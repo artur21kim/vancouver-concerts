@@ -7,17 +7,47 @@ export default async function BrowsePage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Fetch all data upfront (client-side filtering for instant updates)
-  const { data: shows } = await supabase
+  // Fetch with proper joins
+  const { data: showsRaw, error } = await supabase
     .from('fact_shows')
     .select(`
       show_id,
       date,
       setlist_url,
-      artist:dim_artist(artist_id, artist_name, monthly_listeners),
-      venue:dim_venue(venue_id, venue_name, capacity)
+      dim_artist!inner (
+        artist_id,
+        artist_name,
+        monthly_listeners
+      ),
+      dim_venue!inner (
+        venue_id,
+        venue_name,
+        capacity
+      )
     `)
     .order('date', { ascending: false })
+
+  // Log error if any
+  if (error) {
+    console.error('Supabase query error:', error)
+  }
+
+  // Transform nested objects to flat structure
+  const shows = showsRaw?.map(show => ({
+    show_id: show.show_id,
+    date: show.date,
+    setlist_url: show.setlist_url,
+    artist: {
+      artist_id: show.dim_artist.artist_id,
+      artist_name: show.dim_artist.artist_name,
+      monthly_listeners: show.dim_artist.monthly_listeners
+    },
+    venue: {
+      venue_id: show.dim_venue.venue_id,
+      venue_name: show.dim_venue.venue_name,
+      capacity: show.dim_venue.capacity
+    }
+  })) || []
 
   const { data: artists } = await supabase
     .from('dim_artist')
@@ -29,5 +59,5 @@ export default async function BrowsePage() {
     .select('venue_id, venue_name, capacity')
     .order('venue_name')
 
-  return <BrowseClient shows={shows || []} artists={artists || []} venues={venues || []} />
+  return <BrowseClient shows={shows} artists={artists || []} venues={venues || []} />
 }
