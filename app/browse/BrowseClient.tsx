@@ -214,7 +214,7 @@ export default function BrowseClient({
                 {paginatedShows.map((show) => (
                   <tr key={show.show_id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(show.date).toLocaleDateString('en-CA')}
+                      {new Date(show.date).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {show.artist.artist_name}
@@ -224,7 +224,7 @@ export default function BrowseClient({
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {show.setlist_url ? (
-                        <a
+                        
                           href={show.setlist_url}
                           target="_blank"
                           rel="noopener noreferrer"
