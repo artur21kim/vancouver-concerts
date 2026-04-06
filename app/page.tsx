@@ -16,15 +16,25 @@ export default async function Home() {
   // Query 3: Top venues
   const { data: topVenues, error: error3 } = await supabase.rpc('top_venues')
 
-  // Calculate total shows
-  const totalShows = showsByYear?.reduce((sum: number, item: any) => sum + item.show_count, 0) || 0
+// Calculate total shows
+const totalShows = showsByYear?.reduce((sum: number, item: any) => sum + item.show_count, 0) || 0
 
-  return (
-    <main className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-6xl mx-auto">
-      
-        {/* Header */}
-        <div className="text-center mb-12">
+return (
+  <main className="min-h-screen bg-gray-50 py-12 px-4">
+    <div className="max-w-6xl mx-auto">
+    
+      {/* Browse All Shows Link */}
+      <div className="text-center mb-4">
+        <a 
+          href="/browse" 
+          className="text-blue-600 hover:text-blue-800 underline text-lg"
+        >
+          → Browse All Shows
+        </a>
+      </div>
+
+      {/* Header */}
+      <div className="text-center mb-12">
           <h1 className="text-5xl font-bold text-gray-900 mb-4">
             Vancouver Concert History
           </h1>
