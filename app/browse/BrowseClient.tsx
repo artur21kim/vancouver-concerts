@@ -224,7 +224,7 @@ export default function BrowseClient({
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {show.setlist_url ? (
-                        
+                        <a
                           href={show.setlist_url}
                           target="_blank"
                           rel="noopener noreferrer"
