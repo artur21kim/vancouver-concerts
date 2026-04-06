@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Slider from 'rc-slider'
 import 'rc-slider/assets/index.css'
 import Select from 'react-select'
@@ -34,6 +34,13 @@ export default function BrowseClient({
   artists: Artist[]
   venues: Venue[]
 }) {
+  // Mounted state for hydration fix
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   // State for filters
   const [yearRange, setYearRange] = useState([2000, 2025])
   const [selectedArtist, setSelectedArtist] = useState<{ value: number; label: string } | null>(null)
@@ -142,7 +149,7 @@ export default function BrowseClient({
               value={yearRange}
               onChange={(value) => {
                 setYearRange(value as number[])
-                setCurrentPage(1) // Reset to first page when filter changes
+                setCurrentPage(1)
               }}
               marks={{
                 1900: '1900',
@@ -161,31 +168,45 @@ export default function BrowseClient({
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Artist</label>
-              <Select
-                options={availableArtists}
-                value={selectedArtist}
-                onChange={(option) => {
-                  setSelectedArtist(option)
-                  setCurrentPage(1)
-                }}
-                isClearable
-                placeholder="Search artists..."
-                className="text-sm"
-              />
+              {mounted ? (
+                <Select
+                  instanceId="artist-select"
+                  options={availableArtists}
+                  value={selectedArtist}
+                  onChange={(option) => {
+                    setSelectedArtist(option)
+                    setCurrentPage(1)
+                  }}
+                  isClearable
+                  placeholder="Search artists..."
+                  className="text-sm"
+                />
+              ) : (
+                <div className="border border-gray-300 rounded px-3 py-2 text-sm text-gray-400">
+                  Search artists...
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Venue</label>
-              <Select
-                options={availableVenues}
-                value={selectedVenue}
-                onChange={(option) => {
-                  setSelectedVenue(option)
-                  setCurrentPage(1)
-                }}
-                isClearable
-                placeholder="Search venues..."
-                className="text-sm"
-              />
+              {mounted ? (
+                <Select
+                  instanceId="venue-select"
+                  options={availableVenues}
+                  value={selectedVenue}
+                  onChange={(option) => {
+                    setSelectedVenue(option)
+                    setCurrentPage(1)
+                  }}
+                  isClearable
+                  placeholder="Search venues..."
+                  className="text-sm"
+                />
+              ) : (
+                <div className="border border-gray-300 rounded px-3 py-2 text-sm text-gray-400">
+                  Search venues...
+                </div>
+              )}
             </div>
           </div>
         </div>
