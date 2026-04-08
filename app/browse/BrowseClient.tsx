@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Slider from 'rc-slider'
 import 'rc-slider/assets/index.css'
 import Select from 'react-select'
@@ -37,6 +38,7 @@ export default function BrowseClient({
   artists: Artist[]
   venues: Venue[]
 }) {
+  const searchParams = useSearchParams()
   // Mounted state for hydration fix
   const [mounted, setMounted] = useState(false)
 
@@ -49,21 +51,41 @@ export default function BrowseClient({
   const [selectedArtist, setSelectedArtist] = useState<{ value: number; label: string } | null>(null)
   const [selectedVenue, setSelectedVenue] = useState<{ value: number; label: string } | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [pageInput, setPageInput] = useState('1')
   const [sortColumn, setSortColumn] = useState<SortColumn>('date')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const rowsPerPage = 50
+
+  // Handle URL params on mount
+  useEffect(() => {
+    const artistId = searchParams.get('artist_id')
+    const venueId = searchParams.get('venue_id')
+    
+    if (artistId) {
+      const artist = artists.find(a => a.artist_id === parseInt(artistId))
+      if (artist) {
+        setSelectedArtist({ value: artist.artist_id, label: artist.artist_name })
+      }
+    }
+    
+    if (venueId) {
+      const venue = venues.find(v => v.venue_id === parseInt(venueId))
+      if (venue) {
+        setSelectedVenue({ value: venue.venue_id, label: venue.venue_name })
+      }
+    }
+  }, [searchParams, artists, venues])
 
   // Handle column header click
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
-      // Toggle direction if clicking same column
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
     } else {
-      // New column, default to ascending
       setSortColumn(column)
       setSortDirection('asc')
     }
-    setCurrentPage(1) // Reset to first page on sort change
+    setCurrentPage(1)
+    setPageInput('1')
   }
 
   // Filter shows based on current filters
@@ -144,16 +166,58 @@ export default function BrowseClient({
       ? venues.find((v) => v.venue_id === selectedVenue.value)?.capacity
       : null
 
-    return { totalShows, uniqueArtists, uniqueVenues, monthlyListeners, venueCapacity }
+    // First/Last show dates
+    let firstShow = null
+    let lastShow = null
+    
+    if (filteredShows.length > 0) {
+      const sortedByDate = [...filteredShows].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      )
+      firstShow = sortedByDate[0].date
+      lastShow = sortedByDate[sortedByDate.length - 1].date
+    }
+
+    return { 
+      totalShows, 
+      uniqueArtists, 
+      uniqueVenues, 
+      monthlyListeners, 
+      venueCapacity,
+      firstShow,
+      lastShow
+    }
   }, [filteredShows, selectedArtist, selectedVenue, artists, venues])
 
-  // Pagination (now using sortedShows instead of filteredShows)
+  // Pagination
   const paginatedShows = useMemo(() => {
     const start = (currentPage - 1) * rowsPerPage
     return sortedShows.slice(start, start + rowsPerPage)
   }, [sortedShows, currentPage])
 
   const totalPages = Math.ceil(sortedShows.length / rowsPerPage)
+
+  // Update page input when currentPage changes programmatically
+  useEffect(() => {
+    setPageInput(currentPage.toString())
+  }, [currentPage])
+
+  // Handle page input change
+  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPageInput(e.target.value)
+  }
+
+  // Handle page input submit
+  const handlePageInputSubmit = (e: React.FormEvent | React.FocusEvent) => {
+    e.preventDefault()
+    const pageNum = parseInt(pageInput)
+    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+      setCurrentPage(pageNum)
+    } else {
+      // Reset to current page if invalid
+      setPageInput(currentPage.toString())
+    }
+  }
 
   // Sort indicator component
   const SortIndicator = ({ column }: { column: SortColumn }) => {
@@ -166,19 +230,49 @@ export default function BrowseClient({
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-7xl mx-auto">
+      {/* Back to Home Link */}
+      <div className="mb-4">
+        <a 
+          href="/" 
+          className="text-blue-600 hover:text-blue-800 underline text-lg"
+        >
+          ← Overview
+        </a>
+      </div>
         {/* Header */}
         <h1 className="text-4xl font-bold text-gray-900 mb-8">Browse Shows</h1>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <StatCard label="Shows" value={stats.totalShows.toLocaleString()} />
-          <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
-          <StatCard label="Venues" value={stats.uniqueVenues.toLocaleString()} />
-          {stats.monthlyListeners && (
-            <StatCard label="Monthly Listeners" value={stats.monthlyListeners.toLocaleString()} />
-          )}
-          {stats.venueCapacity && (
-            <StatCard label="Venue Capacity" value={stats.venueCapacity.toLocaleString()} />
+        <div className="mb-8">
+          {/* Top row - always 3 columns */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <StatCard label="Shows" value={stats.totalShows.toLocaleString()} />
+            <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
+            <StatCard label="Venues" value={stats.uniqueVenues.toLocaleString()} />
+          </div>
+          
+          {/* Second row - conditional stats, also 3 columns max */}
+          {(stats.monthlyListeners || stats.venueCapacity || stats.firstShow || stats.lastShow) && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {stats.monthlyListeners && (
+                <StatCard label="Monthly Listeners" value={stats.monthlyListeners.toLocaleString()} />
+              )}
+              {stats.venueCapacity && (
+                <StatCard label="Capacity" value={stats.venueCapacity.toLocaleString()} />
+              )}
+              {stats.firstShow && (
+                <StatCard 
+                  label={selectedArtist ? "First Show (Artist)" : selectedVenue ? "First Show (Venue)" : "First Show"} 
+                  value={stats.firstShow} 
+                />
+              )}
+              {stats.lastShow && (
+                <StatCard 
+                  label={selectedArtist ? "Last Show (Artist)" : selectedVenue ? "Last Show (Venue)" : "Last Show"} 
+                  value={stats.lastShow} 
+                />
+              )}
+            </div>
           )}
         </div>
 
@@ -186,47 +280,81 @@ export default function BrowseClient({
         <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
           <h2 className="text-xl font-bold mb-4">Filters</h2>
           
-          {/* Year Range Slider */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Year Range: {yearRange[0]} - {yearRange[1]}
+        {/* Year Range Slider */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-sm font-medium text-gray-900">
+              Year Range:
             </label>
-            <Slider
-              range
+            <input
+              type="number"
+              value={yearRange[0]}
+              onChange={(e) => {
+                const newStart = parseInt(e.target.value)
+                if (!isNaN(newStart) && newStart >= 1900 && newStart <= yearRange[1]) {
+                  setYearRange([newStart, yearRange[1]])
+                  setCurrentPage(1)
+                  setPageInput('1')
+                }
+              }}
               min={1900}
               max={2025}
-              value={yearRange}
-              onChange={(value) => {
-                setYearRange(value as number[])
-                setCurrentPage(1)
+              className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-900">—</span>
+            <input
+              type="number"
+              value={yearRange[1]}
+              onChange={(e) => {
+                const newEnd = parseInt(e.target.value)
+                if (!isNaN(newEnd) && newEnd <= 2025 && newEnd >= yearRange[0]) {
+                  setYearRange([yearRange[0], newEnd])
+                  setCurrentPage(1)
+                  setPageInput('1')
+                }
               }}
-              marks={{
-                1900: '1900',
-                1910: '1910',
-                1920: '1920',
-                1930: '1930',
-                1940: '1940',
-                1950: '1950',
-                1960: '1960',
-                1970: '1970',
-                1980: '1980',
-                1990: '1990',
-                2000: '2000',
-                2010: '2010',
-                2020: '2020',
-                2025: '2025',
-              }}
-              styles={{
-                track: { backgroundColor: '#3b82f6' },
-                handle: { borderColor: '#3b82f6' },
-              }}
+              min={1900}
+              max={2025}
+              className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          <Slider
+            range
+            min={1900}
+            max={2025}
+            value={yearRange}
+            onChange={(value) => {
+              setYearRange(value as number[])
+              setCurrentPage(1)
+              setPageInput('1')
+            }}
+            marks={{
+              1900: '1900',
+              1910: '1910',
+              1920: '1920',
+              1930: '1930',
+              1940: '1940',
+              1950: '1950',
+              1960: '1960',
+              1970: '1970',
+              1980: '1980',
+              1990: '1990',
+              2000: '2000',
+              2010: '2010',
+              2020: '2020',
+              2025: '2025',
+            }}
+            styles={{
+              track: { backgroundColor: '#3b82f6' },
+              handle: { borderColor: '#3b82f6' },
+            }}
+          />
+        </div>
 
           {/* Artist & Venue Dropdowns */}
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Artist</label>
+              <label className="block text-sm font-medium text-gray-900 mb-2">Artist</label>
               {mounted ? (
                 <Select
                   instanceId="artist-select"
@@ -235,15 +363,14 @@ export default function BrowseClient({
                   onChange={(option) => {
                     setSelectedArtist(option)
                     setCurrentPage(1)
+                    setPageInput('1')
                   }}
                   isClearable
                   placeholder="Search artists..."
                   className="text-sm"
                   filterOption={(option, inputValue) => {
-                    // Custom filter for better performance with large lists
                     return option.label.toLowerCase().includes(inputValue.toLowerCase())
                   }}
-                  // Key settings for large lists
                   pageSize={50}
                   menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
                   styles={{
@@ -257,7 +384,7 @@ export default function BrowseClient({
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Venue</label>
+              <label className="block text-sm font-medium text-gray-900 mb-2">Venue</label>
               {mounted ? (
                 <Select
                   instanceId="venue-select"
@@ -266,6 +393,7 @@ export default function BrowseClient({
                   onChange={(option) => {
                     setSelectedVenue(option)
                     setCurrentPage(1)
+                    setPageInput('1')
                   }}
                   isClearable
                   placeholder="Search venues..."
@@ -325,10 +453,34 @@ export default function BrowseClient({
                       {show.date}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {show.artist.artist_name}
+                      <button
+                        onClick={() => {
+                          setSelectedArtist({ 
+                            value: show.artist.artist_id, 
+                            label: show.artist.artist_name 
+                          })
+                          setCurrentPage(1)
+                          setPageInput('1')
+                        }}
+                        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                      >
+                        {show.artist.artist_name}
+                      </button>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {show.venue.venue_name}
+                      <button
+                        onClick={() => {
+                          setSelectedVenue({ 
+                            value: show.venue.venue_id, 
+                            label: show.venue.venue_name 
+                          })
+                          setCurrentPage(1)
+                          setPageInput('1')
+                        }}
+                        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                      >
+                        {show.venue.venue_name}
+                      </button>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {show.setlist_url ? (
@@ -353,26 +505,38 @@ export default function BrowseClient({
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t">
-              <div className="text-sm text-gray-700">
-                Showing {(currentPage - 1) * rowsPerPage + 1} to{' '}
-                {Math.min(currentPage * rowsPerPage, sortedShows.length)} of{' '}
-                {sortedShows.length} shows
+              <div className="text-sm text-gray-900">
+                Showing {((currentPage - 1) * rowsPerPage + 1).toLocaleString()} to{' '}
+                {Math.min(currentPage * rowsPerPage, sortedShows.length).toLocaleString()} of{' '}
+                {sortedShows.length.toLocaleString()} shows
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  onClick={() => {
+                    setCurrentPage((p) => Math.max(1, p - 1))
+                  }}
                   disabled={currentPage === 1}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Previous
                 </button>
-                <span className="px-4 py-2 text-sm text-gray-700">
-                  Page {currentPage} of {totalPages}
-                </span>
+                <form onSubmit={handlePageInputSubmit} className="flex items-center gap-2">
+                  <span className="text-sm text-gray-900">Page</span>
+                  <input
+                    type="text"
+                    value={pageInput}
+                    onChange={handlePageInputChange}
+                    onBlur={handlePageInputSubmit}
+                    className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-900">of {totalPages.toLocaleString()}</span>
+                </form>
                 <button
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  onClick={() => {
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }}
                   disabled={currentPage === totalPages}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next
                 </button>
