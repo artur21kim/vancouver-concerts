@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Slider from 'rc-slider'
 import 'rc-slider/assets/index.css'
@@ -29,7 +29,8 @@ type Venue = {
 type SortColumn = 'date' | 'artist' | 'venue' | null
 type SortDirection = 'asc' | 'desc'
 
-export default function BrowseClient({
+// Create a new component that uses useSearchParams
+function BrowseContent({
   shows,
   artists,
   venues,
@@ -546,6 +547,23 @@ export default function BrowseClient({
         </div>
       </div>
     </div>
+  )
+}
+
+// Main export with Suspense wrapper
+export default function BrowseClient({
+  shows,
+  artists,
+  venues,
+}: {
+  shows: Show[]
+  artists: Artist[]
+  venues: Venue[]
+}) {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 py-8 px-4 flex items-center justify-center">Loading...</div>}>
+      <BrowseContent shows={shows} artists={artists} venues={venues} />
+    </Suspense>
   )
 }
 
