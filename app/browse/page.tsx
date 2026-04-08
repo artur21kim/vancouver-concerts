@@ -7,7 +7,7 @@ export default async function BrowsePage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Fetch with proper joins
+  // Fetch shows without joins (simpler, more reliable)
   const { data: showsRaw, error } = await supabase
     .from('fact_shows')
     .select(`
@@ -27,28 +27,6 @@ export default async function BrowsePage() {
     `)
     .order('date', { ascending: false })
 
-  // Log error if any
-  if (error) {
-    console.error('Supabase query error:', error)
-  }
-
-  // Transform nested objects to flat structure
-  const shows = showsRaw?.map(show => ({
-    show_id: show.show_id,
-    date: show.date,
-    setlist_url: show.setlist_url,
-    artist: {
-      artist_id: show.dim_artist.artist_id,
-      artist_name: show.dim_artist.artist_name,
-      monthly_listeners: show.dim_artist.monthly_listeners
-    },
-    venue: {
-      venue_id: show.dim_venue.venue_id,
-      venue_name: show.dim_venue.venue_name,
-      capacity: show.dim_venue.capacity
-    }
-  })) || []
-
   const { data: artists } = await supabase
     .from('dim_artist')
     .select('artist_id, artist_name, monthly_listeners')
@@ -59,5 +37,30 @@ export default async function BrowsePage() {
     .select('venue_id, venue_name, capacity')
     .order('venue_name')
 
-  return <BrowseClient shows={shows} artists={artists || []} venues={venues || []} />
+  //  ADD THESE LOGS
+  console.log('Supabase error:', error)
+  console.log('First show raw:', showsRaw?.[0])
+  
+  // Transform nested objects to flat structure
+const shows = showsRaw?.map((show: any) => {
+  console.log('Raw show structure:', show) // Debug log
+  
+  return {
+    show_id: show.show_id,
+    date: show.date,
+    setlist_url: show.setlist_url,
+    artist: {
+      artist_id: show.dim_artist?.artist_id || 0,
+      artist_name: show.dim_artist?.artist_name || 'Unknown',
+      monthly_listeners: show.dim_artist?.monthly_listeners || null
+    },
+    venue: {
+      venue_id: show.dim_venue?.venue_id || 0,
+      venue_name: show.dim_venue?.venue_name || 'Unknown',
+      capacity: show.dim_venue?.capacity || null
+    }
+  }
+}) || []
+
+  return <BrowseClient shows={shows || []} artists={artists || []} venues={venues || []} />
 }
