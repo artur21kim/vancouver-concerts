@@ -25,6 +25,9 @@ type Venue = {
   capacity: number | null
 }
 
+type SortColumn = 'date' | 'artist' | 'venue' | null
+type SortDirection = 'asc' | 'desc'
+
 export default function BrowseClient({
   shows,
   artists,
@@ -42,11 +45,26 @@ export default function BrowseClient({
   }, [])
 
   // State for filters
-  const [yearRange, setYearRange] = useState([2000, 2025])
+  const [yearRange, setYearRange] = useState([1900, 2025])
   const [selectedArtist, setSelectedArtist] = useState<{ value: number; label: string } | null>(null)
   const [selectedVenue, setSelectedVenue] = useState<{ value: number; label: string } | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [sortColumn, setSortColumn] = useState<SortColumn>('date')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const rowsPerPage = 50
+
+  // Handle column header click
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      // Toggle direction if clicking same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      // New column, default to ascending
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+    setCurrentPage(1) // Reset to first page on sort change
+  }
 
   // Filter shows based on current filters
   const filteredShows = useMemo(() => {
@@ -59,7 +77,30 @@ export default function BrowseClient({
     })
   }, [shows, yearRange, selectedArtist, selectedVenue])
 
-  // Cascading filter: only show artists/venues that have shows in selected year range
+  // Sort filtered shows
+  const sortedShows = useMemo(() => {
+    if (!sortColumn) return filteredShows
+
+    return [...filteredShows].sort((a, b) => {
+      let comparison = 0
+
+      switch (sortColumn) {
+        case 'date':
+          comparison = new Date(a.date).getTime() - new Date(b.date).getTime()
+          break
+        case 'artist':
+          comparison = a.artist.artist_name.localeCompare(b.artist.artist_name)
+          break
+        case 'venue':
+          comparison = a.venue.venue_name.localeCompare(b.venue.venue_name)
+          break
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison
+    })
+  }, [filteredShows, sortColumn, sortDirection])
+
+  // Cascading filter - NO LIMITS, keep all options
   const availableArtists = useMemo(() => {
     const artistIds = new Set(
       shows
@@ -106,13 +147,21 @@ export default function BrowseClient({
     return { totalShows, uniqueArtists, uniqueVenues, monthlyListeners, venueCapacity }
   }, [filteredShows, selectedArtist, selectedVenue, artists, venues])
 
-  // Pagination
+  // Pagination (now using sortedShows instead of filteredShows)
   const paginatedShows = useMemo(() => {
     const start = (currentPage - 1) * rowsPerPage
-    return filteredShows.slice(start, start + rowsPerPage)
-  }, [filteredShows, currentPage])
+    return sortedShows.slice(start, start + rowsPerPage)
+  }, [sortedShows, currentPage])
 
-  const totalPages = Math.ceil(filteredShows.length / rowsPerPage)
+  const totalPages = Math.ceil(sortedShows.length / rowsPerPage)
+
+  // Sort indicator component
+  const SortIndicator = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) {
+      return <span className="text-gray-400 ml-1">↕</span>
+    }
+    return <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -153,8 +202,18 @@ export default function BrowseClient({
               }}
               marks={{
                 1900: '1900',
+                1910: '1910',
+                1920: '1920',
+                1930: '1930',
+                1940: '1940',
                 1950: '1950',
+                1960: '1960',
+                1970: '1970',
+                1980: '1980',
+                1990: '1990',
                 2000: '2000',
+                2010: '2010',
+                2020: '2020',
                 2025: '2025',
               }}
               styles={{
@@ -180,6 +239,16 @@ export default function BrowseClient({
                   isClearable
                   placeholder="Search artists..."
                   className="text-sm"
+                  filterOption={(option, inputValue) => {
+                    // Custom filter for better performance with large lists
+                    return option.label.toLowerCase().includes(inputValue.toLowerCase())
+                  }}
+                  // Key settings for large lists
+                  pageSize={50}
+                  menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+                  styles={{
+                    menuPortal: (base) => ({ ...base, zIndex: 9999 })
+                  }}
                 />
               ) : (
                 <div className="border border-gray-300 rounded px-3 py-2 text-sm text-gray-400">
@@ -217,16 +286,34 @@ export default function BrowseClient({
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
+                  <th
+                    onClick={() => handleSort('date')}
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none w-32"
+                  >
+                    <div className="flex items-center">
+                      Date
+                      <SortIndicator column="date" />
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Artist
+                  <th
+                    onClick={() => handleSort('artist')}
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none w-64"
+                  >
+                    <div className="flex items-center">
+                      Artist
+                      <SortIndicator column="artist" />
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Venue
+                  <th
+                    onClick={() => handleSort('venue')}
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none w-64"
+                  >
+                    <div className="flex items-center">
+                      Venue
+                      <SortIndicator column="venue" />
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
                     Setlist
                   </th>
                 </tr>
@@ -245,7 +332,7 @@ export default function BrowseClient({
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {show.setlist_url ? (
-                        <a
+                        <a 
                           href={show.setlist_url}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -268,8 +355,8 @@ export default function BrowseClient({
             <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t">
               <div className="text-sm text-gray-700">
                 Showing {(currentPage - 1) * rowsPerPage + 1} to{' '}
-                {Math.min(currentPage * rowsPerPage, filteredShows.length)} of{' '}
-                {filteredShows.length} shows
+                {Math.min(currentPage * rowsPerPage, sortedShows.length)} of{' '}
+                {sortedShows.length} shows
               </div>
               <div className="flex gap-2">
                 <button
