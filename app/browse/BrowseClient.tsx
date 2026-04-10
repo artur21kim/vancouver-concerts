@@ -368,7 +368,8 @@ function BrowseContent({
                 typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025
               ]}
               onChange={(value) => {
-                setYearRange(value as number[])
+                const vals = value as number[]
+                setYearRange([vals[0], vals[1]] as [number, number])
                 setCurrentPage(1)
                 setPageInput('1')
               }}

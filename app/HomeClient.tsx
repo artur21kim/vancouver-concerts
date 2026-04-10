@@ -338,7 +338,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
                     onClick={() => setShowAllArtists(!showAllArtists)}
                     className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium"
                   >
-                    {showAllArtists ? '← Show less' : `View more (${topArtists.length} total)`}
+                    {showAllArtists ? '← Show less' : 'View more →'}
                   </button>
                 )}
               </>
@@ -382,7 +382,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
                     onClick={() => setShowAllVenues(!showAllVenues)}
                     className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium"
                   >
-                    {showAllVenues ? '← Show less' : `View more (${topVenues.length} total)`}
+                    {showAllVenues ? '← Show less' : 'View more →'}
                   </button>
                 )}
               </>
