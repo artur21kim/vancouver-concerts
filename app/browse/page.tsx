@@ -1,8 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import BrowseClient from './BrowseClient'
 
-// This tells Next.js to cache this page and revalidate every hour
-export const revalidate = 3600 // 1 hour in seconds
+export const revalidate = 3600
 
 export default async function BrowsePage() {
   const supabase = createClient(
@@ -37,12 +36,24 @@ export default async function BrowsePage() {
       `)
       .order('date', { ascending: false })
       .range(showPage * pageSize, (showPage + 1) * pageSize - 1)
-    
+
     if (error) {
       console.error('Error fetching page', showPage, error)
-      break
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-red-600 text-lg mb-4">Failed to load concert data</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      )
     }
-    
+
     if (data && data.length > 0) {
       allShowsRaw = [...allShowsRaw, ...data]
       showPage++
@@ -58,12 +69,17 @@ export default async function BrowsePage() {
   let hasMoreArtists = true
 
   while (hasMoreArtists) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('dim_artist')
       .select('artist_id, artist_name, monthly_listeners')
       .order('artist_name')
       .range(artistPage * pageSize, (artistPage + 1) * pageSize - 1)
-    
+
+    if (error) {
+      console.error('Error fetching artists', error)
+      break
+    }
+
     if (data && data.length > 0) {
       allArtists = [...allArtists, ...data]
       artistPage++
@@ -79,12 +95,17 @@ export default async function BrowsePage() {
   let hasMoreVenues = true
 
   while (hasMoreVenues) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('dim_venue')
       .select('venue_id, venue_name, capacity')
       .order('venue_name')
       .range(venuePage * pageSize, (venuePage + 1) * pageSize - 1)
-    
+
+    if (error) {
+      console.error('Error fetching venues', error)
+      break
+    }
+
     if (data && data.length > 0) {
       allVenues = [...allVenues, ...data]
       venuePage++
@@ -92,6 +113,18 @@ export default async function BrowsePage() {
     } else {
       hasMoreVenues = false
     }
+  }
+
+  // Check if we got any data
+  if (allShowsRaw.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-gray-600">Loading concert database...</p>
+        </div>
+      </div>
+    )
   }
 
   // Transform nested objects to flat structure

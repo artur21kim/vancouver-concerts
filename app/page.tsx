@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import HomeClient from './HomeClient'
 
-export const revalidate = 3600 // Cache for 1 hour like Browse page
+export const revalidate = 3600 // Cache for 1 hour
 
 export default async function Home() {
   const supabase = createClient(
@@ -33,12 +33,24 @@ export default async function Home() {
       `)
       .order('date', { ascending: false })
       .range(showPage * pageSize, (showPage + 1) * pageSize - 1)
-    
+
     if (error) {
       console.error('Error fetching page', showPage, error)
-      break
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-red-600 text-lg mb-4">Failed to load concert data</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      )
     }
-    
+
     if (data && data.length > 0) {
       allShowsRaw = [...allShowsRaw, ...data]
       showPage++
@@ -46,6 +58,18 @@ export default async function Home() {
     } else {
       hasMoreShows = false
     }
+  }
+
+  // Check if we got any data
+  if (allShowsRaw.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-gray-600">Loading concert history...</p>
+        </div>
+      </div>
+    )
   }
 
   // Transform nested objects to flat structure
