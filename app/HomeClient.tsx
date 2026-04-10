@@ -27,13 +27,25 @@ type Show = {
 type Decade = 'all' | '1900s' | '1910s' | '1920s' | '1930s' | '1940s' | '1950s' | '1960s' | '1970s' | '1980s' | '1990s' | '2000s' | '2010s' | '2020s'
 
 const DECADES: Decade[] = ['all', '1900s', '1910s', '1920s', '1930s', '1940s', '1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s']
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export default function HomeClient({ shows }: { shows: Show[] }) {
   const router = useRouter()
   const [selectedDecade, setSelectedDecade] = useState<Decade>('all')
+  const [selectedYear, setSelectedYear] = useState<number | null>(null)
+  const [showAllArtists, setShowAllArtists] = useState(false)
+  const [showAllVenues, setShowAllVenues] = useState(false)
 
-  // Filter shows by selected decade
+  // Filter shows by selected decade or year
   const filteredShows = useMemo(() => {
+    if (selectedYear) {
+      // Filter by specific year
+      return shows.filter((show) => {
+        const year = new Date(show.date).getFullYear()
+        return year === selectedYear
+      })
+    }
+    
     if (selectedDecade === 'all') return shows
 
     const decadeStart = parseInt(selectedDecade.substring(0, 4))
@@ -43,7 +55,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
       const year = new Date(show.date).getFullYear()
       return year >= decadeStart && year <= decadeEnd
     })
-  }, [shows, selectedDecade])
+  }, [shows, selectedDecade, selectedYear])
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -51,9 +63,11 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
     const uniqueArtists = new Set(filteredShows.map((s) => s.artist_id)).size
     const uniqueVenues = new Set(filteredShows.map((s) => s.venue_id)).size
     
-    // Shows per year (only if decade selected, not for "all")
+    // Shows per year (only if decade or year selected, not for "all")
     let showsPerYear = null
-    if (selectedDecade !== 'all') {
+    if (selectedYear) {
+      showsPerYear = totalShows.toString()
+    } else if (selectedDecade !== 'all') {
       const decadeStart = parseInt(selectedDecade.substring(0, 4))
       const decadeEnd = decadeStart + 9
       const years = decadeEnd - decadeStart + 1
@@ -61,11 +75,29 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
     }
 
     return { totalShows, uniqueArtists, uniqueVenues, showsPerYear }
-  }, [filteredShows, selectedDecade])
+  }, [filteredShows, selectedDecade, selectedYear])
 
   // Chart data
   const chartData = useMemo(() => {
-    if (selectedDecade === 'all') {
+    if (selectedYear) {
+      // Show 12 bars (months in the selected year)
+      const monthCounts: { [key: number]: number } = {}
+      Array.from({ length: 12 }, (_, i) => i).forEach(month => monthCounts[month] = 0)
+
+      filteredShows.forEach(show => {
+        const month = new Date(show.date).getMonth()
+        monthCounts[month]++
+      })
+
+      return {
+        labels: MONTH_NAMES,
+        datasets: [{
+          label: 'Shows',
+          data: Array.from({ length: 12 }, (_, i) => monthCounts[i]),
+          backgroundColor: 'rgb(59, 130, 246)',
+        }]
+      }
+    } else if (selectedDecade === 'all') {
       // Show 13 bars (one per decade)
       const decadeCounts: { [key: string]: number } = {}
       
@@ -114,9 +146,9 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
         }]
       }
     }
-  }, [shows, filteredShows, selectedDecade])
+  }, [shows, filteredShows, selectedDecade, selectedYear])
 
-  // Top 10 Artists
+  // Top Artists
   const topArtists = useMemo(() => {
     const artistCounts: { [key: number]: { name: string; count: number } } = {}
     
@@ -130,10 +162,9 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
     return Object.entries(artistCounts)
       .map(([id, data]) => ({ artist_id: parseInt(id), artist_name: data.name, show_count: data.count }))
       .sort((a, b) => b.show_count - a.show_count)
-      .slice(0, 10)
   }, [filteredShows])
 
-  // Top 10 Venues
+  // Top Venues
   const topVenues = useMemo(() => {
     const venueCounts: { [key: number]: { name: string; count: number } } = {}
     
@@ -147,7 +178,6 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
     return Object.entries(venueCounts)
       .map(([id, data]) => ({ venue_id: parseInt(id), venue_name: data.name, show_count: data.count }))
       .sort((a, b) => b.show_count - a.show_count)
-      .slice(0, 10)
   }, [filteredShows])
 
   const chartOptions = {
@@ -164,6 +194,24 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
       }
     }
   }
+
+  // Get chart title
+  const chartTitle = useMemo(() => {
+    if (selectedYear) {
+      return `Shows in ${selectedYear}`
+    }
+    if (selectedDecade === 'all') {
+      return 'Shows by Decade'
+    }
+    return `Shows in the ${selectedDecade}`
+  }, [selectedDecade, selectedYear])
+
+  // Get filter context for Top 10 headers
+  const filterContext = useMemo(() => {
+    if (selectedYear) return selectedYear.toString()
+    if (selectedDecade !== 'all') return selectedDecade
+    return null
+  }, [selectedDecade, selectedYear])
 
   return (
     <main className="min-h-screen bg-gray-50 py-8 px-4">
@@ -194,7 +242,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
           <StatCard label="Shows" value={stats.totalShows.toLocaleString()} />
           <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
           <StatCard label="Venues" value={stats.uniqueVenues.toLocaleString()} />
-          {stats.showsPerYear && (
+          {stats.showsPerYear && !selectedYear && (
             <StatCard label="Shows per Year" value={stats.showsPerYear} />
           )}
         </div>
@@ -202,23 +250,26 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
         {/* Shows Chart */}
         <div className="bg-white rounded-lg shadow-lg p-5 mb-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">
-            {selectedDecade === 'all' ? 'Shows by Decade' : `Shows in the ${selectedDecade}`}
+            {chartTitle}
           </h2>
           <div style={{ height: '350px' }}>
             <Bar data={chartData} options={chartOptions} />
           </div>
         </div>
 
-        {/* Decade Filter Buttons */}
+        {/* Decade/Year Filter */}
         <div className="bg-white rounded-lg shadow-lg p-5 mb-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Filter by Decade</h2>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 mb-4">
             {DECADES.map((decade) => (
               <button
                 key={decade}
-                onClick={() => setSelectedDecade(decade)}
+                onClick={() => {
+                  setSelectedDecade(decade)
+                  setSelectedYear(null) // Clear year when decade selected
+                }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  selectedDecade === decade
+                  selectedDecade === decade && !selectedYear
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
@@ -227,6 +278,27 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
               </button>
             ))}
           </div>
+          
+          {/* Year dropdown */}
+          <div className="pt-4 border-t">
+            <label className="block text-sm font-medium text-gray-900 mb-2">
+              Or view a specific year:
+            </label>
+            <select
+              value={selectedYear || ''}
+              onChange={(e) => {
+                const year = e.target.value ? parseInt(e.target.value) : null
+                setSelectedYear(year)
+                if (year) setSelectedDecade('all') // Clear decade when year selected
+              }}
+              className="w-full md:w-64 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select year...</option>
+              {Array.from({length: 126}, (_, i) => 1900 + i).map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Two columns for tables */}
@@ -234,68 +306,88 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
           {/* Top Artists */}
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">
-              Top 10 Artists
-              {selectedDecade !== 'all' && (
-                <span className="text-base font-normal text-gray-600 ml-2">({selectedDecade})</span>
+              Top {showAllArtists ? '25' : '10'} Artists
+              {filterContext && (
+                <span className="text-base font-normal text-gray-600 ml-2">({filterContext})</span>
               )}
             </h2>
             {topArtists.length > 0 ? (
-              <div className="space-y-3">
-                {topArtists.map((artist, index) => (
-                  <div key={artist.artist_id} className="flex items-center justify-between border-b pb-2">
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg font-semibold text-gray-400 w-6">
-                        {index + 1}
+              <>
+                <div className="space-y-3">
+                  {topArtists.slice(0, showAllArtists ? 25 : 10).map((artist, index) => (
+                    <div key={artist.artist_id} className="flex items-center justify-between border-b pb-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg font-semibold text-gray-400 w-6">
+                          {index + 1}
+                        </span>
+                        <button
+                          onClick={() => router.push(`/browse?artist_id=${artist.artist_id}`)}
+                          className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+                        >
+                          {artist.artist_name}
+                        </button>
+                      </div>
+                      <span className="text-gray-600 font-medium">
+                        {artist.show_count} shows
                       </span>
-                      <button
-                        onClick={() => router.push(`/browse?artist_id=${artist.artist_id}`)}
-                        className="text-blue-600 hover:text-blue-800 hover:underline text-left"
-                      >
-                        {artist.artist_name}
-                      </button>
                     </div>
-                    <span className="text-gray-600 font-medium">
-                      {artist.show_count} shows
-                    </span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                {topArtists.length > 10 && (
+                  <button
+                    onClick={() => setShowAllArtists(!showAllArtists)}
+                    className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    {showAllArtists ? '← Show less' : `View more (${topArtists.length} total)`}
+                  </button>
+                )}
+              </>
             ) : (
-              <p className="text-gray-500">No shows in this decade</p>
+              <p className="text-gray-500">No shows in this period</p>
             )}
           </div>
 
           {/* Top Venues */}
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">
-              Top 10 Venues
-              {selectedDecade !== 'all' && (
-                <span className="text-base font-normal text-gray-600 ml-2">({selectedDecade})</span>
+              Top {showAllVenues ? '25' : '10'} Venues
+              {filterContext && (
+                <span className="text-base font-normal text-gray-600 ml-2">({filterContext})</span>
               )}
             </h2>
             {topVenues.length > 0 ? (
-              <div className="space-y-3">
-                {topVenues.map((venue, index) => (
-                  <div key={venue.venue_id} className="flex items-center justify-between border-b pb-2">
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg font-semibold text-gray-400 w-6">
-                        {index + 1}
+              <>
+                <div className="space-y-3">
+                  {topVenues.slice(0, showAllVenues ? 25 : 10).map((venue, index) => (
+                    <div key={venue.venue_id} className="flex items-center justify-between border-b pb-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg font-semibold text-gray-400 w-6">
+                          {index + 1}
+                        </span>
+                        <button
+                          onClick={() => router.push(`/browse?venue_id=${venue.venue_id}`)}
+                          className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+                        >
+                          {venue.venue_name}
+                        </button>
+                      </div>
+                      <span className="text-gray-600 font-medium">
+                        {venue.show_count} shows
                       </span>
-                      <button
-                        onClick={() => router.push(`/browse?venue_id=${venue.venue_id}`)}
-                        className="text-blue-600 hover:text-blue-800 hover:underline text-left"
-                      >
-                        {venue.venue_name}
-                      </button>
                     </div>
-                    <span className="text-gray-600 font-medium">
-                      {venue.show_count} shows
-                    </span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                {topVenues.length > 10 && (
+                  <button
+                    onClick={() => setShowAllVenues(!showAllVenues)}
+                    className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    {showAllVenues ? '← Show less' : `View more (${topVenues.length} total)`}
+                  </button>
+                )}
+              </>
             ) : (
-              <p className="text-gray-500">No shows in this decade</p>
+              <p className="text-gray-500">No shows in this period</p>
             )}
           </div>
         </div>

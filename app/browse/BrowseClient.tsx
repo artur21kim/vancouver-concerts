@@ -40,6 +40,7 @@ function BrowseContent({
   venues: Venue[]
 }) {
   const searchParams = useSearchParams()
+
   // Mounted state for hydration fix
   const [mounted, setMounted] = useState(false)
 
@@ -48,7 +49,7 @@ function BrowseContent({
   }, [])
 
   // State for filters
-  const [yearRange, setYearRange] = useState([1900, 2025])
+  const [yearRange, setYearRange] = useState<[number | string, number | string]>([1900, 2025])
   const [selectedArtist, setSelectedArtist] = useState<{ value: number; label: string } | null>(null)
   const [selectedVenue, setSelectedVenue] = useState<{ value: number; label: string } | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
@@ -61,14 +62,14 @@ function BrowseContent({
   useEffect(() => {
     const artistId = searchParams.get('artist_id')
     const venueId = searchParams.get('venue_id')
-    
+
     if (artistId) {
       const artist = artists.find(a => a.artist_id === parseInt(artistId))
       if (artist) {
         setSelectedArtist({ value: artist.artist_id, label: artist.artist_name })
       }
     }
-    
+
     if (venueId) {
       const venue = venues.find(v => v.venue_id === parseInt(venueId))
       if (venue) {
@@ -76,6 +77,20 @@ function BrowseContent({
       }
     }
   }, [searchParams, artists, venues])
+
+  // Dynamic page title
+  const pageTitle = useMemo(() => {
+    if (selectedArtist && selectedVenue) {
+      return `Browse: ${selectedArtist.label} @ ${selectedVenue.label}`
+    }
+    if (selectedArtist) {
+      return `Browse: ${selectedArtist.label}`
+    }
+    if (selectedVenue) {
+      return `Browse: ${selectedVenue.label}`
+    }
+    return 'Browse Shows'
+  }, [selectedArtist, selectedVenue])
 
   // Handle column header click
   const handleSort = (column: SortColumn) => {
@@ -93,7 +108,9 @@ function BrowseContent({
   const filteredShows = useMemo(() => {
     return shows.filter((show) => {
       const year = new Date(show.date).getFullYear()
-      const matchesYear = year >= yearRange[0] && year <= yearRange[1]
+      const startYear = typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900
+      const endYear = typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025
+      const matchesYear = year >= startYear && year <= endYear
       const matchesArtist = !selectedArtist || show.artist.artist_id === selectedArtist.value
       const matchesVenue = !selectedVenue || show.venue.venue_id === selectedVenue.value
       return matchesYear && matchesArtist && matchesVenue
@@ -125,11 +142,14 @@ function BrowseContent({
 
   // Cascading filter - NO LIMITS, keep all options
   const availableArtists = useMemo(() => {
+    const startYear = typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900
+    const endYear = typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025
+
     const artistIds = new Set(
       shows
         .filter((show) => {
           const year = new Date(show.date).getFullYear()
-          return year >= yearRange[0] && year <= yearRange[1]
+          return year >= startYear && year <= endYear
         })
         .map((show) => show.artist.artist_id)
     )
@@ -139,11 +159,14 @@ function BrowseContent({
   }, [artists, shows, yearRange])
 
   const availableVenues = useMemo(() => {
+    const startYear = typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900
+    const endYear = typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025
+
     const venueIds = new Set(
       shows
         .filter((show) => {
           const year = new Date(show.date).getFullYear()
-          return year >= yearRange[0] && year <= yearRange[1]
+          return year >= startYear && year <= endYear
         })
         .map((show) => show.venue.venue_id)
     )
@@ -157,12 +180,12 @@ function BrowseContent({
     const totalShows = filteredShows.length
     const uniqueArtists = new Set(filteredShows.map((s) => s.artist.artist_id)).size
     const uniqueVenues = new Set(filteredShows.map((s) => s.venue.venue_id)).size
-    
+
     // Conditional stats
     const monthlyListeners = selectedArtist
       ? artists.find((a) => a.artist_id === selectedArtist.value)?.monthly_listeners
       : null
-    
+
     const venueCapacity = selectedVenue
       ? venues.find((v) => v.venue_id === selectedVenue.value)?.capacity
       : null
@@ -170,7 +193,7 @@ function BrowseContent({
     // First/Last show dates
     let firstShow = null
     let lastShow = null
-    
+
     if (filteredShows.length > 0) {
       const sortedByDate = [...filteredShows].sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
@@ -179,11 +202,11 @@ function BrowseContent({
       lastShow = sortedByDate[sortedByDate.length - 1].date
     }
 
-    return { 
-      totalShows, 
-      uniqueArtists, 
-      uniqueVenues, 
-      monthlyListeners, 
+    return {
+      totalShows,
+      uniqueArtists,
+      uniqueVenues,
+      monthlyListeners,
       venueCapacity,
       firstShow,
       lastShow
@@ -231,17 +254,18 @@ function BrowseContent({
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-7xl mx-auto">
-      {/* Back to Home Link */}
-      <div className="mb-4">
-        <a 
-          href="/" 
-          className="text-blue-600 hover:text-blue-800 underline text-lg"
-        >
-          ← Overview
-        </a>
-      </div>
-        {/* Header */}
-        <h1 className="text-4xl font-bold text-gray-900 mb-8">Browse Shows</h1>
+        {/* Back to Home Link */}
+        <div className="mb-4">
+          <a
+            href="/"
+            className="text-blue-600 hover:text-blue-800 underline text-lg"
+          >
+            ← Overview
+          </a>
+        </div>
+
+        {/* Dynamic Header */}
+        <h1 className="text-4xl font-bold text-gray-900 mb-8">{pageTitle}</h1>
 
         {/* Stats Cards */}
         <div className="mb-8">
@@ -251,7 +275,7 @@ function BrowseContent({
             <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
             <StatCard label="Venues" value={stats.uniqueVenues.toLocaleString()} />
           </div>
-          
+
           {/* Second row - conditional stats, also 3 columns max */}
           {(stats.monthlyListeners || stats.venueCapacity || stats.firstShow || stats.lastShow) && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -262,15 +286,15 @@ function BrowseContent({
                 <StatCard label="Capacity" value={stats.venueCapacity.toLocaleString()} />
               )}
               {stats.firstShow && (
-                <StatCard 
-                  label={selectedArtist ? "First Show (Artist)" : selectedVenue ? "First Show (Venue)" : "First Show"} 
-                  value={stats.firstShow} 
+                <StatCard
+                  label={selectedArtist ? "First Show (Artist)" : selectedVenue ? "First Show (Venue)" : "First Show"}
+                  value={stats.firstShow}
                 />
               )}
               {stats.lastShow && (
-                <StatCard 
-                  label={selectedArtist ? "Last Show (Artist)" : selectedVenue ? "Last Show (Venue)" : "Last Show"} 
-                  value={stats.lastShow} 
+                <StatCard
+                  label={selectedArtist ? "Last Show (Artist)" : selectedVenue ? "Last Show (Venue)" : "Last Show"}
+                  value={stats.lastShow}
                 />
               )}
             </div>
@@ -279,78 +303,97 @@ function BrowseContent({
 
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-          <h2 className="text-xl font-bold mb-4">Filters</h2>
-          
-        {/* Year Range Slider */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-2">
-            <label className="block text-sm font-medium text-gray-900">
-              Year Range:
-            </label>
-            <input
-              type="number"
-              value={yearRange[0]}
-              onChange={(e) => {
-                const newStart = parseInt(e.target.value)
-                if (!isNaN(newStart) && newStart >= 1900 && newStart <= yearRange[1]) {
-                  setYearRange([newStart, yearRange[1]])
-                  setCurrentPage(1)
-                  setPageInput('1')
-                }
-              }}
+          <h2 className="text-xl font-bold mb-4 text-gray-900">Filters</h2>
+
+          {/* Year Range Slider */}
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-sm font-medium text-gray-900">
+                Year Range:
+              </label>
+              <input
+                type="number"
+                defaultValue={typeof yearRange[0] === 'number' ? yearRange[0] : 1900}
+                onBlur={(e) => {
+                  const value = e.target.value
+                  const newStart = parseInt(value)
+                  if (!isNaN(newStart) && newStart >= 1900 && newStart <= (typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]))) {
+                    setYearRange([newStart, yearRange[1]])
+                    setCurrentPage(1)
+                    setPageInput('1')
+                  } else {
+                    e.target.value = (typeof yearRange[0] === 'number' ? yearRange[0] : 1900).toString()
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur() // Trigger onBlur
+                  }
+                }}
+                min={1900}
+                max={2025}
+                className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-900">—</span>
+              <input
+                type="number"
+                defaultValue={typeof yearRange[1] === 'number' ? yearRange[1] : 2025}
+                onBlur={(e) => {
+                  const value = e.target.value
+                  const newEnd = parseInt(value)
+                  if (!isNaN(newEnd) && newEnd <= 2025 && newEnd >= (typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]))) {
+                    setYearRange([yearRange[0], newEnd])
+                    setCurrentPage(1)
+                    setPageInput('1')
+                  } else {
+                    e.target.value = (typeof yearRange[1] === 'number' ? yearRange[1] : 2025).toString()
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur() // Trigger onBlur
+                  }
+                }}
+                min={1900}
+                max={2025}
+                className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <Slider
+              range
               min={1900}
               max={2025}
-              className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <span className="text-sm text-gray-900">—</span>
-            <input
-              type="number"
-              value={yearRange[1]}
-              onChange={(e) => {
-                const newEnd = parseInt(e.target.value)
-                if (!isNaN(newEnd) && newEnd <= 2025 && newEnd >= yearRange[0]) {
-                  setYearRange([yearRange[0], newEnd])
-                  setCurrentPage(1)
-                  setPageInput('1')
-                }
+              value={[
+                typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900,
+                typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025
+              ]}
+              onChange={(value) => {
+                setYearRange(value as number[])
+                setCurrentPage(1)
+                setPageInput('1')
               }}
-              min={1900}
-              max={2025}
-              className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              marks={{
+                1900: '1900',
+                1910: '1910',
+                1920: '1920',
+                1930: '1930',
+                1940: '1940',
+                1950: '1950',
+                1960: '1960',
+                1970: '1970',
+                1980: '1980',
+                1990: '1990',
+                2000: '2000',
+                2010: '2010',
+                2020: '2020',
+                2025: '2025',
+              }}
+              styles={{
+                track: { backgroundColor: '#3b82f6' },
+                handle: { borderColor: '#3b82f6' },
+              }}
             />
           </div>
-          <Slider
-            range
-            min={1900}
-            max={2025}
-            value={yearRange}
-            onChange={(value) => {
-              setYearRange(value as number[])
-              setCurrentPage(1)
-              setPageInput('1')
-            }}
-            marks={{
-              1900: '1900',
-              1910: '1910',
-              1920: '1920',
-              1930: '1930',
-              1940: '1940',
-              1950: '1950',
-              1960: '1960',
-              1970: '1970',
-              1980: '1980',
-              1990: '1990',
-              2000: '2000',
-              2010: '2010',
-              2020: '2020',
-              2025: '2025',
-            }}
-            styles={{
-              track: { backgroundColor: '#3b82f6' },
-              handle: { borderColor: '#3b82f6' },
-            }}
-          />
-        </div>
 
           {/* Artist & Venue Dropdowns */}
           <div className="grid md:grid-cols-2 gap-4">
@@ -456,9 +499,9 @@ function BrowseContent({
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <button
                         onClick={() => {
-                          setSelectedArtist({ 
-                            value: show.artist.artist_id, 
-                            label: show.artist.artist_name 
+                          setSelectedArtist({
+                            value: show.artist.artist_id,
+                            label: show.artist.artist_name
                           })
                           setCurrentPage(1)
                           setPageInput('1')
@@ -471,9 +514,9 @@ function BrowseContent({
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <button
                         onClick={() => {
-                          setSelectedVenue({ 
-                            value: show.venue.venue_id, 
-                            label: show.venue.venue_name 
+                          setSelectedVenue({
+                            value: show.venue.venue_id,
+                            label: show.venue.venue_name
                           })
                           setCurrentPage(1)
                           setPageInput('1')
@@ -485,7 +528,7 @@ function BrowseContent({
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {show.setlist_url ? (
-                        <a 
+                        <a
                           href={show.setlist_url}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -517,7 +560,7 @@ function BrowseContent({
                     setCurrentPage((p) => Math.max(1, p - 1))
                   }}
                   disabled={currentPage === 1}
-                  className="px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Previous
                 </button>
@@ -537,7 +580,7 @@ function BrowseContent({
                     setCurrentPage((p) => Math.min(totalPages, p + 1))
                   }}
                   disabled={currentPage === totalPages}
-                  className="px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next
                 </button>
