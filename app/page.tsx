@@ -1,3 +1,4 @@
+import Navigation from './components/Navigation'
 import { createClient } from '@supabase/supabase-js'
 import HomeClient from './HomeClient'
 
@@ -82,5 +83,10 @@ export default async function Home() {
     venue_name: show.dim_venue?.venue_name || 'Unknown'
   }))
 
-  return <HomeClient shows={shows} />
+  return (
+    <>
+      <Navigation />
+      <HomeClient shows={shows} />
+    </>
+  )
 }

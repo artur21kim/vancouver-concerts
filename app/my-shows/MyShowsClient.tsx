@@ -1,0 +1,353 @@
+'use client'
+
+import Navigation from '../components/Navigation'
+import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+
+type Show = {
+  show_id: number
+  date: string
+  setlist_url: string | null
+  added_at: string
+  notes: string | null
+  source: string | null
+  artist: {
+    artist_id: number
+    artist_name: string
+    monthly_listeners: number | null
+  }
+  venue: {
+    venue_id: number
+    venue_name: string
+    capacity: number | null
+  }
+}
+
+type SortField = 'date' | 'artist' | 'venue' | 'added_at'
+type SortDirection = 'asc' | 'desc'
+
+export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }) {
+  const router = useRouter()
+  const [shows, setShows] = useState(initialShows)
+  const [sortField, setSortField] = useState<SortField>('added_at')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [removingShows, setRemovingShows] = useState<Set<number>>(new Set())
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageInput, setPageInput] = useState('1')
+  const showsPerPage = 50
+
+  const removeShow = async (showId: number) => {
+    setRemovingShows(prev => new Set(prev).add(showId))
+
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      await supabase
+        .from('user_shows')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('show_id', showId)
+
+      // Remove from local state
+      setShows(shows.filter(s => s.show_id !== showId))
+    } catch (error) {
+      console.error('Error removing show:', error)
+    } finally {
+      setRemovingShows(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(showId)
+        return newSet
+      })
+    }
+  }
+
+  // Sort shows
+  const sortedShows = useMemo(() => {
+    const sorted = [...shows]
+
+    sorted.sort((a, b) => {
+      let aVal: any
+      let bVal: any
+
+      switch (sortField) {
+        case 'date':
+          aVal = new Date(a.date).getTime()
+          bVal = new Date(b.date).getTime()
+          break
+        case 'artist':
+          aVal = a.artist.artist_name.toLowerCase()
+          bVal = b.artist.artist_name.toLowerCase()
+          break
+        case 'venue':
+          aVal = a.venue.venue_name.toLowerCase()
+          bVal = b.venue.venue_name.toLowerCase()
+          break
+        case 'added_at':
+          aVal = new Date(a.added_at).getTime()
+          bVal = new Date(b.added_at).getTime()
+          break
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    })
+
+    return sorted
+  }, [shows, sortField, sortDirection])
+
+  // Calculate stats
+  const stats = useMemo(() => {
+    const totalShows = shows.length
+    const uniqueArtists = new Set(shows.map(s => s.artist.artist_id)).size
+    const uniqueVenues = new Set(shows.map(s => s.venue.venue_id)).size
+
+    return { totalShows, uniqueArtists, uniqueVenues }
+  }, [shows])
+
+  // Pagination
+  const totalPages = Math.ceil(sortedShows.length / showsPerPage)
+  const currentShows = useMemo(() => {
+    const startIndex = (currentPage - 1) * showsPerPage
+    return sortedShows.slice(startIndex, startIndex + showsPerPage)
+  }, [sortedShows, currentPage])
+
+  // Handle sort
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
+    setCurrentPage(1)
+    setPageInput('1')
+  }
+
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page)
+      setPageInput(page.toString())
+    }
+  }
+
+  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPageInput(e.target.value)
+  }
+
+  const handlePageInputSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const page = parseInt(pageInput)
+    if (!isNaN(page) && page >= 1 && page <= totalPages) {
+      setCurrentPage(page)
+    } else {
+      setPageInput(currentPage.toString())
+    }
+  }
+
+  return (
+    <>
+      <Navigation />
+      <main className="min-h-screen bg-gray-50 py-8 px-4">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <h1 className="text-4xl font-bold text-gray-900 mb-8">My Shows</h1>
+
+          {/* Stats Cards */}
+          <div className="mb-8">
+            <div className="grid grid-cols-3 gap-4">
+              <StatCard label="Shows" value={stats.totalShows.toLocaleString()} />
+              <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
+              <StatCard label="Venues" value={stats.uniqueVenues.toLocaleString()} />
+            </div>
+          </div>
+
+          {shows.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-lg p-12 text-center">
+              <p className="text-gray-600 text-lg mb-4">You haven't added any shows yet!</p>
+              <button
+                onClick={() => router.push('/browse')}
+                className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
+              >
+                Browse Shows
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16"></th>
+                      <th
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('date')}
+                      >
+                        Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('artist')}
+                      >
+                        Artist {sortField === 'artist' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('venue')}
+                      >
+                        Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Setlist
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {currentShows.map((show) => {
+                      const isRemoving = removingShows.has(show.show_id)
+
+                      return (
+                        <tr key={show.show_id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => removeShow(show.show_id)}
+                              disabled={isRemoving}
+                              className="focus:outline-none disabled:opacity-50"
+                              title="Remove from My Shows"
+                            >
+                              {isRemoving ? (
+                                <div className="w-5 h-5 border-2 border-gray-300 border-t-red-500 rounded-full animate-spin"></div>
+                              ) : (
+                                <svg
+                                  className="w-6 h-6 fill-red-500 text-red-500 hover:fill-red-600 hover:text-red-600 transition-colors"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  viewBox="0 0 24 24"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+                                  />
+                                </svg>
+                              )}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                            {show.date}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            <button
+                              onClick={() => router.push(`/browse?artist_id=${show.artist.artist_id}`)}
+                              className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+                            >
+                              {show.artist.artist_name}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            <button
+                              onClick={() => router.push(`/browse?venue_id=${show.venue.venue_id}`)}
+                              className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+                            >
+                              {show.venue.venue_name}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm">
+                            {show.setlist_url ? (
+
+                             <a href = { show.setlist_url }
+                                target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 hover:underline"
+                              >
+                            View
+                          </a>
+                          ) : (
+                          <span className="text-gray-400">-</span>
+                            )}
+                        </td>
+                        </tr>
+                  )
+                    })}
+                </tbody>
+              </table>
+            </div>
+
+              {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 sm:px-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-700">
+                    Showing{' '}
+                    <span className="font-medium">
+                      {(currentPage - 1) * showsPerPage + 1}
+                    </span>{' '}
+                    to{' '}
+                    <span className="font-medium">
+                      {Math.min(currentPage * showsPerPage, sortedShows.length)}
+                    </span>{' '}
+                    of <span className="font-medium">{sortedShows.length}</span> shows
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+
+                  <form onSubmit={handlePageInputSubmit} className="flex items-center gap-1">
+                    <span className="text-sm text-gray-700">Page</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max={totalPages}
+                      value={pageInput}
+                      onChange={handlePageInputChange}
+                      onBlur={() => {
+                        const page = parseInt(pageInput)
+                        if (isNaN(page) || page < 1 || page > totalPages) {
+                          setPageInput(currentPage.toString())
+                        }
+                      }}
+                      className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">of {totalPages}</span>
+                  </form>
+
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+          )}
+      </div>
+    </main >
+    </>
+  )
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-white rounded-lg shadow p-4">
+      <p className="text-sm text-gray-600 mb-1">{label}</p>
+      <p className="text-2xl font-bold text-gray-900">{value}</p>
+    </div>
+  )
+}

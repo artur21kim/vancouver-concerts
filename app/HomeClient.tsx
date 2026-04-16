@@ -33,11 +33,20 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
   const router = useRouter()
   const [selectedDecade, setSelectedDecade] = useState<Decade>('all')
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null) // NEW: 0-11 for Jan-Dec
   const [showAllArtists, setShowAllArtists] = useState(false)
   const [showAllVenues, setShowAllVenues] = useState(false)
 
-  // Filter shows by selected decade or year
+  // Filter shows by selected decade, year, or month
   const filteredShows = useMemo(() => {
+    if (selectedMonth !== null && selectedYear) {
+      // Filter by specific month
+      return shows.filter((show) => {
+        const date = new Date(show.date)
+        return date.getFullYear() === selectedYear && date.getMonth() === selectedMonth
+      })
+    }
+
     if (selectedYear) {
       // Filter by specific year
       return shows.filter((show) => {
@@ -55,7 +64,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
       const year = new Date(show.date).getFullYear()
       return year >= decadeStart && year <= decadeEnd
     })
-  }, [shows, selectedDecade, selectedYear])
+  }, [shows, selectedDecade, selectedYear, selectedMonth])
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -63,9 +72,9 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
     const uniqueArtists = new Set(filteredShows.map((s) => s.artist_id)).size
     const uniqueVenues = new Set(filteredShows.map((s) => s.venue_id)).size
 
-    // Shows per year (only if decade selected, not for "all" or specific year)
+    // Shows per year (only if decade selected, not for "all" or specific year/month)
     let showsPerYear = null
-    if (selectedDecade !== 'all' && !selectedYear) {
+    if (selectedDecade !== 'all' && !selectedYear && !selectedMonth) {
       const decadeStart = parseInt(selectedDecade.substring(0, 4))
       const decadeEnd = decadeStart + 9
       const years = decadeEnd - decadeStart + 1
@@ -73,17 +82,26 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
     }
 
     return { totalShows, uniqueArtists, uniqueVenues, showsPerYear }
-  }, [filteredShows, selectedDecade, selectedYear])
+  }, [filteredShows, selectedDecade, selectedYear, selectedMonth])
 
   // Chart data
   const chartData = useMemo(() => {
-    if (selectedYear) {
+    if (selectedMonth !== null && selectedYear) {
+      // At month level - navigate to Browse instead of showing chart
+      // This case shouldn't render, but keeping for safety
+      return {
+        labels: [],
+        datasets: []
+      }
+    } else if (selectedYear) {
       // Show 12 bars (months in the selected year)
       const monthCounts: { [key: number]: number } = {}
       Array.from({ length: 12 }, (_, i) => i).forEach(month => monthCounts[month] = 0)
 
       filteredShows.forEach(show => {
-        const month = new Date(show.date).getMonth()
+        // Parse month directly from YYYY-MM-DD to avoid timezone issues
+        const dateParts = show.date.split('-')
+        const month = parseInt(dateParts[1]) - 1 // Convert 1-12 to 0-11 for array index
         monthCounts[month]++
       })
 
@@ -144,7 +162,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
         }]
       }
     }
-  }, [shows, filteredShows, selectedDecade, selectedYear])
+  }, [shows, filteredShows, selectedDecade, selectedYear, selectedMonth])
 
   // Top Artists
   const topArtists = useMemo(() => {
@@ -197,26 +215,36 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
         const index = elements[0].index
 
         if (selectedYear) {
-          // At year level - no drilldown
-          return
+          // At year level - drill to month, then navigate to Browse
+          const clickedMonth = index // 0-11
+          const year = selectedYear
+          const month = clickedMonth + 1 // 1-12 for URL
+
+          // Navigate to Browse page filtered by year and month
+          router.push(`/browse?year=${year}&month=${month}`)
         } else if (selectedDecade === 'all') {
           // At all time level - drill to decade
           const decades = DECADES.filter(d => d !== 'all')
           const clickedDecade = decades[index] as Decade
           setSelectedDecade(clickedDecade)
           setSelectedYear(null)
+          setSelectedMonth(null)
         } else {
           // At decade level - drill to year
           const decadeStart = parseInt(selectedDecade.substring(0, 4))
           const clickedYear = decadeStart + index
           setSelectedYear(clickedYear)
+          setSelectedMonth(null)
         }
       }
     }
-  }), [selectedDecade, selectedYear])
+  }), [selectedDecade, selectedYear, router])
 
   // Get chart title
   const chartTitle = useMemo(() => {
+    if (selectedMonth !== null && selectedYear) {
+      return `Shows in ${MONTH_NAMES[selectedMonth]} ${selectedYear}`
+    }
     if (selectedYear) {
       return `Shows in ${selectedYear}`
     }
@@ -224,14 +252,17 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
       return 'Shows by Decade'
     }
     return `Shows in the ${selectedDecade}`
-  }, [selectedDecade, selectedYear])
+  }, [selectedDecade, selectedYear, selectedMonth])
 
   // Get filter context for Top 10 headers
   const filterContext = useMemo(() => {
+    if (selectedMonth !== null && selectedYear) {
+      return `${MONTH_NAMES[selectedMonth]} ${selectedYear}`
+    }
     if (selectedYear) return selectedYear.toString()
     if (selectedDecade !== 'all') return selectedDecade
     return null
-  }, [selectedDecade, selectedYear])
+  }, [selectedDecade, selectedYear, selectedMonth])
 
   // Breadcrumb navigation
   const breadcrumb = useMemo(() => {
@@ -242,11 +273,12 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
       onClick: () => {
         setSelectedDecade('all')
         setSelectedYear(null)
+        setSelectedMonth(null)
       },
-      active: selectedDecade === 'all' && !selectedYear
+      active: selectedDecade === 'all' && !selectedYear && selectedMonth === null
     })
 
-    if (selectedDecade !== 'all' || selectedYear) {
+    if (selectedDecade !== 'all' || selectedYear || selectedMonth !== null) {
       const decade = selectedYear
         ? `${Math.floor(selectedYear / 10) * 10}s` as Decade
         : selectedDecade
@@ -256,25 +288,97 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
         onClick: () => {
           setSelectedDecade(decade)
           setSelectedYear(null)
+          setSelectedMonth(null)
         },
-        active: selectedDecade !== 'all' && !selectedYear
+        active: selectedDecade !== 'all' && !selectedYear && selectedMonth === null
       })
     }
 
     if (selectedYear) {
       crumbs.push({
         label: selectedYear.toString(),
+        onClick: () => {
+          setSelectedMonth(null)
+        },
+        active: !!selectedYear && selectedMonth === null
+      })
+    }
+
+    if (selectedMonth !== null && selectedYear) {
+      crumbs.push({
+        label: MONTH_NAMES[selectedMonth],
         onClick: () => { }, // Already at this level
         active: true
       })
     }
 
     return crumbs
-  }, [selectedDecade, selectedYear])
+  }, [selectedDecade, selectedYear, selectedMonth])
+
+  // Navigation helpers (Previous/Next)
+  const navigation = useMemo(() => {
+    if (selectedDecade === 'all' && !selectedYear) {
+      return null // No navigation at top level
+    }
+
+    if (selectedYear && selectedMonth === null) {
+      // At year level - navigate between years
+      const currentDecade = Math.floor(selectedYear / 10) * 10
+      const prevYear = selectedYear - 1
+      const nextYear = selectedYear + 1
+
+      return {
+        previous: prevYear >= 1900 ? {
+          label: prevYear.toString(),
+          onClick: () => {
+            setSelectedYear(prevYear)
+            const newDecade = `${Math.floor(prevYear / 10) * 10}s` as Decade
+            setSelectedDecade(newDecade)
+          }
+        } : null,
+        current: selectedYear.toString(),
+        next: nextYear <= 2025 ? {
+          label: nextYear.toString(),
+          onClick: () => {
+            setSelectedYear(nextYear)
+            const newDecade = `${Math.floor(nextYear / 10) * 10}s` as Decade
+            setSelectedDecade(newDecade)
+          }
+        } : null
+      }
+    }
+
+    if (selectedDecade !== 'all') {
+      // At decade level - navigate between decades
+      const currentDecadeStart = parseInt(selectedDecade.substring(0, 4))
+      const prevDecadeStart = currentDecadeStart - 10
+      const nextDecadeStart = currentDecadeStart + 10
+
+      return {
+        previous: prevDecadeStart >= 1900 ? {
+          label: `${prevDecadeStart}s`,
+          onClick: () => {
+            setSelectedDecade(`${prevDecadeStart}s` as Decade)
+            setSelectedYear(null)
+          }
+        } : null,
+        current: selectedDecade,
+        next: nextDecadeStart <= 2020 ? {
+          label: `${nextDecadeStart}s`,
+          onClick: () => {
+            setSelectedDecade(`${nextDecadeStart}s` as Decade)
+            setSelectedYear(null)
+          }
+        } : null
+      }
+    }
+
+    return null
+  }, [selectedDecade, selectedYear, selectedMonth])
 
   return (
     <main className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
 
         {/* Browse All Shows Link */}
         <div className="text-center mb-4">
@@ -288,6 +392,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
 
         {/* Header */}
         <div className="text-center mb-8">
+        
           <h1 className="text-5xl font-bold text-gray-900 mb-4">
             Vancouver Concert History
           </h1>
@@ -309,7 +414,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
         {/* Shows Chart */}
         <div className="bg-white rounded-lg shadow-lg p-5 mb-6">
           {/* Breadcrumb */}
-          {(selectedDecade !== 'all' || selectedYear) && (
+          {(selectedDecade !== 'all' || selectedYear || selectedMonth !== null) && (
             <div className="mb-4 flex items-center gap-2 text-sm">
               {breadcrumb.map((crumb, index) => (
                 <div key={crumb.label} className="flex items-center gap-2">
@@ -329,20 +434,54 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
             </div>
           )}
 
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">
-            {chartTitle}
-          </h2>
-          <div style={{ height: '350px', cursor: selectedYear ? 'default' : 'pointer' }}>
+          {/* Previous/Next Navigation + Title - Integrated */}
+          {navigation ? (
+            <div className="mb-6">
+              <div className="flex items-center justify-center gap-6">
+                {navigation.previous ? (
+                  <button
+                    onClick={navigation.previous.onClick}
+                    className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 text-sm"
+                  >
+                    ← Previous {selectedYear ? 'Year' : 'Decade'}
+                  </button>
+                ) : (
+                  <div className="w-32"></div>
+                )}
+                
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {chartTitle}
+                </h2>
+
+                {navigation.next ? (
+                  <button
+                    onClick={navigation.next.onClick}
+                    className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 text-sm"
+                  >
+                    Next {selectedYear ? 'Year' : 'Decade'} →
+                  </button>
+                ) : (
+                  <div className="w-32"></div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+              {chartTitle}
+            </h2>
+          )}
+          
+          <div style={{ height: '350px', cursor: 'pointer' }}>
             <Bar data={chartData} options={chartOptions} />
           </div>
-          {!selectedYear && (
-            <p className="text-sm text-gray-500 mt-2 text-center">
-              Click a bar to drill down
-            </p>
-          )}
+          <p className="text-sm text-gray-500 mt-2 text-center">
+            {selectedYear 
+              ? 'Click a month to view shows in Browse' 
+              : 'Click a bar to drill down'}
+          </p>
         </div>
 
-        {/* Decade/Year Filter */}
+        {/* Decade/Year Filter - Always visible */}
         <div className="bg-white rounded-lg shadow-lg p-5 mb-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Filter by Decade</h2>
           <div className="flex flex-wrap gap-2 mb-4">
@@ -351,9 +490,10 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
                 key={decade}
                 onClick={() => {
                   setSelectedDecade(decade)
-                  setSelectedYear(null) // Clear year when decade selected
+                  setSelectedYear(null)
+                  setSelectedMonth(null)
                 }}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedDecade === decade && !selectedYear
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedDecade === decade && !selectedYear && selectedMonth === null
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
@@ -373,8 +513,8 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
               onChange={(e) => {
                 const year = e.target.value ? parseInt(e.target.value) : null
                 setSelectedYear(year)
+                setSelectedMonth(null)
                 if (year) {
-                  // Set the appropriate decade when year is selected
                   const decade = `${Math.floor(year / 10) * 10}s` as Decade
                   setSelectedDecade(decade)
                 }
