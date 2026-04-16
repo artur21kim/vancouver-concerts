@@ -34,7 +34,7 @@ export default function QuestionnairePage() {
           .eq('user_id', currentUser.id)
           .limit(1);
 
-        setHasExistingData(existingSongs && existingSongs.length > 0);
+        setHasExistingData(!!(existingSongs && existingSongs.length > 0));
       }
     } catch (err) {
       console.error('Error checking user status:', err);
