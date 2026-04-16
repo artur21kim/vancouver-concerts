@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@/utils/supabase/client';
 
 export default function QuestionnairePage() {
   const router = useRouter();
@@ -44,12 +44,20 @@ export default function QuestionnairePage() {
   };
 
   const handleYearChange = (value: string) => {
-    const numValue = value === '' ? '' : parseInt(value);
-    
     if (value === '') {
       setYear('');
       setError('');
-    } else if (numValue >= 1900 && numValue <= 2025) {
+      return;
+    }
+    
+    const numValue = parseInt(value);
+    
+    if (isNaN(numValue)) {
+      setError('Please enter a valid year');
+      return;
+    }
+    
+    if (numValue >= 1900 && numValue <= 2025) {
       setYear(numValue);
       setError('');
     } else if (numValue < 1900) {
