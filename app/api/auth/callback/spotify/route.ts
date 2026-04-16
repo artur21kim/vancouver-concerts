@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@/utils/supabase/server';
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -119,25 +119,31 @@ export async function GET(request: Request) {
       }));
     });
 
-    // Batch insert into user_spotify_songs
-    // Delete existing data first to ensure clean state
-    await supabase
-      .from('user_spotify_songs')
-      .delete()
-      .eq('user_id', state);
+    console.log(`Inserting ${songsToInsert.length} song-artist pairs for user ${state}`);
 
-    // Insert in batches (Supabase has limits on insert size)
+    // Batch upsert into user_spotify_songs (handles duplicates gracefully)
     const batchSize = 1000;
+    let successCount = 0;
+    let errorCount = 0;
+
     for (let i = 0; i < songsToInsert.length; i += batchSize) {
       const batch = songsToInsert.slice(i, i + batchSize);
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('user_spotify_songs')
-        .insert(batch);
+        .upsert(batch, { 
+          onConflict: 'user_id,spotify_track_id',
+          ignoreDuplicates: false // Update if exists
+        });
 
       if (error) {
-        console.error('Error inserting batch:', error);
+        console.error(`Error upserting batch ${i / batchSize + 1}:`, error);
+        errorCount++;
+      } else {
+        successCount++;
       }
     }
+
+    console.log(`Upsert complete: ${successCount} successful batches, ${errorCount} errors`);
 
     // Redirect to venue selection page
     return NextResponse.redirect(
