@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Select from 'react-select'
 import Slider from 'rc-slider'
@@ -42,7 +42,7 @@ type SortDirection = 'asc' | 'desc'
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-export default function BrowseClient({
+function BrowseContent({
   shows,
   artists,
   venues,
@@ -738,5 +738,28 @@ function StatCard({ label, value }: { label: string; value: string }) {
       <p className="text-sm text-gray-600 mb-1">{label}</p>
       <p className="text-2xl font-bold text-gray-900">{value}</p>
     </div>
+  )
+}
+
+export default function BrowseClient({
+  shows,
+  artists,
+  venues,
+}: {
+  shows: Show[]
+  artists: Artist[]
+  venues: Venue[]
+}) {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <BrowseContent shows={shows} artists={artists} venues={venues} />
+    </Suspense>
   )
 }
