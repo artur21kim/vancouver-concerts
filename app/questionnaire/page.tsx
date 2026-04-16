@@ -158,7 +158,7 @@ export default function QuestionnairePage() {
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8">
-        <h1 className="text-3xl font-bold mb-2">Find Your Concert History</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Find Your Concert History</h1>
         <p className="text-gray-600 mb-8">
           We'll match your Spotify listening history with Vancouver concerts to help you discover shows you may have attended.
         </p>
@@ -166,7 +166,7 @@ export default function QuestionnairePage() {
         <div className="space-y-6">
           {/* Question */}
           <div>
-            <label className="block text-lg font-semibold mb-4">
+            <label className="block text-lg font-semibold text-gray-900 mb-4">
               What year did you go to your first concert?
             </label>
             
