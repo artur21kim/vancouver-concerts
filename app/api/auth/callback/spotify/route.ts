@@ -73,7 +73,7 @@ export async function GET(request: Request) {
     };
 
     while (nextUrl) {
-      const response = await fetch(nextUrl, {
+      const response: Response = await fetch(nextUrl, {
         headers: {
           'Authorization': `Bearer ${accessToken}`
         }
