@@ -96,9 +96,9 @@ export async function GET(request: Request) {
       allSongs.push(...data.items);
       nextUrl = data.next;
 
-      // TESTING LIMIT: Only fetch 100 songs to test flow without rate limiting
+      // TESTING LIMIT: Only fetch 1000 songs to test flow without rate limiting
       // TODO: Remove or increase this limit after testing is successful
-      if (allSongs.length >= 100) {
+      if (allSongs.length >= 1000) {
         console.log(`✅ Reached testing limit of 100 songs. Stopping fetch.`);
         console.log(`📊 Total songs fetched: ${allSongs.length}`);
         break;
