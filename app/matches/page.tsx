@@ -148,7 +148,9 @@ export default function MatchesPage() {
 
           {/* Top Venues */}
           <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Top Venues You Likely Attended</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              Top 15 Venues (out of {matchData.total_venues_matched} total)
+            </h2>
             <p className="text-gray-600 mb-6">
               These venues hosted the most shows by artists in your Spotify library
             </p>
