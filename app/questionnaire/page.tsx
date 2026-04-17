@@ -81,20 +81,37 @@ export default function QuestionnairePage() {
       return;
     }
 
-    // Store year in localStorage for use after OAuth callback
-    localStorage.setItem('firstConcertYear', year.toString());
-
     // Check if user is logged in
     if (!user) {
+      // Store year in localStorage temporarily for after login
+      localStorage.setItem('firstConcertYear', year.toString());
       // Redirect to login with return path
       router.push('/login?return_to=/questionnaire');
       return;
     }
 
-    // Redirect to Spotify OAuth
-    // Update this URL to match your Spotify OAuth endpoint
-    const spotifyAuthUrl = `/api/auth/spotify?first_concert_year=${year}`;
-    router.push(spotifyAuthUrl);
+    try {
+      // Save first_concert_year to user_profiles
+      const { error: updateError } = await supabase
+        .from('user_profiles')
+        .update({ first_concert_year: year })
+        .eq('user_id', user.id);
+
+      if (updateError) {
+        console.error('Error saving first_concert_year:', updateError);
+        setError('Failed to save concert year. Please try again.');
+        return;
+      }
+
+      console.log(`✅ Saved first_concert_year: ${year} for user: ${user.id}`);
+
+      // Redirect to Spotify OAuth
+      const spotifyAuthUrl = `/api/auth/spotify?first_concert_year=${year}`;
+      router.push(spotifyAuthUrl);
+    } catch (err) {
+      console.error('Error in handleConnectSpotify:', err);
+      setError('An error occurred. Please try again.');
+    }
   };
 
   const handleRerunMatcher = async () => {
