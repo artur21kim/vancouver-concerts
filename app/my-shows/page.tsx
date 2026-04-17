@@ -28,10 +28,13 @@ export default async function MyShowsPage() {
         show_id,
         date,
         setlist_url,
+        show_type,
+        festival_name,
         dim_artist!inner (
           artist_id,
           artist_name,
-          monthly_listeners
+          monthly_listeners,
+          spotify_id
         ),
         dim_venue!inner (
           venue_id,
@@ -48,6 +51,8 @@ export default async function MyShowsPage() {
         show_id: us.fact_shows.show_id,
         date: us.fact_shows.date,
         setlist_url: us.fact_shows.setlist_url,
+        show_type: us.fact_shows.show_type,
+        festival_name: us.fact_shows.festival_name,
         added_at: us.added_at,
         notes: us.notes,
         source: us.source,
@@ -55,6 +60,7 @@ export default async function MyShowsPage() {
             artist_id: us.fact_shows.dim_artist.artist_id,
             artist_name: us.fact_shows.dim_artist.artist_name,
             monthly_listeners: us.fact_shows.dim_artist.monthly_listeners,
+            spotify_id: us.fact_shows.dim_artist.spotify_id,
         },
         venue: {
             venue_id: us.fact_shows.dim_venue.venue_id,
