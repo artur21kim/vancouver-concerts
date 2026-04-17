@@ -14,10 +14,10 @@ export default function Navigation() {
                 <div className="flex items-center justify-between h-16">
                     {/* Left: Brand + Nav Links */}
                     <div className="flex items-center gap-0">
-                        {/* Brand - More left padding on mobile */}
+                        {/* Brand - Aligned with content below */}
                        <a 
                         href="/"
-                        className="text-xl md:text-2xl font-bold text-gray-900 hover:text-gray-700 ml-2 md:-ml-4 mr-4 md:mr-6"
+                        className="text-xl md:text-2xl font-bold text-gray-900 hover:text-gray-700 md:-ml-4 mr-4 md:mr-6"
             >
                         Vancouver Concert History
                     </a>
