@@ -13,6 +13,8 @@ type Show = {
   show_id: number
   date: string
   setlist_url: string | null
+  show_type: string | null
+  festival_name: string | null
   artist: {
     artist_id: number
     artist_name: string
@@ -97,6 +99,8 @@ function BrowseContent({
       }
       : null
   )
+  const [selectedShowType, setSelectedShowType] = useState<string | null>(null)
+  const [selectedFestival, setSelectedFestival] = useState<{ value: string; label: string } | null>(null)
   
   const [yearRange, setYearRange] = useState<[number | string, number | string]>(() => {
     if (urlYear) {
@@ -211,12 +215,30 @@ function BrowseContent({
   const filteredShows = useMemo(() => {
     let filtered = shows
 
+    // Show Type filter
+    if (selectedShowType) {
+      if (selectedShowType === 'music') {
+        // Include NULL as music (untagged shows assumed to be music)
+        filtered = filtered.filter((show) => 
+          show.show_type === 'music' || show.show_type === null
+        )
+      } else {
+        // Comedy and Festival are explicit only
+        filtered = filtered.filter((show) => show.show_type === selectedShowType)
+      }
+    }
+
     if (selectedArtist) {
       filtered = filtered.filter((show) => show.artist.artist_id === selectedArtist.value)
     }
 
     if (selectedVenue) {
       filtered = filtered.filter((show) => show.venue.venue_id === selectedVenue.value)
+    }
+
+    // Festival filter
+    if (selectedFestival) {
+      filtered = filtered.filter((show) => show.festival_name === selectedFestival.value)
     }
 
     const startYear = typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900
@@ -263,7 +285,7 @@ function BrowseContent({
     })
 
     return filtered
-  }, [shows, selectedArtist, selectedVenue, yearRange, urlMonth, sortField, sortDirection])
+  }, [shows, selectedShowType, selectedArtist, selectedVenue, selectedFestival, yearRange, urlMonth, sortField, sortDirection])
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -347,6 +369,21 @@ function BrowseContent({
     value: venue.venue_id,
     label: venue.venue_name,
   }))
+
+  // Festival options - get unique festival names from shows
+  const festivalOptions = useMemo(() => {
+    const uniqueFestivals = new Set(
+      shows
+        .map(show => show.festival_name)
+        .filter((name): name is string => name !== null && name !== '')
+    )
+    return Array.from(uniqueFestivals)
+      .sort()
+      .map(festival => ({
+        value: festival,
+        label: festival
+      }))
+  }, [shows])
 
   // Dynamic page title
   const pageTitle = useMemo(() => {
@@ -432,12 +469,14 @@ function BrowseContent({
 
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-baseline gap-3 mb-4">
             <h2 className="text-xl font-bold text-gray-900">Filters</h2>
             <button
               onClick={() => {
+                setSelectedShowType(null)
                 setSelectedArtist(null)
                 setSelectedVenue(null)
+                setSelectedFestival(null)
                 setYearRange([1900, 2025])
                 setCurrentPage(1)
                 setPageInput('1')
@@ -448,8 +487,27 @@ function BrowseContent({
             </button>
           </div>
 
-          {/* Artist and Venue Filters - Side by Side */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          {/* Show Type, Artist, Venue, and Festival Filters - 4 columns */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            {/* Show Type Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-900 mb-2">Show Type</label>
+              <select
+                value={selectedShowType || ''}
+                onChange={(e) => {
+                  setSelectedShowType(e.target.value || null)
+                  setCurrentPage(1)
+                  setPageInput('1')
+                }}
+                className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="" className="text-gray-500">All Shows</option>
+                <option value="music" className="text-gray-900">Music</option>
+                <option value="comedy" className="text-gray-900">Comedy</option>
+                <option value="festival" className="text-gray-900">Festival</option>
+              </select>
+            </div>
+
             {/* Artist Filter */}
             <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">Artist</label>
@@ -483,6 +541,25 @@ function BrowseContent({
                 }}
                 isClearable
                 placeholder="All venues..."
+                className="text-sm"
+                styles={customSelectStyles}
+              />
+            </div>
+
+            {/* Festival Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-900 mb-2">Festival</label>
+              <Select
+                instanceId="festival-select"
+                options={festivalOptions}
+                value={selectedFestival}
+                onChange={(option) => {
+                  setSelectedFestival(option)
+                  setCurrentPage(1)
+                  setPageInput('1')
+                }}
+                isClearable
+                placeholder="All festivals..."
                 className="text-sm"
                 styles={customSelectStyles}
               />

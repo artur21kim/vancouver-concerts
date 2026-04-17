@@ -23,6 +23,8 @@ export default async function BrowsePage() {
         show_id,
         date,
         setlist_url,
+        show_type,
+        festival_name,
         dim_artist!inner (
           artist_id,
           artist_name,
@@ -132,6 +134,8 @@ export default async function BrowsePage() {
     show_id: show.show_id,
     date: show.date,
     setlist_url: show.setlist_url,
+    show_type: show.show_type,
+    festival_name: show.festival_name,
     artist: {
       artist_id: show.dim_artist?.artist_id || 0,
       artist_name: show.dim_artist?.artist_name || 'Unknown',
