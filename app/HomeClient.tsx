@@ -385,8 +385,8 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
+        {/* Stats Cards - Single row on all screens */}
+        <div className="grid grid-cols-4 gap-2 md:gap-4 mb-4 md:mb-6">
           <StatCard label="Shows" value={stats.totalShows.toLocaleString()} />
           <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
           <StatCard label="Venues" value={stats.uniqueVenues.toLocaleString()} />
@@ -612,12 +612,12 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
   )
 }
 
-// Stats Card Component - Mobile Responsive
+// Stats Card Component - Compact for 4-column mobile layout
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-white rounded-lg shadow p-3 md:p-4">
-      <p className="text-xs md:text-sm text-gray-600 mb-1">{label}</p>
-      <p className="text-xl md:text-2xl font-bold text-gray-900">{value}</p>
+    <div className="bg-white rounded-lg shadow p-2 md:p-4">
+      <p className="text-[10px] md:text-sm text-gray-600 mb-0.5 md:mb-1 leading-tight">{label}</p>
+      <p className="text-base md:text-2xl font-bold text-gray-900">{value}</p>
     </div>
   )
 }
