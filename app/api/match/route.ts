@@ -144,8 +144,8 @@ export async function GET(request: Request) {
       const spotifyScore = (artist.spotify_song_count / maxSpotifyCount) * 100;
       const vancouverScore = (artist.vancouver_show_count / maxVancouverCount) * 100;
       
-      // Weighted score: 60% Spotify + 40% Vancouver
-      const weightedScore = (0.6 * spotifyScore) + (0.4 * vancouverScore);
+      // Weighted score: 70% Spotify + 30% Vancouver
+      const weightedScore = (0.7 * spotifyScore) + (0.3 * vancouverScore);
 
       return {
         ...artist,
@@ -212,6 +212,7 @@ export async function GET(request: Request) {
         first_concert_year: firstConcertYear,
         matched_artists_count: matchedArtists.length,
         total_shows_count: shows.length,
+        total_venues_matched: Object.keys(venueScores).length,
         top_artists: scoredArtists.slice(0, 20), // Top 20 artists for reference
         top_venues: rankedVenues,
         duration_seconds: parseFloat(duration)

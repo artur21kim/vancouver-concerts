@@ -28,6 +28,7 @@ type MatchData = {
   first_concert_year: number;
   matched_artists_count: number;
   total_shows_count: number;
+  total_venues_matched: number;
   top_artists: Artist[];
   top_venues: Venue[];
   duration_seconds: number;
@@ -136,8 +137,8 @@ export default function MatchesPage() {
               value={matchData.total_shows_count.toLocaleString()} 
             />
             <StatCard 
-              label="Top Venues" 
-              value={matchData.top_venues.length.toString()} 
+              label="Total Venues" 
+              value={matchData.total_venues_matched.toString()} 
             />
             <StatCard 
               label="Processing Time" 
