@@ -33,14 +33,13 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
   const router = useRouter()
   const [selectedDecade, setSelectedDecade] = useState<Decade>('all')
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
-  const [selectedMonth, setSelectedMonth] = useState<number | null>(null) // NEW: 0-11 for Jan-Dec
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
   const [showAllArtists, setShowAllArtists] = useState(false)
   const [showAllVenues, setShowAllVenues] = useState(false)
 
   // Filter shows by selected decade, year, or month
   const filteredShows = useMemo(() => {
     if (selectedMonth !== null && selectedYear) {
-      // Filter by specific month
       return shows.filter((show) => {
         const date = new Date(show.date)
         return date.getFullYear() === selectedYear && date.getMonth() === selectedMonth
@@ -48,7 +47,6 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
     }
 
     if (selectedYear) {
-      // Filter by specific year
       return shows.filter((show) => {
         const year = new Date(show.date).getFullYear()
         return year === selectedYear
@@ -72,7 +70,6 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
     const uniqueArtists = new Set(filteredShows.map((s) => s.artist_id)).size
     const uniqueVenues = new Set(filteredShows.map((s) => s.venue_id)).size
 
-    // Shows per year (only if decade selected, not for "all" or specific year/month)
     let showsPerYear = null
     if (selectedDecade !== 'all' && !selectedYear && !selectedMonth) {
       const decadeStart = parseInt(selectedDecade.substring(0, 4))
@@ -87,21 +84,17 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
   // Chart data
   const chartData = useMemo(() => {
     if (selectedMonth !== null && selectedYear) {
-      // At month level - navigate to Browse instead of showing chart
-      // This case shouldn't render, but keeping for safety
       return {
         labels: [],
         datasets: []
       }
     } else if (selectedYear) {
-      // Show 12 bars (months in the selected year)
       const monthCounts: { [key: number]: number } = {}
       Array.from({ length: 12 }, (_, i) => i).forEach(month => monthCounts[month] = 0)
 
       filteredShows.forEach(show => {
-        // Parse month directly from YYYY-MM-DD to avoid timezone issues
         const dateParts = show.date.split('-')
-        const month = parseInt(dateParts[1]) - 1 // Convert 1-12 to 0-11 for array index
+        const month = parseInt(dateParts[1]) - 1
         monthCounts[month]++
       })
 
@@ -114,7 +107,6 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
         }]
       }
     } else if (selectedDecade === 'all') {
-      // Show 13 bars (one per decade)
       const decadeCounts: { [key: string]: number } = {}
 
       DECADES.filter(d => d !== 'all').forEach(decade => {
@@ -139,7 +131,6 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
         }]
       }
     } else {
-      // Show 10 bars (individual years within decade)
       const decadeStart = parseInt(selectedDecade.substring(0, 4))
       const years = Array.from({ length: 10 }, (_, i) => decadeStart + i)
 
@@ -215,22 +206,17 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
         const index = elements[0].index
 
         if (selectedYear) {
-          // At year level - drill to month, then navigate to Browse
-          const clickedMonth = index // 0-11
+          const clickedMonth = index
           const year = selectedYear
-          const month = clickedMonth + 1 // 1-12 for URL
-
-          // Navigate to Browse page filtered by year and month
+          const month = clickedMonth + 1
           router.push(`/browse?year=${year}&month=${month}`)
         } else if (selectedDecade === 'all') {
-          // At all time level - drill to decade
           const decades = DECADES.filter(d => d !== 'all')
           const clickedDecade = decades[index] as Decade
           setSelectedDecade(clickedDecade)
           setSelectedYear(null)
           setSelectedMonth(null)
         } else {
-          // At decade level - drill to year
           const decadeStart = parseInt(selectedDecade.substring(0, 4))
           const clickedYear = decadeStart + index
           setSelectedYear(clickedYear)
@@ -307,7 +293,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
     if (selectedMonth !== null && selectedYear) {
       crumbs.push({
         label: MONTH_NAMES[selectedMonth],
-        onClick: () => { }, // Already at this level
+        onClick: () => { },
         active: true
       })
     }
@@ -318,11 +304,10 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
   // Navigation helpers (Previous/Next)
   const navigation = useMemo(() => {
     if (selectedDecade === 'all' && !selectedYear) {
-      return null // No navigation at top level
+      return null
     }
 
     if (selectedYear && selectedMonth === null) {
-      // At year level - navigate between years
       const currentDecade = Math.floor(selectedYear / 10) * 10
       const prevYear = selectedYear - 1
       const nextYear = selectedYear + 1
@@ -349,7 +334,6 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
     }
 
     if (selectedDecade !== 'all') {
-      // At decade level - navigate between decades
       const currentDecadeStart = parseInt(selectedDecade.substring(0, 4))
       const prevDecadeStart = currentDecadeStart - 10
       const nextDecadeStart = currentDecadeStart + 10
@@ -377,32 +361,32 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
   }, [selectedDecade, selectedYear, selectedMonth])
 
   return (
-    <main className="min-h-screen bg-gray-50 py-8 px-4">
+    <main className="min-h-screen bg-gray-50 py-4 md:py-8 px-4">
       <div className="max-w-7xl mx-auto">
 
-        {/* Browse All Shows Link */}
-        <div className="text-center mb-4">
-          <a
-            href="/browse"
-            className="text-blue-600 hover:text-blue-800 underline text-lg"
-          >
-            → Browse All Shows
-          </a>
-        </div>
-
-        {/* Header */}
-        <div className="text-center mb-8">
-        
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">
+        {/* Header - Mobile Responsive */}
+        <div className="mb-4 md:mb-6">
+          {/* Main title - hidden on mobile, visible on desktop */}
+          <h1 className="hidden md:block text-5xl font-bold text-gray-900 mb-4 text-center">
             Vancouver Concert History
           </h1>
-          <p className="text-xl text-gray-600">
-            {shows.length.toLocaleString()} shows • 1900-2025
-          </p>
+          
+          {/* Subtitle + Browse button row */}
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm md:text-xl text-gray-600">
+              {shows.length.toLocaleString()} shows • 1900-2025
+            </p>
+            <a
+              href="/browse"
+              className="text-sm md:text-lg text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap"
+            >
+              → Browse All
+            </a>
+          </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
           <StatCard label="Shows" value={stats.totalShows.toLocaleString()} />
           <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
           <StatCard label="Venues" value={stats.uniqueVenues.toLocaleString()} />
@@ -412,10 +396,10 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
         </div>
 
         {/* Shows Chart */}
-        <div className="bg-white rounded-lg shadow-lg p-5 mb-6">
+        <div className="bg-white rounded-lg shadow-lg p-4 md:p-5 mb-4 md:mb-6">
           {/* Breadcrumb */}
           {(selectedDecade !== 'all' || selectedYear || selectedMonth !== null) && (
-            <div className="mb-4 flex items-center gap-2 text-sm">
+            <div className="mb-4 flex items-center gap-2 text-xs md:text-sm">
               {breadcrumb.map((crumb, index) => (
                 <div key={crumb.label} className="flex items-center gap-2">
                   {index > 0 && <span className="text-gray-400">›</span>}
@@ -434,78 +418,82 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
             </div>
           )}
 
-          {/* Previous/Next Navigation + Title - Integrated */}
+          {/* Previous/Next Navigation + Title */}
           {navigation ? (
-            <div className="mb-6">
-              <div className="flex items-center justify-center gap-6">
+            <div className="mb-4 md:mb-6">
+              <div className="flex items-center justify-center gap-2 md:gap-6">
                 {navigation.previous ? (
                   <button
                     onClick={navigation.previous.onClick}
-                    className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 text-sm"
+                    className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 text-xs md:text-sm"
                   >
-                    ← Previous {selectedYear ? 'Year' : 'Decade'}
+                    ← <span className="hidden md:inline">Previous {selectedYear ? 'Year' : 'Decade'}</span>
                   </button>
                 ) : (
-                  <div className="w-32"></div>
+                  <div className="w-8 md:w-32"></div>
                 )}
                 
-                <h2 className="text-2xl font-bold text-gray-900">
+                <h2 className="text-lg md:text-2xl font-bold text-gray-900 text-center">
                   {chartTitle}
                 </h2>
 
                 {navigation.next ? (
                   <button
                     onClick={navigation.next.onClick}
-                    className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 text-sm"
+                    className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 text-xs md:text-sm"
                   >
-                    Next {selectedYear ? 'Year' : 'Decade'} →
+                    <span className="hidden md:inline">Next {selectedYear ? 'Year' : 'Decade'}</span> →
                   </button>
                 ) : (
-                  <div className="w-32"></div>
+                  <div className="w-8 md:w-32"></div>
                 )}
               </div>
             </div>
           ) : (
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+            <h2 className="text-lg md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">
               {chartTitle}
             </h2>
           )}
           
-          <div style={{ height: '350px', cursor: 'pointer' }}>
+          <div style={{ height: '300px', cursor: 'pointer' }} className="md:h-[350px]">
             <Bar data={chartData} options={chartOptions} />
           </div>
-          <p className="text-sm text-gray-500 mt-2 text-center">
+          <p className="text-xs md:text-sm text-gray-500 mt-2 text-center">
             {selectedYear 
               ? 'Click a month to view shows in Browse' 
               : 'Click a bar to drill down'}
           </p>
         </div>
 
-        {/* Decade/Year Filter - Always visible */}
-        <div className="bg-white rounded-lg shadow-lg p-5 mb-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Filter by Decade</h2>
-          <div className="flex flex-wrap gap-2 mb-4">
-            {DECADES.map((decade) => (
-              <button
-                key={decade}
-                onClick={() => {
-                  setSelectedDecade(decade)
-                  setSelectedYear(null)
-                  setSelectedMonth(null)
-                }}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${selectedDecade === decade && !selectedYear && selectedMonth === null
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-              >
-                {decade === 'all' ? 'All Time' : decade}
-              </button>
-            ))}
+        {/* Decade/Year Filter - Mobile Horizontal Scroll */}
+        <div className="bg-white rounded-lg shadow-lg p-4 md:p-5 mb-4 md:mb-6">
+          <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-3 md:mb-4">Filter by Decade</h2>
+          
+          {/* Horizontal scroll on mobile, wrap on desktop */}
+          <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+            <div className="flex md:flex-wrap gap-2 mb-4 min-w-max md:min-w-0">
+              {DECADES.map((decade) => (
+                <button
+                  key={decade}
+                  onClick={() => {
+                    setSelectedDecade(decade)
+                    setSelectedYear(null)
+                    setSelectedMonth(null)
+                  }}
+                  className={`px-3 md:px-4 py-2 rounded-md text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${selectedDecade === decade && !selectedYear && selectedMonth === null
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                >
+                  {decade === 'all' ? 'All Time' : decade}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Year dropdown */}
           <div className="pt-4 border-t">
-            <label className="block text-sm font-medium text-gray-900 mb-2">
+            <label className="block text-xs md:text-sm font-medium text-gray-900 mb-2">
               Or view a specific year:
             </label>
             <select
@@ -519,7 +507,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
                   setSelectedDecade(decade)
                 }
               }}
-              className="w-full md:w-64 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full md:w-64 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select year...</option>
               {Array.from({ length: 126 }, (_, i) => 1900 + i).map(year => (
@@ -529,33 +517,33 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
           </div>
         </div>
 
-        {/* Two columns for tables */}
-        <div className="grid md:grid-cols-2 gap-8">
+        {/* Two columns for tables - stack on mobile */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
           {/* Top Artists */}
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+          <div className="bg-white rounded-lg shadow-lg p-4 md:p-6">
+            <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">
               Top {showAllArtists ? '25' : '10'} Artists
               {filterContext && (
-                <span className="text-base font-normal text-gray-600 ml-2">({filterContext})</span>
+                <span className="text-sm md:text-base font-normal text-gray-600 ml-2">({filterContext})</span>
               )}
             </h2>
             {topArtists.length > 0 ? (
               <>
-                <div className="space-y-3">
+                <div className="space-y-2 md:space-y-3">
                   {topArtists.slice(0, showAllArtists ? 25 : 10).map((artist, index) => (
                     <div key={artist.artist_id} className="flex items-center justify-between border-b pb-2">
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg font-semibold text-gray-400 w-6">
+                      <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                        <span className="text-base md:text-lg font-semibold text-gray-400 w-4 md:w-6 flex-shrink-0">
                           {index + 1}
                         </span>
                         <button
                           onClick={() => router.push(`/browse?artist_id=${artist.artist_id}`)}
-                          className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+                          className="text-sm md:text-base text-blue-600 hover:text-blue-800 hover:underline text-left truncate"
                         >
                           {artist.artist_name}
                         </button>
                       </div>
-                      <span className="text-gray-600 font-medium">
+                      <span className="text-xs md:text-base text-gray-600 font-medium whitespace-nowrap ml-2">
                         {artist.show_count} shows
                       </span>
                     </div>
@@ -564,42 +552,42 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
                 {topArtists.length > 10 && (
                   <button
                     onClick={() => setShowAllArtists(!showAllArtists)}
-                    className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    className="mt-4 text-blue-600 hover:text-blue-800 text-xs md:text-sm font-medium"
                   >
                     {showAllArtists ? '← Show less' : 'View more →'}
                   </button>
                 )}
               </>
             ) : (
-              <p className="text-gray-500">No shows in this period</p>
+              <p className="text-sm text-gray-500">No shows in this period</p>
             )}
           </div>
 
           {/* Top Venues */}
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+          <div className="bg-white rounded-lg shadow-lg p-4 md:p-6">
+            <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">
               Top {showAllVenues ? '25' : '10'} Venues
               {filterContext && (
-                <span className="text-base font-normal text-gray-600 ml-2">({filterContext})</span>
+                <span className="text-sm md:text-base font-normal text-gray-600 ml-2">({filterContext})</span>
               )}
             </h2>
             {topVenues.length > 0 ? (
               <>
-                <div className="space-y-3">
+                <div className="space-y-2 md:space-y-3">
                   {topVenues.slice(0, showAllVenues ? 25 : 10).map((venue, index) => (
                     <div key={venue.venue_id} className="flex items-center justify-between border-b pb-2">
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg font-semibold text-gray-400 w-6">
+                      <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                        <span className="text-base md:text-lg font-semibold text-gray-400 w-4 md:w-6 flex-shrink-0">
                           {index + 1}
                         </span>
                         <button
                           onClick={() => router.push(`/browse?venue_id=${venue.venue_id}`)}
-                          className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+                          className="text-sm md:text-base text-blue-600 hover:text-blue-800 hover:underline text-left truncate"
                         >
                           {venue.venue_name}
                         </button>
                       </div>
-                      <span className="text-gray-600 font-medium">
+                      <span className="text-xs md:text-base text-gray-600 font-medium whitespace-nowrap ml-2">
                         {venue.show_count} shows
                       </span>
                     </div>
@@ -608,14 +596,14 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
                 {topVenues.length > 10 && (
                   <button
                     onClick={() => setShowAllVenues(!showAllVenues)}
-                    className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    className="mt-4 text-blue-600 hover:text-blue-800 text-xs md:text-sm font-medium"
                   >
                     {showAllVenues ? '← Show less' : 'View more →'}
                   </button>
                 )}
               </>
             ) : (
-              <p className="text-gray-500">No shows in this period</p>
+              <p className="text-sm text-gray-500">No shows in this period</p>
             )}
           </div>
         </div>
@@ -624,12 +612,12 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
   )
 }
 
-// Stats Card Component
+// Stats Card Component - Mobile Responsive
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <p className="text-sm text-gray-600 mb-1">{label}</p>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
+    <div className="bg-white rounded-lg shadow p-3 md:p-4">
+      <p className="text-xs md:text-sm text-gray-600 mb-1">{label}</p>
+      <p className="text-xl md:text-2xl font-bold text-gray-900">{value}</p>
     </div>
   )
 }
