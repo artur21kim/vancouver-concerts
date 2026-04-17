@@ -372,13 +372,13 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
           </h1>
           
           {/* Subtitle + Browse button row */}
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between md:justify-center gap-4 md:relative">
             <p className="text-sm md:text-xl text-gray-600">
               {shows.length.toLocaleString()} shows • 1900-2025
             </p>
             <a
               href="/browse"
-              className="text-sm md:text-lg text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap"
+              className="text-sm md:text-lg text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap md:absolute md:right-0"
             >
               → Browse All
             </a>
