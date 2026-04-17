@@ -135,7 +135,7 @@ export async function GET(request: Request) {
       const { data, error } = await supabase
         .from('user_spotify_songs')
         .upsert(batch, { 
-          onConflict: 'user_id,spotify_track_id',
+          onConflict: 'user_id,spotify_track_id,spotify_artist_id',
           ignoreDuplicates: false // Update if exists
         });
 
