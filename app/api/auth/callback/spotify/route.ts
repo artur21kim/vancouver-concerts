@@ -40,10 +40,10 @@ export async function GET(request: Request) {
     const supabase = await createClient();
 
     // NOTE: This process can take a few minutes for users with large libraries
-    // Rate limiting: 600ms between requests = 100 requests/minute
-    // For 2000 songs (40 requests): ~24 seconds
-    // For 5000 songs (100 requests): ~60 seconds (1 minute)
-    // For 10000 songs (200 requests): ~120 seconds (2 minutes)
+    // Rate limiting: 400ms between requests = 150 requests/minute (safely under 180/min limit)
+    // For 2000 songs (40 requests): ~16 seconds
+    // For 5000 songs (100 requests): ~40 seconds
+    // For 10000 songs (200 requests): ~80 seconds (1.3 minutes)
     
     // TODO Phase 4.5: Consider showing progress UI or running this in background job
 
@@ -62,18 +62,18 @@ export async function GET(request: Request) {
     const rateLimit = async () => {
       requestCount++;
       
-      // 100 requests per minute = 1 request every 600ms
+      // 150 requests per minute = 1 request every 400ms
       if (requestCount % 10 === 0) {
         // Every 10 requests, check if we need to slow down
         const elapsedMs = Date.now() - startTime;
-        const expectedMs = requestCount * 600; // 600ms per request = 100/min
+        const expectedMs = requestCount * 400; // 400ms per request = 150/min
         
         if (elapsedMs < expectedMs) {
           await new Promise(resolve => setTimeout(resolve, expectedMs - elapsedMs));
         }
       } else {
         // Standard delay between requests
-        await new Promise(resolve => setTimeout(resolve, 600));
+        await new Promise(resolve => setTimeout(resolve, 400));
       }
     };
 
