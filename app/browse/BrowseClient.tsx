@@ -116,6 +116,33 @@ function BrowseContent({
   const [userShows, setUserShows] = useState<Set<number>>(new Set())
   const [loadingShows, setLoadingShows] = useState<Set<number>>(new Set())
 
+  // Auto-adjust year range when artist/venue filter changes
+  useEffect(() => {
+    // Skip if both filters are empty (default state)
+    if (!selectedArtist && !selectedVenue) {
+      setYearRange([1900, 2025])
+      return
+    }
+
+    // Calculate the natural date range of filtered shows (before year range filter)
+    let relevantShows = shows
+
+    if (selectedArtist) {
+      relevantShows = relevantShows.filter((show) => show.artist.artist_id === selectedArtist.value)
+    }
+
+    if (selectedVenue) {
+      relevantShows = relevantShows.filter((show) => show.venue.venue_id === selectedVenue.value)
+    }
+
+    if (relevantShows.length > 0) {
+      const years = relevantShows.map(s => new Date(s.date).getFullYear())
+      const minYear = Math.min(...years)
+      const maxYear = Math.max(...years)
+      setYearRange([minYear, maxYear])
+    }
+  }, [selectedArtist, selectedVenue, shows])
+
   // Fetch user's shows
   useEffect(() => {
     const fetchUserShows = async () => {
@@ -405,7 +432,21 @@ function BrowseContent({
 
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Filters</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Filters</h2>
+            <button
+              onClick={() => {
+                setSelectedArtist(null)
+                setSelectedVenue(null)
+                setYearRange([1900, 2025])
+                setCurrentPage(1)
+                setPageInput('1')
+              }}
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+            >
+              Clear All
+            </button>
+          </div>
 
           {/* Artist and Venue Filters - Side by Side */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -475,7 +516,7 @@ function BrowseContent({
                 }}
                 min={1900}
                 max={2025}
-                className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-20 px-2 py-1 text-sm text-center text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <span className="text-sm text-gray-900">—</span>
               <input
@@ -499,7 +540,7 @@ function BrowseContent({
                 }}
                 min={1900}
                 max={2025}
-                className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-20 px-2 py-1 text-sm text-center text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <Slider
@@ -718,7 +759,7 @@ function BrowseContent({
                         setPageInput(currentPage.toString())
                       }
                     }}
-                    className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-16 px-2 py-1 text-sm text-center text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <span className="text-sm text-gray-700">of {totalPages}</span>
                 </form>
