@@ -507,11 +507,11 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
                   setSelectedDecade(decade)
                 }
               }}
-              className="w-full md:w-64 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full md:w-64 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
             >
-              <option value="">Select year...</option>
+              <option value="" className="text-gray-500">Select year...</option>
               {Array.from({ length: 126 }, (_, i) => 1900 + i).map(year => (
-                <option key={year} value={year}>{year}</option>
+                <option key={year} value={year} className="text-gray-900">{year}</option>
               ))}
             </select>
           </div>

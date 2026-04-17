@@ -42,6 +42,26 @@ type SortDirection = 'asc' | 'desc'
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
+// Custom styles for react-select dropdowns
+const customSelectStyles = {
+  control: (base: any) => ({
+    ...base,
+    fontSize: '0.875rem'
+  }),
+  singleValue: (base: any) => ({
+    ...base,
+    color: '#111827' // text-gray-900 - dark text for selected value
+  }),
+  placeholder: (base: any) => ({
+    ...base,
+    color: '#6B7280' // text-gray-500 - medium gray for placeholder
+  }),
+  option: (base: any) => ({
+    ...base,
+    color: '#111827' // text-gray-900 - dark text for dropdown options
+  })
+}
+
 function BrowseContent({
   shows,
   artists,
@@ -58,8 +78,8 @@ function BrowseContent({
   // Get initial filter values from URL params
   const initialArtistId = searchParams.get('artist_id')
   const initialVenueId = searchParams.get('venue_id')
-  const urlYear = searchParams.get('year') // NEW: Get year from URL
-  const urlMonth = searchParams.get('month') // NEW: Get month from URL (1-12)
+  const urlYear = searchParams.get('year')
+  const urlMonth = searchParams.get('month')
 
   const [selectedArtist, setSelectedArtist] = useState<{ value: number; label: string } | null>(
     initialArtistId
@@ -78,11 +98,10 @@ function BrowseContent({
       : null
   )
   
-  // NEW: Initialize year range from URL params
   const [yearRange, setYearRange] = useState<[number | string, number | string]>(() => {
     if (urlYear) {
       const year = parseInt(urlYear)
-      return [year, year] // Set both start and end to the same year
+      return [year, year]
     }
     return [1900, 2025]
   })
@@ -128,7 +147,6 @@ function BrowseContent({
 
     try {
       if (isAdded) {
-        // Remove show
         await supabase
           .from('user_shows')
           .delete()
@@ -141,7 +159,6 @@ function BrowseContent({
           return newSet
         })
       } else {
-        // Add show
         await supabase
           .from('user_shows')
           .insert({
@@ -167,17 +184,14 @@ function BrowseContent({
   const filteredShows = useMemo(() => {
     let filtered = shows
 
-    // Artist filter
     if (selectedArtist) {
       filtered = filtered.filter((show) => show.artist.artist_id === selectedArtist.value)
     }
 
-    // Venue filter
     if (selectedVenue) {
       filtered = filtered.filter((show) => show.venue.venue_id === selectedVenue.value)
     }
 
-    // Year range filter
     const startYear = typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900
     const endYear = typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025
 
@@ -186,20 +200,17 @@ function BrowseContent({
       return year >= startYear && year <= endYear
     })
 
-    // NEW: Month filter (if month param is provided)
     if (urlMonth) {
-      const monthNum = parseInt(urlMonth) // URL month is 1-12
+      const monthNum = parseInt(urlMonth)
       if (monthNum >= 1 && monthNum <= 12) {
         filtered = filtered.filter((show) => {
-          // Parse date as YYYY-MM-DD to avoid timezone issues
           const dateParts = show.date.split('-')
-          const showMonth = parseInt(dateParts[1]) // Month from date string (1-12)
+          const showMonth = parseInt(dateParts[1])
           return showMonth === monthNum
         })
       }
     }
 
-    // Sort
     filtered.sort((a, b) => {
       let aVal: any
       let bVal: any
@@ -233,17 +244,14 @@ function BrowseContent({
     const uniqueArtists = new Set(filteredShows.map((s) => s.artist.artist_id)).size
     const uniqueVenues = new Set(filteredShows.map((s) => s.venue.venue_id)).size
 
-    // Calculate monthly listeners (only when artist is selected)
     const monthlyListeners = selectedArtist
       ? artists.find((a) => a.artist_id === selectedArtist.value)?.monthly_listeners || null
       : null
 
-    // Calculate capacity (only when venue is selected)
     const capacity = selectedVenue
       ? venues.find((v) => v.venue_id === selectedVenue.value)?.capacity || null
       : null
 
-    // Calculate first and last show dates
     const sortedByDate = [...filteredShows].sort((a, b) =>
       new Date(a.date).getTime() - new Date(b.date).getTime()
     )
@@ -315,7 +323,6 @@ function BrowseContent({
 
   // Dynamic page title
   const pageTitle = useMemo(() => {
-    // NEW: Include month/year in title if filtered
     if (urlYear && urlMonth) {
       const monthName = MONTH_NAMES[parseInt(urlMonth) - 1]
       return `Browse: ${monthName} ${urlYear}`
@@ -417,6 +424,7 @@ function BrowseContent({
                 isClearable
                 placeholder="All artists..."
                 className="text-sm"
+                styles={customSelectStyles}
               />
             </div>
 
@@ -435,6 +443,7 @@ function BrowseContent({
                 isClearable
                 placeholder="All venues..."
                 className="text-sm"
+                styles={customSelectStyles}
               />
             </div>
           </div>
