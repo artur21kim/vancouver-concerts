@@ -64,11 +64,11 @@ export default function LikelyShowsPage() {
       
       // Extract unique artists and venues for filters
       const artists = Array.from(new Set(shows.map((s: Show) => JSON.stringify({ artist_id: s.artist_id, artist_name: s.artist_name }))))
-        .map(str => JSON.parse(str))
+        .map(str => JSON.parse(str as string) as { artist_id: number; artist_name: string })
         .sort((a, b) => a.artist_name.localeCompare(b.artist_name));
       
       const venues = Array.from(new Set(shows.map((s: Show) => JSON.stringify({ venue_id: s.venue_id, venue_name: s.venue_name }))))
-        .map(str => JSON.parse(str))
+        .map(str => JSON.parse(str as string) as { venue_id: number; venue_name: string })
         .sort((a, b) => a.venue_name.localeCompare(b.venue_name));
       
       setAvailableArtists(artists);
