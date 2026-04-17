@@ -29,7 +29,7 @@ export default async function BrowsePage() {
           artist_id,
           artist_name,
           monthly_listeners,
-          spotify_id
+          spotify_artist_id
         ),
         dim_venue!inner (
           venue_id,
@@ -74,7 +74,7 @@ export default async function BrowsePage() {
   while (hasMoreArtists) {
     const { data, error } = await supabase
       .from('dim_artist')
-      .select('artist_id, artist_name, monthly_listeners, spotify_id')
+      .select('artist_id, artist_name, monthly_listeners, spotify_artist_id')
       .order('artist_name')
       .range(artistPage * pageSize, (artistPage + 1) * pageSize - 1)
 
@@ -141,7 +141,7 @@ export default async function BrowsePage() {
       artist_id: show.dim_artist?.artist_id || 0,
       artist_name: show.dim_artist?.artist_name || 'Unknown',
       monthly_listeners: show.dim_artist?.monthly_listeners || null,
-      spotify_id: show.dim_artist?.spotify_id || null
+      spotify_artist_id: show.dim_artist?.spotify_artist_id || null
     },
     venue: {
       venue_id: show.dim_venue?.venue_id || 0,

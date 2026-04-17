@@ -33,7 +33,7 @@ export default async function MyShowsPage() {
                     artist_id,
                     artist_name,
                     monthly_listeners,
-                    spotify_id
+                    spotify_artist_id
                 ),
                 dim_venue (
                     venue_id,
@@ -94,7 +94,7 @@ export default async function MyShowsPage() {
                 artist_id: artist.artist_id,
                 artist_name: artist.artist_name,
                 monthly_listeners: artist.monthly_listeners,
-                spotify_id: artist.spotify_id,
+                spotify_artist_id: artist.spotify_arid,
             },
             venue: {
                 venue_id: venue.venue_id,

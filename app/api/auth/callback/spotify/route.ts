@@ -41,6 +41,7 @@ export async function GET(request: Request) {
 
     // NOTE: This process can take a few minutes for users with large libraries
     // Rate limiting: 600ms between requests = 100 requests/minute
+    // For 100 songs (2 requests): ~1.2 seconds
     // For 2000 songs (40 requests): ~24 seconds
     // For 5000 songs (100 requests): ~60 seconds (1 minute)
     // For 10000 songs (200 requests): ~120 seconds (2 minutes)
@@ -95,8 +96,11 @@ export async function GET(request: Request) {
       allSongs.push(...data.items);
       nextUrl = data.next;
 
-      // Safety limit (can adjust or remove)
-      if (allSongs.length >= 10000) {
+      // TESTING LIMIT: Only fetch 100 songs to test flow without rate limiting
+      // TODO: Remove or increase this limit after testing is successful
+      if (allSongs.length >= 100) {
+        console.log(`✅ Reached testing limit of 100 songs. Stopping fetch.`);
+        console.log(`📊 Total songs fetched: ${allSongs.length}`);
         break;
       }
 
@@ -119,7 +123,7 @@ export async function GET(request: Request) {
       }));
     });
 
-    console.log(`Inserting ${songsToInsert.length} song-artist pairs for user ${state}`);
+    console.log(`📝 Inserting ${songsToInsert.length} song-artist pairs for user ${state}`);
 
     // Batch upsert into user_spotify_songs (handles duplicates gracefully)
     const batchSize = 1000;
@@ -136,14 +140,14 @@ export async function GET(request: Request) {
         });
 
       if (error) {
-        console.error(`Error upserting batch ${i / batchSize + 1}:`, error);
+        console.error(`❌ Error upserting batch ${i / batchSize + 1}:`, error);
         errorCount++;
       } else {
         successCount++;
       }
     }
 
-    console.log(`Upsert complete: ${successCount} successful batches, ${errorCount} errors`);
+    console.log(`✅ Upsert complete: ${successCount} successful batches, ${errorCount} errors`);
 
     // Redirect to venue selection page
     return NextResponse.redirect(
@@ -151,7 +155,7 @@ export async function GET(request: Request) {
     );
 
   } catch (error) {
-    console.error('Spotify OAuth error:', error);
+    console.error('❌ Spotify OAuth error:', error);
     return NextResponse.redirect(
       new URL('/questionnaire?error=spotify_processing_failed', requestUrl.origin)
     );

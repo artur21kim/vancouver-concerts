@@ -19,7 +19,7 @@ type Show = {
     artist_id: number
     artist_name: string
     monthly_listeners: number | null
-    spotify_id: string | null
+    spotify_artist_id: string | null
   }
   venue: {
     venue_id: number
@@ -32,7 +32,7 @@ type Artist = {
   artist_id: number
   artist_name: string
   monthly_listeners: number | null
-  spotify_id: string | null
+  spotify_artist_id: string | null
 }
 
 type Venue = {
@@ -790,9 +790,9 @@ function BrowseContent({
                         )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
-                        {show.artist.spotify_id ? (
+                        {show.artist.spotify_artist_id ? (
                           <a 
-                            href={`https://open.spotify.com/artist/${show.artist.spotify_id}`}
+                            href={`https://open.spotify.com/artist/${show.artist.spotify_artist_id}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center justify-center hover:opacity-70 transition-opacity"
