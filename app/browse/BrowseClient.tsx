@@ -683,6 +683,9 @@ function BrowseContent({
                   >
                     Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                    Festival
+                  </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
                     Setlist
                   </th>
@@ -758,6 +761,9 @@ function BrowseContent({
                         >
                           {show.venue.venue_name}
                         </button>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {show.festival_name || '-'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm">
                         {show.setlist_url ? (
