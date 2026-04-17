@@ -94,7 +94,7 @@ export default async function MyShowsPage() {
                 artist_id: artist.artist_id,
                 artist_name: artist.artist_name,
                 monthly_listeners: artist.monthly_listeners,
-                spotify_artist_id: artist.spotify_arid,
+                spotify_artist_id: artist.spotify_id,
             },
             venue: {
                 venue_id: venue.venue_id,
