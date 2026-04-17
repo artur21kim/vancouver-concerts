@@ -22,7 +22,6 @@ export default async function MyShowsPage() {
         .select(`
             show_id,
             added_at,
-            notes,
             source,
             fact_shows (
                 show_id,
@@ -89,7 +88,7 @@ export default async function MyShowsPage() {
             show_type: show.show_type,
             festival_name: show.festival_name,
             added_at: us.added_at,
-            notes: us.notes,
+            notes: null,  // Column doesn't exist in schema
             source: us.source,
             artist: {
                 artist_id: artist.artist_id,
