@@ -41,14 +41,18 @@ export async function GET(request: Request) {
 
     // NOTE: This process can take a few minutes for users with large libraries
     // Rate limiting: 600ms between requests = 100 requests/minute
-    // For 100 songs (2 requests): ~1.2 seconds
     // For 2000 songs (40 requests): ~24 seconds
     // For 5000 songs (100 requests): ~60 seconds (1 minute)
     // For 10000 songs (200 requests): ~120 seconds (2 minutes)
     
     // TODO Phase 4.5: Consider showing progress UI or running this in background job
 
+    // ⏱️ START PERFORMANCE TRACKING
+    const performanceStart = Date.now();
+    console.log(`🚀 Starting Spotify fetch for user: ${state}`);
+
     // Fetch all liked songs (paginated with rate limiting)
+    const fetchStartTime = Date.now();
     const allSongs: any[] = [];
     let nextUrl: string | null = 'https://api.spotify.com/v1/me/tracks?limit=50';
     let requestCount = 0;
@@ -85,7 +89,7 @@ export async function GET(request: Request) {
         if (response.status === 429) {
           const retryAfter = response.headers.get('Retry-After');
           const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 60000;
-          console.log(`Rate limited. Waiting ${waitTime}ms before retry...`);
+          console.log(`⚠️ Rate limited. Waiting ${waitTime}ms before retry...`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
           continue; // Retry this request
         }
@@ -96,12 +100,10 @@ export async function GET(request: Request) {
       allSongs.push(...data.items);
       nextUrl = data.next;
 
-      // TESTING LIMIT: Only fetch 1000 songs to test flow without rate limiting
-      // TODO: Remove or increase this limit after testing is successful
-      if (allSongs.length >= 1000) {
-        console.log(`✅ Reached testing limit of 100 songs. Stopping fetch.`);
-        console.log(`📊 Total songs fetched: ${allSongs.length}`);
-        break;
+      // Log progress every 500 songs
+      if (allSongs.length % 500 === 0 && allSongs.length > 0) {
+        const elapsed = ((Date.now() - fetchStartTime) / 1000).toFixed(1);
+        console.log(`📊 Progress: ${allSongs.length} songs fetched (${elapsed}s elapsed)`);
       }
 
       // Rate limit delay before next request
@@ -110,7 +112,16 @@ export async function GET(request: Request) {
       }
     }
 
+    const fetchEndTime = Date.now();
+    const fetchDuration = ((fetchEndTime - fetchStartTime) / 1000).toFixed(2);
+    
+    console.log(`✅ Spotify Fetch Complete:`);
+    console.log(`   - Songs fetched: ${allSongs.length}`);
+    console.log(`   - API requests: ${requestCount}`);
+    console.log(`   - Fetch duration: ${fetchDuration}s`);
+
     // Transform and prepare for database insert
+    const transformStartTime = Date.now();
     const songsToInsert = allSongs.flatMap(item => {
       const track = item.track;
       return track.artists.map((artist: any) => ({
@@ -123,9 +134,11 @@ export async function GET(request: Request) {
       }));
     });
 
-    console.log(`📝 Inserting ${songsToInsert.length} song-artist pairs for user ${state}`);
+    const transformDuration = ((Date.now() - transformStartTime) / 1000).toFixed(2);
+    console.log(`🔄 Transform complete: ${songsToInsert.length} records in ${transformDuration}s`);
 
     // Batch upsert into user_spotify_songs (handles duplicates gracefully)
+    const upsertStartTime = Date.now();
     const batchSize = 1000;
     let successCount = 0;
     let errorCount = 0;
@@ -147,7 +160,24 @@ export async function GET(request: Request) {
       }
     }
 
+    const upsertDuration = ((Date.now() - upsertStartTime) / 1000).toFixed(2);
+    const totalDuration = ((Date.now() - performanceStart) / 1000).toFixed(2);
+
     console.log(`✅ Upsert complete: ${successCount} successful batches, ${errorCount} errors`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`📈 PERFORMANCE SUMMARY`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`   User ID: ${state}`);
+    console.log(`   Total songs: ${allSongs.length}`);
+    console.log(`   Total records: ${songsToInsert.length}`);
+    console.log(`   API requests: ${requestCount}`);
+    console.log(`   ─────────────────────────────────────`);
+    console.log(`   Fetch time: ${fetchDuration}s`);
+    console.log(`   Transform time: ${transformDuration}s`);
+    console.log(`   Upsert time: ${upsertDuration}s`);
+    console.log(`   ─────────────────────────────────────`);
+    console.log(`   🏁 TOTAL TIME: ${totalDuration}s`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
     // Redirect to venue selection page
     return NextResponse.redirect(
