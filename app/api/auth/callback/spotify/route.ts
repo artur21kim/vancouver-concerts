@@ -38,6 +38,20 @@ export async function GET(request: Request) {
     // Initialize Supabase client
     const supabase = await createClient();
 
+    // IMPORTANT: Verify the user is actually logged in
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      console.error('❌ User not authenticated:', authError);
+      throw new Error('User not authenticated');
+    }
+
+    // Verify the state matches the logged-in user
+    if (user.id !== state) {
+      console.error('❌ State mismatch:', { expected: state, actual: user.id });
+      throw new Error('Invalid OAuth state');
+    }
+
     // Calculate token expiration time
     const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000);
 
@@ -45,7 +59,7 @@ export async function GET(request: Request) {
     const { error: tokenError } = await supabase
       .from('user_spotify_tokens')
       .upsert({
-        user_id: state,
+        user_id: user.id,
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
         expires_at: expiresAt.toISOString(),
@@ -69,19 +83,18 @@ export async function GET(request: Request) {
         spotify_connected: true,
         updated_at: new Date().toISOString()
       })
-      .eq('user_id', state);
+      .eq('user_id', user.id);
 
     if (profileError) {
       console.error('❌ Error updating user profile:', profileError);
     }
 
-    console.log(`✅ Spotify token saved for user: ${state}`);
+    console.log(`✅ Spotify token saved for user: ${user.id}`);
     console.log(`📊 Redirecting to processing page`);
 
-    // Redirect to dedicated processing page (NOT venue-selection)
-    return NextResponse.redirect(
-      new URL('/spotify-processing', requestUrl.origin)
-    );
+    // Redirect to dedicated processing page
+    const redirectUrl = new URL('/spotify-processing', requestUrl.origin);
+    return NextResponse.redirect(redirectUrl);
 
   } catch (error) {
     console.error('❌ Spotify OAuth error:', error);
