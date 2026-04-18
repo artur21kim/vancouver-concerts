@@ -41,14 +41,14 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
   const filteredShows = useMemo(() => {
     if (selectedMonth !== null && selectedYear) {
       return shows.filter((show) => {
-        const date = new Date(show.date)
+        const date = new Date(show.date + 'T12:00:00')
         return date.getFullYear() === selectedYear && date.getMonth() === selectedMonth
       })
     }
 
     if (selectedYear) {
       return shows.filter((show) => {
-        const year = new Date(show.date).getFullYear()
+        const year = new Date(show.date + 'T12:00:00').getFullYear()
         return year === selectedYear
       })
     }
@@ -59,7 +59,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
     const decadeEnd = decadeStart + 9
 
     return shows.filter((show) => {
-      const year = new Date(show.date).getFullYear()
+      const year = new Date(show.date + 'T12:00:00').getFullYear()
       return year >= decadeStart && year <= decadeEnd
     })
   }, [shows, selectedDecade, selectedYear, selectedMonth])
@@ -114,7 +114,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
       })
 
       shows.forEach(show => {
-        const year = new Date(show.date).getFullYear()
+        const year = new Date(show.date + 'T12:00:00').getFullYear()
         const decadeStart = Math.floor(year / 10) * 10
         const decadeLabel = `${decadeStart}s`
         if (decadeCounts[decadeLabel] !== undefined) {
@@ -138,7 +138,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
       years.forEach(year => yearCounts[year] = 0)
 
       filteredShows.forEach(show => {
-        const year = new Date(show.date).getFullYear()
+        const year = new Date(show.date + 'T12:00:00').getFullYear()
         if (yearCounts[year] !== undefined) {
           yearCounts[year]++
         }

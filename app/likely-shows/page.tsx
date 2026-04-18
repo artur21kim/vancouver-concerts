@@ -516,10 +516,10 @@ export default function LikelyShowsPage() {
                             {group.shows.map(show => (
                               <tr key={show.show_id} className="hover:bg-gray-50">
                                 <td className="px-6 py-4 text-sm text-gray-900">
-                                  {new Date(show.date).toLocaleDateString('en-US', { 
-                                    year: 'numeric', 
-                                    month: 'short', 
-                                    day: 'numeric' 
+                                  {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric'
                                   })}
                                 </td>
                                 {sortBy === 'year' && (

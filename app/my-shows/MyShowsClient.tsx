@@ -253,7 +253,11 @@ export default function MyShowsClient({ shows: initialShows }: MyShowsClientProp
                             </button>
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                            {show.date}
+                            {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-900">
                             <button
