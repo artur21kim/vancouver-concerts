@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { show_ids, status } = body;
+    const { show_ids, status, source = 'manual' } = body;
 
     if (!show_ids || !Array.isArray(show_ids) || show_ids.length === 0) {
       return NextResponse.json({ 
@@ -34,7 +34,8 @@ export async function POST(request: Request) {
     const records = show_ids.map(show_id => ({
       user_id: user.id,
       show_id: show_id,
-      status: userShowStatus
+      status: userShowStatus,
+      source: source
     }));
 
     // Bulk upsert to user_shows
@@ -52,13 +53,14 @@ export async function POST(request: Request) {
       }, { status: 500 });
     }
 
-    console.log(`✅ Bulk updated ${show_ids.length} shows to status: ${userShowStatus}`);
+    console.log(`✅ Bulk updated ${show_ids.length} shows to status: ${userShowStatus}, source: ${source}`);
 
     return NextResponse.json({
       success: true,
       data: {
         updated_count: show_ids.length,
-        status: userShowStatus
+        status: userShowStatus,
+        source
       }
     });
 

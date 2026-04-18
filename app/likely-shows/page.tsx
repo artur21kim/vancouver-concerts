@@ -165,7 +165,11 @@ export default function LikelyShowsPage() {
       const response = await fetch('/api/shows/update-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ show_id: showId, status })
+        body: JSON.stringify({ 
+          show_id: showId, 
+          status,
+          source: 'likely_shows'
+        })
       });
 
       if (!response.ok) {
@@ -193,7 +197,8 @@ export default function LikelyShowsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           show_ids: artistShows.map(s => s.show_id),
-          status 
+          status,
+          source: 'likely_shows'
         })
       });
 
@@ -322,8 +327,30 @@ export default function LikelyShowsPage() {
                   max="2025"
                   value={yearRange[1]}
                   onChange={(e) => setYearRange([yearRange[0], parseInt(e.target.value)])}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-blue"
+                  style={{
+                    background: `linear-gradient(to right, #2563eb 0%, #2563eb ${((yearRange[1] - 2008) / (2025 - 2008)) * 100}%, #e5e7eb ${((yearRange[1] - 2008) / (2025 - 2008)) * 100}%, #e5e7eb 100%)`
+                  }}
                 />
+                <style jsx>{`
+                  .slider-blue::-webkit-slider-thumb {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    width: 20px;
+                    height: 20px;
+                    border-radius: 50%;
+                    background: #2563eb;
+                    cursor: pointer;
+                  }
+                  .slider-blue::-moz-range-thumb {
+                    width: 20px;
+                    height: 20px;
+                    border-radius: 50%;
+                    background: #2563eb;
+                    cursor: pointer;
+                    border: none;
+                  }
+                `}</style>
               </div>
 
               {/* Sort */}

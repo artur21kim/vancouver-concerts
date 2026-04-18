@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { show_id, status } = body;
+    const { show_id, status, source = 'manual' } = body;
 
     if (!show_id || !status || !['added', 'skipped'].includes(status)) {
       return NextResponse.json({ 
@@ -30,7 +30,8 @@ export async function POST(request: Request) {
       .upsert({
         user_id: user.id,
         show_id: show_id,
-        status: userShowStatus
+        status: userShowStatus,
+        source: source
       }, {
         onConflict: 'user_id,show_id'
       });
@@ -43,13 +44,14 @@ export async function POST(request: Request) {
       }, { status: 500 });
     }
 
-    console.log(`✅ Updated show ${show_id} to status: ${userShowStatus}`);
+    console.log(`✅ Updated show ${show_id} to status: ${userShowStatus}, source: ${source}`);
 
     return NextResponse.json({
       success: true,
       data: {
         show_id,
-        status: userShowStatus
+        status: userShowStatus,
+        source
       }
     });
 
