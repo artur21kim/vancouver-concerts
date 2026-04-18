@@ -36,7 +36,7 @@ export default function LikelyShowsPage() {
   const [yearRange, setYearRange] = useState<[number, number]>([2008, 2025]);
   const [selectedArtists, setSelectedArtists] = useState<number[]>([]);
   const [selectedVenues, setSelectedVenues] = useState<number[]>([]);
-  const [sortBy, setSortBy] = useState<'relevance' | 'artist' | 'count' | 'date'>('relevance');
+  const [sortBy, setSortBy] = useState<'relevance' | 'artist' | 'count' | 'year'>('relevance');
 
   // Available options for filters
   const [availableArtists, setAvailableArtists] = useState<{ artist_id: number; artist_name: string }[]>([]);
@@ -111,7 +111,40 @@ export default function LikelyShowsPage() {
   };
 
   const groupAndSortShows = (shows: Show[]) => {
-    // Group by artist
+    if (sortBy === 'year') {
+      // Group by year instead of artist
+      const yearGroups = shows.reduce((acc, show) => {
+        const year = new Date(show.date).getFullYear();
+        const existing = acc.find(g => g.artist_id === year); // Reuse artist_id field for year
+        
+        if (existing) {
+          existing.shows.push(show);
+          existing.show_count++;
+        } else {
+          acc.push({
+            artist_id: year, // Store year in artist_id field
+            artist_name: year.toString(), // Store year as string in artist_name
+            show_count: 1,
+            match_score: 0, // Not used for year grouping
+            shows: [show]
+          });
+        }
+        return acc;
+      }, [] as GroupedShows[]);
+
+      // Sort year groups (newest first)
+      yearGroups.sort((a, b) => b.artist_id - a.artist_id);
+
+      // Sort shows within each year by date (newest first)
+      yearGroups.forEach(group => {
+        group.shows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      });
+
+      setGroupedShows(yearGroups);
+      return;
+    }
+
+    // Group by artist (original logic)
     const grouped = shows.reduce((acc, show) => {
       const existing = acc.find(g => g.artist_id === show.artist_id);
       if (existing) {
@@ -122,7 +155,7 @@ export default function LikelyShowsPage() {
           artist_id: show.artist_id,
           artist_name: show.artist_name,
           show_count: 1,
-          match_score: show.match_score, // Use match score from API
+          match_score: show.match_score,
           shows: [show]
         });
       }
@@ -136,12 +169,6 @@ export default function LikelyShowsPage() {
       grouped.sort((a, b) => a.artist_name.localeCompare(b.artist_name));
     } else if (sortBy === 'count') {
       grouped.sort((a, b) => b.show_count - a.show_count);
-    } else if (sortBy === 'date') {
-      // For date sort, sort shows within each group, then sort groups by earliest show
-      grouped.forEach(group => {
-        group.shows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      });
-      grouped.sort((a, b) => new Date(b.shows[0].date).getTime() - new Date(a.shows[0].date).getTime());
     }
 
     // Sort shows within each group by date (newest first)
@@ -187,16 +214,20 @@ export default function LikelyShowsPage() {
     }
   };
 
-  const handleBulkAction = async (artistId: number, action: 'add' | 'skip') => {
+  const handleBulkAction = async (groupId: number, action: 'add' | 'skip') => {
     const status = action === 'add' ? 'added' : 'skipped';
-    const artistShows = allShows.filter(s => s.artist_id === artistId);
+    
+    // For year grouping, groupId is the year; for artist grouping, it's artist_id
+    const groupShows = sortBy === 'year'
+      ? allShows.filter(s => new Date(s.date).getFullYear() === groupId)
+      : allShows.filter(s => s.artist_id === groupId);
     
     try {
       const response = await fetch('/api/shows/bulk-update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          show_ids: artistShows.map(s => s.show_id),
+          show_ids: groupShows.map(s => s.show_id),
           status,
           source: 'likely_shows'
         })
@@ -208,7 +239,7 @@ export default function LikelyShowsPage() {
 
       // Update local state
       setAllShows(prev => prev.map(show => 
-        artistShows.some(s => s.show_id === show.show_id) ? { ...show, status } : show
+        groupShows.some(s => s.show_id === show.show_id) ? { ...show, status } : show
       ));
 
     } catch (err) {
@@ -358,13 +389,13 @@ export default function LikelyShowsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as 'relevance' | 'artist' | 'count' | 'date')}
+                  onChange={(e) => setSortBy(e.target.value as 'relevance' | 'artist' | 'count' | 'year')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                 >
                   <option value="relevance">Relevance (Recommended)</option>
                   <option value="count">Show Count (Most to Least)</option>
                   <option value="artist">Artist Name (A-Z)</option>
-                  <option value="date">Date (Newest to Oldest)</option>
+                  <option value="year">Year (Newest First)</option>
                 </select>
               </div>
             </div>
@@ -385,9 +416,14 @@ export default function LikelyShowsPage() {
                   const allAdded = group.shows.every(s => s.status === 'added');
                   const allSkipped = group.shows.every(s => s.status === 'skipped');
                   
+                  // For year grouping, calculate unique artists
+                  const uniqueArtistCount = sortBy === 'year' 
+                    ? new Set(group.shows.map(s => s.artist_id)).size
+                    : null;
+                  
                   return (
                     <div key={group.artist_id}>
-                      {/* Artist Group Header */}
+                      {/* Group Header */}
                       <div className="bg-gray-50 px-6 py-4 flex items-center justify-between hover:bg-gray-100 transition">
                         <button
                           onClick={() => toggleGroup(group.artist_id)}
@@ -397,7 +433,13 @@ export default function LikelyShowsPage() {
                             {isExpanded ? '▼' : '▶'}
                           </span>
                           <h3 className="font-semibold text-gray-900">
-                            {group.artist_name} <span className="text-gray-500 font-normal">({group.show_count} shows)</span>
+                            {group.artist_name} 
+                            <span className="text-gray-500 font-normal">
+                              {sortBy === 'year' 
+                                ? ` (${group.show_count} shows from ${uniqueArtistCount} artists)`
+                                : ` (${group.show_count} shows)`
+                              }
+                            </span>
                           </h3>
                         </button>
                         <div className="flex gap-2">
@@ -432,6 +474,9 @@ export default function LikelyShowsPage() {
                           <thead className="bg-gray-100">
                             <tr>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                              {sortBy === 'year' && (
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Artist</th>
+                              )}
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Venue</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -447,6 +492,9 @@ export default function LikelyShowsPage() {
                                     day: 'numeric' 
                                   })}
                                 </td>
+                                {sortBy === 'year' && (
+                                  <td className="px-6 py-4 text-sm text-gray-900">{show.artist_name}</td>
+                                )}
                                 <td className="px-6 py-4 text-sm text-gray-900">{show.venue_name}</td>
                                 <td className="px-6 py-4 text-sm">
                                   {show.status === 'pending' && (
