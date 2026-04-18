@@ -94,7 +94,7 @@ export default function LikelyShowsPage() {
 
     // Filter by year range
     filtered = filtered.filter(show => {
-      const year = new Date(show.date).getFullYear();
+      const year = new Date(show.date + 'T12:00:00').getFullYear();
       return year >= yearRange[0] && year <= yearRange[1];
     });
 
@@ -116,7 +116,7 @@ export default function LikelyShowsPage() {
     if (sortBy === 'year') {
       // Group by year instead of artist
       const yearGroups = shows.reduce((acc, show) => {
-        const year = new Date(show.date).getFullYear();
+        const year = new Date(show.date + 'T12:00:00').getFullYear();
         const existing = acc.find(g => g.artist_id === year); // Reuse artist_id field for year
         
         if (existing) {
@@ -181,12 +181,51 @@ export default function LikelyShowsPage() {
     setGroupedShows(grouped);
   };
 
+  const autoCollapseIfComplete = (groupId: number) => {
+    // Check if all shows in this group are now reviewed
+    const groupShows = sortBy === 'year'
+      ? allShows.filter(s => new Date(s.date + 'T12:00:00').getFullYear() === groupId)
+      : allShows.filter(s => s.artist_id === groupId);
+    
+    const allReviewed = groupShows.every(s => s.status === 'added' || s.status === 'skipped');
+    
+    if (allReviewed) {
+      setExpandedGroups(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(groupId);
+        return newSet;
+      });
+    }
+  };
+
   const handleAddShow = async (showId: number) => {
     await updateShowStatus(showId, 'added');
+    
+    // Find which group this show belongs to and check if complete
+    const show = allShows.find(s => s.show_id === showId);
+    if (show) {
+      const groupId = sortBy === 'year' 
+        ? new Date(show.date + 'T12:00:00').getFullYear()
+        : show.artist_id;
+      
+      // Small delay to let state update
+      setTimeout(() => autoCollapseIfComplete(groupId), 100);
+    }
   };
 
   const handleSkipShow = async (showId: number) => {
     await updateShowStatus(showId, 'skipped');
+    
+    // Find which group this show belongs to and check if complete
+    const show = allShows.find(s => s.show_id === showId);
+    if (show) {
+      const groupId = sortBy === 'year' 
+        ? new Date(show.date + 'T12:00:00').getFullYear()
+        : show.artist_id;
+      
+      // Small delay to let state update
+      setTimeout(() => autoCollapseIfComplete(groupId), 100);
+    }
   };
 
   const updateShowStatus = async (showId: number, status: 'added' | 'skipped') => {
@@ -219,9 +258,8 @@ export default function LikelyShowsPage() {
   const handleBulkAction = async (groupId: number, action: 'add' | 'skip') => {
     const status = action === 'add' ? 'added' : 'skipped';
     
-    // For year grouping, groupId is the year; for artist grouping, it's artist_id
     const groupShows = sortBy === 'year'
-      ? allShows.filter(s => new Date(s.date).getFullYear() === groupId)
+      ? allShows.filter(s => new Date(s.date + 'T12:00:00').getFullYear() === groupId)
       : allShows.filter(s => s.artist_id === groupId);
     
     try {
@@ -243,6 +281,9 @@ export default function LikelyShowsPage() {
       setAllShows(prev => prev.map(show => 
         groupShows.some(s => s.show_id === show.show_id) ? { ...show, status } : show
       ));
+      
+      // Auto-collapse after bulk action
+      setTimeout(() => autoCollapseIfComplete(groupId), 100);
 
     } catch (err) {
       console.error('Error bulk updating shows:', err);
@@ -357,22 +398,43 @@ export default function LikelyShowsPage() {
             </div>
 
             <div className="space-y-4">
-              {/* Year Range */}
+              {/* Year Range - Two Sliders */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Year Range: {yearRange[0]} - {yearRange[1]}
                 </label>
-                <input
-                  type="range"
-                  min="2008"
-                  max="2025"
-                  value={yearRange[1]}
-                  onChange={(e) => setYearRange([yearRange[0], parseInt(e.target.value)])}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-blue"
-                  style={{
-                    background: `linear-gradient(to right, #2563eb 0%, #2563eb ${((yearRange[1] - 2008) / (2025 - 2008)) * 100}%, #e5e7eb ${((yearRange[1] - 2008) / (2025 - 2008)) * 100}%, #e5e7eb 100%)`
-                  }}
-                />
+                <div className="relative pt-1">
+                  {/* Min Year Slider */}
+                  <input
+                    type="range"
+                    min="2008"
+                    max={yearRange[1]}
+                    value={yearRange[0]}
+                    onChange={(e) => setYearRange([parseInt(e.target.value), yearRange[1]])}
+                    className="absolute w-full h-2 bg-transparent appearance-none cursor-pointer slider-blue z-20"
+                    style={{ pointerEvents: 'auto' }}
+                  />
+                  {/* Max Year Slider */}
+                  <input
+                    type="range"
+                    min={yearRange[0]}
+                    max="2025"
+                    value={yearRange[1]}
+                    onChange={(e) => setYearRange([yearRange[0], parseInt(e.target.value)])}
+                    className="absolute w-full h-2 bg-transparent appearance-none cursor-pointer slider-blue z-20"
+                    style={{ pointerEvents: 'auto' }}
+                  />
+                  {/* Track Background */}
+                  <div className="relative h-2 bg-gray-200 rounded-lg">
+                    <div
+                      className="absolute h-2 bg-blue-600 rounded-lg"
+                      style={{
+                        left: `${((yearRange[0] - 2008) / (2025 - 2008)) * 100}%`,
+                        right: `${100 - ((yearRange[1] - 2008) / (2025 - 2008)) * 100}%`
+                      }}
+                    />
+                  </div>
+                </div>
                 <style jsx>{`
                   .slider-blue::-webkit-slider-thumb {
                     -webkit-appearance: none;
@@ -382,6 +444,7 @@ export default function LikelyShowsPage() {
                     border-radius: 50%;
                     background: #2563eb;
                     cursor: pointer;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                   }
                   .slider-blue::-moz-range-thumb {
                     width: 20px;
@@ -390,6 +453,7 @@ export default function LikelyShowsPage() {
                     background: #2563eb;
                     cursor: pointer;
                     border: none;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                   }
                 `}</style>
               </div>
