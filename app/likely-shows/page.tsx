@@ -181,11 +181,11 @@ export default function LikelyShowsPage() {
     setGroupedShows(grouped);
   };
 
-  const autoCollapseIfComplete = (groupId: number) => {
-    // Check if all shows in this group are now reviewed
+  const autoCollapseIfComplete = (groupId: number, updatedShows: Show[]) => {
+    // Check if all shows in this group are now reviewed using the updated state
     const groupShows = sortBy === 'year'
-      ? allShows.filter(s => new Date(s.date + 'T12:00:00').getFullYear() === groupId)
-      : allShows.filter(s => s.artist_id === groupId);
+      ? updatedShows.filter(s => new Date(s.date + 'T12:00:00').getFullYear() === groupId)
+      : updatedShows.filter(s => s.artist_id === groupId);
     
     const allReviewed = groupShows.every(s => s.status === 'added' || s.status === 'skipped');
     
@@ -199,32 +199,32 @@ export default function LikelyShowsPage() {
   };
 
   const handleAddShow = async (showId: number) => {
-    await updateShowStatus(showId, 'added');
+    const updatedShows = await updateShowStatus(showId, 'added');
     
     // Find which group this show belongs to and check if complete
-    const show = allShows.find(s => s.show_id === showId);
+    const show = updatedShows.find(s => s.show_id === showId);
     if (show) {
       const groupId = sortBy === 'year' 
         ? new Date(show.date + 'T12:00:00').getFullYear()
         : show.artist_id;
       
       // Small delay to let state update
-      setTimeout(() => autoCollapseIfComplete(groupId), 100);
+      setTimeout(() => autoCollapseIfComplete(groupId, updatedShows), 100);
     }
   };
 
   const handleSkipShow = async (showId: number) => {
-    await updateShowStatus(showId, 'skipped');
+    const updatedShows = await updateShowStatus(showId, 'skipped');
     
     // Find which group this show belongs to and check if complete
-    const show = allShows.find(s => s.show_id === showId);
+    const show = updatedShows.find(s => s.show_id === showId);
     if (show) {
       const groupId = sortBy === 'year' 
         ? new Date(show.date + 'T12:00:00').getFullYear()
         : show.artist_id;
       
       // Small delay to let state update
-      setTimeout(() => autoCollapseIfComplete(groupId), 100);
+      setTimeout(() => autoCollapseIfComplete(groupId, updatedShows), 100);
     }
   };
 
@@ -244,14 +244,18 @@ export default function LikelyShowsPage() {
         throw new Error('Failed to update show status');
       }
 
-      // Update local state
-      setAllShows(prev => prev.map(show => 
+      // Update local state and get the updated array
+      const updatedShows = allShows.map(show => 
         show.show_id === showId ? { ...show, status } : show
-      ));
+      );
+      setAllShows(updatedShows);
+      
+      return updatedShows; // Return for auto-collapse check
 
     } catch (err) {
       console.error('Error updating show status:', err);
       alert('Failed to update show. Please try again.');
+      return allShows; // Return original on error
     }
   };
 
@@ -278,12 +282,13 @@ export default function LikelyShowsPage() {
       }
 
       // Update local state
-      setAllShows(prev => prev.map(show => 
+      const updatedShows = allShows.map(show => 
         groupShows.some(s => s.show_id === show.show_id) ? { ...show, status } : show
-      ));
+      );
+      setAllShows(updatedShows);
       
-      // Auto-collapse after bulk action
-      setTimeout(() => autoCollapseIfComplete(groupId), 100);
+      // Auto-collapse after bulk action (works from pending or mixed states)
+      setTimeout(() => autoCollapseIfComplete(groupId, updatedShows), 100);
 
     } catch (err) {
       console.error('Error bulk updating shows:', err);
@@ -407,7 +412,7 @@ export default function LikelyShowsPage() {
                   {/* Min Year Slider */}
                   <input
                     type="range"
-                    min="2008"
+                    min="1900"
                     max={yearRange[1]}
                     value={yearRange[0]}
                     onChange={(e) => setYearRange([parseInt(e.target.value), yearRange[1]])}
@@ -429,8 +434,8 @@ export default function LikelyShowsPage() {
                     <div
                       className="absolute h-2 bg-blue-600 rounded-lg"
                       style={{
-                        left: `${((yearRange[0] - 2008) / (2025 - 2008)) * 100}%`,
-                        right: `${100 - ((yearRange[1] - 2008) / (2025 - 2008)) * 100}%`
+                        left: `${((yearRange[0] - 1900) / (2025 - 1900)) * 100}%`,
+                        right: `${100 - ((yearRange[1] - 1900) / (2025 - 1900)) * 100}%`
                       }}
                     />
                   </div>
