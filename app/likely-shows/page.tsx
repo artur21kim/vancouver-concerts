@@ -422,9 +422,15 @@ export default function LikelyShowsPage() {
                 {groupedShows.map(group => {
                   const isExpanded = expandedGroups.has(group.artist_id);
                   
-                  // Check if all shows in this group are added or skipped
-                  const allAdded = group.shows.every(s => s.status === 'added');
-                  const allSkipped = group.shows.every(s => s.status === 'skipped');
+                  // Calculate status counts for this group
+                  const addedCount = group.shows.filter(s => s.status === 'added').length;
+                  const skippedCount = group.shows.filter(s => s.status === 'skipped').length;
+                  const pendingCount = group.shows.filter(s => s.status === 'pending').length;
+                  
+                  const allAdded = addedCount === group.show_count;
+                  const allSkipped = skippedCount === group.show_count;
+                  const hasAdded = addedCount > 0;
+                  const hasSkipped = skippedCount > 0;
                   
                   // For year grouping, calculate unique artists
                   const uniqueArtistCount = sortBy === 'year' 
@@ -459,10 +465,17 @@ export default function LikelyShowsPage() {
                             className={`px-4 py-2 text-sm font-medium rounded-lg transition ${
                               allAdded
                                 ? 'bg-green-100 text-green-700 cursor-default'
+                                : hasAdded
+                                ? 'bg-green-50 text-green-700 border border-green-300 hover:bg-green-100'
                                 : 'bg-green-600 text-white hover:bg-green-700'
                             }`}
                           >
-                            {allAdded ? 'All Added ✓' : 'Add All'}
+                            {allAdded 
+                              ? 'All Added ✓' 
+                              : hasAdded 
+                              ? `${addedCount} Added ✓`
+                              : 'Add All'
+                            }
                           </button>
                           <button
                             onClick={() => handleBulkAction(group.artist_id, 'skip')}
@@ -470,10 +483,17 @@ export default function LikelyShowsPage() {
                             className={`px-4 py-2 text-sm font-medium rounded-lg transition ${
                               allSkipped
                                 ? 'bg-red-100 text-red-700 cursor-default'
+                                : hasSkipped
+                                ? 'bg-red-50 text-red-700 border border-red-300 hover:bg-red-100'
                                 : 'bg-red-600 text-white hover:bg-red-700'
                             }`}
                           >
-                            {allSkipped ? 'All Skipped ✓' : 'Skip All'}
+                            {allSkipped 
+                              ? 'All Skipped ✓' 
+                              : hasSkipped 
+                              ? `${skippedCount} Skipped ✓`
+                              : 'Skip All'
+                            }
                           </button>
                         </div>
                       </div>
