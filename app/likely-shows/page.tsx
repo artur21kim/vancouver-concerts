@@ -26,12 +26,13 @@ export default function LikelyShowsPage() {
   const [allShows, setAllShows] = useState<Show[]>([]);
   const [filteredShows, setFilteredShows] = useState<Show[]>([]);
   const [groupedShows, setGroupedShows] = useState<GroupedShows[]>([]);
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
   
   // Filter states
   const [yearRange, setYearRange] = useState<[number, number]>([2008, 2025]);
   const [selectedArtists, setSelectedArtists] = useState<number[]>([]);
   const [selectedVenues, setSelectedVenues] = useState<number[]>([]);
-  const [sortBy, setSortBy] = useState<'artist' | 'count' | 'date'>('artist');
+  const [sortBy, setSortBy] = useState<'artist' | 'count' | 'date'>('count');
 
   // Available options for filters
   const [availableArtists, setAvailableArtists] = useState<{ artist_id: number; artist_name: string }[]>([]);
@@ -204,6 +205,18 @@ export default function LikelyShowsPage() {
     }
   };
 
+  const toggleGroup = (artistId: number) => {
+    setExpandedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(artistId)) {
+        newSet.delete(artistId);
+      } else {
+        newSet.add(artistId);
+      }
+      return newSet;
+    });
+  };
+
   const clearFilters = () => {
     setYearRange([2008, 2025]);
     setSelectedArtists([]);
@@ -303,8 +316,8 @@ export default function LikelyShowsPage() {
                   onChange={(e) => setSortBy(e.target.value as 'artist' | 'count' | 'date')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value="artist">Artist Name (A-Z)</option>
                   <option value="count">Show Count (Most to Least)</option>
+                  <option value="artist">Artist Name (A-Z)</option>
                   <option value="date">Date (Newest to Oldest)</option>
                 </select>
               </div>
@@ -319,93 +332,110 @@ export default function LikelyShowsPage() {
               </div>
             ) : (
               <div className="divide-y divide-gray-200">
-                {groupedShows.map(group => (
-                  <div key={group.artist_id}>
-                    {/* Artist Group Header */}
-                    <div className="bg-gray-50 px-6 py-4 flex items-center justify-between">
-                      <h3 className="font-semibold text-gray-900">
-                        {group.artist_name} <span className="text-gray-500">({group.show_count} shows)</span>
-                      </h3>
-                      <div className="flex gap-2">
+                {groupedShows.map(group => {
+                  const isExpanded = expandedGroups.has(group.artist_id);
+                  
+                  return (
+                    <div key={group.artist_id}>
+                      {/* Artist Group Header */}
+                      <div className="bg-gray-50 px-6 py-4 flex items-center justify-between hover:bg-gray-100 transition">
                         <button
-                          onClick={() => handleBulkAction(group.artist_id, 'add')}
-                          className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
+                          onClick={() => toggleGroup(group.artist_id)}
+                          className="flex items-center gap-3 flex-1 text-left"
                         >
-                          Add All
+                          <span className="text-gray-500 font-mono text-sm">
+                            {isExpanded ? '▼' : '▶'}
+                          </span>
+                          <h3 className="font-semibold text-gray-900">
+                            {group.artist_name} <span className="text-gray-500 font-normal">({group.show_count} shows)</span>
+                          </h3>
                         </button>
-                        <button
-                          onClick={() => handleBulkAction(group.artist_id, 'skip')}
-                          className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
-                        >
-                          Skip All
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleBulkAction(group.artist_id, 'add')}
+                            className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition"
+                          >
+                            Add All
+                          </button>
+                          <button
+                            onClick={() => handleBulkAction(group.artist_id, 'skip')}
+                            className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition"
+                          >
+                            Skip All
+                          </button>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Shows Table */}
-                    <table className="min-w-full">
-                      <thead className="bg-gray-100">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Venue</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {group.shows.map(show => (
-                          <tr key={show.show_id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 text-sm text-gray-900">
-                              {new Date(show.date).toLocaleDateString('en-US', { 
-                                year: 'numeric', 
-                                month: 'short', 
-                                day: 'numeric' 
-                              })}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-900">{show.venue_name}</td>
-                            <td className="px-6 py-4 text-sm">
-                              {show.status === 'pending' && (
-                                <span className="text-gray-600">Pending Review</span>
-                              )}
-                              {show.status === 'added' && (
-                                <span className="text-green-600 font-medium">Added ✓</span>
-                              )}
-                              {show.status === 'skipped' && (
-                                <span className="text-red-600 font-medium">Skipped ✗</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-right">
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  onClick={() => handleAddShow(show.show_id)}
-                                  disabled={show.status !== 'pending'}
-                                  className={`px-3 py-1 rounded ${
-                                    show.status === 'pending'
-                                      ? 'bg-green-600 text-white hover:bg-green-700'
-                                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                  }`}
-                                >
-                                  ✓ Add
-                                </button>
-                                <button
-                                  onClick={() => handleSkipShow(show.show_id)}
-                                  disabled={show.status !== 'pending'}
-                                  className={`px-3 py-1 rounded ${
-                                    show.status === 'pending'
-                                      ? 'bg-red-600 text-white hover:bg-red-700'
-                                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                  }`}
-                                >
-                                  ✗ Skip
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
+                      {/* Shows Table - Only show if expanded */}
+                      {isExpanded && (
+                        <table className="min-w-full">
+                          <thead className="bg-gray-100">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Venue</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {group.shows.map(show => (
+                              <tr key={show.show_id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 text-sm text-gray-900">
+                                  {new Date(show.date).toLocaleDateString('en-US', { 
+                                    year: 'numeric', 
+                                    month: 'short', 
+                                    day: 'numeric' 
+                                  })}
+                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-900">{show.venue_name}</td>
+                                <td className="px-6 py-4 text-sm">
+                                  {show.status === 'pending' && (
+                                    <span className="text-gray-600">Pending Review</span>
+                                  )}
+                                  {show.status === 'added' && (
+                                    <span className="text-green-600 font-medium">Added ✓</span>
+                                  )}
+                                  {show.status === 'skipped' && (
+                                    <span className="text-red-600 font-medium">Skipped ✗</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 text-sm text-center">
+                                  <div className="flex justify-center gap-3">
+                                    <button
+                                      onClick={() => handleAddShow(show.show_id)}
+                                      disabled={show.status !== 'pending'}
+                                      className={`${
+                                        show.status === 'pending'
+                                          ? 'text-green-600 hover:text-green-800 cursor-pointer'
+                                          : 'text-gray-300 cursor-not-allowed'
+                                      } text-lg font-bold`}
+                                      title="Add to My Shows"
+                                    >
+                                      ✓
+                                    </button>
+                                    <button
+                                      onClick={() => handleSkipShow(show.show_id)}
+                                      disabled={show.status !== 'pending'}
+                                      className={`${
+                                        show.status === 'pending'
+                                          ? 'text-red-600 hover:text-red-800 cursor-pointer'
+                                          : 'text-gray-300 cursor-not-allowed'
+                                      } text-lg font-bold`}
+                                      title="Skip this show"
+                                    >
+                                      ✗
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
               </div>
             )}
           </div>
