@@ -322,7 +322,7 @@ export default function LikelyShowsPage() {
                   max="2025"
                   value={yearRange[1]}
                   onChange={(e) => setYearRange([yearRange[0], parseInt(e.target.value)])}
-                  className="w-full"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                 />
               </div>
 
@@ -354,6 +354,10 @@ export default function LikelyShowsPage() {
                 {groupedShows.map(group => {
                   const isExpanded = expandedGroups.has(group.artist_id);
                   
+                  // Check if all shows in this group are added or skipped
+                  const allAdded = group.shows.every(s => s.status === 'added');
+                  const allSkipped = group.shows.every(s => s.status === 'skipped');
+                  
                   return (
                     <div key={group.artist_id}>
                       {/* Artist Group Header */}
@@ -372,15 +376,25 @@ export default function LikelyShowsPage() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleBulkAction(group.artist_id, 'add')}
-                            className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition"
+                            disabled={allAdded}
+                            className={`px-4 py-2 text-sm font-medium rounded-lg transition ${
+                              allAdded
+                                ? 'bg-green-100 text-green-700 cursor-default'
+                                : 'bg-green-600 text-white hover:bg-green-700'
+                            }`}
                           >
-                            Add All
+                            {allAdded ? 'All Added ✓' : 'Add All'}
                           </button>
                           <button
                             onClick={() => handleBulkAction(group.artist_id, 'skip')}
-                            className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition"
+                            disabled={allSkipped}
+                            className={`px-4 py-2 text-sm font-medium rounded-lg transition ${
+                              allSkipped
+                                ? 'bg-red-100 text-red-700 cursor-default'
+                                : 'bg-red-600 text-white hover:bg-red-700'
+                            }`}
                           >
-                            Skip All
+                            {allSkipped ? 'All Skipped ✓' : 'Skip All'}
                           </button>
                         </div>
                       </div>
@@ -422,24 +436,26 @@ export default function LikelyShowsPage() {
                                   <div className="flex justify-center gap-3">
                                     <button
                                       onClick={() => handleAddShow(show.show_id)}
-                                      disabled={show.status !== 'pending'}
                                       className={`${
-                                        show.status === 'pending'
+                                        show.status === 'added'
+                                          ? 'text-green-600 font-bold'
+                                          : show.status === 'pending'
                                           ? 'text-green-600 hover:text-green-800 cursor-pointer'
-                                          : 'text-gray-300 cursor-not-allowed'
-                                      } text-lg font-bold`}
+                                          : 'text-gray-400 hover:text-green-600 cursor-pointer'
+                                      } text-lg`}
                                       title="Add to My Shows"
                                     >
                                       ✓
                                     </button>
                                     <button
                                       onClick={() => handleSkipShow(show.show_id)}
-                                      disabled={show.status !== 'pending'}
                                       className={`${
-                                        show.status === 'pending'
+                                        show.status === 'skipped'
+                                          ? 'text-red-600 font-bold'
+                                          : show.status === 'pending'
                                           ? 'text-red-600 hover:text-red-800 cursor-pointer'
-                                          : 'text-gray-300 cursor-not-allowed'
-                                      } text-lg font-bold`}
+                                          : 'text-gray-400 hover:text-red-600 cursor-pointer'
+                                      } text-lg`}
                                       title="Skip this show"
                                     >
                                       ✗
