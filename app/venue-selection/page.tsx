@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navigation from '../components/Navigation';
 
@@ -17,15 +17,7 @@ type VenueConfirmation = {
   status: 'yes' | 'no' | 'not_sure';
 };
 
-type SpotifyStatus = {
-  status: 'not_connected' | 'pending' | 'processing' | 'complete' | 'error';
-  songs_fetched: number;
-  total_songs: number;
-  progress_percentage: number;
-  error_message?: string;
-};
-
-export default function VenueSelectionPage() {
+function VenueSelectionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -33,21 +25,10 @@ export default function VenueSelectionPage() {
   const [error, setError] = useState('');
   const [venues, setVenues] = useState<Venue[]>([]);
   const [confirmations, setConfirmations] = useState<Map<number, 'yes' | 'no' | 'not_sure'>>(new Map());
-  
-  // Spotify processing state
-  const [spotifyStatus, setSpotifyStatus] = useState<SpotifyStatus | null>(null);
-  const [processingSpotify, setProcessingSpotify] = useState(false);
 
   useEffect(() => {
     fetchVenues();
-    
-    // Check if we just came from Spotify OAuth
-    const isProcessingSpotify = searchParams.get('spotify') === 'processing';
-    if (isProcessingSpotify) {
-      setProcessingSpotify(true);
-      startSpotifyProcessing();
-    }
-  }, [searchParams]);
+  }, []);
 
   const fetchVenues = async () => {
     try {
@@ -73,62 +54,6 @@ export default function VenueSelectionPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Start Spotify background processing
-  const startSpotifyProcessing = async () => {
-    console.log('🚀 Starting Spotify background processing');
-    
-    // Poll status every 3 seconds
-    const pollInterval = setInterval(async () => {
-      try {
-        // Check status
-        const statusResponse = await fetch('/api/spotify/status');
-        const status: SpotifyStatus = await statusResponse.json();
-        
-        setSpotifyStatus(status);
-        console.log(`📊 Spotify status: ${status.status} (${status.songs_fetched}/${status.total_songs})`);
-
-        // If complete or error, stop polling
-        if (status.status === 'complete') {
-          console.log('✅ Spotify processing complete!');
-          clearInterval(pollInterval);
-          setProcessingSpotify(false);
-          return;
-        }
-
-        if (status.status === 'error') {
-          console.error('❌ Spotify processing error:', status.error_message);
-          clearInterval(pollInterval);
-          setProcessingSpotify(false);
-          setError(`Spotify processing failed: ${status.error_message}`);
-          return;
-        }
-
-        // If processing or pending, trigger next chunk
-        if (status.status === 'processing' || status.status === 'pending') {
-          const fetchResponse = await fetch('/api/spotify/fetch', {
-            method: 'POST'
-          });
-          
-          if (!fetchResponse.ok) {
-            throw new Error('Failed to fetch Spotify chunk');
-          }
-
-          const fetchResult = await fetchResponse.json();
-          console.log(`📦 Chunk complete: ${fetchResult.songs_fetched} songs total`);
-        }
-
-      } catch (err) {
-        console.error('Error in Spotify polling:', err);
-        clearInterval(pollInterval);
-        setProcessingSpotify(false);
-        setError('Failed to process Spotify library. Please try reconnecting.');
-      }
-    }, 3000); // Poll every 3 seconds
-
-    // Cleanup interval on unmount
-    return () => clearInterval(pollInterval);
   };
 
   const handleVenueConfirmation = (venueId: number, status: 'yes' | 'no' | 'not_sure') => {
@@ -203,39 +128,6 @@ export default function VenueSelectionPage() {
               Help us narrow down your concert history by confirming which venues you've actually attended.
             </p>
           </div>
-
-          {/* Spotify Processing Banner */}
-          {processingSpotify && spotifyStatus && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
-              <div className="flex items-center gap-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-blue-900 mb-1">
-                    Processing Your Spotify Library
-                  </h3>
-                  <p className="text-sm text-blue-700">
-                    {spotifyStatus.total_songs > 0 ? (
-                      <>
-                        {spotifyStatus.songs_fetched.toLocaleString()} / {spotifyStatus.total_songs.toLocaleString()} songs 
-                        ({spotifyStatus.progress_percentage}%)
-                      </>
-                    ) : (
-                      'Starting...'
-                    )}
-                  </p>
-                  <div className="w-full bg-blue-200 rounded-full h-2 mt-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${spotifyStatus.progress_percentage}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-              <p className="text-xs text-blue-600 mt-3">
-                This may take a few minutes. You can continue selecting venues while we process your library in the background.
-              </p>
-            </div>
-          )}
 
           {/* Progress Stats */}
           <div className="bg-white rounded-lg shadow p-4 mb-6">
@@ -350,5 +242,23 @@ export default function VenueSelectionPage() {
         </div>
       </main>
     </>
+  );
+}
+
+export default function VenueSelectionPage() {
+  return (
+    <Suspense fallback={
+      <>
+        <Navigation />
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading...</p>
+          </div>
+        </div>
+      </>
+    }>
+      <VenueSelectionContent />
+    </Suspense>
   );
 }
