@@ -1,0 +1,197 @@
+import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+
+// Process one chunk of Spotify songs (500 songs = ~4 seconds)
+// This stays well under the 10-second timeout limit
+export async function POST(request: Request) {
+  try {
+    const supabase = await createClient();
+    
+    // Get current user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's token from database
+    const { data: tokenData, error: tokenError } = await supabase
+      .from('user_spotify_tokens')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+
+    if (tokenError || !tokenData) {
+      return NextResponse.json({ error: 'Spotify token not found' }, { status: 404 });
+    }
+
+    // If already complete, return success
+    if (tokenData.status === 'complete') {
+      return NextResponse.json({ 
+        status: 'complete',
+        songs_fetched: tokenData.songs_fetched,
+        total_songs: tokenData.total_songs
+      });
+    }
+
+    // Update status to processing if pending
+    if (tokenData.status === 'pending') {
+      await supabase
+        .from('user_spotify_tokens')
+        .update({ 
+          status: 'processing',
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+    }
+
+    const accessToken = tokenData.access_token;
+    const startUrl = tokenData.last_fetch_url || 'https://api.spotify.com/v1/me/tracks?limit=50';
+    
+    console.log(`🔄 Fetching chunk for user ${user.id} (${tokenData.songs_fetched} songs so far)`);
+
+    // Fetch one batch (up to 10 requests = 500 songs max per chunk)
+    const songsInChunk: any[] = [];
+    let nextUrl: string | null = startUrl;
+    let requestCount = 0;
+    const maxRequestsPerChunk = 10; // 10 requests * 50 songs = 500 songs per chunk
+
+    while (nextUrl && requestCount < maxRequestsPerChunk) {
+      const response = await fetch(nextUrl, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          // Rate limited - mark for retry
+          const retryAfter = response.headers.get('Retry-After');
+          const waitTime = retryAfter ? parseInt(retryAfter) : 60;
+          
+          await supabase
+            .from('user_spotify_tokens')
+            .update({ 
+              error_message: `Rate limited. Retry after ${waitTime}s`,
+              updated_at: new Date().toISOString()
+            })
+            .eq('user_id', user.id);
+
+          return NextResponse.json({ 
+            status: 'processing',
+            error: 'rate_limited',
+            retry_after: waitTime,
+            songs_fetched: tokenData.songs_fetched,
+            total_songs: tokenData.total_songs
+          });
+        }
+        
+        throw new Error(`Spotify API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // On first request, get total count
+      if (requestCount === 0 && tokenData.total_songs === 0) {
+        await supabase
+          .from('user_spotify_tokens')
+          .update({ 
+            total_songs: data.total,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', user.id);
+      }
+
+      songsInChunk.push(...data.items);
+      nextUrl = data.next;
+      requestCount++;
+
+      // Rate limiting: 400ms between requests
+      if (nextUrl && requestCount < maxRequestsPerChunk) {
+        await new Promise(resolve => setTimeout(resolve, 400));
+      }
+    }
+
+    console.log(`📦 Chunk fetched: ${songsInChunk.length} songs in this batch`);
+
+    // Transform songs for database
+    const songsToInsert = songsInChunk.flatMap(item => {
+      const track = item.track;
+      return track.artists.map((artist: any) => ({
+        user_id: user.id,
+        spotify_track_id: track.id,
+        spotify_artist_id: artist.id,
+        track_name: track.name,
+        artist_name: artist.name,
+        added_at: item.added_at
+      }));
+    });
+
+    // Batch upsert
+    const batchSize = 1000;
+    for (let i = 0; i < songsToInsert.length; i += batchSize) {
+      const batch = songsToInsert.slice(i, i + batchSize);
+      const { error: upsertError } = await supabase
+        .from('user_spotify_songs')
+        .upsert(batch, { 
+          onConflict: 'user_id,spotify_track_id,spotify_artist_id',
+          ignoreDuplicates: false
+        });
+
+      if (upsertError) {
+        console.error(`❌ Error upserting batch:`, upsertError);
+      }
+    }
+
+    // Update progress
+    const newSongsFetched = tokenData.songs_fetched + songsInChunk.length;
+    const isComplete = !nextUrl;
+
+    await supabase
+      .from('user_spotify_tokens')
+      .update({ 
+        songs_fetched: newSongsFetched,
+        last_fetch_url: nextUrl,
+        status: isComplete ? 'complete' : 'processing',
+        error_message: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', user.id);
+
+    console.log(`✅ Progress: ${newSongsFetched} songs fetched${isComplete ? ' - COMPLETE' : ''}`);
+
+    return NextResponse.json({
+      status: isComplete ? 'complete' : 'processing',
+      songs_fetched: newSongsFetched,
+      total_songs: tokenData.total_songs || newSongsFetched,
+      has_more: !isComplete
+    });
+
+  } catch (error) {
+    console.error('❌ Spotify fetch error:', error);
+    
+    // Try to mark as error in database
+    try {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        await supabase
+          .from('user_spotify_tokens')
+          .update({ 
+            status: 'error',
+            error_message: error instanceof Error ? error.message : 'Unknown error',
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', user.id);
+      }
+    } catch (dbError) {
+      console.error('Failed to update error status:', dbError);
+    }
+
+    return NextResponse.json({ 
+      error: 'Failed to fetch Spotify songs',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
+  }
+}

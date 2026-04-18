@@ -34,154 +34,53 @@ export async function GET(request: Request) {
     }
 
     const tokenData = await tokenResponse.json();
-    const accessToken = tokenData.access_token;
 
     // Initialize Supabase client
     const supabase = await createClient();
 
-    // NOTE: This process can take a few minutes for users with large libraries
-    // Rate limiting: 400ms between requests = 150 requests/minute (safely under 180/min limit)
-    // For 2000 songs (40 requests): ~16 seconds
-    // For 5000 songs (100 requests): ~40 seconds
-    // For 10000 songs (200 requests): ~80 seconds (1.3 minutes)
-    
-    // TODO Phase 4.5: Consider showing progress UI or running this in background job
+    // Calculate token expiration time
+    const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000);
 
-    // ⏱️ START PERFORMANCE TRACKING
-    const performanceStart = Date.now();
-    console.log(`🚀 Starting Spotify fetch for user: ${state}`);
-
-    // Fetch all liked songs (paginated with rate limiting)
-    const fetchStartTime = Date.now();
-    const allSongs: any[] = [];
-    let nextUrl: string | null = 'https://api.spotify.com/v1/me/tracks?limit=50';
-    let requestCount = 0;
-    const startTime = Date.now();
-
-    // Helper function to add delay for rate limiting
-    const rateLimit = async () => {
-      requestCount++;
-      
-      // 150 requests per minute = 1 request every 400ms
-      if (requestCount % 10 === 0) {
-        // Every 10 requests, check if we need to slow down
-        const elapsedMs = Date.now() - startTime;
-        const expectedMs = requestCount * 400; // 400ms per request = 150/min
-        
-        if (elapsedMs < expectedMs) {
-          await new Promise(resolve => setTimeout(resolve, expectedMs - elapsedMs));
-        }
-      } else {
-        // Standard delay between requests
-        await new Promise(resolve => setTimeout(resolve, 400));
-      }
-    };
-
-    while (nextUrl) {
-      const response: Response = await fetch(nextUrl, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
+    // Save token to database (upsert in case user reconnects)
+    const { error: tokenError } = await supabase
+      .from('user_spotify_tokens')
+      .upsert({
+        user_id: state,
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        expires_at: expiresAt.toISOString(),
+        status: 'pending',
+        songs_fetched: 0,
+        total_songs: 0,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id'
       });
 
-      if (!response.ok) {
-        // Check if we hit rate limit
-        if (response.status === 429) {
-          const retryAfter = response.headers.get('Retry-After');
-          const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 60000;
-          console.log(`⚠️ Rate limited. Waiting ${waitTime}ms before retry...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-          continue; // Retry this request
-        }
-        throw new Error('Failed to fetch liked songs');
-      }
-
-      const data = await response.json();
-      allSongs.push(...data.items);
-      nextUrl = data.next;
-
-      // Log progress every 500 songs
-      if (allSongs.length % 500 === 0 && allSongs.length > 0) {
-        const elapsed = ((Date.now() - fetchStartTime) / 1000).toFixed(1);
-        console.log(`📊 Progress: ${allSongs.length} songs fetched (${elapsed}s elapsed)`);
-      }
-
-      // Rate limit delay before next request
-      if (nextUrl) {
-        await rateLimit();
-      }
+    if (tokenError) {
+      console.error('❌ Error saving Spotify token:', tokenError);
+      throw new Error('Failed to save Spotify token');
     }
 
-    const fetchEndTime = Date.now();
-    const fetchDuration = ((fetchEndTime - fetchStartTime) / 1000).toFixed(2);
-    
-    console.log(`✅ Spotify Fetch Complete:`);
-    console.log(`   - Songs fetched: ${allSongs.length}`);
-    console.log(`   - API requests: ${requestCount}`);
-    console.log(`   - Fetch duration: ${fetchDuration}s`);
+    // Update user profile to mark Spotify as connected
+    const { error: profileError } = await supabase
+      .from('user_profiles')
+      .update({ 
+        spotify_connected: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', state);
 
-    // Transform and prepare for database insert
-    const transformStartTime = Date.now();
-    const songsToInsert = allSongs.flatMap(item => {
-      const track = item.track;
-      return track.artists.map((artist: any) => ({
-        user_id: state, // user_id from OAuth state
-        spotify_track_id: track.id,
-        spotify_artist_id: artist.id,
-        track_name: track.name,
-        artist_name: artist.name,
-        added_at: item.added_at
-      }));
-    });
-
-    const transformDuration = ((Date.now() - transformStartTime) / 1000).toFixed(2);
-    console.log(`🔄 Transform complete: ${songsToInsert.length} records in ${transformDuration}s`);
-
-    // Batch upsert into user_spotify_songs (handles duplicates gracefully)
-    const upsertStartTime = Date.now();
-    const batchSize = 1000;
-    let successCount = 0;
-    let errorCount = 0;
-
-    for (let i = 0; i < songsToInsert.length; i += batchSize) {
-      const batch = songsToInsert.slice(i, i + batchSize);
-      const { data, error } = await supabase
-        .from('user_spotify_songs')
-        .upsert(batch, { 
-          onConflict: 'user_id,spotify_track_id,spotify_artist_id',
-          ignoreDuplicates: false // Update if exists
-        });
-
-      if (error) {
-        console.error(`❌ Error upserting batch ${i / batchSize + 1}:`, error);
-        errorCount++;
-      } else {
-        successCount++;
-      }
+    if (profileError) {
+      console.error('❌ Error updating user profile:', profileError);
     }
 
-    const upsertDuration = ((Date.now() - upsertStartTime) / 1000).toFixed(2);
-    const totalDuration = ((Date.now() - performanceStart) / 1000).toFixed(2);
+    console.log(`✅ Spotify token saved for user: ${state}`);
+    console.log(`📊 Redirecting to processing page`);
 
-    console.log(`✅ Upsert complete: ${successCount} successful batches, ${errorCount} errors`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`📈 PERFORMANCE SUMMARY`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`   User ID: ${state}`);
-    console.log(`   Total songs: ${allSongs.length}`);
-    console.log(`   Total records: ${songsToInsert.length}`);
-    console.log(`   API requests: ${requestCount}`);
-    console.log(`   ─────────────────────────────────────`);
-    console.log(`   Fetch time: ${fetchDuration}s`);
-    console.log(`   Transform time: ${transformDuration}s`);
-    console.log(`   Upsert time: ${upsertDuration}s`);
-    console.log(`   ─────────────────────────────────────`);
-    console.log(`   🏁 TOTAL TIME: ${totalDuration}s`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-
-    // Redirect to venue selection page
+    // Redirect to dedicated processing page (NOT venue-selection)
     return NextResponse.redirect(
-      new URL('/venue-selection', requestUrl.origin)
+      new URL('/spotify-processing', requestUrl.origin)
     );
 
   } catch (error) {
