@@ -11,12 +11,16 @@ type Show = {
   venue_id: number;
   venue_name: string;
   status: 'pending' | 'added' | 'skipped';
+  match_score: number;
+  spotify_song_count: number;
+  vancouver_show_count: number;
 };
 
 type GroupedShows = {
   artist_id: number;
   artist_name: string;
   show_count: number;
+  match_score: number;
   shows: Show[];
 };
 
@@ -32,7 +36,7 @@ export default function LikelyShowsPage() {
   const [yearRange, setYearRange] = useState<[number, number]>([2008, 2025]);
   const [selectedArtists, setSelectedArtists] = useState<number[]>([]);
   const [selectedVenues, setSelectedVenues] = useState<number[]>([]);
-  const [sortBy, setSortBy] = useState<'artist' | 'count' | 'date'>('count');
+  const [sortBy, setSortBy] = useState<'relevance' | 'artist' | 'count' | 'date'>('relevance');
 
   // Available options for filters
   const [availableArtists, setAvailableArtists] = useState<{ artist_id: number; artist_name: string }[]>([]);
@@ -118,6 +122,7 @@ export default function LikelyShowsPage() {
           artist_id: show.artist_id,
           artist_name: show.artist_name,
           show_count: 1,
+          match_score: show.match_score, // Use match score from API
           shows: [show]
         });
       }
@@ -125,7 +130,9 @@ export default function LikelyShowsPage() {
     }, [] as GroupedShows[]);
 
     // Sort groups
-    if (sortBy === 'artist') {
+    if (sortBy === 'relevance') {
+      grouped.sort((a, b) => b.match_score - a.match_score);
+    } else if (sortBy === 'artist') {
       grouped.sort((a, b) => a.artist_name.localeCompare(b.artist_name));
     } else if (sortBy === 'count') {
       grouped.sort((a, b) => b.show_count - a.show_count);
@@ -313,9 +320,10 @@ export default function LikelyShowsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as 'artist' | 'count' | 'date')}
+                  onChange={(e) => setSortBy(e.target.value as 'relevance' | 'artist' | 'count' | 'date')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
+                  <option value="relevance">Relevance (Recommended)</option>
                   <option value="count">Show Count (Most to Least)</option>
                   <option value="artist">Artist Name (A-Z)</option>
                   <option value="date">Date (Newest to Oldest)</option>

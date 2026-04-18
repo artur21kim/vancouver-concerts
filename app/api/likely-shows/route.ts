@@ -63,8 +63,18 @@ export async function GET(request: Request) {
       });
     }
 
-    const uniqueSpotifyArtistIds = [...new Set(userSongs.map(s => s.spotify_artist_id))];
-    console.log(`🎵 User has ${uniqueSpotifyArtistIds.length} unique Spotify artists`);
+    // Count songs per artist for Spotify score
+    const artistSongCounts = userSongs.reduce((acc: any, song: any) => {
+      const artistId = song.spotify_artist_id;
+      if (!acc[artistId]) {
+        acc[artistId] = 0;
+      }
+      acc[artistId]++;
+      return acc;
+    }, {});
+
+    const uniqueSpotifyArtistIds = Object.keys(artistSongCounts);
+    console.log(`🎵 User has ${userSongs.length} liked songs from ${uniqueSpotifyArtistIds.length} unique artists`);
 
     // Match Spotify artists to Vancouver artists
     const { data: matchedArtists, error: artistsError } = await supabase
@@ -148,9 +158,51 @@ export async function GET(request: Request) {
         artist_id: artist.artist_id,
         artist_name: artist.artist_name,
         venue_id: venue.venue_id,
-        venue_name: venue.venue_name
+        venue_name: venue.venue_name,
+        spotify_artist_id: artist.spotify_artist_id
       };
     });
+
+    // Calculate match scores for each artist
+    // Group shows by artist to get show counts
+    const artistShowCounts = transformedShows.reduce((acc: any, show: any) => {
+      if (!acc[show.artist_id]) {
+        acc[show.artist_id] = 0;
+      }
+      acc[show.artist_id]++;
+      return acc;
+    }, {});
+
+    // Calculate normalized scores (0-100 scale)
+    const maxSpotifyCount = Math.max(...Object.values(artistSongCounts) as number[]);
+    const maxVancouverCount = Math.max(...Object.values(artistShowCounts) as number[]);
+
+    const artistMatchScores = matchedArtists.reduce((acc: any, artist: any) => {
+      const spotifyCount = artistSongCounts[artist.spotify_artist_id] || 0;
+      const vancouverCount = artistShowCounts[artist.artist_id] || 0;
+
+      const spotifyScore = (spotifyCount / maxSpotifyCount) * 100;
+      const vancouverScore = (vancouverCount / maxVancouverCount) * 100;
+      
+      // Weighted score: 70% Spotify + 30% Vancouver
+      const matchScore = (0.7 * spotifyScore) + (0.3 * vancouverScore);
+
+      acc[artist.artist_id] = {
+        match_score: matchScore,
+        spotify_song_count: spotifyCount,
+        vancouver_show_count: vancouverCount
+      };
+      
+      return acc;
+    }, {});
+
+    // Add match scores to transformed shows
+    const showsWithScores = transformedShows.map(show => ({
+      ...show,
+      match_score: artistMatchScores[show.artist_id]?.match_score || 0,
+      spotify_song_count: artistMatchScores[show.artist_id]?.spotify_song_count || 0,
+      vancouver_show_count: artistMatchScores[show.artist_id]?.vancouver_show_count || 0
+    }));
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
@@ -159,15 +211,15 @@ export async function GET(request: Request) {
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     console.log(`   Confirmed venues: ${confirmedVenueIds.length}`);
     console.log(`   Matched artists: ${matchedArtistIds.length}`);
-    console.log(`   Total shows: ${transformedShows.length}`);
+    console.log(`   Total shows: ${showsWithScores.length}`);
     console.log(`   Duration: ${duration}s`);
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
     return NextResponse.json({
       success: true,
       data: {
-        shows: transformedShows,
-        total_shows: transformedShows.length,
+        shows: showsWithScores,
+        total_shows: showsWithScores.length,
         confirmed_venues: confirmedVenueIds.length,
         matched_artists: matchedArtistIds.length
       }
