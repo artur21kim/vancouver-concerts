@@ -206,6 +206,17 @@ export async function GET(request: Request) {
     console.log(`   Duration: ${duration}s`);
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
+    // Save spotify_matched_shows count to user_profiles
+    const { error: profileUpdateError } = await supabase
+      .from('user_profiles')
+      .update({ spotify_matched_shows: shows.length })
+      .eq('user_id', user.id);
+
+    if (profileUpdateError) {
+      console.error('Error updating spotify_matched_shows:', profileUpdateError);
+      // Don't fail the request, just log the error
+    }
+
     return NextResponse.json({
       success: true,
       data: {

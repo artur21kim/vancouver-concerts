@@ -55,6 +55,24 @@ export async function POST(request: Request) {
 
     console.log(`✅ Bulk updated ${show_ids.length} shows to status: ${userShowStatus}, source: ${source}`);
 
+    // Update likely_shows_added count if source is likely_shows
+    if (source === 'likely_shows') {
+      const increment = status === 'added' ? show_ids.length : -show_ids.length;
+      
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('likely_shows_added')
+        .eq('user_id', user.id)
+        .single();
+
+      const newCount = Math.max(0, (profile?.likely_shows_added || 0) + increment);
+      
+      await supabase
+        .from('user_profiles')
+        .update({ likely_shows_added: newCount })
+        .eq('user_id', user.id);
+    }
+
     return NextResponse.json({
       success: true,
       data: {

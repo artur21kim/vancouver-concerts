@@ -215,6 +215,17 @@ export async function GET(request: Request) {
     console.log(`   Duration: ${duration}s`);
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
+    // Save likely_shows_total count to user_profiles
+    const { error: profileUpdateError } = await supabase
+      .from('user_profiles')
+      .update({ likely_shows_total: showsWithScores.length })
+      .eq('user_id', user.id);
+
+    if (profileUpdateError) {
+      console.error('Error updating likely_shows_total:', profileUpdateError);
+      // Don't fail the request, just log the error
+    }
+
     return NextResponse.json({
       success: true,
       data: {

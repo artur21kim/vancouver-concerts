@@ -318,12 +318,20 @@ export default function LikelyShowsPage() {
       <Navigation />
       <main className="min-h-screen bg-gray-50 py-8 px-4">
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Likely Shows You Attended</h1>
-            <p className="text-gray-600">
-              Based on confirmed venues and your Spotify listening history
-            </p>
+          {/* Header with Done Reviewing Button */}
+          <div className="mb-8 flex items-center justify-between sticky top-16 bg-gray-50 py-4 z-10">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">Likely Shows You Attended</h1>
+              <p className="text-gray-600">
+                Based on confirmed venues and your Spotify listening history
+              </p>
+            </div>
+            <button
+              onClick={() => router.push('/review-summary')}
+              className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition whitespace-nowrap ml-4"
+            >
+              Done Reviewing →
+            </button>
           </div>
 
           {/* Stats Cards */}
@@ -547,6 +555,22 @@ export default function LikelyShowsPage() {
                 })}
               </div>
             )}
+          </div>
+
+          {/* Bottom Done Reviewing Button */}
+          <div className="mt-8 bg-white rounded-lg shadow p-6 text-center">
+            <p className="text-gray-600 mb-4">
+              {pendingCount === 0 
+                ? 'All shows reviewed! View your results.'
+                : `${pendingCount} shows still pending review. You can continue later.`
+              }
+            </p>
+            <button
+              onClick={() => router.push('/review-summary')}
+              className="px-8 py-4 bg-blue-600 text-white font-semibold text-lg rounded-lg hover:bg-blue-700 transition"
+            >
+              Done Reviewing →
+            </button>
           </div>
         </div>
       </main>

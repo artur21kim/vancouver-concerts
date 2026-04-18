@@ -46,6 +46,32 @@ export async function POST(request: Request) {
 
     console.log(`✅ Updated show ${show_id} to status: ${userShowStatus}, source: ${source}`);
 
+    // Update likely_shows_added count if source is likely_shows
+    if (source === 'likely_shows') {
+      const increment = status === 'added' ? 1 : -1;
+      
+      const { error: profileUpdateError } = await supabase.rpc('increment_likely_shows_added', {
+        p_user_id: user.id,
+        p_increment: increment
+      });
+
+      if (profileUpdateError) {
+        // If RPC doesn't exist, use direct update
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('likely_shows_added')
+          .eq('user_id', user.id)
+          .single();
+
+        const newCount = Math.max(0, (profile?.likely_shows_added || 0) + increment);
+        
+        await supabase
+          .from('user_profiles')
+          .update({ likely_shows_added: newCount })
+          .eq('user_id', user.id);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
