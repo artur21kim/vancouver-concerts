@@ -45,6 +45,7 @@ type SortField = 'date' | 'artist' | 'venue'
 type SortDirection = 'asc' | 'desc'
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const MONTH_NAMES_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 // Custom styles for react-select dropdowns
 const customSelectStyles = {
@@ -118,14 +119,24 @@ function BrowseContent({
   const [pageInput, setPageInput] = useState('1')
   const showsPerPage = 50
 
+  // Track if user has manually changed year range (to disable urlMonth filter)
+  const [hasManualYearChange, setHasManualYearChange] = useState(false)
+
   // User shows state
   const [userShows, setUserShows] = useState<Set<number>>(new Set())
   const [loadingShows, setLoadingShows] = useState<Set<number>>(new Set())
 
-  // Auto-adjust year range when artist/venue filter changes
+  // Auto-adjust year range when artist/venue filter changes OR on initial load with URL params
   useEffect(() => {
-    // Skip if both filters are empty (default state)
-    if (!selectedArtist && !selectedVenue) {
+    // If URL has year param (from month drilldown), use that
+    if (urlYear) {
+      const year = parseInt(urlYear)
+      setYearRange([year, year])
+      return
+    }
+
+    // Skip if both filters are empty AND no URL params (default state)
+    if (!selectedArtist && !selectedVenue && !initialArtistId && !initialVenueId) {
       setYearRange([1900, 2025])
       return
     }
@@ -147,7 +158,7 @@ function BrowseContent({
       const maxYear = Math.max(...years)
       setYearRange([minYear, maxYear])
     }
-  }, [selectedArtist, selectedVenue, shows])
+  }, [selectedArtist, selectedVenue, shows, initialArtistId, initialVenueId, urlYear])
 
   // Fetch user's shows
   useEffect(() => {
@@ -251,7 +262,8 @@ function BrowseContent({
       return year >= startYear && year <= endYear
     })
 
-    if (urlMonth) {
+    // Only filter by URL month if user hasn't manually changed the year range
+    if (urlMonth && !hasManualYearChange) {
       const monthNum = parseInt(urlMonth)
       if (monthNum >= 1 && monthNum <= 12) {
         filtered = filtered.filter((show) => {
@@ -287,7 +299,7 @@ function BrowseContent({
     })
 
     return filtered
-  }, [shows, selectedShowType, selectedArtist, selectedVenue, selectedFestival, yearRange, urlMonth, sortField, sortDirection])
+  }, [shows, selectedShowType, selectedArtist, selectedVenue, selectedFestival, yearRange, urlMonth, hasManualYearChange, sortField, sortDirection])
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -387,22 +399,65 @@ function BrowseContent({
       }))
   }, [shows])
 
-  // Dynamic page title
+  // Dynamic page title with priority - active filters override URL params
   const pageTitle = useMemo(() => {
-    if (urlYear && urlMonth) {
-      const monthName = MONTH_NAMES[parseInt(urlMonth) - 1]
+    // Priority 1: Artist + Venue (user actively filtered)
+    if (selectedArtist && selectedVenue) {
+      return `Browse: ${selectedArtist.label} @ ${selectedVenue.label}`
+    }
+    
+    // Priority 2: Artist only (user actively filtered)
+    if (selectedArtist) {
+      return `Browse: ${selectedArtist.label}`
+    }
+    
+    // Priority 3: Venue only (user actively filtered)
+    if (selectedVenue) {
+      return `Browse: ${selectedVenue.label}`
+    }
+
+    // Priority 4: Year + Month from URL (drilldown from home, only if no active filters and no manual year changes)
+    if (urlYear && urlMonth && !hasManualYearChange) {
+      const monthName = MONTH_NAMES_FULL[parseInt(urlMonth) - 1]
       return `Browse: ${monthName} ${urlYear}`
     }
     
-    if (selectedArtist && selectedVenue) {
-      return `Browse: ${selectedArtist.label} @ ${selectedVenue.label}`
-    } else if (selectedArtist) {
-      return `Browse: ${selectedArtist.label}`
-    } else if (selectedVenue) {
-      return `Browse: ${selectedVenue.label}`
+    // Priority 5: Festival only
+    if (selectedFestival) {
+      return `Browse: ${selectedFestival.label}`
     }
+    
+    // Priority 6: Show Type only
+    if (selectedShowType) {
+      const showTypeNames: Record<string, string> = {
+        'music': 'Music',
+        'comedy': 'Comedy',
+        'festival': 'Festivals'
+      }
+      return `Browse: ${showTypeNames[selectedShowType]}`
+    }
+    
+    // Priority 7: Default
     return 'Browse Shows'
-  }, [selectedArtist, selectedVenue, urlYear, urlMonth])
+  }, [selectedArtist, selectedVenue, selectedFestival, selectedShowType, urlYear, urlMonth, hasManualYearChange])
+
+  // Format date range for combined card
+  const dateRangeDisplay = useMemo(() => {
+    if (!stats.firstShow || !stats.lastShow) return null
+
+    const firstDate = new Date(stats.firstShow + 'T12:00:00')
+    const lastDate = new Date(stats.lastShow + 'T12:00:00')
+    const isSameDate = stats.firstShow === stats.lastShow
+
+    const formatDate = (date: Date) => 
+      date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+
+    if (isSameDate) {
+      return formatDate(firstDate)
+    } else {
+      return `${formatDate(firstDate)} – ${formatDate(lastDate)}`
+    }
+  }, [stats.firstShow, stats.lastShow])
 
   return (
     <>
@@ -422,9 +477,17 @@ function BrowseContent({
             <StatCard label="Venues" value={stats.uniqueVenues.toLocaleString()} />
           </div>
 
-          {/* Row 2: Conditional cards */}
-          {(selectedArtist || selectedVenue || stats.firstShow) && (
+          {/* Row 2: Conditional cards with Date Range always first */}
+          {(dateRangeDisplay || selectedArtist || selectedVenue) && (
             <div className="grid grid-cols-3 gap-4">
+              {/* Date Range - always first when there are results */}
+              {dateRangeDisplay && (
+                <StatCard
+                  label="Date Range"
+                  value={dateRangeDisplay}
+                />
+              )}
+
               {/* Monthly Listeners - only when artist selected */}
               {selectedArtist && stats.monthlyListeners !== null && (
                 <StatCard
@@ -436,34 +499,6 @@ function BrowseContent({
               {/* Capacity - only when venue selected */}
               {selectedVenue && stats.capacity !== null && (
                 <StatCard label="Capacity" value={stats.capacity.toLocaleString()} />
-              )}
-
-              {/* First Show */}
-              {stats.firstShow && (
-                <StatCard
-                  label={
-                    selectedArtist && !selectedVenue
-                      ? 'First Show (Artist)'
-                      : selectedVenue && !selectedArtist
-                        ? 'First Show (Venue)'
-                        : 'First Show'
-                  }
-                  value={stats.firstShow}
-                />
-              )}
-
-              {/* Last Show */}
-              {stats.lastShow && (
-                <StatCard
-                  label={
-                    selectedArtist && !selectedVenue
-                      ? 'Last Show (Artist)'
-                      : selectedVenue && !selectedArtist
-                        ? 'Last Show (Venue)'
-                        : 'Last Show'
-                  }
-                  value={stats.lastShow}
-                />
               )}
             </div>
           )}
@@ -480,6 +515,7 @@ function BrowseContent({
                 setSelectedVenue(null)
                 setSelectedFestival(null)
                 setYearRange([1900, 2025])
+                setHasManualYearChange(false) // Re-enable urlMonth filter
                 setCurrentPage(1)
                 setPageInput('1')
               }}
@@ -576,16 +612,15 @@ function BrowseContent({
               </label>
               <input
                 type="number"
-                defaultValue={typeof yearRange[0] === 'number' ? yearRange[0] : 1900}
-                onBlur={(e) => {
+                value={typeof yearRange[0] === 'number' ? yearRange[0] : 1900}
+                onChange={(e) => {
                   const value = e.target.value
                   const newStart = parseInt(value)
                   if (!isNaN(newStart) && newStart >= 1900 && newStart <= (typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]))) {
                     setYearRange([newStart, yearRange[1]])
+                    setHasManualYearChange(true)
                     setCurrentPage(1)
                     setPageInput('1')
-                  } else {
-                    e.target.value = (typeof yearRange[0] === 'number' ? yearRange[0] : 1900).toString()
                   }
                 }}
                 onKeyDown={(e) => {
@@ -600,16 +635,15 @@ function BrowseContent({
               <span className="text-sm text-gray-900">—</span>
               <input
                 type="number"
-                defaultValue={typeof yearRange[1] === 'number' ? yearRange[1] : 2025}
-                onBlur={(e) => {
+                value={typeof yearRange[1] === 'number' ? yearRange[1] : 2025}
+                onChange={(e) => {
                   const value = e.target.value
                   const newEnd = parseInt(value)
                   if (!isNaN(newEnd) && newEnd <= 2025 && newEnd >= (typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]))) {
                     setYearRange([yearRange[0], newEnd])
+                    setHasManualYearChange(true)
                     setCurrentPage(1)
                     setPageInput('1')
-                  } else {
-                    e.target.value = (typeof yearRange[1] === 'number' ? yearRange[1] : 2025).toString()
                   }
                 }}
                 onKeyDown={(e) => {
@@ -633,6 +667,7 @@ function BrowseContent({
               onChange={(value) => {
                 const vals = value as number[]
                 setYearRange([vals[0], vals[1]] as [number, number])
+                setHasManualYearChange(true) // Disable urlMonth filter
                 setCurrentPage(1)
                 setPageInput('1')
               }}
