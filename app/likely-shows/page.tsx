@@ -296,6 +296,46 @@ export default function LikelyShowsPage() {
     }
   };
 
+  const handleRestAction = async (groupId: number, action: 'add' | 'skip') => {
+    const status: 'added' | 'skipped' = action === 'add' ? 'added' : 'skipped';
+    
+    // Get only PENDING shows in this group
+    const groupShows = sortBy === 'year'
+      ? allShows.filter(s => new Date(s.date + 'T12:00:00').getFullYear() === groupId && s.status === 'pending')
+      : allShows.filter(s => s.artist_id === groupId && s.status === 'pending');
+    
+    if (groupShows.length === 0) return; // No pending shows to update
+    
+    try {
+      const response = await fetch('/api/shows/bulk-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          show_ids: groupShows.map(s => s.show_id),
+          status,
+          source: 'likely_shows'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to bulk update shows');
+      }
+
+      // Update local state
+      const updatedShows = allShows.map(show => 
+        groupShows.some(s => s.show_id === show.show_id) ? { ...show, status } : show
+      );
+      setAllShows(updatedShows);
+      
+      // Auto-collapse after rest action
+      setTimeout(() => autoCollapseIfComplete(groupId, updatedShows), 100);
+
+    } catch (err) {
+      console.error('Error bulk updating shows:', err);
+      alert('Failed to update shows. Please try again.');
+    }
+  };
+
   const toggleGroup = (artistId: number) => {
     setExpandedGroups(prev => {
       const newSet = new Set(prev);
@@ -412,7 +452,7 @@ export default function LikelyShowsPage() {
                   {/* Min Year Slider */}
                   <input
                     type="range"
-                    min="1900"
+                    min="2008"
                     max={yearRange[1]}
                     value={yearRange[0]}
                     onChange={(e) => setYearRange([parseInt(e.target.value), yearRange[1]])}
@@ -434,8 +474,8 @@ export default function LikelyShowsPage() {
                     <div
                       className="absolute h-2 bg-blue-600 rounded-lg"
                       style={{
-                        left: `${((yearRange[0] - 1900) / (2025 - 1900)) * 100}%`,
-                        right: `${100 - ((yearRange[1] - 1900) / (2025 - 1900)) * 100}%`
+                        left: `${((yearRange[0] - 2008) / (2025 - 2008)) * 100}%`,
+                        right: `${100 - ((yearRange[1] - 2008) / (2025 - 2008)) * 100}%`
                       }}
                     />
                   </div>
@@ -546,6 +586,27 @@ export default function LikelyShowsPage() {
                               : 'Add All'
                             }
                           </button>
+                          
+                          {/* Add Rest - only show if there are pending shows and at least one reviewed */}
+                          {pendingCount > 0 && (addedCount > 0 || skippedCount > 0) && (
+                            <button
+                              onClick={() => handleRestAction(group.artist_id, 'add')}
+                              className="px-4 py-2 text-sm font-medium rounded-lg transition bg-green-500 text-white hover:bg-green-600"
+                            >
+                              Add Rest
+                            </button>
+                          )}
+                          
+                          {/* Skip Rest - only show if there are pending shows and at least one reviewed */}
+                          {pendingCount > 0 && (addedCount > 0 || skippedCount > 0) && (
+                            <button
+                              onClick={() => handleRestAction(group.artist_id, 'skip')}
+                              className="px-4 py-2 text-sm font-medium rounded-lg transition bg-red-500 text-white hover:bg-red-600"
+                            >
+                              Skip Rest
+                            </button>
+                          )}
+                          
                           <button
                             onClick={() => handleBulkAction(group.artist_id, 'skip')}
                             disabled={allSkipped}
