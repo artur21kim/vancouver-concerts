@@ -260,7 +260,7 @@ export default function LikelyShowsPage() {
   };
 
   const handleBulkAction = async (groupId: number, action: 'add' | 'skip') => {
-    const status = action === 'add' ? 'added' : 'skipped';
+    const status: 'added' | 'skipped' = action === 'add' ? 'added' : 'skipped';
     
     const groupShows = sortBy === 'year'
       ? allShows.filter(s => new Date(s.date + 'T12:00:00').getFullYear() === groupId)
