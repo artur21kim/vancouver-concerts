@@ -336,6 +336,42 @@ export default function LikelyShowsPage() {
     }
   };
 
+  const handleClearAll = async (groupId: number) => {
+    if (!confirm('Clear all reviews for this artist?')) {
+      return;
+    }
+
+    const groupShows = sortBy === 'year'
+      ? allShows.filter(s => new Date(s.date + 'T12:00:00').getFullYear() === groupId)
+      : allShows.filter(s => s.artist_id === groupId);
+    
+    try {
+      const response = await fetch('/api/shows/bulk-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          show_ids: groupShows.map(s => s.show_id),
+          status: 'pending',
+          source: 'likely_shows'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to clear reviews');
+      }
+
+      // Update local state - set all back to pending
+      const updatedShows = allShows.map(show => 
+        groupShows.some(s => s.show_id === show.show_id) ? { ...show, status: 'pending' as const } : show
+      );
+      setAllShows(updatedShows);
+
+    } catch (err) {
+      console.error('Error clearing reviews:', err);
+      alert('Failed to clear reviews. Please try again.');
+    }
+  };
+
   const toggleGroup = (artistId: number) => {
     setExpandedGroups(prev => {
       const newSet = new Set(prev);
@@ -568,63 +604,121 @@ export default function LikelyShowsPage() {
                           </h3>
                         </button>
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => handleBulkAction(group.artist_id, 'add')}
-                            disabled={allAdded}
-                            className={`px-4 py-2 text-sm font-medium rounded-lg transition ${
-                              allAdded
-                                ? 'bg-green-100 text-green-700 cursor-default'
-                                : hasAdded
-                                ? 'bg-green-50 text-green-700 border border-green-300 hover:bg-green-100'
-                                : 'bg-green-600 text-white hover:bg-green-700'
-                            }`}
-                          >
-                            {allAdded 
-                              ? 'All Added ✓' 
-                              : hasAdded 
-                              ? `${addedCount} Added ✓`
-                              : 'Add All'
-                            }
-                          </button>
-                          
-                          {/* Add Rest - only show if there are pending shows and at least one reviewed */}
-                          {pendingCount > 0 && (addedCount > 0 || skippedCount > 0) && (
-                            <button
-                              onClick={() => handleRestAction(group.artist_id, 'add')}
-                              className="px-4 py-2 text-sm font-medium rounded-lg transition bg-green-500 text-white hover:bg-green-600"
-                            >
-                              Add Rest
-                            </button>
+                          {/* Scenario: All shows are added */}
+                          {allAdded ? (
+                            <>
+                              <button
+                                disabled
+                                className="px-4 py-2 text-sm font-medium rounded-lg bg-green-50 text-green-700 cursor-default"
+                              >
+                                All Added ✓
+                              </button>
+                              <button
+                                onClick={() => handleClearAll(group.artist_id)}
+                                className="px-4 py-2 text-sm font-medium rounded-lg transition bg-gray-600 text-white hover:bg-gray-700"
+                              >
+                                Clear
+                              </button>
+                            </>
+                          ) : allSkipped ? (
+                            /* Scenario: All shows are skipped */
+                            <>
+                              <button
+                                disabled
+                                className="px-4 py-2 text-sm font-medium rounded-lg bg-red-50 text-red-700 cursor-default"
+                              >
+                                All Skipped ✓
+                              </button>
+                              <button
+                                onClick={() => handleClearAll(group.artist_id)}
+                                className="px-4 py-2 text-sm font-medium rounded-lg transition bg-gray-600 text-white hover:bg-gray-700"
+                              >
+                                Clear
+                              </button>
+                            </>
+                          ) : pendingCount === 0 && hasAdded && hasSkipped ? (
+                            /* Scenario: All reviewed but mixed (some added, some skipped) */
+                            <>
+                              <button
+                                disabled
+                                className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-50 text-gray-700 cursor-default"
+                              >
+                                {addedCount + skippedCount} Reviewed ✓
+                              </button>
+                              <button
+                                onClick={() => handleClearAll(group.artist_id)}
+                                className="px-4 py-2 text-sm font-medium rounded-lg transition bg-gray-600 text-white hover:bg-gray-700"
+                              >
+                                Clear
+                              </button>
+                            </>
+                          ) : hasAdded || hasSkipped ? (
+                            /* Scenario: Partially reviewed (has added/skipped + pending) */
+                            <>
+                              {hasAdded && hasSkipped ? (
+                                /* Mixed state with pending */
+                                <button
+                                  disabled
+                                  className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-50 text-gray-700 cursor-default"
+                                >
+                                  {addedCount + skippedCount} Reviewed ✓
+                                </button>
+                              ) : hasAdded ? (
+                                /* Only added, no skipped */
+                                <button
+                                  disabled
+                                  className="px-4 py-2 text-sm font-medium rounded-lg bg-green-50 text-green-700 cursor-default"
+                                >
+                                  {addedCount} Added ✓
+                                </button>
+                              ) : (
+                                /* Only skipped, no added */
+                                <button
+                                  disabled
+                                  className="px-4 py-2 text-sm font-medium rounded-lg bg-red-50 text-red-700 cursor-default"
+                                >
+                                  {skippedCount} Skipped ✓
+                                </button>
+                              )}
+                              
+                              <button
+                                onClick={() => handleRestAction(group.artist_id, 'add')}
+                                className="px-4 py-2 text-sm font-medium rounded-lg transition bg-green-500 text-white hover:bg-green-600"
+                              >
+                                Add Rest
+                              </button>
+                              
+                              <button
+                                onClick={() => handleRestAction(group.artist_id, 'skip')}
+                                className="px-4 py-2 text-sm font-medium rounded-lg transition bg-red-500 text-white hover:bg-red-600"
+                              >
+                                Skip Rest
+                              </button>
+                              
+                              <button
+                                onClick={() => handleClearAll(group.artist_id)}
+                                className="px-4 py-2 text-sm font-medium rounded-lg transition bg-gray-600 text-white hover:bg-gray-700"
+                              >
+                                Clear
+                              </button>
+                            </>
+                          ) : (
+                            /* Scenario: All pending (no reviews yet) */
+                            <>
+                              <button
+                                onClick={() => handleBulkAction(group.artist_id, 'add')}
+                                className="px-4 py-2 text-sm font-medium rounded-lg transition bg-green-600 text-white hover:bg-green-700"
+                              >
+                                Add All
+                              </button>
+                              <button
+                                onClick={() => handleBulkAction(group.artist_id, 'skip')}
+                                className="px-4 py-2 text-sm font-medium rounded-lg transition bg-red-600 text-white hover:bg-red-700"
+                              >
+                                Skip All
+                              </button>
+                            </>
                           )}
-                          
-                          {/* Skip Rest - only show if there are pending shows and at least one reviewed */}
-                          {pendingCount > 0 && (addedCount > 0 || skippedCount > 0) && (
-                            <button
-                              onClick={() => handleRestAction(group.artist_id, 'skip')}
-                              className="px-4 py-2 text-sm font-medium rounded-lg transition bg-red-500 text-white hover:bg-red-600"
-                            >
-                              Skip Rest
-                            </button>
-                          )}
-                          
-                          <button
-                            onClick={() => handleBulkAction(group.artist_id, 'skip')}
-                            disabled={allSkipped}
-                            className={`px-4 py-2 text-sm font-medium rounded-lg transition ${
-                              allSkipped
-                                ? 'bg-red-100 text-red-700 cursor-default'
-                                : hasSkipped
-                                ? 'bg-red-50 text-red-700 border border-red-300 hover:bg-red-100'
-                                : 'bg-red-600 text-white hover:bg-red-700'
-                            }`}
-                          >
-                            {allSkipped 
-                              ? 'All Skipped ✓' 
-                              : hasSkipped 
-                              ? `${skippedCount} Skipped ✓`
-                              : 'Skip All'
-                            }
-                          </button>
                         </div>
                       </div>
 
