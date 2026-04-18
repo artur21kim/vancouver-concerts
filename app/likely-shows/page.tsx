@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Navigation from '../components/Navigation';
 
 type Show = {
@@ -25,6 +26,7 @@ type GroupedShows = {
 };
 
 export default function LikelyShowsPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [allShows, setAllShows] = useState<Show[]>([]);
