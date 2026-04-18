@@ -41,7 +41,7 @@ export default function SpotifyProcessingPage() {
           
           // Small delay to show 100% before redirect
           setTimeout(() => {
-            router.push('/venue-selection');
+            router.push('/matches');
           }, 1000);
           return;
         }
