@@ -235,6 +235,17 @@ export default function LikelyShowsPage() {
   const pendingCount = allShows.filter(s => s.status === 'pending').length;
   const addedCount = allShows.filter(s => s.status === 'added').length;
   const skippedCount = allShows.filter(s => s.status === 'skipped').length;
+  const reviewedShowsCount = addedCount + skippedCount;
+
+  // Calculate unique artists
+  const uniqueArtists = new Set(allShows.map(s => s.artist_id));
+  const totalArtists = uniqueArtists.size;
+  
+  // Calculate reviewed artists (artists with at least one reviewed show)
+  const reviewedArtistIds = new Set(
+    allShows.filter(s => s.status === 'added' || s.status === 'skipped').map(s => s.artist_id)
+  );
+  const reviewedArtistsCount = reviewedArtistIds.size;
 
   if (loading) {
     return (
@@ -281,8 +292,8 @@ export default function LikelyShowsPage() {
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <StatCard label="Total Shows" value={totalShows.toLocaleString()} />
-            <StatCard label="Pending Review" value={pendingCount.toLocaleString()} color="gray" />
+            <StatCard label="Shows Reviewed" value={`${reviewedShowsCount} / ${totalShows}`} />
+            <StatCard label="Artists Reviewed" value={`${reviewedArtistsCount} / ${totalArtists}`} />
             <StatCard label="Added" value={addedCount.toLocaleString()} color="green" />
             <StatCard label="Skipped" value={skippedCount.toLocaleString()} color="red" />
           </div>
@@ -321,7 +332,7 @@ export default function LikelyShowsPage() {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as 'relevance' | 'artist' | 'count' | 'date')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                 >
                   <option value="relevance">Relevance (Recommended)</option>
                   <option value="count">Show Count (Most to Least)</option>
