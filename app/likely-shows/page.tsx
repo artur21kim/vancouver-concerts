@@ -436,7 +436,6 @@ export default function LikelyShowsPage() {
                   );
                 })}
               </div>
-              </div>
             )}
           </div>
         </div>
