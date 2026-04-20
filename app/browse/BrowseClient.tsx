@@ -122,6 +122,32 @@ function BrowseContent({
   // Track if user has manually changed year range (to disable urlMonth filter)
   const [hasManualYearChange, setHasManualYearChange] = useState(false)
 
+  // Capacity filter state
+  const [capacityRange, setCapacityRange] = useState<[number, number]>([0, 65000])
+  const [activeCapacityButton, setActiveCapacityButton] = useState<string | null>('All')
+
+  // Capacity button handler
+  const handleCapacityButton = (category: string, range: [number, number]) => {
+    // For Unknown button, keep slider at full range but set the active button
+    if (category === 'Unknown') {
+      setActiveCapacityButton('Unknown')
+      // Don't change the slider range - keep it at current position
+    } else {
+      setCapacityRange(range)
+      setActiveCapacityButton(category)
+    }
+    setCurrentPage(1)
+    setPageInput('1')
+  }
+
+  // Capacity slider handler
+  const handleCapacitySlider = (value: number[]) => {
+    setCapacityRange([value[0], value[1]])
+    setActiveCapacityButton(null) // Deselect buttons when manually dragging
+    setCurrentPage(1)
+    setPageInput('1')
+  }
+
   // User shows state
   const [userShows, setUserShows] = useState<Set<number>>(new Set())
   const [loadingShows, setLoadingShows] = useState<Set<number>>(new Set())
@@ -254,6 +280,24 @@ function BrowseContent({
       filtered = filtered.filter((show) => show.festival_name === selectedFestival.value)
     }
 
+    // Capacity filter - exclude unknowns UNLESS "All" or "Unknown" button is active
+    filtered = filtered.filter((show) => {
+      const capacity = show.venue.capacity
+      
+      // Special handling for "Unknown" button - show ONLY unknowns
+      if (activeCapacityButton === 'Unknown') {
+        return capacity === null
+      }
+      
+      // If "All" button active, include everything (including unknowns)
+      if (activeCapacityButton === 'All') return true
+      
+      // Otherwise, exclude venues with unknown capacity
+      if (capacity === null) return false
+      
+      return capacity >= capacityRange[0] && capacity <= capacityRange[1]
+    })
+
     const startYear = typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900
     const endYear = typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025
 
@@ -299,7 +343,7 @@ function BrowseContent({
     })
 
     return filtered
-  }, [shows, selectedShowType, selectedArtist, selectedVenue, selectedFestival, yearRange, urlMonth, hasManualYearChange, sortField, sortDirection])
+  }, [shows, selectedShowType, selectedArtist, selectedVenue, selectedFestival, capacityRange, yearRange, urlMonth, hasManualYearChange, sortField, sortDirection])
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -401,33 +445,82 @@ function BrowseContent({
 
   // Dynamic page title with priority - active filters override URL params
   const pageTitle = useMemo(() => {
-    // Priority 1: Artist + Venue (user actively filtered)
+    // Priority 1: Artist + Venue (specific venue overrides capacity)
     if (selectedArtist && selectedVenue) {
       return `Browse: ${selectedArtist.label} @ ${selectedVenue.label}`
     }
     
-    // Priority 2: Artist only (user actively filtered)
+    // Priority 2: Artist + Capacity
+    if (selectedArtist && activeCapacityButton && activeCapacityButton !== 'All') {
+      const capacityLabel = {
+        'Small': 'Small (<500)',
+        'Medium': 'Medium (500-3K)',
+        'Large': 'Large (3K-10K)',
+        'X-Large': 'X-Large (10K+)'
+      }[activeCapacityButton] || activeCapacityButton
+      return `Browse: ${selectedArtist.label} @ ${capacityLabel} Venues`
+    }
+    
+    // Priority 3: Artist only
     if (selectedArtist) {
       return `Browse: ${selectedArtist.label}`
     }
     
-    // Priority 3: Venue only (user actively filtered)
+    // Priority 4: Venue only (specific venue overrides capacity)
     if (selectedVenue) {
       return `Browse: ${selectedVenue.label}`
     }
 
-    // Priority 4: Year + Month from URL (drilldown from home, only if no active filters and no manual year changes)
+    // Priority 5: Show Type + Capacity
+    if (selectedShowType && activeCapacityButton && activeCapacityButton !== 'All') {
+      const showTypeNames: Record<string, string> = {
+        'music': 'Music',
+        'comedy': 'Comedy',
+        'festival': 'Festivals'
+      }
+      const capacityLabel = {
+        'Small': 'Small (<500)',
+        'Medium': 'Medium (500-3K)',
+        'Large': 'Large (3K-10K)',
+        'X-Large': 'X-Large (10K+)'
+      }[activeCapacityButton] || activeCapacityButton
+      return `Browse: ${showTypeNames[selectedShowType]} @ ${capacityLabel} Venues`
+    }
+
+    // Priority 6: Festival + Capacity
+    if (selectedFestival && activeCapacityButton && activeCapacityButton !== 'All') {
+      const capacityLabel = {
+        'Small': 'Small (<500)',
+        'Medium': 'Medium (500-3K)',
+        'Large': 'Large (3K-10K)',
+        'X-Large': 'X-Large (10K+)'
+      }[activeCapacityButton] || activeCapacityButton
+      return `Browse: ${selectedFestival.label} @ ${capacityLabel} Venues`
+    }
+
+    // Priority 7: Capacity only
+    if (activeCapacityButton && activeCapacityButton !== 'All') {
+      const capacityLabel = {
+        'Small': 'Small (<500)',
+        'Medium': 'Medium (500-3K)',
+        'Large': 'Large (3K-10K)',
+        'X-Large': 'X-Large (10K+)'
+      }[activeCapacityButton] || activeCapacityButton
+      return `Browse: ${capacityLabel} Venues`
+    }
+
+    // Priority 8: Year + Month from URL (drilldown from home, only if no active filters and no manual year changes)
     if (urlYear && urlMonth && !hasManualYearChange) {
       const monthName = MONTH_NAMES_FULL[parseInt(urlMonth) - 1]
       return `Browse: ${monthName} ${urlYear}`
     }
     
-    // Priority 5: Festival only
+    // Priority 9: Festival only
     if (selectedFestival) {
       return `Browse: ${selectedFestival.label}`
     }
     
-    // Priority 6: Show Type only
+    // Priority 10: Show Type only
     if (selectedShowType) {
       const showTypeNames: Record<string, string> = {
         'music': 'Music',
@@ -437,9 +530,9 @@ function BrowseContent({
       return `Browse: ${showTypeNames[selectedShowType]}`
     }
     
-    // Priority 7: Default
+    // Priority 11: Default
     return 'Browse Shows'
-  }, [selectedArtist, selectedVenue, selectedFestival, selectedShowType, urlYear, urlMonth, hasManualYearChange])
+  }, [selectedArtist, selectedVenue, selectedFestival, selectedShowType, activeCapacityButton, urlYear, urlMonth, hasManualYearChange])
 
   // Format date range for combined card
   const dateRangeDisplay = useMemo(() => {
@@ -514,6 +607,8 @@ function BrowseContent({
                 setSelectedArtist(null)
                 setSelectedVenue(null)
                 setSelectedFestival(null)
+                setCapacityRange([0, 65000])
+                setActiveCapacityButton('All')
                 setYearRange([1900, 2025])
                 setHasManualYearChange(false) // Re-enable urlMonth filter
                 setCurrentPage(1)
@@ -601,6 +696,169 @@ function BrowseContent({
                 className="text-sm"
                 styles={customSelectStyles}
               />
+            </div>
+          </div>
+
+          {/* Venue Capacity Filter - Buttons + Slider */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-900 mb-2">
+              Venue Capacity
+            </label>
+            
+            {/* Grid container - all children same width */}
+            <div className="grid" style={{ gridTemplateColumns: '1fr', width: 'fit-content' }}>
+              {/* Quick Select Buttons with Tooltips */}
+              <div className="flex gap-2 mb-2">
+                <button
+                  onClick={() => handleCapacityButton('Small', [0, 500])}
+                  title="0-500"
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+                    activeCapacityButton === 'Small'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Small
+                </button>
+                <button
+                  onClick={() => handleCapacityButton('Medium', [500, 3000])}
+                  title="500-3,000"
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+                    activeCapacityButton === 'Medium'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Medium
+                </button>
+                <button
+                  onClick={() => handleCapacityButton('Large', [3000, 10000])}
+                  title="3,000-10,000"
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+                    activeCapacityButton === 'Large'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Large
+                </button>
+                <button
+                  onClick={() => handleCapacityButton('X-Large', [10000, 65000])}
+                  title="10,000-65,000"
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+                    activeCapacityButton === 'X-Large'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  X-Large
+                </button>
+                <button
+                  onClick={() => handleCapacityButton('Unknown', [0, 65000])}
+                  title="Unknown capacity"
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+                    activeCapacityButton === 'Unknown'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Unknown
+                </button>
+                <button
+                  onClick={() => handleCapacityButton('All', [0, 65000])}
+                  title="0-65,000+"
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+                    activeCapacityButton === 'All'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  All
+                </button>
+              </div>
+
+              {/* Unknown Capacity Warning - Always rendered, visibility controlled */}
+              {(() => {
+                // Calculate unknowns from ALL shows (before capacity filter)
+                let preCapacityFiltered = shows
+                
+                // Apply all filters EXCEPT capacity
+                if (selectedShowType) {
+                  if (selectedShowType === 'music') {
+                    preCapacityFiltered = preCapacityFiltered.filter((show) => 
+                      show.show_type === 'music' || show.show_type === null
+                    )
+                  } else {
+                    preCapacityFiltered = preCapacityFiltered.filter((show) => show.show_type === selectedShowType)
+                  }
+                }
+                
+                if (selectedArtist) {
+                  preCapacityFiltered = preCapacityFiltered.filter((show) => show.artist.artist_id === selectedArtist.value)
+                }
+                
+                if (selectedVenue) {
+                  preCapacityFiltered = preCapacityFiltered.filter((show) => show.venue.venue_id === selectedVenue.value)
+                }
+                
+                if (selectedFestival) {
+                  preCapacityFiltered = preCapacityFiltered.filter((show) => show.festival_name === selectedFestival.value)
+                }
+                
+                const startYear = typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900
+                const endYear = typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025
+                
+                preCapacityFiltered = preCapacityFiltered.filter((show) => {
+                  const year = new Date(show.date).getFullYear()
+                  return year >= startYear && year <= endYear
+                })
+                
+                if (urlMonth && !hasManualYearChange) {
+                  const monthNum = parseInt(urlMonth)
+                  if (monthNum >= 1 && monthNum <= 12) {
+                    preCapacityFiltered = preCapacityFiltered.filter((show) => {
+                      const dateParts = show.date.split('-')
+                      const showMonth = parseInt(dateParts[1])
+                      return showMonth === monthNum
+                    })
+                  }
+                }
+                
+                const unknownCount = preCapacityFiltered.filter(show => show.venue.capacity === null).length
+                const shouldShow = unknownCount > 0 && activeCapacityButton !== 'All' && activeCapacityButton !== 'Unknown'
+                
+                return (
+                  <div className={`bg-blue-50 border border-blue-200 rounded-md px-3 py-1.5 mb-3 ${shouldShow ? '' : 'invisible'}`}>
+                    <p className="text-xs text-blue-800 whitespace-nowrap">
+                      ℹ️ <strong>{unknownCount.toLocaleString()}</strong> shows at venues with unknown capacity are hidden. Click <strong>"All"</strong> to include them.
+                    </p>
+                  </div>
+                )
+              })()}
+
+              {/* Compact Range Slider - Matches grid width */}
+              <div>
+                <Slider
+                  range
+                  min={0}
+                  max={65000}
+                  value={activeCapacityButton === 'Unknown' ? [0, 65000] : capacityRange}
+                  onChange={handleCapacitySlider}
+                  disabled={activeCapacityButton === 'Unknown'}
+                  styles={{
+                    track: { backgroundColor: '#3b82f6' },
+                    handle: { borderColor: '#3b82f6' },
+                  }}
+                />
+                
+                {/* Current range display */}
+                <div className="text-center text-xs text-gray-600 mt-2">
+                  {activeCapacityButton === 'Unknown' 
+                    ? 'Unknown capacity' 
+                    : `${capacityRange[0].toLocaleString()} – ${capacityRange[1] === 65000 ? '65,000+' : capacityRange[1].toLocaleString()}`
+                  }
+                </div>
+              </div>
             </div>
           </div>
 

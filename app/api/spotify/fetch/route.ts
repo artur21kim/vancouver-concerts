@@ -25,6 +25,52 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Spotify token not found' }, { status: 404 });
     }
 
+    // Check if token is expired and refresh if needed
+    const now = new Date();
+    const expiresAt = new Date(tokenData.expires_at);
+    
+    let accessToken = tokenData.access_token;
+    
+    if (now >= expiresAt) {
+      console.log(`🔄 Token expired, refreshing for user ${user.id}`);
+      
+      // Refresh the token
+      const refreshResponse = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${Buffer.from(
+            `${process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
+          ).toString('base64')}`
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: tokenData.refresh_token
+        })
+      });
+
+      if (!refreshResponse.ok) {
+        console.error('❌ Failed to refresh token:', await refreshResponse.text());
+        return NextResponse.json({ error: 'Failed to refresh Spotify token' }, { status: 401 });
+      }
+
+      const refreshData = await refreshResponse.json();
+      accessToken = refreshData.access_token;
+      
+      // Update token in database
+      const newExpiresAt = new Date(Date.now() + refreshData.expires_in * 1000);
+      await supabase
+        .from('user_spotify_tokens')
+        .update({ 
+          access_token: accessToken,
+          expires_at: newExpiresAt.toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+      
+      console.log(`✅ Token refreshed for user ${user.id}`);
+    }
+
     // If already complete, return success
     if (tokenData.status === 'complete') {
       return NextResponse.json({ 
@@ -45,7 +91,6 @@ export async function POST(request: Request) {
         .eq('user_id', user.id);
     }
 
-    const accessToken = tokenData.access_token;
     const startUrl = tokenData.last_fetch_url || 'https://api.spotify.com/v1/me/tracks?limit=50';
     
     console.log(`🔄 Fetching chunk for user ${user.id} (${tokenData.songs_fetched} songs so far)`);
@@ -64,6 +109,27 @@ export async function POST(request: Request) {
       });
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          // Token is invalid or lacks permissions
+          console.error(`❌ Spotify auth error (${response.status}):`, await response.text());
+          
+          await supabase
+            .from('user_spotify_tokens')
+            .update({ 
+              status: 'error',
+              error_message: `Authentication failed (${response.status}). Please reconnect Spotify.`,
+              updated_at: new Date().toISOString()
+            })
+            .eq('user_id', user.id);
+
+          return NextResponse.json({ 
+            status: 'error',
+            error: 'auth_failed',
+            message: 'Spotify authentication failed. Please reconnect your account.',
+            songs_fetched: tokenData.songs_fetched
+          }, { status: response.status });
+        }
+        
         if (response.status === 429) {
           // Rate limited - mark for retry
           const retryAfter = response.headers.get('Retry-After');
