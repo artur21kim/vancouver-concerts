@@ -86,6 +86,7 @@ export async function POST(request: Request) {
         .from('user_spotify_tokens')
         .update({ 
           status: 'processing',
+          fetch_started_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('user_id', user.id);
@@ -93,7 +94,12 @@ export async function POST(request: Request) {
 
     const startUrl = tokenData.last_fetch_url || 'https://api.spotify.com/v1/me/tracks?limit=50';
     
-    console.log(`🔄 Fetching chunk for user ${user.id} (${tokenData.songs_fetched} songs so far)`);
+    const chunkStartTime = Date.now();
+    const totalElapsedTime = tokenData.fetch_started_at 
+      ? (Date.now() - new Date(tokenData.fetch_started_at).getTime()) / 1000 
+      : 0;
+    
+    console.log(`🔄 Fetching chunk for user ${user.id} (${tokenData.songs_fetched} songs so far, ${totalElapsedTime.toFixed(1)}s elapsed)`);
 
     // Fetch one batch (up to 10 requests = 500 songs max per chunk)
     const songsInChunk: any[] = [];
@@ -178,7 +184,9 @@ export async function POST(request: Request) {
       }
     }
 
-    console.log(`📦 Chunk fetched: ${songsInChunk.length} songs in this batch`);
+    console.log(`📦 Chunk fetched: ${songsInChunk.length} songs in this batch (${requestCount} API requests, ${((Date.now() - chunkStartTime) / 1000).toFixed(2)}s)`);
+
+    const transformStartTime = Date.now();
 
     // Transform songs for database
     const songsToInsert = songsInChunk.flatMap(item => {
@@ -193,8 +201,14 @@ export async function POST(request: Request) {
       }));
     });
 
+    const transformTime = ((Date.now() - transformStartTime) / 1000).toFixed(2);
+    const upsertStartTime = Date.now();
+
     // Batch upsert
     const batchSize = 1000;
+    let upsertSuccessCount = 0;
+    let upsertErrorCount = 0;
+    
     for (let i = 0; i < songsToInsert.length; i += batchSize) {
       const batch = songsToInsert.slice(i, i + batchSize);
       const { error: upsertError } = await supabase
@@ -206,22 +220,51 @@ export async function POST(request: Request) {
 
       if (upsertError) {
         console.error(`❌ Error upserting batch:`, upsertError);
+        upsertErrorCount++;
+      } else {
+        upsertSuccessCount++;
       }
     }
+
+    const upsertTime = ((Date.now() - upsertStartTime) / 1000).toFixed(2);
+    
+    console.log(`💾 Transform: ${transformTime}s | Upsert: ${upsertTime}s (${upsertSuccessCount} batches OK, ${upsertErrorCount} errors)`);
 
     // Update progress
     const newSongsFetched = tokenData.songs_fetched + songsInChunk.length;
     const isComplete = !nextUrl;
+    
+    // Calculate cumulative API requests
+    const totalApiRequests = (tokenData.total_api_requests || 0) + requestCount;
+
+    const updateData: any = {
+      songs_fetched: newSongsFetched,
+      last_fetch_url: nextUrl,
+      status: isComplete ? 'complete' : 'processing',
+      error_message: null,
+      total_api_requests: totalApiRequests,
+      total_records_created: songsToInsert.length,
+      updated_at: new Date().toISOString()
+    };
+
+    if (isComplete) {
+      updateData.fetch_completed_at = new Date().toISOString();
+      
+      const totalDuration = tokenData.fetch_started_at 
+        ? ((Date.now() - new Date(tokenData.fetch_started_at).getTime()) / 1000).toFixed(2)
+        : '0';
+      
+      console.log(`\n🎉 SPOTIFY FETCH COMPLETE:`);
+      console.log(`   - Songs fetched: ${newSongsFetched}`);
+      console.log(`   - API requests: ${totalApiRequests}`);
+      console.log(`   - Total duration: ${totalDuration}s`);
+      console.log(`   - Records created: ${songsToInsert.length}`);
+      console.log(`   - User: ${user.id}\n`);
+    }
 
     await supabase
       .from('user_spotify_tokens')
-      .update({ 
-        songs_fetched: newSongsFetched,
-        last_fetch_url: nextUrl,
-        status: isComplete ? 'complete' : 'processing',
-        error_message: null,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('user_id', user.id);
 
     console.log(`✅ Progress: ${newSongsFetched} songs fetched${isComplete ? ' - COMPLETE' : ''}`);
