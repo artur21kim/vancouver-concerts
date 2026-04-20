@@ -141,8 +141,9 @@ function BrowseContent({
   }
 
   // Capacity slider handler
-  const handleCapacitySlider = (value: number[]) => {
-    setCapacityRange([value[0], value[1]])
+  const handleCapacitySlider = (value: number | number[]) => {
+    const range = Array.isArray(value) ? value : [value, value]
+    setCapacityRange([range[0], range[1]])
     setActiveCapacityButton(null) // Deselect buttons when manually dragging
     setCurrentPage(1)
     setPageInput('1')
