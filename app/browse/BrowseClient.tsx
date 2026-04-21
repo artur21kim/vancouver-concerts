@@ -577,31 +577,34 @@ function BrowseContent({
       {/* Dynamic Header */}
           <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4 md:mb-6">{pageTitle}</h1>
 
-      {/* Stats Cards - Match Overview page layout */}
-      <div className="mb-4 md:mb-6">
-          {/* Row 1: Always visible - 4 columns like Overview */}
-          <div className="grid grid-cols-4 gap-2 md:gap-4 mb-2 md:mb-4">
+      {/* Stats Cards - 4 columns mobile, 3 columns desktop */}
+      <div className="mb-4 md:mb-8">
+          {/* Row 1: Always visible */}
+          <div className="grid grid-cols-4 md:grid-cols-3 gap-2 md:gap-4 mb-2 md:mb-4">
             <StatCard label="Shows" value={stats.totalShows.toLocaleString()} />
             <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
             <StatCard label="Venues" value={stats.uniqueVenues.toLocaleString()} />
             
-            {/* Date Range in 4th spot when available, otherwise empty */}
-            {dateRangeDisplay ? (
-              <div className="bg-white rounded-lg shadow p-2 md:p-4">
-                <p className="text-[10px] md:text-sm text-gray-600 mb-0.5 md:mb-1 leading-tight">Date Range</p>
-                <p className="text-sm md:text-2xl font-bold text-gray-900 break-words leading-tight">
-                  <span className="md:hidden">{dateRangeDisplayMobile}</span>
-                  <span className="hidden md:inline">{dateRangeDisplay}</span>
-                </p>
+            {/* Date Range - 4th spot on mobile, hidden on desktop initially */}
+            {dateRangeDisplay && (
+              <div className="md:hidden bg-white rounded-lg shadow p-2">
+                <p className="text-[10px] text-gray-600 mb-0.5 leading-tight">Date Range</p>
+                <p className="text-sm font-bold text-gray-900 break-words leading-tight">{dateRangeDisplayMobile}</p>
               </div>
-            ) : (
-              <div></div>
             )}
           </div>
 
-          {/* Row 2: Conditional cards for Monthly Listeners and Capacity */}
-          {(selectedArtist || selectedVenue) && (stats.monthlyListeners !== null || stats.capacity !== null) && (
-            <div className="grid grid-cols-4 gap-2 md:gap-4">
+          {/* Row 2: Conditional cards - Date Range always first on desktop */}
+          {(dateRangeDisplay || selectedArtist || selectedVenue) && (
+            <div className="hidden md:grid md:grid-cols-3 gap-4">
+              {/* Date Range - always first when there are results */}
+              {dateRangeDisplay && (
+                <StatCard
+                  label="Date Range"
+                  value={dateRangeDisplay}
+                />
+              )}
+
               {/* Monthly Listeners - only when artist selected */}
               {selectedArtist && stats.monthlyListeners !== null && (
                 <StatCard
@@ -728,7 +731,7 @@ function BrowseContent({
             
             {/* Grid container - all children same width */}
             <div className="grid" style={{ gridTemplateColumns: '1fr', width: 'fit-content' }}>
-              {/* Quick Select Buttons - Single row, wraps on mobile */}
+              {/* Quick Select Buttons - All in first row on mobile */}
               <div className="flex flex-wrap gap-2 mb-3">
                 <button
                   onClick={() => handleCapacityButton('Small', [0, 500])}
@@ -775,6 +778,17 @@ function BrowseContent({
                   X-Large
                 </button>
                 <button
+                  onClick={() => handleCapacityButton('All', [0, 65000])}
+                  title="0-65,000+"
+                  className={`order-last md:order-none px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                    activeCapacityButton === 'All'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  All
+                </button>
+                <button
                   onClick={() => handleCapacityButton('Unknown', [0, 65000])}
                   title="Unknown capacity"
                   className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
@@ -784,17 +798,6 @@ function BrowseContent({
                   }`}
                 >
                   Unknown
-                </button>
-                <button
-                  onClick={() => handleCapacityButton('All', [0, 65000])}
-                  title="0-65,000+"
-                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
-                    activeCapacityButton === 'All'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  All
                 </button>
               </div>
 
@@ -952,24 +955,25 @@ function BrowseContent({
               }}
               marks={{
                 1900: '1900',
-                1910: { label: <span className="hidden md:inline">1910</span>, style: {} },
-                1920: { label: <span className="hidden md:inline">1920</span>, style: {} },
-                1930: { label: <span className="hidden md:inline">1930</span>, style: {} },
-                1940: { label: <span className="hidden md:inline">1940</span>, style: {} },
-                1950: { label: <span className="hidden md:inline">1950</span>, style: {} },
-                1960: { label: <span className="hidden md:inline">1960</span>, style: {} },
-                1970: { label: <span className="hidden md:inline">1970</span>, style: {} },
-                1980: { label: <span className="hidden md:inline">1980</span>, style: {} },
-                1990: { label: <span className="hidden md:inline">1990</span>, style: {} },
-                2000: { label: <span className="hidden md:inline">2000</span>, style: {} },
-                2010: { label: <span className="hidden md:inline">2010</span>, style: {} },
-                2020: { label: <span className="hidden md:inline">2020</span>, style: {} },
+                1910: { label: '', style: { display: 'none' } },
+                1920: { label: '', style: { display: 'none' } },
+                1930: { label: '', style: { display: 'none' } },
+                1940: { label: '', style: { display: 'none' } },
+                1950: { label: '', style: { display: 'none' } },
+                1960: { label: '', style: { display: 'none' } },
+                1970: { label: '', style: { display: 'none' } },
+                1980: { label: '', style: { display: 'none' } },
+                1990: { label: '', style: { display: 'none' } },
+                2000: { label: '', style: { display: 'none' } },
+                2010: { label: '', style: { display: 'none' } },
+                2020: { label: '', style: { display: 'none' } },
                 2025: '2025',
               }}
               styles={{
                 track: { backgroundColor: '#3b82f6' },
                 handle: { borderColor: '#3b82f6' },
               }}
+              className="md:[&_.rc-slider-mark-text:not(:first-child):not(:last-child)]:block [&_.rc-slider-mark-text:not(:first-child):not(:last-child)]:hidden"
             />
           </div>
         </div>
