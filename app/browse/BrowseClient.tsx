@@ -535,16 +535,18 @@ function BrowseContent({
     return 'Browse Shows'
   }, [selectedArtist, selectedVenue, selectedFestival, selectedShowType, activeCapacityButton, urlYear, urlMonth, hasManualYearChange])
 
-  // Format date range for combined card
+  // Format date range for combined card - simplified to years only
   const dateRangeDisplay = useMemo(() => {
     if (!stats.firstShow || !stats.lastShow) return null
 
-    const isSameDate = stats.firstShow === stats.lastShow
+    const firstYear = stats.firstShow.split('-')[0]
+    const lastYear = stats.lastShow.split('-')[0]
+    const isSameYear = firstYear === lastYear
 
-    if (isSameDate) {
-      return stats.firstShow
+    if (isSameYear) {
+      return firstYear
     } else {
-      return `${stats.firstShow} – ${stats.lastShow}`
+      return `${firstYear}–${lastYear}`
     }
   }, [stats.firstShow, stats.lastShow])
 
@@ -704,7 +706,7 @@ function BrowseContent({
             <div className="max-w-full">
               {/* Quick Select Buttons - Responsive wrapping with All/Unknown on second row */}
               <div className="flex flex-col gap-2">
-                {/* First row: Small, Medium, Large, X-Large */}
+                {/* First row: Small, Medium, Large, X-Large, All */}
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => handleCapacityButton('Small', [0, 500])}
@@ -750,10 +752,6 @@ function BrowseContent({
                   >
                     X-Large
                   </button>
-                </div>
-                
-                {/* Second row: All and Unknown */}
-                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => handleCapacityButton('All', [0, 65000])}
                     title="0-65,000+"
@@ -765,6 +763,10 @@ function BrowseContent({
                   >
                     All
                   </button>
+                </div>
+                
+                {/* Second row: Unknown only */}
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => handleCapacityButton('Unknown', [0, 65000])}
                     title="Unknown capacity"
@@ -970,10 +972,11 @@ function BrowseContent({
                   >
                     Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <span className="md:hidden">Fest.</span>
-                    <span className="hidden md:inline">Festival</span>
-                  </th>
+                  {(selectedShowType === 'festival' || selectedFestival) && (
+                    <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Festival
+                    </th>
+                  )}
                   <th className="px-2 md:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16 md:w-24">
                     Setlist
                   </th>
@@ -1020,7 +1023,7 @@ function BrowseContent({
                           </button>
                         </td>
                       )}
-                      <td className="px-2 md:px-4 py-3 whitespace-nowrap text-xs md:text-sm text-gray-900">
+                      <td className="px-2 md:px-4 py-3 whitespace-nowrap text-[11px] md:text-sm text-gray-900">
                         <span className="md:hidden">{show.date}</span>
                         <span className="hidden md:inline">
                           {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', {
@@ -1060,9 +1063,11 @@ function BrowseContent({
                           {show.venue.venue_name}
                         </button>
                       </td>
-                      <td className="px-2 md:px-4 py-3 text-[11px] md:text-sm text-gray-600 max-w-[80px] md:max-w-none truncate">
-                        {show.festival_name || '-'}
-                      </td>
+                      {(selectedShowType === 'festival' || selectedFestival) && (
+                        <td className="px-2 md:px-4 py-3 text-[11px] md:text-sm text-gray-600">
+                          {show.festival_name || '-'}
+                        </td>
+                      )}
                       <td className="px-2 md:px-4 py-3 whitespace-nowrap text-sm text-center">
                         {show.setlist_url ? (
                           <a 
