@@ -731,7 +731,7 @@ function BrowseContent({
             
             {/* Grid container - all children same width */}
             <div className="grid" style={{ gridTemplateColumns: '1fr', width: 'fit-content' }}>
-              {/* Quick Select Buttons - All in first row on mobile */}
+              {/* Quick Select Buttons - Different order for mobile vs desktop */}
               <div className="flex flex-wrap gap-2 mb-3">
                 <button
                   onClick={() => handleCapacityButton('Small', [0, 500])}
@@ -780,7 +780,7 @@ function BrowseContent({
                 <button
                   onClick={() => handleCapacityButton('All', [0, 65000])}
                   title="0-65,000+"
-                  className={`order-last md:order-none px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                  className={`order-5 md:order-6 px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
                     activeCapacityButton === 'All'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -791,7 +791,7 @@ function BrowseContent({
                 <button
                   onClick={() => handleCapacityButton('Unknown', [0, 65000])}
                   title="Unknown capacity"
-                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                  className={`order-6 md:order-5 px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
                     activeCapacityButton === 'Unknown'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -955,25 +955,24 @@ function BrowseContent({
               }}
               marks={{
                 1900: '1900',
-                1910: { label: '', style: { display: 'none' } },
-                1920: { label: '', style: { display: 'none' } },
-                1930: { label: '', style: { display: 'none' } },
-                1940: { label: '', style: { display: 'none' } },
-                1950: { label: '', style: { display: 'none' } },
-                1960: { label: '', style: { display: 'none' } },
-                1970: { label: '', style: { display: 'none' } },
-                1980: { label: '', style: { display: 'none' } },
-                1990: { label: '', style: { display: 'none' } },
-                2000: { label: '', style: { display: 'none' } },
-                2010: { label: '', style: { display: 'none' } },
-                2020: { label: '', style: { display: 'none' } },
+                1910: '1910',
+                1920: '1920',
+                1930: '1930',
+                1940: '1940',
+                1950: '1950',
+                1960: '1960',
+                1970: '1970',
+                1980: '1980',
+                1990: '1990',
+                2000: '2000',
+                2010: '2010',
+                2020: '2020',
                 2025: '2025',
               }}
               styles={{
                 track: { backgroundColor: '#3b82f6' },
                 handle: { borderColor: '#3b82f6' },
               }}
-              className="md:[&_.rc-slider-mark-text:not(:first-child):not(:last-child)]:block [&_.rc-slider-mark-text:not(:first-child):not(:last-child)]:hidden"
             />
           </div>
         </div>
@@ -992,18 +991,18 @@ function BrowseContent({
                     Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th
-                    className="px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 md:w-80"
                     onClick={() => handleSort('artist')}
                   >
                     Artist {sortField === 'artist' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th
-                    className="px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 md:w-64"
                     onClick={() => handleSort('venue')}
                   >
                     Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className={`px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${(selectedShowType === 'festival' || selectedFestival) ? '' : 'hidden md:table-cell'}`}>
+                  <th className={`px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:w-56 ${(selectedShowType === 'festival' || selectedFestival) ? '' : 'hidden md:table-cell'}`}>
                     Festival
                   </th>
                   <th className="px-1 md:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12 md:w-24">
