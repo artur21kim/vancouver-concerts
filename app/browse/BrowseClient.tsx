@@ -546,7 +546,7 @@ function BrowseContent({
     if (isSameYear) {
       return firstYear
     } else {
-      return `${firstYear}–${lastYear}`
+      return `${firstYear}-${lastYear}`
     }
   }, [stats.firstShow, stats.lastShow])
 
@@ -832,7 +832,7 @@ function BrowseContent({
                 const shouldShow = unknownCount > 0 && activeCapacityButton !== 'All' && activeCapacityButton !== 'Unknown'
                 
                 return (
-                  <div className={`bg-blue-50 border border-blue-200 rounded-md px-3 py-1.5 mb-3 ${shouldShow ? '' : 'invisible'}`}>
+                  <div className={`bg-blue-50 border border-blue-200 rounded-md px-3 py-1.5 mt-2 ${shouldShow ? '' : 'invisible'}`}>
                     <p className="text-xs text-blue-800">
                       ℹ️ <strong>{unknownCount.toLocaleString()}</strong> shows at venues with unknown capacity are hidden. Click <strong>"All"</strong> to include them.
                     </p>
@@ -953,34 +953,34 @@ function BrowseContent({
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  {user && <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12 md:w-16"></th>}
+                  {user && <th className="px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10 md:w-16"></th>}
                   <th
-                    className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-24 md:w-32"
+                    className="px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-20 md:w-32"
                     onClick={() => handleSort('date')}
                   >
                     Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th
-                    className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     onClick={() => handleSort('artist')}
                   >
                     Artist {sortField === 'artist' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th
-                    className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     onClick={() => handleSort('venue')}
                   >
                     Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   {(selectedShowType === 'festival' || selectedFestival) && (
-                    <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Festival
                     </th>
                   )}
-                  <th className="px-2 md:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16 md:w-24">
+                  <th className="px-1 md:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12 md:w-24">
                     Setlist
                   </th>
-                  <th className="px-2 md:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16 md:w-24">
+                  <th className="px-1 md:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12 md:w-24">
                     Spotify
                   </th>
                 </tr>
@@ -993,7 +993,7 @@ function BrowseContent({
                   return (
                     <tr key={show.show_id} className="hover:bg-gray-50">
                       {user && (
-                        <td className="px-2 md:px-4 py-3">
+                        <td className="px-1 md:px-4 py-3">
                           <button
                             onClick={() => toggleShow(show.show_id)}
                             disabled={isLoading}
@@ -1023,7 +1023,7 @@ function BrowseContent({
                           </button>
                         </td>
                       )}
-                      <td className="px-2 md:px-4 py-3 whitespace-nowrap text-[11px] md:text-sm text-gray-900">
+                      <td className="px-1 md:px-4 py-3 whitespace-nowrap text-[11px] md:text-sm text-gray-900">
                         <span className="md:hidden">{show.date}</span>
                         <span className="hidden md:inline">
                           {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', {
@@ -1033,7 +1033,7 @@ function BrowseContent({
                           })}
                         </span>
                       </td>
-                      <td className="px-2 md:px-4 py-3 text-[11px] md:text-sm text-gray-900">
+                      <td className="px-1 md:px-4 py-3 text-[11px] md:text-sm text-gray-900">
                         <button
                           onClick={() => {
                             setSelectedArtist({
@@ -1048,7 +1048,7 @@ function BrowseContent({
                           {show.artist.artist_name}
                         </button>
                       </td>
-                      <td className="px-2 md:px-4 py-3 text-[11px] md:text-sm text-gray-900">
+                      <td className="px-1 md:px-4 py-3 text-[11px] md:text-sm text-gray-900">
                         <button
                           onClick={() => {
                             setSelectedVenue({
@@ -1064,11 +1064,11 @@ function BrowseContent({
                         </button>
                       </td>
                       {(selectedShowType === 'festival' || selectedFestival) && (
-                        <td className="px-2 md:px-4 py-3 text-[11px] md:text-sm text-gray-600">
+                        <td className="px-1 md:px-4 py-3 text-[11px] md:text-sm text-gray-600">
                           {show.festival_name || '-'}
                         </td>
                       )}
-                      <td className="px-2 md:px-4 py-3 whitespace-nowrap text-sm text-center">
+                      <td className="px-1 md:px-4 py-3 whitespace-nowrap text-sm text-center">
                         {show.setlist_url ? (
                           <a 
                             href={show.setlist_url}
@@ -1087,7 +1087,7 @@ function BrowseContent({
                           <span className="text-gray-400">-</span>
                         )}
                       </td>
-                      <td className="px-2 md:px-4 py-3 whitespace-nowrap text-sm text-center">
+                      <td className="px-1 md:px-4 py-3 whitespace-nowrap text-sm text-center">
                         {show.artist.spotify_artist_id ? (
                           <a 
                             href={`https://open.spotify.com/artist/${show.artist.spotify_artist_id}`}
