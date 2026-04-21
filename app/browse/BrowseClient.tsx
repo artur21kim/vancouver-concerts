@@ -726,8 +726,8 @@ function BrowseContent({
               Venue Capacity
             </label>
             
-            {/* Responsive container */}
-            <div className="max-w-full">
+            {/* Grid container - all children same width */}
+            <div className="grid" style={{ gridTemplateColumns: '1fr', width: 'fit-content' }}>
               {/* Quick Select Buttons - Single row, wraps on mobile */}
               <div className="flex flex-wrap gap-2 mb-3">
                 <button
@@ -858,7 +858,7 @@ function BrowseContent({
               })()}
 
               {/* Range Slider */}
-              <div className="px-2">
+              <div>
                 <Slider
                   range
                   min={0}
@@ -935,44 +935,42 @@ function BrowseContent({
                 className="w-16 md:w-20 px-2 py-1 text-xs md:text-sm text-center text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div className="px-2">
-              <Slider
-                range
-                min={1900}
-                max={2025}
-                value={[
-                  typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900,
-                  typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025
-                ]}
-                onChange={(value) => {
-                  const vals = value as number[]
-                  setYearRange([vals[0], vals[1]] as [number, number])
-                  setHasManualYearChange(true) // Disable urlMonth filter
-                  setCurrentPage(1)
-                  setPageInput('1')
-                }}
-                marks={{
-                  1900: '1900',
-                  1910: { label: <span className="hidden md:inline">1910</span>, style: {} },
-                  1920: { label: <span className="hidden md:inline">1920</span>, style: {} },
-                  1930: { label: <span className="hidden md:inline">1930</span>, style: {} },
-                  1940: { label: <span className="hidden md:inline">1940</span>, style: {} },
-                  1950: { label: <span className="hidden md:inline">1950</span>, style: {} },
-                  1960: { label: <span className="hidden md:inline">1960</span>, style: {} },
-                  1970: { label: <span className="hidden md:inline">1970</span>, style: {} },
-                  1980: { label: <span className="hidden md:inline">1980</span>, style: {} },
-                  1990: { label: <span className="hidden md:inline">1990</span>, style: {} },
-                  2000: { label: <span className="hidden md:inline">2000</span>, style: {} },
-                  2010: { label: <span className="hidden md:inline">2010</span>, style: {} },
-                  2020: { label: <span className="hidden md:inline">2020</span>, style: {} },
-                  2025: '2025',
-                }}
-                styles={{
-                  track: { backgroundColor: '#3b82f6' },
-                  handle: { borderColor: '#3b82f6' },
-                }}
-              />
-            </div>
+            <Slider
+              range
+              min={1900}
+              max={2025}
+              value={[
+                typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900,
+                typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025
+              ]}
+              onChange={(value) => {
+                const vals = value as number[]
+                setYearRange([vals[0], vals[1]] as [number, number])
+                setHasManualYearChange(true) // Disable urlMonth filter
+                setCurrentPage(1)
+                setPageInput('1')
+              }}
+              marks={{
+                1900: '1900',
+                1910: { label: <span className="hidden md:inline">1910</span>, style: {} },
+                1920: { label: <span className="hidden md:inline">1920</span>, style: {} },
+                1930: { label: <span className="hidden md:inline">1930</span>, style: {} },
+                1940: { label: <span className="hidden md:inline">1940</span>, style: {} },
+                1950: { label: <span className="hidden md:inline">1950</span>, style: {} },
+                1960: { label: <span className="hidden md:inline">1960</span>, style: {} },
+                1970: { label: <span className="hidden md:inline">1970</span>, style: {} },
+                1980: { label: <span className="hidden md:inline">1980</span>, style: {} },
+                1990: { label: <span className="hidden md:inline">1990</span>, style: {} },
+                2000: { label: <span className="hidden md:inline">2000</span>, style: {} },
+                2010: { label: <span className="hidden md:inline">2010</span>, style: {} },
+                2020: { label: <span className="hidden md:inline">2020</span>, style: {} },
+                2025: '2025',
+              }}
+              styles={{
+                track: { backgroundColor: '#3b82f6' },
+                handle: { borderColor: '#3b82f6' },
+              }}
+            />
           </div>
         </div>
 
