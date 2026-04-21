@@ -539,17 +539,12 @@ function BrowseContent({
   const dateRangeDisplay = useMemo(() => {
     if (!stats.firstShow || !stats.lastShow) return null
 
-    const firstDate = new Date(stats.firstShow + 'T12:00:00')
-    const lastDate = new Date(stats.lastShow + 'T12:00:00')
     const isSameDate = stats.firstShow === stats.lastShow
 
-    const formatDate = (date: Date) => 
-      date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-
     if (isSameDate) {
-      return formatDate(firstDate)
+      return stats.firstShow
     } else {
-      return `${formatDate(firstDate)} – ${formatDate(lastDate)}`
+      return `${stats.firstShow} – ${stats.lastShow}`
     }
   }, [stats.firstShow, stats.lastShow])
 
@@ -707,74 +702,81 @@ function BrowseContent({
             
             {/* Responsive container */}
             <div className="max-w-full">
-              {/* Quick Select Buttons - Responsive wrapping */}
-              <div className="flex flex-wrap gap-2 mb-3">
-                <button
-                  onClick={() => handleCapacityButton('Small', [0, 500])}
-                  title="0-500"
-                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
-                    activeCapacityButton === 'Small'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Small
-                </button>
-                <button
-                  onClick={() => handleCapacityButton('Medium', [500, 3000])}
-                  title="500-3,000"
-                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
-                    activeCapacityButton === 'Medium'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Medium
-                </button>
-                <button
-                  onClick={() => handleCapacityButton('Large', [3000, 10000])}
-                  title="3,000-10,000"
-                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
-                    activeCapacityButton === 'Large'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Large
-                </button>
-                <button
-                  onClick={() => handleCapacityButton('X-Large', [10000, 65000])}
-                  title="10,000-65,000"
-                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
-                    activeCapacityButton === 'X-Large'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  X-Large
-                </button>
-                <button
-                  onClick={() => handleCapacityButton('Unknown', [0, 65000])}
-                  title="Unknown capacity"
-                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
-                    activeCapacityButton === 'Unknown'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  Unknown
-                </button>
-                <button
-                  onClick={() => handleCapacityButton('All', [0, 65000])}
-                  title="0-65,000+"
-                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
-                    activeCapacityButton === 'All'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  All
-                </button>
+              {/* Quick Select Buttons - Responsive wrapping with All/Unknown on second row */}
+              <div className="flex flex-col gap-2">
+                {/* First row: Small, Medium, Large, X-Large */}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleCapacityButton('Small', [0, 500])}
+                    title="0-500"
+                    className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                      activeCapacityButton === 'Small'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Small
+                  </button>
+                  <button
+                    onClick={() => handleCapacityButton('Medium', [500, 3000])}
+                    title="500-3,000"
+                    className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                      activeCapacityButton === 'Medium'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Medium
+                  </button>
+                  <button
+                    onClick={() => handleCapacityButton('Large', [3000, 10000])}
+                    title="3,000-10,000"
+                    className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                      activeCapacityButton === 'Large'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Large
+                  </button>
+                  <button
+                    onClick={() => handleCapacityButton('X-Large', [10000, 65000])}
+                    title="10,000-65,000"
+                    className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                      activeCapacityButton === 'X-Large'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    X-Large
+                  </button>
+                </div>
+                
+                {/* Second row: All and Unknown */}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleCapacityButton('All', [0, 65000])}
+                    title="0-65,000+"
+                    className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                      activeCapacityButton === 'All'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => handleCapacityButton('Unknown', [0, 65000])}
+                    title="Unknown capacity"
+                    className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                      activeCapacityButton === 'Unknown'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Unknown
+                  </button>
+                </div>
               </div>
 
               {/* Unknown Capacity Warning */}
@@ -1019,13 +1021,16 @@ function BrowseContent({
                         </td>
                       )}
                       <td className="px-2 md:px-4 py-3 whitespace-nowrap text-xs md:text-sm text-gray-900">
-                        {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
+                        <span className="md:hidden">{show.date}</span>
+                        <span className="hidden md:inline">
+                          {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </span>
                       </td>
-                      <td className="px-2 md:px-4 py-3 text-xs md:text-sm text-gray-900">
+                      <td className="px-2 md:px-4 py-3 text-[11px] md:text-sm text-gray-900">
                         <button
                           onClick={() => {
                             setSelectedArtist({
@@ -1040,7 +1045,7 @@ function BrowseContent({
                           {show.artist.artist_name}
                         </button>
                       </td>
-                      <td className="px-2 md:px-4 py-3 text-xs md:text-sm text-gray-900">
+                      <td className="px-2 md:px-4 py-3 text-[11px] md:text-sm text-gray-900">
                         <button
                           onClick={() => {
                             setSelectedVenue({
@@ -1055,7 +1060,7 @@ function BrowseContent({
                           {show.venue.venue_name}
                         </button>
                       </td>
-                      <td className="px-2 md:px-4 py-3 text-xs md:text-sm text-gray-600 max-w-[80px] md:max-w-none truncate">
+                      <td className="px-2 md:px-4 py-3 text-[11px] md:text-sm text-gray-600 max-w-[80px] md:max-w-none truncate">
                         {show.festival_name || '-'}
                       </td>
                       <td className="px-2 md:px-4 py-3 whitespace-nowrap text-sm text-center">
@@ -1103,30 +1108,18 @@ function BrowseContent({
 
         {/* Pagination - Improved mobile layout */}
         <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            {/* Results count - top on mobile */}
-            <div className="text-sm text-gray-700 text-center sm:text-left">
-              Showing{' '}
-              <span className="font-medium">
-                {(currentPage - 1) * showsPerPage + 1}
-              </span>{' '}
-              to{' '}
-              <span className="font-medium">
-                {Math.min(currentPage * showsPerPage, filteredShows.length)}
-              </span>{' '}
-              of <span className="font-medium">{filteredShows.length}</span> results
-            </div>
-            
-            {/* Pagination controls */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
+          <div className="flex items-center justify-between">
+            {/* Left: Previous button */}
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
 
+            {/* Center: Page input */}
+            <div className="flex flex-col items-center gap-1">
               <form onSubmit={handlePageInputSubmit} className="flex items-center gap-1">
                 <input
                   type="number"
@@ -1144,15 +1137,19 @@ function BrowseContent({
                 />
                 <span className="text-sm text-gray-700">/ {totalPages}</span>
               </form>
-
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
+              <p className="text-xs text-gray-600">
+                {(currentPage - 1) * showsPerPage + 1}–{Math.min(currentPage * showsPerPage, filteredShows.length)} of {filteredShows.length.toLocaleString()}
+              </p>
             </div>
+
+            {/* Right: Next button */}
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>
@@ -1165,7 +1162,7 @@ function BrowseContent({
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-white rounded-lg shadow p-2 md:p-4">
-      <p className="text-[10px] md:text-sm text-gray-600 mb-0.5 md:mb-1">{label}</p>
+      <p className="text-[10px] md:text-sm text-gray-600 mb-0.5 md:mb-1 leading-tight">{label}</p>
       <p className="text-sm md:text-2xl font-bold text-gray-900 break-words leading-tight">{value}</p>
     </div>
   )
