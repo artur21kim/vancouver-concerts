@@ -41,7 +41,7 @@ type Venue = {
   capacity: number | null
 }
 
-type SortField = 'date' | 'artist' | 'venue'
+type SortField = 'date' | 'artist' | 'venue' | 'festival'
 type SortDirection = 'asc' | 'desc'
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -335,6 +335,10 @@ function BrowseContent({
         case 'venue':
           aVal = a.venue.venue_name.toLowerCase()
           bVal = b.venue.venue_name.toLowerCase()
+          break
+        case 'festival':
+          aVal = (a.festival_name || '').toLowerCase()
+          bVal = (b.festival_name || '').toLowerCase()
           break
       }
 
@@ -955,18 +959,18 @@ function BrowseContent({
               }}
               marks={{
                 1900: '1900',
-                1910: '1910',
-                1920: '1920',
-                1930: '1930',
-                1940: '1940',
-                1950: '1950',
-                1960: '1960',
-                1970: '1970',
-                1980: '1980',
-                1990: '1990',
-                2000: '2000',
-                2010: '2010',
-                2020: '2020',
+                1910: { label: <span className="hidden md:inline">1910</span> },
+                1920: { label: <span className="hidden md:inline">1920</span> },
+                1930: { label: <span className="hidden md:inline">1930</span> },
+                1940: { label: <span className="hidden md:inline">1940</span> },
+                1950: { label: <span className="hidden md:inline">1950</span> },
+                1960: { label: <span className="hidden md:inline">1960</span> },
+                1970: { label: <span className="hidden md:inline">1970</span> },
+                1980: { label: <span className="hidden md:inline">1980</span> },
+                1990: { label: <span className="hidden md:inline">1990</span> },
+                2000: { label: <span className="hidden md:inline">2000</span> },
+                2010: { label: <span className="hidden md:inline">2010</span> },
+                2020: { label: <span className="hidden md:inline">2020</span> },
                 2025: '2025',
               }}
               styles={{
@@ -1002,8 +1006,11 @@ function BrowseContent({
                   >
                     Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className={`px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:w-56 ${(selectedShowType === 'festival' || selectedFestival) ? '' : 'hidden md:table-cell'}`}>
-                    Festival
+                  <th 
+                    className={`px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 md:w-56 ${(selectedShowType === 'festival' || selectedFestival) ? '' : 'hidden md:table-cell'}`}
+                    onClick={() => handleSort('festival')}
+                  >
+                    Festival {sortField === 'festival' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th className="px-1 md:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12 md:w-24">
                     Setlist
@@ -1150,28 +1157,23 @@ function BrowseContent({
             </button>
 
             {/* Center: Page input */}
-            <div className="flex flex-col items-center gap-1">
-              <form onSubmit={handlePageInputSubmit} className="flex items-center gap-1">
-                <input
-                  type="number"
-                  min="1"
-                  max={totalPages}
-                  value={pageInput}
-                  onChange={handlePageInputChange}
-                  onBlur={() => {
-                    const page = parseInt(pageInput)
-                    if (isNaN(page) || page < 1 || page > totalPages) {
-                      setPageInput(currentPage.toString())
-                    }
-                  }}
-                  className="w-12 px-2 py-1 text-sm text-center text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">/ {totalPages}</span>
-              </form>
-              <p className="text-xs text-gray-600">
-                {(currentPage - 1) * showsPerPage + 1}–{Math.min(currentPage * showsPerPage, filteredShows.length)} of {filteredShows.length.toLocaleString()}
-              </p>
-            </div>
+            <form onSubmit={handlePageInputSubmit} className="flex items-center gap-1">
+              <input
+                type="number"
+                min="1"
+                max={totalPages}
+                value={pageInput}
+                onChange={handlePageInputChange}
+                onBlur={() => {
+                  const page = parseInt(pageInput)
+                  if (isNaN(page) || page < 1 || page > totalPages) {
+                    setPageInput(currentPage.toString())
+                  }
+                }}
+                className="w-12 px-2 py-1 text-sm text-center text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">/ {totalPages}</span>
+            </form>
 
             {/* Right: Next button */}
             <button
