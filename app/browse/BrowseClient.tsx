@@ -535,8 +535,26 @@ function BrowseContent({
     return 'Browse Shows'
   }, [selectedArtist, selectedVenue, selectedFestival, selectedShowType, activeCapacityButton, urlYear, urlMonth, hasManualYearChange])
 
-  // Format date range for combined card - simplified to years only
+  // Format date range for combined card - full on desktop, years only on mobile
   const dateRangeDisplay = useMemo(() => {
+    if (!stats.firstShow || !stats.lastShow) return null
+
+    const firstDate = new Date(stats.firstShow + 'T12:00:00')
+    const lastDate = new Date(stats.lastShow + 'T12:00:00')
+    const isSameDate = stats.firstShow === stats.lastShow
+
+    const formatDate = (date: Date) => 
+      date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+
+    if (isSameDate) {
+      return formatDate(firstDate)
+    } else {
+      return `${formatDate(firstDate)} – ${formatDate(lastDate)}`
+    }
+  }, [stats.firstShow, stats.lastShow])
+  
+  // Mobile-only year range format
+  const dateRangeDisplayMobile = useMemo(() => {
     if (!stats.firstShow || !stats.lastShow) return null
 
     const firstYear = stats.firstShow.split('-')[0]
@@ -569,7 +587,13 @@ function BrowseContent({
             
             {/* Date Range in 4th spot when available, otherwise empty */}
             {dateRangeDisplay ? (
-              <StatCard label="Date Range" value={dateRangeDisplay} />
+              <div className="bg-white rounded-lg shadow p-2 md:p-4">
+                <p className="text-[10px] md:text-sm text-gray-600 mb-0.5 md:mb-1 leading-tight">Date Range</p>
+                <p className="text-sm md:text-2xl font-bold text-gray-900 break-words leading-tight">
+                  <span className="md:hidden">{dateRangeDisplayMobile}</span>
+                  <span className="hidden md:inline">{dateRangeDisplay}</span>
+                </p>
+              </div>
             ) : (
               <div></div>
             )}
@@ -704,81 +728,74 @@ function BrowseContent({
             
             {/* Responsive container */}
             <div className="max-w-full">
-              {/* Quick Select Buttons - Responsive wrapping with All/Unknown on second row */}
-              <div className="flex flex-col gap-2">
-                {/* First row: Small, Medium, Large, X-Large, All */}
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => handleCapacityButton('Small', [0, 500])}
-                    title="0-500"
-                    className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
-                      activeCapacityButton === 'Small'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    Small
-                  </button>
-                  <button
-                    onClick={() => handleCapacityButton('Medium', [500, 3000])}
-                    title="500-3,000"
-                    className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
-                      activeCapacityButton === 'Medium'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    Medium
-                  </button>
-                  <button
-                    onClick={() => handleCapacityButton('Large', [3000, 10000])}
-                    title="3,000-10,000"
-                    className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
-                      activeCapacityButton === 'Large'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    Large
-                  </button>
-                  <button
-                    onClick={() => handleCapacityButton('X-Large', [10000, 65000])}
-                    title="10,000-65,000"
-                    className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
-                      activeCapacityButton === 'X-Large'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    X-Large
-                  </button>
-                  <button
-                    onClick={() => handleCapacityButton('All', [0, 65000])}
-                    title="0-65,000+"
-                    className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
-                      activeCapacityButton === 'All'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    All
-                  </button>
-                </div>
-                
-                {/* Second row: Unknown only */}
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => handleCapacityButton('Unknown', [0, 65000])}
-                    title="Unknown capacity"
-                    className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
-                      activeCapacityButton === 'Unknown'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    Unknown
-                  </button>
-                </div>
+              {/* Quick Select Buttons - Single row, wraps on mobile */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                <button
+                  onClick={() => handleCapacityButton('Small', [0, 500])}
+                  title="0-500"
+                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                    activeCapacityButton === 'Small'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Small
+                </button>
+                <button
+                  onClick={() => handleCapacityButton('Medium', [500, 3000])}
+                  title="500-3,000"
+                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                    activeCapacityButton === 'Medium'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Medium
+                </button>
+                <button
+                  onClick={() => handleCapacityButton('Large', [3000, 10000])}
+                  title="3,000-10,000"
+                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                    activeCapacityButton === 'Large'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Large
+                </button>
+                <button
+                  onClick={() => handleCapacityButton('X-Large', [10000, 65000])}
+                  title="10,000-65,000"
+                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                    activeCapacityButton === 'X-Large'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  X-Large
+                </button>
+                <button
+                  onClick={() => handleCapacityButton('Unknown', [0, 65000])}
+                  title="Unknown capacity"
+                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                    activeCapacityButton === 'Unknown'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Unknown
+                </button>
+                <button
+                  onClick={() => handleCapacityButton('All', [0, 65000])}
+                  title="0-65,000+"
+                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
+                    activeCapacityButton === 'All'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  All
+                </button>
               </div>
 
               {/* Unknown Capacity Warning */}
@@ -832,7 +849,7 @@ function BrowseContent({
                 const shouldShow = unknownCount > 0 && activeCapacityButton !== 'All' && activeCapacityButton !== 'Unknown'
                 
                 return (
-                  <div className={`bg-blue-50 border border-blue-200 rounded-md px-3 py-1.5 mt-2 ${shouldShow ? '' : 'invisible'}`}>
+                  <div className={`bg-blue-50 border border-blue-200 rounded-md px-3 py-1.5 mb-3 ${shouldShow ? '' : 'invisible'}`}>
                     <p className="text-xs text-blue-800">
                       ℹ️ <strong>{unknownCount.toLocaleString()}</strong> shows at venues with unknown capacity are hidden. Click <strong>"All"</strong> to include them.
                     </p>
@@ -936,6 +953,18 @@ function BrowseContent({
                 }}
                 marks={{
                   1900: '1900',
+                  1910: { label: <span className="hidden md:inline">1910</span>, style: {} },
+                  1920: { label: <span className="hidden md:inline">1920</span>, style: {} },
+                  1930: { label: <span className="hidden md:inline">1930</span>, style: {} },
+                  1940: { label: <span className="hidden md:inline">1940</span>, style: {} },
+                  1950: { label: <span className="hidden md:inline">1950</span>, style: {} },
+                  1960: { label: <span className="hidden md:inline">1960</span>, style: {} },
+                  1970: { label: <span className="hidden md:inline">1970</span>, style: {} },
+                  1980: { label: <span className="hidden md:inline">1980</span>, style: {} },
+                  1990: { label: <span className="hidden md:inline">1990</span>, style: {} },
+                  2000: { label: <span className="hidden md:inline">2000</span>, style: {} },
+                  2010: { label: <span className="hidden md:inline">2010</span>, style: {} },
+                  2020: { label: <span className="hidden md:inline">2020</span>, style: {} },
                   2025: '2025',
                 }}
                 styles={{
@@ -972,11 +1001,9 @@ function BrowseContent({
                   >
                     Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  {(selectedShowType === 'festival' || selectedFestival) && (
-                    <th className="px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Festival
-                    </th>
-                  )}
+                  <th className={`px-1 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${(selectedShowType === 'festival' || selectedFestival) ? '' : 'hidden md:table-cell'}`}>
+                    Festival
+                  </th>
                   <th className="px-1 md:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12 md:w-24">
                     Setlist
                   </th>
@@ -1063,11 +1090,9 @@ function BrowseContent({
                           {show.venue.venue_name}
                         </button>
                       </td>
-                      {(selectedShowType === 'festival' || selectedFestival) && (
-                        <td className="px-1 md:px-4 py-3 text-[11px] md:text-sm text-gray-600">
-                          {show.festival_name || '-'}
-                        </td>
-                      )}
+                      <td className={`px-1 md:px-4 py-3 text-[11px] md:text-sm text-gray-600 ${(selectedShowType === 'festival' || selectedFestival) ? '' : 'hidden md:table-cell'}`}>
+                        {show.festival_name || '-'}
+                      </td>
                       <td className="px-1 md:px-4 py-3 whitespace-nowrap text-sm text-center">
                         {show.setlist_url ? (
                           <a 
