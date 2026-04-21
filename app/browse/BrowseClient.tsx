@@ -344,7 +344,7 @@ function BrowseContent({
     })
 
     return filtered
-  }, [shows, selectedShowType, selectedArtist, selectedVenue, selectedFestival, capacityRange, yearRange, urlMonth, hasManualYearChange, sortField, sortDirection])
+  }, [shows, selectedShowType, selectedArtist, selectedVenue, selectedFestival, capacityRange, yearRange, urlMonth, hasManualYearChange, sortField, sortDirection, activeCapacityButton])
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -560,28 +560,27 @@ function BrowseContent({
       <div className="max-w-7xl mx-auto">
         
       {/* Dynamic Header */}
-          <h1 className="text-4xl font-bold text-gray-900 mb-6">{pageTitle}</h1>
+          <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4 md:mb-6">{pageTitle}</h1>
 
-      {/* Stats Cards */}
-      <div className="mb-8">
-          {/* Row 1: Always visible */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
+      {/* Stats Cards - Match Overview page layout */}
+      <div className="mb-4 md:mb-6">
+          {/* Row 1: Always visible - 4 columns like Overview */}
+          <div className="grid grid-cols-4 gap-2 md:gap-4 mb-2 md:mb-4">
             <StatCard label="Shows" value={stats.totalShows.toLocaleString()} />
             <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
             <StatCard label="Venues" value={stats.uniqueVenues.toLocaleString()} />
+            
+            {/* Date Range in 4th spot when available, otherwise empty */}
+            {dateRangeDisplay ? (
+              <StatCard label="Date Range" value={dateRangeDisplay} />
+            ) : (
+              <div></div>
+            )}
           </div>
 
-          {/* Row 2: Conditional cards with Date Range always first */}
-          {(dateRangeDisplay || selectedArtist || selectedVenue) && (
-            <div className="grid grid-cols-3 gap-4">
-              {/* Date Range - always first when there are results */}
-              {dateRangeDisplay && (
-                <StatCard
-                  label="Date Range"
-                  value={dateRangeDisplay}
-                />
-              )}
-
+          {/* Row 2: Conditional cards for Monthly Listeners and Capacity */}
+          {(selectedArtist || selectedVenue) && (stats.monthlyListeners !== null || stats.capacity !== null) && (
+            <div className="grid grid-cols-4 gap-2 md:gap-4">
               {/* Monthly Listeners - only when artist selected */}
               {selectedArtist && stats.monthlyListeners !== null && (
                 <StatCard
@@ -599,9 +598,9 @@ function BrowseContent({
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div className="bg-white rounded-lg shadow-lg p-4 md:p-6 mb-6">
           <div className="flex items-baseline gap-3 mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Filters</h2>
+            <h2 className="text-lg md:text-xl font-bold text-gray-900">Filters</h2>
             <button
               onClick={() => {
                 setSelectedShowType(null)
@@ -621,8 +620,8 @@ function BrowseContent({
             </button>
           </div>
 
-          {/* Show Type, Artist, Venue, and Festival Filters - 4 columns */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          {/* Show Type, Artist, Venue, and Festival Filters - 2 columns on mobile, 4 on desktop */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
             {/* Show Type Filter */}
             <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">Show Type</label>
@@ -706,14 +705,14 @@ function BrowseContent({
               Venue Capacity
             </label>
             
-            {/* Grid container - all children same width */}
-            <div className="grid" style={{ gridTemplateColumns: '1fr', width: 'fit-content' }}>
-              {/* Quick Select Buttons with Tooltips */}
-              <div className="flex gap-2 mb-2">
+            {/* Responsive container */}
+            <div className="max-w-full">
+              {/* Quick Select Buttons - Responsive wrapping */}
+              <div className="flex flex-wrap gap-2 mb-3">
                 <button
                   onClick={() => handleCapacityButton('Small', [0, 500])}
                   title="0-500"
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
                     activeCapacityButton === 'Small'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -724,7 +723,7 @@ function BrowseContent({
                 <button
                   onClick={() => handleCapacityButton('Medium', [500, 3000])}
                   title="500-3,000"
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
                     activeCapacityButton === 'Medium'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -735,7 +734,7 @@ function BrowseContent({
                 <button
                   onClick={() => handleCapacityButton('Large', [3000, 10000])}
                   title="3,000-10,000"
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
                     activeCapacityButton === 'Large'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -746,7 +745,7 @@ function BrowseContent({
                 <button
                   onClick={() => handleCapacityButton('X-Large', [10000, 65000])}
                   title="10,000-65,000"
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
                     activeCapacityButton === 'X-Large'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -757,7 +756,7 @@ function BrowseContent({
                 <button
                   onClick={() => handleCapacityButton('Unknown', [0, 65000])}
                   title="Unknown capacity"
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
                     activeCapacityButton === 'Unknown'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -768,7 +767,7 @@ function BrowseContent({
                 <button
                   onClick={() => handleCapacityButton('All', [0, 65000])}
                   title="0-65,000+"
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+                  className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${
                     activeCapacityButton === 'All'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -778,7 +777,7 @@ function BrowseContent({
                 </button>
               </div>
 
-              {/* Unknown Capacity Warning - Always rendered, visibility controlled */}
+              {/* Unknown Capacity Warning */}
               {(() => {
                 // Calculate unknowns from ALL shows (before capacity filter)
                 let preCapacityFiltered = shows
@@ -830,15 +829,15 @@ function BrowseContent({
                 
                 return (
                   <div className={`bg-blue-50 border border-blue-200 rounded-md px-3 py-1.5 mb-3 ${shouldShow ? '' : 'invisible'}`}>
-                    <p className="text-xs text-blue-800 whitespace-nowrap">
+                    <p className="text-xs text-blue-800">
                       ℹ️ <strong>{unknownCount.toLocaleString()}</strong> shows at venues with unknown capacity are hidden. Click <strong>"All"</strong> to include them.
                     </p>
                   </div>
                 )
               })()}
 
-              {/* Compact Range Slider - Matches grid width */}
-              <div>
+              {/* Range Slider */}
+              <div className="px-2">
                 <Slider
                   range
                   min={0}
@@ -863,7 +862,7 @@ function BrowseContent({
             </div>
           </div>
 
-          {/* Year Range Slider */}
+          {/* Year Range Slider - Simplified for mobile */}
           <div className="mb-6">
             <div className="flex items-center gap-2 mb-2">
               <label className="block text-sm font-medium text-gray-900">
@@ -889,7 +888,7 @@ function BrowseContent({
                 }}
                 min={1900}
                 max={2025}
-                className="w-20 px-2 py-1 text-sm text-center text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-16 md:w-20 px-2 py-1 text-xs md:text-sm text-center text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <span className="text-sm text-gray-900">—</span>
               <input
@@ -912,45 +911,35 @@ function BrowseContent({
                 }}
                 min={1900}
                 max={2025}
-                className="w-20 px-2 py-1 text-sm text-center text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-16 md:w-20 px-2 py-1 text-xs md:text-sm text-center text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <Slider
-              range
-              min={1900}
-              max={2025}
-              value={[
-                typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900,
-                typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025
-              ]}
-              onChange={(value) => {
-                const vals = value as number[]
-                setYearRange([vals[0], vals[1]] as [number, number])
-                setHasManualYearChange(true) // Disable urlMonth filter
-                setCurrentPage(1)
-                setPageInput('1')
-              }}
-              marks={{
-                1900: '1900',
-                1910: '1910',
-                1920: '1920',
-                1930: '1930',
-                1940: '1940',
-                1950: '1950',
-                1960: '1960',
-                1970: '1970',
-                1980: '1980',
-                1990: '1990',
-                2000: '2000',
-                2010: '2010',
-                2020: '2020',
-                2025: '2025',
-              }}
-              styles={{
-                track: { backgroundColor: '#3b82f6' },
-                handle: { borderColor: '#3b82f6' },
-              }}
-            />
+            <div className="px-2">
+              <Slider
+                range
+                min={1900}
+                max={2025}
+                value={[
+                  typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900,
+                  typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025
+                ]}
+                onChange={(value) => {
+                  const vals = value as number[]
+                  setYearRange([vals[0], vals[1]] as [number, number])
+                  setHasManualYearChange(true) // Disable urlMonth filter
+                  setCurrentPage(1)
+                  setPageInput('1')
+                }}
+                marks={{
+                  1900: '1900',
+                  2025: '2025',
+                }}
+                styles={{
+                  track: { backgroundColor: '#3b82f6' },
+                  handle: { borderColor: '#3b82f6' },
+                }}
+              />
+            </div>
           </div>
         </div>
 
@@ -960,32 +949,33 @@ function BrowseContent({
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  {user && <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16"></th>}
+                  {user && <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12 md:w-16"></th>}
                   <th
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-32"
+                    className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-24 md:w-32"
                     onClick={() => handleSort('date')}
                   >
                     Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-80"
+                    className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     onClick={() => handleSort('artist')}
                   >
                     Artist {sortField === 'artist' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-64"
+                    className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     onClick={() => handleSort('venue')}
                   >
                     Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
-                    Festival
+                  <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <span className="md:hidden">Fest.</span>
+                    <span className="hidden md:inline">Festival</span>
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                  <th className="px-2 md:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16 md:w-24">
                     Setlist
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                  <th className="px-2 md:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16 md:w-24">
                     Spotify
                   </th>
                 </tr>
@@ -998,7 +988,7 @@ function BrowseContent({
                   return (
                     <tr key={show.show_id} className="hover:bg-gray-50">
                       {user && (
-                        <td className="px-4 py-3">
+                        <td className="px-2 md:px-4 py-3">
                           <button
                             onClick={() => toggleShow(show.show_id)}
                             disabled={isLoading}
@@ -1006,10 +996,10 @@ function BrowseContent({
                             title={isAdded ? 'Remove from My Shows' : 'Add to My Shows'}
                           >
                             {isLoading ? (
-                              <div className="w-5 h-5 border-2 border-gray-300 border-t-red-500 rounded-full animate-spin"></div>
+                              <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-gray-300 border-t-red-500 rounded-full animate-spin"></div>
                             ) : (
                               <svg
-                                className={`w-6 h-6 transition-colors ${isAdded
+                                className={`w-5 h-5 md:w-6 md:h-6 transition-colors ${isAdded
                                     ? 'fill-red-500 text-red-500'
                                     : 'fill-none text-gray-300 hover:text-red-400'
                                   }`}
@@ -1028,14 +1018,14 @@ function BrowseContent({
                           </button>
                         </td>
                       )}
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-2 md:px-4 py-3 whitespace-nowrap text-xs md:text-sm text-gray-900">
                         {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric'
                         })}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
+                      <td className="px-2 md:px-4 py-3 text-xs md:text-sm text-gray-900">
                         <button
                           onClick={() => {
                             setSelectedArtist({
@@ -1050,7 +1040,7 @@ function BrowseContent({
                           {show.artist.artist_name}
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
+                      <td className="px-2 md:px-4 py-3 text-xs md:text-sm text-gray-900">
                         <button
                           onClick={() => {
                             setSelectedVenue({
@@ -1065,10 +1055,10 @@ function BrowseContent({
                           {show.venue.venue_name}
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
+                      <td className="px-2 md:px-4 py-3 text-xs md:text-sm text-gray-600 max-w-[80px] md:max-w-none truncate">
                         {show.festival_name || '-'}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
+                      <td className="px-2 md:px-4 py-3 whitespace-nowrap text-sm text-center">
                         {show.setlist_url ? (
                           <a 
                             href={show.setlist_url}
@@ -1080,14 +1070,14 @@ function BrowseContent({
                             <img 
                               src="https://www.setlist.fm/favicon.ico" 
                               alt="setlist.fm"
-                              className="w-4 h-4"
+                              className="w-3.5 h-3.5 md:w-4 md:h-4"
                             />
                           </a>
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
+                      <td className="px-2 md:px-4 py-3 whitespace-nowrap text-sm text-center">
                         {show.artist.spotify_artist_id ? (
                           <a 
                             href={`https://open.spotify.com/artist/${show.artist.spotify_artist_id}`}
@@ -1096,7 +1086,7 @@ function BrowseContent({
                             className="inline-flex items-center justify-center hover:opacity-70 transition-opacity"
                             title="Open in Spotify"
                           >
-                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="#1DB954">
+                            <svg className="w-3.5 h-3.5 md:w-4 md:h-4" viewBox="0 0 24 24" fill="#1DB954">
                               <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
                             </svg>
                           </a>
@@ -1111,75 +1101,57 @@ function BrowseContent({
             </table>
           </div>
 
-        {/* Pagination */}
-        <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 sm:px-6">
-          <div className="flex items-center justify-between">
-            <div className="flex-1 flex justify-between sm:hidden">
+        {/* Pagination - Improved mobile layout */}
+        <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            {/* Results count - top on mobile */}
+            <div className="text-sm text-gray-700 text-center sm:text-left">
+              Showing{' '}
+              <span className="font-medium">
+                {(currentPage - 1) * showsPerPage + 1}
+              </span>{' '}
+              to{' '}
+              <span className="font-medium">
+                {Math.min(currentPage * showsPerPage, filteredShows.length)}
+              </span>{' '}
+              of <span className="font-medium">{filteredShows.length}</span> results
+            </div>
+            
+            {/* Pagination controls */}
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Previous
               </button>
+
+              <form onSubmit={handlePageInputSubmit} className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min="1"
+                  max={totalPages}
+                  value={pageInput}
+                  onChange={handlePageInputChange}
+                  onBlur={() => {
+                    const page = parseInt(pageInput)
+                    if (isNaN(page) || page < 1 || page > totalPages) {
+                      setPageInput(currentPage.toString())
+                    }
+                  }}
+                  className="w-12 px-2 py-1 text-sm text-center text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">/ {totalPages}</span>
+              </form>
+
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
               </button>
-            </div>
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-700">
-                  Showing{' '}
-                  <span className="font-medium">
-                    {(currentPage - 1) * showsPerPage + 1}
-                  </span>{' '}
-                  to{' '}
-                  <span className="font-medium">
-                    {Math.min(currentPage * showsPerPage, filteredShows.length)}
-                  </span>{' '}
-                  of <span className="font-medium">{filteredShows.length}</span> results
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Previous
-                </button>
-
-                <form onSubmit={handlePageInputSubmit} className="flex items-center gap-1">
-                  <span className="text-sm text-gray-700">Page</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max={totalPages}
-                    value={pageInput}
-                    onChange={handlePageInputChange}
-                    onBlur={() => {
-                      const page = parseInt(pageInput)
-                      if (isNaN(page) || page < 1 || page > totalPages) {
-                        setPageInput(currentPage.toString())
-                      }
-                    }}
-                    className="w-16 px-2 py-1 text-sm text-center text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-700">of {totalPages}</span>
-                </form>
-
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -1192,9 +1164,9 @@ function BrowseContent({
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <p className="text-sm text-gray-600 mb-1">{label}</p>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
+    <div className="bg-white rounded-lg shadow p-2 md:p-4">
+      <p className="text-[10px] md:text-sm text-gray-600 mb-0.5 md:mb-1">{label}</p>
+      <p className="text-sm md:text-2xl font-bold text-gray-900 break-words leading-tight">{value}</p>
     </div>
   )
 }
