@@ -43,7 +43,7 @@ export default function AuthButton() {
 
     if (loading) {
         return (
-            <div className="w-20 h-10 bg-gray-200 animate-pulse rounded-md"></div>
+            <div className="w-20 h-10 bg-muted animate-pulse rounded-md"></div>
         )
     }
 
@@ -52,7 +52,7 @@ export default function AuthButton() {
             <>
                 <button
                     onClick={() => setShowAuthModal(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium text-sm md:text-base"
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 font-medium text-sm md:text-base"
                 >
                     Sign In
                 </button>
@@ -70,21 +70,21 @@ export default function AuthButton() {
         <div className="relative">
             <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2 px-2 md:px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md"
+                className="flex items-center gap-2 px-2 md:px-4 py-2 bg-muted hover:opacity-80 rounded-md"
             >
-                <div className="w-7 h-7 md:w-8 md:h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-xs md:text-sm">
+                <div className="w-7 h-7 md:w-8 md:h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-semibold text-xs md:text-sm">
                     {username ? username[0].toUpperCase() : user.email?.[0].toUpperCase()}
                 </div>
-                <span className="text-gray-900 font-medium hidden md:block">
+                <span className="text-foreground font-medium hidden md:block">
                     {displayName}
                 </span>
             </button>
 
             {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
-                    <div className="px-4 py-2 border-b border-gray-200">
-                        <p className="text-sm text-gray-500">Signed in as</p>
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                <div className="absolute right-0 mt-2 w-48 bg-card rounded-md shadow-lg py-1 z-50 border border-border">
+                    <div className="px-4 py-2 border-b border-border">
+                        <p className="text-sm text-muted-foreground">Signed in as</p>
+                        <p className="text-sm font-medium text-foreground truncate">
                             {displayName}
                         </p>
                     </div>
@@ -93,7 +93,7 @@ export default function AuthButton() {
                             setShowUserMenu(false)
                             // TODO: Navigate to profile page
                         }}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted"
                     >
                         My Profile
                     </button>
@@ -102,14 +102,14 @@ export default function AuthButton() {
                             setShowUserMenu(false)
                             router.push('/my-shows')
                         }}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted"
                     >
                         My Shows
                     </button>
-                    <div className="border-t border-gray-200"></div>
+                    <div className="border-t border-border"></div>
                     <button
                         onClick={handleSignOut}
-                        className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                        className="block w-full text-left px-4 py-2 text-sm text-destructive hover:bg-muted"
                     >
                         Sign Out
                     </button>

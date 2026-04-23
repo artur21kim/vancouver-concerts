@@ -1,23 +1,33 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { useTheme } from 'next-themes'
+import { useEffect, useState } from 'react'
 import AuthButton from './AuthButton'
 
 export default function Navigation() {
     const pathname = usePathname()
+    const { theme, setTheme } = useTheme()
+    const [mounted, setMounted] = useState(false)
+
+    useEffect(() => {
+        setMounted(true)
+    }, [])
 
     const isActive = (path: string) => pathname === path
 
     return (
-        <nav className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
+        <nav className="sticky top-0 z-50 bg-background border-b border-border shadow-sm">
             <div className="max-w-7xl mx-auto px-4">
                 <div className="flex items-center justify-between h-16">
+
                     {/* Left: Brand + Nav Links */}
                     <div className="flex items-center gap-0">
-                        {/* Brand - Aligned with content below */}
+
+                        {/* Brand */}
                         <a
                             href="/"
-                            className="text-xl md:text-2xl font-bold text-gray-900 hover:text-gray-700 md:-ml-4 mr-4 md:mr-6"
+                            className="text-xl md:text-2xl font-bold text-foreground hover:text-muted-foreground md:-ml-4 mr-4 md:mr-6"
                         >
                             Vancouver Concert History
                         </a>
@@ -27,8 +37,8 @@ export default function Navigation() {
                             <a
                                 href="/"
                                 className={`text-sm font-medium transition-colors ${isActive('/')
-                                    ? 'text-blue-600 border-b-2 border-blue-600 pb-1'
-                                    : 'text-gray-600 hover:text-gray-900'
+                                    ? 'text-primary border-b-2 border-primary pb-1'
+                                    : 'text-muted-foreground hover:text-foreground'
                                     }`}
                             >
                                 Overview
@@ -36,8 +46,8 @@ export default function Navigation() {
                             <a
                                 href="/browse"
                                 className={`text-sm font-medium transition-colors ${isActive('/browse')
-                                    ? 'text-blue-600 border-b-2 border-blue-600 pb-1'
-                                    : 'text-gray-600 hover:text-gray-900'
+                                    ? 'text-primary border-b-2 border-primary pb-1'
+                                    : 'text-muted-foreground hover:text-foreground'
                                     }`}
                             >
                                 Browse
@@ -45,19 +55,29 @@ export default function Navigation() {
                             <a
                                 href="/my-shows"
                                 className={`text-sm font-medium transition-colors ${isActive('/my-shows')
-                                    ? 'text-blue-600 border-b-2 border-blue-600 pb-1'
-                                    : 'text-gray-600 hover:text-gray-900'
+                                    ? 'text-primary border-b-2 border-primary pb-1'
+                                    : 'text-muted-foreground hover:text-foreground'
                                     }`}
                             >
                                 My Shows
                             </a>
                         </div>
-                    </div >
+                    </div>
 
-                    {/* Right: Auth Button - Smaller on mobile */}
-                    <div className="-mr-2 md:-mr-4">
+                    {/* Right: Theme Toggle + Auth Button */}
+                    <div className="flex items-center gap-2 -mr-2 md:-mr-4">
+                        {mounted && (
+                            <button
+                                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                                className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                aria-label="Toggle theme"
+                            >
+                                {theme === 'dark' ? '☀️' : '🌙'}
+                            </button>
+                        )}
                         <AuthButton />
                     </div>
+
                 </div>
             </div>
         </nav>
