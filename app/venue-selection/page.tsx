@@ -27,27 +27,46 @@ function VenueSelectionContent() {
   const [confirmations, setConfirmations] = useState<Map<number, 'yes' | 'no' | 'not_sure'>>(new Map());
 
   useEffect(() => {
-    fetchVenues();
+    fetchVenuesAndSavedSelections();
   }, []);
 
-  const fetchVenues = async () => {
+  const fetchVenuesAndSavedSelections = async () => {
     try {
-      const response = await fetch('/api/match');
-      
-      if (!response.ok) {
+      // Fetch venues and saved selections in parallel
+      const [venuesResponse, savedResponse] = await Promise.all([
+        fetch('/api/match'),
+        fetch('/api/venues/confirm')
+      ]);
+
+      if (!venuesResponse.ok) {
         throw new Error('Failed to fetch venues');
       }
 
-      const result = await response.json();
-      setVenues(result.data.top_venues);
-      
-      // Initialize all venues as 'not_sure'
+      const venuesResult = await venuesResponse.json();
+      const venues: Venue[] = venuesResult.data.top_venues;
+      setVenues(venues);
+
+      // Build saved status map from existing user_venues records
+      const savedStatusMap = new Map<number, 'yes' | 'no' | 'not_sure'>();
+      if (savedResponse.ok) {
+        const savedResult = await savedResponse.json();
+        const savedConfirmations: { venue_id: number; status: 'yes' | 'no' | 'not_sure' }[] = 
+          savedResult.data?.confirmations || [];
+        savedConfirmations.forEach(c => {
+          savedStatusMap.set(c.venue_id, c.status);
+        });
+      }
+
+      // Initialize confirmations — use saved status if available, otherwise 'not_sure'
       const initialConfirmations = new Map<number, 'yes' | 'no' | 'not_sure'>();
-      result.data.top_venues.forEach((venue: Venue) => {
-        initialConfirmations.set(venue.venue_id, 'not_sure');
+      venues.forEach((venue: Venue) => {
+        initialConfirmations.set(
+          venue.venue_id,
+          savedStatusMap.get(venue.venue_id) || 'not_sure'
+        );
       });
       setConfirmations(initialConfirmations);
-      
+
     } catch (err) {
       console.error('Error fetching venues:', err);
       setError('Failed to load venues. Please try again.');
@@ -69,7 +88,6 @@ function VenueSelectionContent() {
     setError('');
 
     try {
-      // Convert Map to array of confirmations
       const confirmationsArray: VenueConfirmation[] = Array.from(confirmations.entries()).map(
         ([venue_id, status]) => ({ venue_id, status })
       );
@@ -85,7 +103,6 @@ function VenueSelectionContent() {
         throw new Error(errorData.error || 'Failed to save confirmations');
       }
 
-      // Redirect to likely seen shows page
       router.push('/likely-shows');
       
     } catch (err) {
