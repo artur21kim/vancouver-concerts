@@ -10,6 +10,7 @@ type Venue = {
   total_shows: number;
   unique_artists: number;
   venue_score: number;
+  user_status: 'yes' | 'no' | 'not_sure' | null;
 };
 
 type VenueConfirmation = {
@@ -19,7 +20,6 @@ type VenueConfirmation = {
 
 function VenueSelectionContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -43,23 +43,31 @@ function VenueSelectionContent() {
       }
 
       const venuesResult = await venuesResponse.json();
-      const venues: Venue[] = venuesResult.data.top_venues;
-      setVenues(venues);
+      const allVenues: Venue[] = venuesResult.data.top_venues;
 
       // Build saved status map from existing user_venues records
       const savedStatusMap = new Map<number, 'yes' | 'no' | 'not_sure'>();
       if (savedResponse.ok) {
         const savedResult = await savedResponse.json();
-        const savedConfirmations: { venue_id: number; status: 'yes' | 'no' | 'not_sure' }[] = 
+        const savedConfirmations: { venue_id: number; status: 'yes' | 'no' | 'not_sure' }[] =
           savedResult.data?.confirmations || [];
         savedConfirmations.forEach(c => {
           savedStatusMap.set(c.venue_id, c.status);
         });
       }
 
-      // Initialize confirmations — use saved status if available, otherwise 'not_sure'
+      // Only show venues that haven't been confirmed yes or no yet
+      // (null or 'not_sure' = still needs review)
+      const unconfirmedVenues = allVenues.filter(venue => {
+        const saved = savedStatusMap.get(venue.venue_id);
+        return saved !== 'yes' && saved !== 'no';
+      });
+
+      setVenues(unconfirmedVenues);
+
+      // Initialize confirmations — use saved 'not_sure' if present, otherwise default to 'not_sure'
       const initialConfirmations = new Map<number, 'yes' | 'no' | 'not_sure'>();
-      venues.forEach((venue: Venue) => {
+      unconfirmedVenues.forEach((venue: Venue) => {
         initialConfirmations.set(
           venue.venue_id,
           savedStatusMap.get(venue.venue_id) || 'not_sure'
@@ -104,7 +112,7 @@ function VenueSelectionContent() {
       }
 
       router.push('/likely-shows');
-      
+
     } catch (err) {
       console.error('Error saving confirmations:', err);
       setError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
@@ -129,6 +137,38 @@ function VenueSelectionContent() {
             <p className="text-gray-600 text-lg">Loading venues...</p>
           </div>
         </div>
+      </>
+    );
+  }
+
+  // All top 15 venues already confirmed
+  if (venues.length === 0) {
+    return (
+      <>
+        <Navigation />
+        <main className="min-h-screen bg-gray-50 py-8 px-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">Confirm Your Venues</h1>
+              <p className="text-gray-600">
+                Help us narrow down your concert history by confirming which venues you've actually attended.
+              </p>
+            </div>
+            <div className="bg-white rounded-lg shadow p-8 text-center">
+              <div className="text-4xl mb-4">✅</div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">All venues confirmed!</h2>
+              <p className="text-gray-600 mb-6">
+                You've already reviewed all the top venues. Head to Likely Shows to continue reviewing your concert history.
+              </p>
+              <button
+                onClick={() => router.push('/likely-shows')}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+              >
+                Continue to Likely Shows →
+              </button>
+            </div>
+          </div>
+        </main>
       </>
     );
   }
@@ -174,9 +214,9 @@ function VenueSelectionContent() {
           <div className="space-y-4 mb-8">
             {venues.map((venue, index) => {
               const status = confirmations.get(venue.venue_id) || 'not_sure';
-              
+
               return (
-                <div 
+                <div
                   key={venue.venue_id}
                   className="bg-white rounded-lg shadow p-6"
                 >
@@ -208,7 +248,7 @@ function VenueSelectionContent() {
                     >
                       ✓ Yes, I've been here
                     </button>
-                    
+
                     <button
                       onClick={() => handleVenueConfirmation(venue.venue_id, 'not_sure')}
                       className={`flex-1 px-4 py-3 rounded-lg font-medium transition ${
@@ -219,7 +259,7 @@ function VenueSelectionContent() {
                     >
                       ? Not Sure
                     </button>
-                    
+
                     <button
                       onClick={() => handleVenueConfirmation(venue.venue_id, 'no')}
                       className={`flex-1 px-4 py-3 rounded-lg font-medium transition ${
@@ -249,7 +289,7 @@ function VenueSelectionContent() {
             >
               {saving ? 'Saving...' : 'Continue to Likely Shows →'}
             </button>
-            
+
             {!hasConfirmedSome && (
               <p className="text-sm text-gray-500 text-center mt-3">
                 Select at least one "Yes" or "No" to continue
