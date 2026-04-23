@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
     const firstConcertYear = profile.first_concert_year;
 
-    // Get all user venue confirmations
+    // Get all user venue confirmations for badge display
     const { data: userVenues } = await supabase
       .from('user_venues')
       .select('venue_id, status')
@@ -39,11 +39,6 @@ export async function GET(request: Request) {
       acc[v.venue_id] = v.status;
       return acc;
     }, {});
-
-    // Build set of venues explicitly marked 'no' — used to filter YVR show counts
-    const noVenueIds = new Set(
-      (userVenues || []).filter(v => v.status === 'no').map(v => v.venue_id)
-    );
 
     // Get user's Spotify artists and count liked songs per artist
     const { data: userSongs, error: songsError } = await supabase
@@ -114,36 +109,22 @@ export async function GET(request: Request) {
       }, { status: 404 });
     }
 
-    // Count ALL shows per artist (for total_shows_count stat)
-    const artistShowCountsAll = shows.reduce((acc: any, show: any) => {
+    // Count shows per artist
+    const artistShowCounts = shows.reduce((acc: any, show: any) => {
       if (!acc[show.artist_id]) acc[show.artist_id] = 0;
       acc[show.artist_id]++;
       return acc;
     }, {});
 
-    // Count shows per artist excluding 'no' venues (for YVR Shows column)
-    const artistShowCountsFiltered = shows.reduce((acc: any, show: any) => {
-      if (noVenueIds.has(show.venue_id)) return acc;
-      if (!acc[show.artist_id]) acc[show.artist_id] = 0;
-      acc[show.artist_id]++;
-      return acc;
-    }, {});
-
-    // Score artists using filtered show counts so scores reflect relevant venues
+    // Score artists
     const artistScores = matchedArtists.map(artist => {
       const spotifyCount = artistSongCounts[artist.spotify_artist_id]?.count || 0;
-      const vancouverCountFiltered = artistShowCountsFiltered[artist.artist_id] || 0;
-      return {
-        artist_id: artist.artist_id,
-        artist_name: artist.artist_name,
-        spotify_artist_id: artist.spotify_artist_id,
-        spotify_song_count: spotifyCount,
-        vancouver_show_count: vancouverCountFiltered // YVR shows excluding 'no' venues
-      };
+      const vancouverCount = artistShowCounts[artist.artist_id] || 0;
+      return { artist_id: artist.artist_id, artist_name: artist.artist_name, spotify_artist_id: artist.spotify_artist_id, spotify_song_count: spotifyCount, vancouver_show_count: vancouverCount };
     });
 
     const maxSpotifyCount = Math.max(...artistScores.map(a => a.spotify_song_count));
-    const maxVancouverCount = Math.max(...artistScores.map(a => a.vancouver_show_count), 1);
+    const maxVancouverCount = Math.max(...artistScores.map(a => a.vancouver_show_count));
 
     const scoredArtists = artistScores.map(artist => {
       const spotifyScore = (artist.spotify_song_count / maxSpotifyCount) * 100;
@@ -152,11 +133,10 @@ export async function GET(request: Request) {
       return { ...artist, spotify_score: spotifyScore, vancouver_score: vancouverScore, weighted_score: weightedScore };
     }).sort((a, b) => b.weighted_score - a.weighted_score);
 
-    // Group by venue and calculate venue scores (using filtered shows)
+    // Group by venue and calculate venue scores
     const venueScores: any = {};
 
     shows.forEach((show: any) => {
-      if (noVenueIds.has(show.venue_id)) return; // Skip 'no' venues in venue scoring too
       const venue = Array.isArray(show.dim_venue) ? show.dim_venue[0] : show.dim_venue;
       const venueId = venue.venue_id;
       const venueName = venue.venue_name;
@@ -177,7 +157,7 @@ export async function GET(request: Request) {
       if (artist) venueScores[venueId].total_score += artist.weighted_score;
     });
 
-    // Top 15 venues with user_status for badge display
+    // Convert to array — show ALL venues with user_status for badge display, top 15
     const top15Venues = Object.values(venueScores)
       .map((venue: any) => ({
         venue_id: venue.venue_id,
@@ -194,7 +174,7 @@ export async function GET(request: Request) {
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log(`✅ MATCHING COMPLETE — ${matchedArtists.length} artists, ${shows.length} shows, ${Object.keys(venueScores).length} venues in ${duration}s`);
 
-    // Save spotify_matched_shows count (total, not filtered)
+    // Save spotify_matched_shows count
     await supabase
       .from('user_profiles')
       .update({ spotify_matched_shows: shows.length })

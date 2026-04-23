@@ -14,26 +14,25 @@ export async function GET(request: Request) {
     console.log(`🎯 Fetching likely shows for user: ${user.id}`);
     const startTime = Date.now();
 
-    // Get user's confirmed venues (yes or not_sure)
+    // Get all user venue statuses
     const { data: userVenues, error: venuesError } = await supabase
       .from('user_venues')
       .select('venue_id, status')
-      .eq('user_id', user.id)
-      .in('status', ['yes', 'not_sure']);
+      .eq('user_id', user.id);
 
     if (venuesError) {
       console.error('Error fetching user venues:', venuesError);
       return NextResponse.json({ error: 'Failed to fetch venues' }, { status: 500 });
     }
 
-    if (!userVenues || userVenues.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: { shows: [], total_shows: 0, message: 'No confirmed venues. Please confirm venues first.' }
-      });
-    }
+    // Build a set of venues the user explicitly said 'no' to — these are the only ones we exclude
+    const noVenueIds = new Set(
+      (userVenues || [])
+        .filter(v => v.status === 'no')
+        .map(v => v.venue_id)
+    );
 
-    const confirmedVenueIds = userVenues.map(v => v.venue_id);
+    console.log(`🚫 Excluding ${noVenueIds.size} venues user said 'no' to`);
 
     // Get user's Spotify artists
     const { data: userSongs, error: songsError } = await supabase
@@ -89,7 +88,8 @@ export async function GET(request: Request) {
 
     const firstConcertYear = profile?.first_concert_year || 2000;
 
-    // Fetch shows matching criteria
+    // Fetch ALL shows for matched artists from first_concert_year onwards
+    // No venue filter here — we'll filter out 'no' venues in code
     const { data: shows, error: showsError } = await supabase
       .from('fact_shows')
       .select(`
@@ -107,7 +107,6 @@ export async function GET(request: Request) {
         )
       `)
       .in('artist_id', matchedArtistIds)
-      .in('venue_id', confirmedVenueIds)
       .gte('date', `${firstConcertYear}-01-01`);
 
     if (showsError) {
@@ -144,9 +143,9 @@ export async function GET(request: Request) {
 
     console.log(`🚫 Excluding ${excludedShowIds.size} shows (${(attendedResult.data || []).length} attended, ${(skippedResult.data || []).length} skipped)`);
 
-    // Transform and filter shows
+    // Transform, filter out 'no' venues and excluded shows
     const transformedShows = shows
-      .filter((show: any) => !excludedShowIds.has(show.show_id))
+      .filter((show: any) => !noVenueIds.has(show.venue_id) && !excludedShowIds.has(show.show_id))
       .map((show: any) => {
         const artist = Array.isArray(show.dim_artist) ? show.dim_artist[0] : show.dim_artist;
         const venue = Array.isArray(show.dim_venue) ? show.dim_venue[0] : show.dim_venue;
@@ -206,7 +205,6 @@ export async function GET(request: Request) {
       data: {
         shows: showsWithScores,
         total_shows: showsWithScores.length,
-        confirmed_venues: confirmedVenueIds.length,
         matched_artists: matchedArtistIds.length
       }
     });

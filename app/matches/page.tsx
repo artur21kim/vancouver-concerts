@@ -22,6 +22,7 @@ type Venue = {
   unique_artists: number;
   average_artist_score: number;
   venue_score: number;
+  user_status: 'yes' | 'no' | 'not_sure' | null;
 };
 
 type MatchData = {
@@ -113,6 +114,8 @@ export default function MatchesPage() {
     );
   }
 
+  const confirmedCount = matchData.top_venues.filter(v => v.user_status === 'yes' || v.user_status === 'no').length;
+
   return (
     <>
       <Navigation />
@@ -128,45 +131,58 @@ export default function MatchesPage() {
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <StatCard 
-              label="Matched Artists" 
-              value={matchData.matched_artists_count.toLocaleString()} 
-            />
-            <StatCard 
-              label="Total Shows" 
-              value={matchData.total_shows_count.toLocaleString()} 
-            />
-            <StatCard 
-              label="Total Venues" 
-              value={matchData.total_venues_matched.toString()} 
-            />
-            <StatCard 
-              label="Processing Time" 
-              value={`${matchData.duration_seconds}s`} 
-            />
+            <StatCard label="Matched Artists" value={matchData.matched_artists_count.toLocaleString()} />
+            <StatCard label="Total Shows" value={matchData.total_shows_count.toLocaleString()} />
+            <StatCard label="Total Venues" value={matchData.total_venues_matched.toString()} />
+            <StatCard label="Processing Time" value={`${matchData.duration_seconds}s`} />
           </div>
 
           {/* Top Venues */}
           <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Top 15 Venues (out of {matchData.total_venues_matched} total)
-            </h2>
-            <p className="text-gray-600 mb-6">
+            <div className="mb-2">
+              <h2 className="text-2xl font-bold text-gray-900">
+                Top 15 Venues (out of {matchData.total_venues_matched} total)
+              </h2>
+            </div>
+            <p className="text-gray-600 mb-1">
               These venues hosted the most shows by artists in your Spotify library
             </p>
+            {confirmedCount > 0 && (
+              <p className="text-sm text-gray-500 mb-6">
+                {confirmedCount} venue{confirmedCount !== 1 ? 's' : ''} already confirmed — badges show your previous answers
+              </p>
+            )}
+            {confirmedCount === 0 && <div className="mb-6" />}
 
             <div className="space-y-4">
               {matchData.top_venues.map((venue, index) => (
-                <div 
+                <div
                   key={venue.venue_id}
                   className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 flex-wrap">
                         <span className="text-2xl font-bold text-blue-600">#{index + 1}</span>
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900">{venue.venue_name}</h3>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-lg font-semibold text-gray-900">{venue.venue_name}</h3>
+                            {venue.user_status === 'yes' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                ✓ Attended
+                              </span>
+                            )}
+                            {venue.user_status === 'no' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                ✗ Never been
+                              </span>
+                            )}
+                            {venue.user_status === 'not_sure' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                ? Not sure
+                              </span>
+                            )}
+                          </div>
                           <div className="flex gap-4 text-sm text-gray-600 mt-1">
                             <span>{venue.total_shows} shows</span>
                             <span>•</span>
