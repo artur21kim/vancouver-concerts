@@ -21,63 +21,78 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    if (!status || !['added', 'skipped'].includes(status)) {
+    if (!status || !['added', 'skipped', 'pending'].includes(status)) {
       return NextResponse.json({ 
-        error: 'Invalid status. Expected "added" or "skipped".' 
+        error: 'Invalid status. Expected "added", "skipped", or "pending".' 
       }, { status: 400 });
     }
 
-    // Map status to user_shows status
-    const userShowStatus = status === 'added' ? 'attended' : 'not_attended';
+    if (status === 'added') {
+      // Bulk upsert into user_shows only when adding
+      const records = show_ids.map(show_id => ({
+        user_id: user.id,
+        show_id: show_id,
+        status: 'attended',
+        source: source
+      }));
 
-    // Prepare records for bulk upsert
-    const records = show_ids.map(show_id => ({
-      user_id: user.id,
-      show_id: show_id,
-      status: userShowStatus,
-      source: source
-    }));
+      const { error: upsertError } = await supabase
+        .from('user_shows')
+        .upsert(records, {
+          onConflict: 'user_id,show_id'
+        });
 
-    // Bulk upsert to user_shows
-    const { error: upsertError } = await supabase
-      .from('user_shows')
-      .upsert(records, {
-        onConflict: 'user_id,show_id'
-      });
+      if (upsertError) {
+        console.error('Error bulk upserting shows:', upsertError);
+        return NextResponse.json({ 
+          error: 'Failed to bulk update shows',
+          details: upsertError.message
+        }, { status: 500 });
+      }
 
-    if (upsertError) {
-      console.error('Error bulk upserting shows:', upsertError);
-      return NextResponse.json({ 
-        error: 'Failed to bulk update shows',
-        details: upsertError.message
-      }, { status: 500 });
+      console.log(`✅ Bulk added ${show_ids.length} shows to user_shows, source: ${source}`);
+
+    } else {
+      // Skipped or pending — remove from user_shows if they exist
+      const { error: deleteError } = await supabase
+        .from('user_shows')
+        .delete()
+        .eq('user_id', user.id)
+        .in('show_id', show_ids);
+
+      if (deleteError) {
+        console.error('Error bulk deleting shows:', deleteError);
+        return NextResponse.json({ 
+          error: 'Failed to bulk update shows',
+          details: deleteError.message
+        }, { status: 500 });
+      }
+
+      console.log(`✅ Bulk ${status} ${show_ids.length} shows — removed from user_shows if present`);
     }
 
-    console.log(`✅ Bulk updated ${show_ids.length} shows to status: ${userShowStatus}, source: ${source}`);
-
-    // Update likely_shows_added count if source is likely_shows
+    // Recalculate likely_shows_added directly from user_shows
     if (source === 'likely_shows') {
-      const increment = status === 'added' ? show_ids.length : -show_ids.length;
-      
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('likely_shows_added')
+      const { count, error: countError } = await supabase
+        .from('user_shows')
+        .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id)
-        .single();
+        .eq('source', 'likely_shows')
+        .eq('status', 'attended');
 
-      const newCount = Math.max(0, (profile?.likely_shows_added || 0) + increment);
-      
-      await supabase
-        .from('user_profiles')
-        .update({ likely_shows_added: newCount })
-        .eq('user_id', user.id);
+      if (!countError) {
+        await supabase
+          .from('user_profiles')
+          .update({ likely_shows_added: count || 0 })
+          .eq('user_id', user.id);
+      }
     }
 
     return NextResponse.json({
       success: true,
       data: {
         updated_count: show_ids.length,
-        status: userShowStatus,
+        status,
         source
       }
     });

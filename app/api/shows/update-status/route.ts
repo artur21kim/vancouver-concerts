@@ -21,53 +21,61 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // Map status to user_shows status
-    const userShowStatus = status === 'added' ? 'attended' : 'not_attended';
+    if (status === 'added') {
+      // Upsert into user_shows only when adding
+      const { error: upsertError } = await supabase
+        .from('user_shows')
+        .upsert({
+          user_id: user.id,
+          show_id: show_id,
+          status: 'attended',
+          source: source
+        }, {
+          onConflict: 'user_id,show_id'
+        });
 
-    // Upsert to user_shows
-    const { error: upsertError } = await supabase
-      .from('user_shows')
-      .upsert({
-        user_id: user.id,
-        show_id: show_id,
-        status: userShowStatus,
-        source: source
-      }, {
-        onConflict: 'user_id,show_id'
-      });
+      if (upsertError) {
+        console.error('Error upserting show:', upsertError);
+        return NextResponse.json({ 
+          error: 'Failed to update show status',
+          details: upsertError.message
+        }, { status: 500 });
+      }
 
-    if (upsertError) {
-      console.error('Error upserting show:', upsertError);
-      return NextResponse.json({ 
-        error: 'Failed to update show status',
-        details: upsertError.message
-      }, { status: 500 });
+      console.log(`✅ Added show ${show_id} to user_shows, source: ${source}`);
+
+    } else {
+      // Skipped — remove from user_shows if it exists
+      const { error: deleteError } = await supabase
+        .from('user_shows')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('show_id', show_id);
+
+      if (deleteError) {
+        console.error('Error deleting show:', deleteError);
+        return NextResponse.json({ 
+          error: 'Failed to update show status',
+          details: deleteError.message
+        }, { status: 500 });
+      }
+
+      console.log(`✅ Skipped show ${show_id} — removed from user_shows if present`);
     }
 
-    console.log(`✅ Updated show ${show_id} to status: ${userShowStatus}, source: ${source}`);
-
-    // Update likely_shows_added count if source is likely_shows
+    // Recalculate likely_shows_added directly from user_shows
     if (source === 'likely_shows') {
-      const increment = status === 'added' ? 1 : -1;
-      
-      const { error: profileUpdateError } = await supabase.rpc('increment_likely_shows_added', {
-        p_user_id: user.id,
-        p_increment: increment
-      });
+      const { count, error: countError } = await supabase
+        .from('user_shows')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('source', 'likely_shows')
+        .eq('status', 'attended');
 
-      if (profileUpdateError) {
-        // If RPC doesn't exist, use direct update
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('likely_shows_added')
-          .eq('user_id', user.id)
-          .single();
-
-        const newCount = Math.max(0, (profile?.likely_shows_added || 0) + increment);
-        
+      if (!countError) {
         await supabase
           .from('user_profiles')
-          .update({ likely_shows_added: newCount })
+          .update({ likely_shows_added: count || 0 })
           .eq('user_id', user.id);
       }
     }
@@ -76,7 +84,7 @@ export async function POST(request: Request) {
       success: true,
       data: {
         show_id,
-        status: userShowStatus,
+        status: status === 'added' ? 'attended' : 'not_attended',
         source
       }
     });
