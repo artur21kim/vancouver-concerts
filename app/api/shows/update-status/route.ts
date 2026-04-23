@@ -5,7 +5,6 @@ export async function POST(request: Request) {
   try {
     const supabase = await createClient();
 
-    // Get authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
@@ -22,7 +21,7 @@ export async function POST(request: Request) {
     }
 
     if (status === 'added') {
-      // Upsert into user_shows only when adding
+      // Upsert into user_shows
       const { error: upsertError } = await supabase
         .from('user_shows')
         .upsert({
@@ -30,22 +29,14 @@ export async function POST(request: Request) {
           show_id: show_id,
           status: 'attended',
           source: source
-        }, {
-          onConflict: 'user_id,show_id'
-        });
+        }, { onConflict: 'user_id,show_id' });
 
       if (upsertError) {
         console.error('Error upserting show:', upsertError);
-        return NextResponse.json({ 
-          error: 'Failed to update show status',
-          details: upsertError.message
-        }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to update show status', details: upsertError.message }, { status: 500 });
       }
-
-      console.log(`✅ Added show ${show_id} to user_shows, source: ${source}`);
-
     } else {
-      // Skipped — remove from user_shows if it exists
+      // Skipped — remove from user_shows (final decision wins)
       const { error: deleteError } = await supabase
         .from('user_shows')
         .delete()
@@ -54,39 +45,46 @@ export async function POST(request: Request) {
 
       if (deleteError) {
         console.error('Error deleting show:', deleteError);
-        return NextResponse.json({ 
-          error: 'Failed to update show status',
-          details: deleteError.message
-        }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to update show status', details: deleteError.message }, { status: 500 });
       }
-
-      console.log(`✅ Skipped show ${show_id} — removed from user_shows if present`);
     }
 
-    // Recalculate likely_shows_added directly from user_shows
+    // Always write the decision to user_show_reviews for persistence
+    const { error: reviewError } = await supabase
+      .from('user_show_reviews')
+      .upsert({
+        user_id: user.id,
+        show_id: show_id,
+        status: status,
+        source: source,
+        reviewed_at: new Date().toISOString()
+      }, { onConflict: 'user_id,show_id' });
+
+    if (reviewError) {
+      console.error('Error upserting review:', reviewError);
+      return NextResponse.json({ error: 'Failed to save review', details: reviewError.message }, { status: 500 });
+    }
+
+    console.log(`✅ Updated show ${show_id} to status: ${status}, source: ${source}`);
+
+    // Recalculate likely_shows_added from user_show_reviews
     if (source === 'likely_shows') {
-      const { count, error: countError } = await supabase
-        .from('user_shows')
+      const { count } = await supabase
+        .from('user_show_reviews')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('source', 'likely_shows')
-        .eq('status', 'attended');
+        .eq('status', 'added');
 
-      if (!countError) {
-        await supabase
-          .from('user_profiles')
-          .update({ likely_shows_added: count || 0 })
-          .eq('user_id', user.id);
-      }
+      await supabase
+        .from('user_profiles')
+        .update({ likely_shows_added: count || 0 })
+        .eq('user_id', user.id);
     }
 
     return NextResponse.json({
       success: true,
-      data: {
-        show_id,
-        status: status === 'added' ? 'attended' : 'not_attended',
-        source
-      }
+      data: { show_id, status, source }
     });
 
   } catch (error) {

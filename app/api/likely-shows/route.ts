@@ -66,9 +66,7 @@ export async function GET(request: Request) {
     // Count songs per artist for Spotify score
     const artistSongCounts = userSongs.reduce((acc: any, song: any) => {
       const artistId = song.spotify_artist_id;
-      if (!acc[artistId]) {
-        acc[artistId] = 0;
-      }
+      if (!acc[artistId]) acc[artistId] = 0;
       acc[artistId]++;
       return acc;
     }, {});
@@ -102,7 +100,7 @@ export async function GET(request: Request) {
     console.log(`✅ Matched ${matchedArtistIds.length} artists`);
 
     // Get user's first concert year
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from('user_profiles')
       .select('first_concert_year')
       .eq('user_id', user.id)
@@ -151,7 +149,6 @@ export async function GET(request: Request) {
     const transformedShows = shows.map((show: any) => {
       const artist = Array.isArray(show.dim_artist) ? show.dim_artist[0] : show.dim_artist;
       const venue = Array.isArray(show.dim_venue) ? show.dim_venue[0] : show.dim_venue;
-
       return {
         show_id: show.show_id,
         date: show.date,
@@ -163,40 +160,30 @@ export async function GET(request: Request) {
       };
     });
 
-    // Calculate match scores for each artist
-    // Group shows by artist to get show counts
+    // Calculate match scores
     const artistShowCounts = transformedShows.reduce((acc: any, show: any) => {
-      if (!acc[show.artist_id]) {
-        acc[show.artist_id] = 0;
-      }
+      if (!acc[show.artist_id]) acc[show.artist_id] = 0;
       acc[show.artist_id]++;
       return acc;
     }, {});
 
-    // Calculate normalized scores (0-100 scale)
     const maxSpotifyCount = Math.max(...Object.values(artistSongCounts) as number[]);
     const maxVancouverCount = Math.max(...Object.values(artistShowCounts) as number[]);
 
     const artistMatchScores = matchedArtists.reduce((acc: any, artist: any) => {
       const spotifyCount = artistSongCounts[artist.spotify_artist_id] || 0;
       const vancouverCount = artistShowCounts[artist.artist_id] || 0;
-
       const spotifyScore = (spotifyCount / maxSpotifyCount) * 100;
       const vancouverScore = (vancouverCount / maxVancouverCount) * 100;
-      
-      // Weighted score: 70% Spotify + 30% Vancouver
       const matchScore = (0.7 * spotifyScore) + (0.3 * vancouverScore);
-
       acc[artist.artist_id] = {
         match_score: matchScore,
         spotify_song_count: spotifyCount,
         vancouver_show_count: vancouverCount
       };
-      
       return acc;
     }, {});
 
-    // Add match scores to transformed shows
     const showsWithScores = transformedShows.map(show => ({
       ...show,
       match_score: artistMatchScores[show.artist_id]?.match_score || 0,
@@ -204,33 +191,47 @@ export async function GET(request: Request) {
       vancouver_show_count: artistMatchScores[show.artist_id]?.vancouver_show_count || 0
     }));
 
-    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    // Fetch existing review decisions from user_show_reviews
+    const showIds = showsWithScores.map(s => s.show_id);
+    const { data: existingReviews } = await supabase
+      .from('user_show_reviews')
+      .select('show_id, status')
+      .eq('user_id', user.id)
+      .in('show_id', showIds);
 
+    // Build a status map from saved reviews
+    const reviewStatusMap = (existingReviews || []).reduce((acc: any, r: any) => {
+      acc[r.show_id] = r.status; // 'added' or 'skipped'
+      return acc;
+    }, {});
+
+    // Attach saved status to each show — pending if no review exists
+    const showsWithStatus = showsWithScores.map(show => ({
+      ...show,
+      status: (reviewStatusMap[show.show_id] || 'pending') as 'added' | 'skipped' | 'pending'
+    }));
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     console.log(`✅ LIKELY SHOWS COMPLETE`);
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     console.log(`   Confirmed venues: ${confirmedVenueIds.length}`);
     console.log(`   Matched artists: ${matchedArtistIds.length}`);
-    console.log(`   Total shows: ${showsWithScores.length}`);
+    console.log(`   Total shows: ${showsWithStatus.length}`);
     console.log(`   Duration: ${duration}s`);
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
     // Save likely_shows_total count to user_profiles
-    const { error: profileUpdateError } = await supabase
+    await supabase
       .from('user_profiles')
-      .update({ likely_shows_total: showsWithScores.length })
+      .update({ likely_shows_total: showsWithStatus.length })
       .eq('user_id', user.id);
-
-    if (profileUpdateError) {
-      console.error('Error updating likely_shows_total:', profileUpdateError);
-      // Don't fail the request, just log the error
-    }
 
     return NextResponse.json({
       success: true,
       data: {
-        shows: showsWithScores,
-        total_shows: showsWithScores.length,
+        shows: showsWithStatus,
+        total_shows: showsWithStatus.length,
         confirmed_venues: confirmedVenueIds.length,
         matched_artists: matchedArtistIds.length
       }

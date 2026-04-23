@@ -5,7 +5,6 @@ export async function GET(request: Request) {
   try {
     const supabase = await createClient();
 
-    // Get authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
@@ -15,13 +14,26 @@ export async function GET(request: Request) {
     // Get funnel stats from user_profiles
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
-      .select('spotify_matched_shows, likely_shows_total, likely_shows_added')
+      .select('spotify_matched_shows, likely_shows_total')
       .eq('user_id', user.id)
       .single();
 
     if (profileError) {
       console.error('Error fetching profile:', profileError);
       return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 });
+    }
+
+    // Count added shows directly from user_show_reviews (source of truth)
+    const { count: addedCount, error: addedError } = await supabase
+      .from('user_show_reviews')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('source', 'likely_shows')
+      .eq('status', 'added');
+
+    if (addedError) {
+      console.error('Error counting added shows:', addedError);
+      return NextResponse.json({ error: 'Failed to count added shows' }, { status: 500 });
     }
 
     // Get total shows in My Shows (all sources)
@@ -36,12 +48,18 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Failed to count shows' }, { status: 500 });
     }
 
+    // Keep user_profiles in sync
+    await supabase
+      .from('user_profiles')
+      .update({ likely_shows_added: addedCount || 0 })
+      .eq('user_id', user.id);
+
     return NextResponse.json({
       success: true,
       data: {
         spotify_matched_shows: profile?.spotify_matched_shows || 0,
         likely_shows_total: profile?.likely_shows_total || 0,
-        likely_shows_added: profile?.likely_shows_added || 0,
+        likely_shows_added: addedCount || 0,
         total_shows_in_my_shows: totalShowsCount || 0
       }
     });
