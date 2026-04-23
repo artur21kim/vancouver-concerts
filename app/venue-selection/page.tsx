@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Navigation from '../components/Navigation';
 
 type Venue = {
@@ -24,54 +24,31 @@ function VenueSelectionContent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [venues, setVenues] = useState<Venue[]>([]);
+  const [hasMoreVenues, setHasMoreVenues] = useState(false);
   const [confirmations, setConfirmations] = useState<Map<number, 'yes' | 'no' | 'not_sure'>>(new Map());
 
   useEffect(() => {
-    fetchVenuesAndSavedSelections();
+    fetchVenues();
   }, []);
 
-  const fetchVenuesAndSavedSelections = async () => {
+  const fetchVenues = async () => {
     try {
-      // Fetch venues and saved selections in parallel
-      const [venuesResponse, savedResponse] = await Promise.all([
-        fetch('/api/match'),
-        fetch('/api/venues/confirm')
-      ]);
+      const response = await fetch('/api/match?mode=venue-selection');
 
-      if (!venuesResponse.ok) {
+      if (!response.ok) {
         throw new Error('Failed to fetch venues');
       }
 
-      const venuesResult = await venuesResponse.json();
-      const allVenues: Venue[] = venuesResult.data.top_venues;
+      const result = await response.json();
+      const fetchedVenues: Venue[] = result.data.top_venues;
+      setVenues(fetchedVenues);
+      setHasMoreVenues(result.data.has_more_venues || false);
 
-      // Build saved status map from existing user_venues records
-      const savedStatusMap = new Map<number, 'yes' | 'no' | 'not_sure'>();
-      if (savedResponse.ok) {
-        const savedResult = await savedResponse.json();
-        const savedConfirmations: { venue_id: number; status: 'yes' | 'no' | 'not_sure' }[] =
-          savedResult.data?.confirmations || [];
-        savedConfirmations.forEach(c => {
-          savedStatusMap.set(c.venue_id, c.status);
-        });
-      }
-
-      // Only show venues that haven't been confirmed yes or no yet
-      // (null or 'not_sure' = still needs review)
-      const unconfirmedVenues = allVenues.filter(venue => {
-        const saved = savedStatusMap.get(venue.venue_id);
-        return saved !== 'yes' && saved !== 'no';
-      });
-
-      setVenues(unconfirmedVenues);
-
-      // Initialize confirmations — use saved 'not_sure' if present, otherwise default to 'not_sure'
+      // Initialize all to 'not_sure' — these are all unconfirmed by definition
       const initialConfirmations = new Map<number, 'yes' | 'no' | 'not_sure'>();
-      unconfirmedVenues.forEach((venue: Venue) => {
-        initialConfirmations.set(
-          venue.venue_id,
-          savedStatusMap.get(venue.venue_id) || 'not_sure'
-        );
+      fetchedVenues.forEach((venue: Venue) => {
+        // Restore 'not_sure' if previously saved, otherwise default
+        initialConfirmations.set(venue.venue_id, venue.user_status === 'not_sure' ? 'not_sure' : 'not_sure');
       });
       setConfirmations(initialConfirmations);
 
@@ -111,7 +88,15 @@ function VenueSelectionContent() {
         throw new Error(errorData.error || 'Failed to save confirmations');
       }
 
-      router.push('/likely-shows');
+      // If there are more unconfirmed venues, reload to show the next batch
+      // Otherwise go straight to likely shows
+      if (hasMoreVenues) {
+        router.refresh();
+        setLoading(true);
+        fetchVenues();
+      } else {
+        router.push('/likely-shows');
+      }
 
     } catch (err) {
       console.error('Error saving confirmations:', err);
@@ -141,7 +126,7 @@ function VenueSelectionContent() {
     );
   }
 
-  // All top 15 venues already confirmed
+  // All venues confirmed
   if (venues.length === 0) {
     return (
       <>
@@ -287,12 +272,23 @@ function VenueSelectionContent() {
                   : 'bg-blue-600 hover:bg-blue-700'
               }`}
             >
-              {saving ? 'Saving...' : 'Continue to Likely Shows →'}
+              {saving
+                ? 'Saving...'
+                : hasMoreVenues
+                ? 'Save & Review Next Venues →'
+                : 'Continue to Likely Shows →'
+              }
             </button>
 
             {!hasConfirmedSome && (
               <p className="text-sm text-gray-500 text-center mt-3">
                 Select at least one "Yes" or "No" to continue
+              </p>
+            )}
+
+            {hasMoreVenues && hasConfirmedSome && (
+              <p className="text-sm text-gray-500 text-center mt-3">
+                More venues to review after this batch
               </p>
             )}
           </div>

@@ -11,7 +11,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log(`🎯 Starting matching algorithm for user: ${user.id}`);
+    // mode=venue-selection returns top 15 unconfirmed (yes/no) venues
+    // default returns top 15 overall with badges
+    const url = new URL(request.url);
+    const mode = url.searchParams.get('mode');
+    const isVenueSelection = mode === 'venue-selection';
+
+    console.log(`🎯 Starting matching algorithm for user: ${user.id} (mode: ${mode || 'default'})`);
     const startTime = Date.now();
 
     // Get user's first_concert_year
@@ -40,12 +46,17 @@ export async function GET(request: Request) {
       return acc;
     }, {});
 
-    // Build set of venues explicitly marked 'no' — used to filter YVR show counts
+    // Venues the user said 'no' to — excluded from YVR counts and venue scoring
     const noVenueIds = new Set(
       (userVenues || []).filter(v => v.status === 'no').map(v => v.venue_id)
     );
 
-    // Get user's Spotify artists and count liked songs per artist
+    // Venues already confirmed yes or no — excluded from venue selection flow
+    const confirmedVenueIds = new Set(
+      (userVenues || []).filter(v => v.status === 'yes' || v.status === 'no').map(v => v.venue_id)
+    );
+
+    // Get user's Spotify artists
     const { data: userSongs, error: songsError } = await supabase
       .from('user_spotify_songs')
       .select('spotify_artist_id, artist_name')
@@ -114,13 +125,6 @@ export async function GET(request: Request) {
       }, { status: 404 });
     }
 
-    // Count ALL shows per artist (for total_shows_count stat)
-    const artistShowCountsAll = shows.reduce((acc: any, show: any) => {
-      if (!acc[show.artist_id]) acc[show.artist_id] = 0;
-      acc[show.artist_id]++;
-      return acc;
-    }, {});
-
     // Count shows per artist excluding 'no' venues (for YVR Shows column)
     const artistShowCountsFiltered = shows.reduce((acc: any, show: any) => {
       if (noVenueIds.has(show.venue_id)) return acc;
@@ -129,16 +133,16 @@ export async function GET(request: Request) {
       return acc;
     }, {});
 
-    // Score artists using filtered show counts so scores reflect relevant venues
+    // Score artists using filtered show counts
     const artistScores = matchedArtists.map(artist => {
       const spotifyCount = artistSongCounts[artist.spotify_artist_id]?.count || 0;
-      const vancouverCountFiltered = artistShowCountsFiltered[artist.artist_id] || 0;
+      const vancouverCount = artistShowCountsFiltered[artist.artist_id] || 0;
       return {
         artist_id: artist.artist_id,
         artist_name: artist.artist_name,
         spotify_artist_id: artist.spotify_artist_id,
         spotify_song_count: spotifyCount,
-        vancouver_show_count: vancouverCountFiltered // YVR shows excluding 'no' venues
+        vancouver_show_count: vancouverCount
       };
     });
 
@@ -152,11 +156,11 @@ export async function GET(request: Request) {
       return { ...artist, spotify_score: spotifyScore, vancouver_score: vancouverScore, weighted_score: weightedScore };
     }).sort((a, b) => b.weighted_score - a.weighted_score);
 
-    // Group by venue and calculate venue scores (using filtered shows)
+    // Group by venue and calculate venue scores (excluding 'no' venues)
     const venueScores: any = {};
 
     shows.forEach((show: any) => {
-      if (noVenueIds.has(show.venue_id)) return; // Skip 'no' venues in venue scoring too
+      if (noVenueIds.has(show.venue_id)) return;
       const venue = Array.isArray(show.dim_venue) ? show.dim_venue[0] : show.dim_venue;
       const venueId = venue.venue_id;
       const venueName = venue.venue_name;
@@ -177,8 +181,8 @@ export async function GET(request: Request) {
       if (artist) venueScores[venueId].total_score += artist.weighted_score;
     });
 
-    // Top 15 venues with user_status for badge display
-    const top15Venues = Object.values(venueScores)
+    // Build ranked venue list with user_status badges
+    const allRankedVenues = Object.values(venueScores)
       .map((venue: any) => ({
         venue_id: venue.venue_id,
         venue_name: venue.venue_name,
@@ -188,13 +192,18 @@ export async function GET(request: Request) {
         venue_score: venue.total_score,
         user_status: userVenueStatusMap[venue.venue_id] || null
       }))
-      .sort((a: any, b: any) => b.venue_score - a.venue_score)
-      .slice(0, 15);
+      .sort((a: any, b: any) => b.venue_score - a.venue_score);
+
+    // venue-selection mode: top 15 that haven't been confirmed yes/no
+    // default mode: top 15 overall with badges
+    const top15Venues = isVenueSelection
+      ? (allRankedVenues as any[]).filter(v => !confirmedVenueIds.has(v.venue_id)).slice(0, 15)
+      : (allRankedVenues as any[]).slice(0, 15);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`✅ MATCHING COMPLETE — ${matchedArtists.length} artists, ${shows.length} shows, ${Object.keys(venueScores).length} venues in ${duration}s`);
+    console.log(`✅ MATCHING COMPLETE — ${matchedArtists.length} artists, ${shows.length} shows, ${Object.keys(venueScores).length} venues, ${top15Venues.length} returned in ${duration}s`);
 
-    // Save spotify_matched_shows count (total, not filtered)
+    // Save spotify_matched_shows count
     await supabase
       .from('user_profiles')
       .update({ spotify_matched_shows: shows.length })
@@ -209,6 +218,9 @@ export async function GET(request: Request) {
         total_venues_matched: Object.keys(venueScores).length,
         top_artists: scoredArtists.slice(0, 20),
         top_venues: top15Venues,
+        has_more_venues: isVenueSelection
+          ? (allRankedVenues as any[]).filter(v => !confirmedVenueIds.has(v.venue_id)).length > 15
+          : false,
         duration_seconds: parseFloat(duration)
       }
     });
