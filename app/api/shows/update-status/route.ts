@@ -35,6 +35,32 @@ export async function POST(request: Request) {
         console.error('Error upserting show:', upsertError);
         return NextResponse.json({ error: 'Failed to update show status', details: upsertError.message }, { status: 500 });
       }
+
+      // Auto-populate user_venues with 'yes' when a show is added
+      // Fetch the venue_id for this show
+      const { data: show, error: showError } = await supabase
+        .from('fact_shows')
+        .select('venue_id')
+        .eq('show_id', show_id)
+        .single();
+
+      if (!showError && show?.venue_id) {
+        const { error: venueError } = await supabase
+          .from('user_venues')
+          .upsert({
+            user_id: user.id,
+            venue_id: show.venue_id,
+            status: 'yes'
+          }, { onConflict: 'user_id,venue_id' });
+
+        if (venueError) {
+          console.error('Error upserting user_venue:', venueError);
+          // Don't fail the request — venue upsert is best-effort
+        } else {
+          console.log(`📍 Auto-populated user_venues: venue ${show.venue_id} = yes`);
+        }
+      }
+
     } else {
       // Skipped — remove from user_shows (final decision wins)
       const { error: deleteError } = await supabase
@@ -49,7 +75,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Always write the decision to user_show_reviews for persistence
+    // Write decision to user_show_reviews for persistence
     const { error: reviewError } = await supabase
       .from('user_show_reviews')
       .upsert({

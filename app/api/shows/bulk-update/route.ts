@@ -24,8 +24,6 @@ export async function POST(request: Request) {
 
     if (status === 'pending') {
       // Clear All — remove from both user_shows and user_show_reviews
-      // Shows become fully pending and will reappear next visit
-
       const { error: deleteShowsError } = await supabase
         .from('user_shows')
         .delete()
@@ -33,7 +31,6 @@ export async function POST(request: Request) {
         .in('show_id', show_ids);
 
       if (deleteShowsError) {
-        console.error('Error clearing user_shows:', deleteShowsError);
         return NextResponse.json({ error: 'Failed to clear shows', details: deleteShowsError.message }, { status: 500 });
       }
 
@@ -44,7 +41,6 @@ export async function POST(request: Request) {
         .in('show_id', show_ids);
 
       if (deleteReviewsError) {
-        console.error('Error clearing user_show_reviews:', deleteReviewsError);
         return NextResponse.json({ error: 'Failed to clear reviews', details: deleteReviewsError.message }, { status: 500 });
       }
 
@@ -64,14 +60,40 @@ export async function POST(request: Request) {
         .upsert(records, { onConflict: 'user_id,show_id' });
 
       if (upsertError) {
-        console.error('Error bulk upserting shows:', upsertError);
         return NextResponse.json({ error: 'Failed to bulk update shows', details: upsertError.message }, { status: 500 });
+      }
+
+      // Auto-populate user_venues with 'yes' for all venues in these shows
+      const { data: showVenues, error: showVenuesError } = await supabase
+        .from('fact_shows')
+        .select('venue_id')
+        .in('show_id', show_ids);
+
+      if (!showVenuesError && showVenues && showVenues.length > 0) {
+        // Get unique venue IDs
+        const uniqueVenueIds = [...new Set(showVenues.map(s => s.venue_id))];
+        const venueRecords = uniqueVenueIds.map(venue_id => ({
+          user_id: user.id,
+          venue_id,
+          status: 'yes'
+        }));
+
+        const { error: venueError } = await supabase
+          .from('user_venues')
+          .upsert(venueRecords, { onConflict: 'user_id,venue_id' });
+
+        if (venueError) {
+          console.error('Error bulk upserting user_venues:', venueError);
+          // Don't fail the request — venue upsert is best-effort
+        } else {
+          console.log(`📍 Auto-populated user_venues for ${uniqueVenueIds.length} unique venues`);
+        }
       }
 
       console.log(`✅ Bulk added ${show_ids.length} shows`);
 
     } else {
-      // Skipped — remove from user_shows (final decision wins)
+      // Skipped — remove from user_shows
       const { error: deleteError } = await supabase
         .from('user_shows')
         .delete()
@@ -79,11 +101,10 @@ export async function POST(request: Request) {
         .in('show_id', show_ids);
 
       if (deleteError) {
-        console.error('Error bulk deleting shows:', deleteError);
         return NextResponse.json({ error: 'Failed to bulk update shows', details: deleteError.message }, { status: 500 });
       }
 
-      console.log(`✅ Bulk skipped ${show_ids.length} shows — removed from user_shows if present`);
+      console.log(`✅ Bulk skipped ${show_ids.length} shows`);
     }
 
     // Write decisions to user_show_reviews (skip for pending — those get deleted above)
@@ -101,7 +122,6 @@ export async function POST(request: Request) {
         .upsert(reviewRecords, { onConflict: 'user_id,show_id' });
 
       if (reviewError) {
-        console.error('Error bulk upserting reviews:', reviewError);
         return NextResponse.json({ error: 'Failed to save reviews', details: reviewError.message }, { status: 500 });
       }
     }
