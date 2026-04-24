@@ -42,38 +42,44 @@ type MatchData = {
 type CapacityFilter = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown';
 type ArtistFilter = 'current' | 'all';
 
-// Map capacity_category values to filter keys
-const CAPACITY_FILTER_MAP: Record<string, CapacityFilter> = {
-  'Small (<500)': 'small',
-  'Medium (500-3K)': 'medium',
-  'Large (3K-10K)': 'large',
-  'X-Large (10K+)': 'xlarge',
-};
-
 const CAPACITY_BUTTONS: { key: CapacityFilter; label: string; tooltip: string }[] = [
-  { key: 'all',     label: 'All',  tooltip: 'All venues'         },
-  { key: 'small',   label: 'S',    tooltip: 'Small (< 500)'      },
-  { key: 'medium',  label: 'M',    tooltip: 'Medium (500–3K)'    },
-  { key: 'large',   label: 'L',    tooltip: 'Large (3K–10K)'     },
-  { key: 'xlarge',  label: 'XL',   tooltip: 'X-Large (10K+)'     },
-  { key: 'unknown', label: '?',    tooltip: 'Unknown capacity'   },
+  { key: 'all',     label: 'All', tooltip: 'All venues'        },
+  { key: 'small',   label: 'S',   tooltip: 'Small (< 500)'     },
+  { key: 'medium',  label: 'M',   tooltip: 'Medium (500–3K)'   },
+  { key: 'large',   label: 'L',   tooltip: 'Large (3K–10K)'    },
+  { key: 'xlarge',  label: 'XL',  tooltip: 'X-Large (10K+)'    },
+  { key: 'unknown', label: '?',   tooltip: 'Unknown capacity'  },
 ];
 
+// Map capacity_category string to filter key
 function capacityFilterKey(category: string | null): CapacityFilter {
   if (!category) return 'unknown';
-  return CAPACITY_FILTER_MAP[category] || 'unknown';
+  if (category.toLowerCase().includes('small'))   return 'small';
+  if (category.toLowerCase().includes('medium'))  return 'medium';
+  if (category.toLowerCase().includes('large') && !category.toLowerCase().includes('x-large')) return 'large';
+  if (category.toLowerCase().includes('x-large') || category.toLowerCase().includes('10k')) return 'xlarge';
+  return 'unknown';
 }
 
-function CapacityBadge({ category, capacity }: { category: string | null; capacity: number | null }) {
-  if (!category && !capacity) return null;
+// Color classes per capacity category
+const CAPACITY_COLORS: Record<CapacityFilter, string> = {
+  all:     'bg-gray-100 text-gray-600',
+  small:   'bg-purple-100 text-purple-700',
+  medium:  'bg-blue-100 text-blue-700',
+  large:   'bg-orange-100 text-orange-700',
+  xlarge:  'bg-red-100 text-red-700',
+  unknown: 'bg-gray-100 text-gray-500',
+};
 
-  const label = category
-    ? CAPACITY_BUTTONS.find(b => b.tooltip.toLowerCase().includes(category.toLowerCase().split(' ')[0]))?.label || '?'
-    : '?';
+function CapacityBadge({ category, capacity }: { category: string | null; capacity: number | null }) {
+  const key = capacityFilterKey(category);
+  const colorClass = CAPACITY_COLORS[key];
+  const label = CAPACITY_BUTTONS.find(b => b.key === key)?.label || '?';
+  const capacityText = capacity ? ` · ${capacity.toLocaleString()}` : '';
 
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-      {label}{capacity ? ` · ${capacity.toLocaleString()}` : ''}
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>
+      {label}{capacityText}
     </span>
   );
 }
@@ -193,7 +199,6 @@ export default function MatchesPage() {
               <h2 className="text-2xl font-bold text-gray-900">
                 Top 15 Venues (out of {matchData.total_venues_matched} total)
               </h2>
-              {/* Capacity filter buttons */}
               <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-medium">
                 {CAPACITY_BUTTONS.map(btn => (
                   <button
@@ -238,7 +243,7 @@ export default function MatchesPage() {
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
                               <h3 className="text-lg font-semibold text-gray-900">{venue.venue_name}</h3>
-                              {/* Attended badge takes priority */}
+                              {/* Attendance badge — takes priority */}
                               {venue.user_status === 'yes' && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                   ✓ Attended
@@ -254,7 +259,7 @@ export default function MatchesPage() {
                                   ? Not sure
                                 </span>
                               )}
-                              {/* Capacity badge */}
+                              {/* Colored capacity badge */}
                               <CapacityBadge
                                 category={venue.capacity_category}
                                 capacity={venue.capacity}

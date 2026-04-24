@@ -18,7 +18,6 @@ export async function GET(request: Request) {
     console.log(`🎯 Starting matching algorithm for user: ${user.id} (mode: ${mode || 'default'})`);
     const startTime = Date.now();
 
-    // Get user's first_concert_year
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .select('first_concert_year')
@@ -33,7 +32,6 @@ export async function GET(request: Request) {
 
     const firstConcertYear = profile.first_concert_year;
 
-    // Get all user venue confirmations
     const { data: userVenues } = await supabase
       .from('user_venues')
       .select('venue_id, status')
@@ -52,7 +50,6 @@ export async function GET(request: Request) {
       (userVenues || []).filter(v => v.status === 'yes' || v.status === 'no').map(v => v.venue_id)
     );
 
-    // Get user's Spotify artists
     const { data: userSongs, error: songsError } = await supabase
       .from('user_spotify_songs')
       .select('spotify_artist_id, artist_name')
@@ -77,7 +74,6 @@ export async function GET(request: Request) {
 
     const uniqueSpotifyArtistIds = Object.keys(artistSongCounts);
 
-    // Match to Vancouver artists
     const { data: matchedArtists, error: artistsError } = await supabase
       .from('dim_artist')
       .select('artist_id, artist_name, spotify_artist_id')
@@ -95,7 +91,6 @@ export async function GET(request: Request) {
 
     const matchedArtistIds = matchedArtists.map(a => a.artist_id);
 
-    // Get shows — include capacity fields from dim_venue
     const { data: shows, error: showsError } = await supabase
       .from('fact_shows')
       .select(`
@@ -123,7 +118,6 @@ export async function GET(request: Request) {
       }, { status: 404 });
     }
 
-    // Fetch excluded show IDs
     const [attendedResult, skippedResult] = await Promise.all([
       supabase.from('user_shows').select('show_id').eq('user_id', user.id).eq('status', 'attended'),
       supabase.from('user_show_reviews').select('show_id').eq('user_id', user.id).eq('status', 'skipped')
@@ -140,7 +134,7 @@ export async function GET(request: Request) {
         .map((show: any) => show.artist_id)
     );
 
-    // Filtered show counts (excludes 'no' venues — current run)
+    // Filtered counts (excludes 'no' venues — current run)
     const artistShowCountsFiltered = shows.reduce((acc: any, show: any) => {
       if (noVenueIds.has(show.venue_id)) return acc;
       if (!acc[show.artist_id]) acc[show.artist_id] = 0;
@@ -148,7 +142,7 @@ export async function GET(request: Request) {
       return acc;
     }, {});
 
-    // Unfiltered show counts (all venues — clean slate)
+    // Unfiltered counts (all venues — clean slate)
     const artistShowCountsAll = shows.reduce((acc: any, show: any) => {
       if (!acc[show.artist_id]) acc[show.artist_id] = 0;
       acc[show.artist_id]++;
@@ -182,9 +176,9 @@ export async function GET(request: Request) {
     });
 
     const currentRunArtists = [...scoredArtists].sort((a, b) => b.weighted_score - a.weighted_score);
+    // Return full list for all_artists so frontend can display any top N without cutoff
     const allArtists = [...scoredArtists].sort((a, b) => b.weighted_score_all - a.weighted_score_all);
 
-    // Group by venue — store capacity info
     const venueScores: any = {};
 
     shows.forEach((show: any) => {
@@ -244,7 +238,7 @@ export async function GET(request: Request) {
         total_shows_count: shows.length,
         total_venues_matched: Object.keys(venueScores).length,
         top_artists: currentRunArtists.slice(0, 20),
-        all_artists: allArtists.slice(0, 20),
+        all_artists: allArtists, // Full list — frontend slices to top 15 for display
         top_venues: top15Venues,
         has_more_venues: isVenueSelection
           ? (allRankedVenues as any[]).filter(v => !confirmedVenueIds.has(v.venue_id)).length > 15
