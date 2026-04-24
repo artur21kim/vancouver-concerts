@@ -223,7 +223,7 @@ function VenueSelectionContent() {
                       onClick={() => handleVenueConfirmation(venue.venue_id, 'not_sure')}
                       className={`flex-1 px-4 py-3 rounded-lg font-medium transition ${
                         status === 'not_sure'
-                          ? 'bg-secondary text-secondary-foreground'
+                          ? 'bg-secondary/70 text-secondary-foreground'
                           : 'bg-muted text-muted-foreground hover:bg-muted/80'
                       }`}
                     >
