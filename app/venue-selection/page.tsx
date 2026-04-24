@@ -22,6 +22,7 @@ function VenueSelectionContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingMore, setSavingMore] = useState(false);
   const [error, setError] = useState('');
   const [venues, setVenues] = useState<Venue[]>([]);
   const [hasMoreVenues, setHasMoreVenues] = useState(false);
@@ -32,6 +33,7 @@ function VenueSelectionContent() {
   }, []);
 
   const fetchVenues = async () => {
+    setLoading(true);
     try {
       const response = await fetch('/api/match?mode=venue-selection');
 
@@ -44,11 +46,9 @@ function VenueSelectionContent() {
       setVenues(fetchedVenues);
       setHasMoreVenues(result.data.has_more_venues || false);
 
-      // Initialize all to 'not_sure' — these are all unconfirmed by definition
       const initialConfirmations = new Map<number, 'yes' | 'no' | 'not_sure'>();
       fetchedVenues.forEach((venue: Venue) => {
-        // Restore 'not_sure' if previously saved, otherwise default
-        initialConfirmations.set(venue.venue_id, venue.user_status === 'not_sure' ? 'not_sure' : 'not_sure');
+        initialConfirmations.set(venue.venue_id, 'not_sure');
       });
       setConfirmations(initialConfirmations);
 
@@ -68,36 +68,30 @@ function VenueSelectionContent() {
     });
   };
 
-  const handleSubmit = async () => {
+  const saveConfirmations = async () => {
+    const confirmationsArray: VenueConfirmation[] = Array.from(confirmations.entries()).map(
+      ([venue_id, status]) => ({ venue_id, status })
+    );
+
+    const response = await fetch('/api/venues/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmations: confirmationsArray })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to save confirmations');
+    }
+  };
+
+  // Primary action — save and go to Likely Shows
+  const handleContinue = async () => {
     setSaving(true);
     setError('');
-
     try {
-      const confirmationsArray: VenueConfirmation[] = Array.from(confirmations.entries()).map(
-        ([venue_id, status]) => ({ venue_id, status })
-      );
-
-      const response = await fetch('/api/venues/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirmations: confirmationsArray })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save confirmations');
-      }
-
-      // If there are more unconfirmed venues, reload to show the next batch
-      // Otherwise go straight to likely shows
-      if (hasMoreVenues) {
-        router.refresh();
-        setLoading(true);
-        fetchVenues();
-      } else {
-        router.push('/likely-shows');
-      }
-
+      await saveConfirmations();
+      router.push('/likely-shows');
     } catch (err) {
       console.error('Error saving confirmations:', err);
       setError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
@@ -106,7 +100,21 @@ function VenueSelectionContent() {
     }
   };
 
-  // Calculate stats
+  // Secondary action — save and load next batch of venues
+  const handleReviewMore = async () => {
+    setSavingMore(true);
+    setError('');
+    try {
+      await saveConfirmations();
+      await fetchVenues();
+    } catch (err) {
+      console.error('Error saving confirmations:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
+    } finally {
+      setSavingMore(false);
+    }
+  };
+
   const yesCount = Array.from(confirmations.values()).filter(s => s === 'yes').length;
   const noCount = Array.from(confirmations.values()).filter(s => s === 'no').length;
   const notSureCount = Array.from(confirmations.values()).filter(s => s === 'not_sure').length;
@@ -166,8 +174,11 @@ function VenueSelectionContent() {
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Confirm Your Venues</h1>
-            <p className="text-gray-600">
+            <p className="text-gray-600 mb-1">
               Help us narrow down your concert history by confirming which venues you've actually attended.
+            </p>
+            <p className="text-sm text-gray-500">
+              We've selected the top 15 venues most likely to match your history — this is all you need to get started.
             </p>
           </div>
 
@@ -201,56 +212,40 @@ function VenueSelectionContent() {
               const status = confirmations.get(venue.venue_id) || 'not_sure';
 
               return (
-                <div
-                  key={venue.venue_id}
-                  className="bg-white rounded-lg shadow p-6"
-                >
+                <div key={venue.venue_id} className="bg-white rounded-lg shadow p-6">
                   <div className="mb-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xl font-bold text-blue-600">#{index + 1}</span>
-                          <h3 className="text-xl font-semibold text-gray-900">{venue.venue_name}</h3>
-                        </div>
-                        <div className="flex gap-4 text-sm text-gray-600 mt-1 ml-9">
-                          <span>{venue.total_shows} shows</span>
-                          <span>•</span>
-                          <span>{venue.unique_artists} artists</span>
-                        </div>
-                      </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl font-bold text-blue-600">#{index + 1}</span>
+                      <h3 className="text-xl font-semibold text-gray-900">{venue.venue_name}</h3>
+                    </div>
+                    <div className="flex gap-4 text-sm text-gray-600 mt-1 ml-9">
+                      <span>{venue.total_shows} shows</span>
+                      <span>•</span>
+                      <span>{venue.unique_artists} artists</span>
                     </div>
                   </div>
 
-                  {/* Selection Buttons */}
                   <div className="flex gap-3">
                     <button
                       onClick={() => handleVenueConfirmation(venue.venue_id, 'yes')}
                       className={`flex-1 px-4 py-3 rounded-lg font-medium transition ${
-                        status === 'yes'
-                          ? 'bg-green-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        status === 'yes' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                     >
                       ✓ Yes, I've been here
                     </button>
-
                     <button
                       onClick={() => handleVenueConfirmation(venue.venue_id, 'not_sure')}
                       className={`flex-1 px-4 py-3 rounded-lg font-medium transition ${
-                        status === 'not_sure'
-                          ? 'bg-gray-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        status === 'not_sure' ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                     >
                       ? Not Sure
                     </button>
-
                     <button
                       onClick={() => handleVenueConfirmation(venue.venue_id, 'no')}
                       className={`flex-1 px-4 py-3 rounded-lg font-medium transition ${
-                        status === 'no'
-                          ? 'bg-red-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        status === 'no' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                     >
                       ✗ Never been
@@ -261,23 +256,19 @@ function VenueSelectionContent() {
             })}
           </div>
 
-          {/* Submit Button */}
+          {/* Submit */}
           <div className="bg-white rounded-lg shadow p-6">
+            {/* Primary action */}
             <button
-              onClick={handleSubmit}
-              disabled={saving || !hasConfirmedSome}
+              onClick={handleContinue}
+              disabled={saving || savingMore || !hasConfirmedSome}
               className={`w-full px-6 py-4 rounded-lg font-semibold text-white text-lg transition ${
-                saving || !hasConfirmedSome
+                saving || savingMore || !hasConfirmedSome
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700'
               }`}
             >
-              {saving
-                ? 'Saving...'
-                : hasMoreVenues
-                ? 'Save & Review Next Venues →'
-                : 'Continue to Likely Shows →'
-              }
+              {saving ? 'Saving...' : 'Continue to Likely Shows →'}
             </button>
 
             {!hasConfirmedSome && (
@@ -286,10 +277,20 @@ function VenueSelectionContent() {
               </p>
             )}
 
+            {/* Secondary action — only shown if more venues exist */}
             {hasMoreVenues && hasConfirmedSome && (
-              <p className="text-sm text-gray-500 text-center mt-3">
-                More venues to review after this batch
-              </p>
+              <div className="mt-4 pt-4 border-t border-gray-100 text-center">
+                <button
+                  onClick={handleReviewMore}
+                  disabled={saving || savingMore}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
+                >
+                  {savingMore ? 'Saving...' : 'Want better results? Review more venues first →'}
+                </button>
+                <p className="text-xs text-gray-400 mt-1">
+                  More venues beyond the top 15 — helpful but not required
+                </p>
+              </div>
             )}
           </div>
         </div>
