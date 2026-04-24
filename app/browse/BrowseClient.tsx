@@ -130,7 +130,6 @@ function BrowseContent({
   const [userShows, setUserShows] = useState<Set<number>>(new Set())
   const [loadingShows, setLoadingShows] = useState<Set<number>>(new Set())
 
-  // Whether festival context is active (show type = festival OR a festival is selected)
   const showFestivalContext = selectedShowType === 'festival' || !!selectedFestival
 
   const handleCapacityButton = (category: string, range: [number, number]) => {
@@ -146,7 +145,6 @@ function BrowseContent({
     setCurrentPage(1); setPageInput('1')
   }
 
-  // Toggle festival sort — cycles asc/desc, or activates if not currently sorting by festival
   const handleFestivalSort = () => {
     if (sortField === 'festival') {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
@@ -331,6 +329,16 @@ function BrowseContent({
   const thBase = 'bg-muted px-1 md:px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider'
   const thSortable = `${thBase} cursor-pointer hover:bg-muted/80`
 
+  // Festival badge classes — amber, works in both light and dark
+  const festivalBadgeClass = isDark
+    ? 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 transition'
+    : 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition'
+
+  // Festival sort mini-button classes
+  const festivalSortClass = (active: boolean) => isDark
+    ? `inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-amber-500/40 text-amber-300 border-amber-400' : 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/25'}`
+    : `inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border transition ${active ? 'bg-amber-200 text-amber-800 border-amber-300' : 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'}`
+
   return (
     <>
       <Navigation />
@@ -409,7 +417,7 @@ function BrowseContent({
               </div>
             </div>
 
-            {/* Capacity Filter — warning note inline beside label */}
+            {/* Capacity Filter — warning inline beside label */}
             <div className="mb-6">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <label className="text-sm font-medium text-foreground">Venue Capacity</label>
@@ -517,15 +525,10 @@ function BrowseContent({
                   <th className={`${thSortable} w-36 md:w-56`} onClick={() => handleSort('venue')}>
                     <span className="flex items-center gap-2">
                       <span>Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}</span>
-                      {/* Festival sort mini-button — only visible when festival context is active */}
                       {showFestivalContext && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleFestivalSort() }}
-                          className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border transition ${
-                            sortField === 'festival'
-                              ? 'bg-accent text-accent-foreground border-accent'
-                              : 'bg-accent/20 text-accent-foreground border-accent/40 hover:bg-accent/40'
-                          }`}
+                          className={festivalSortClass(sortField === 'festival')}
                           title="Sort by festival name"
                         >
                           F{sortField === 'festival' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
@@ -574,27 +577,30 @@ function BrowseContent({
                           {show.artist.artist_name}
                         </button>
                       </td>
+                      {/* Venue cell — festival badge inline on same line */}
                       <td className="px-1 md:px-3 py-3 max-w-[144px] md:max-w-[224px]">
-                        <button
-                          onClick={() => { setSelectedVenue({ value: show.venue.venue_id, label: show.venue.venue_name }); setCurrentPage(1); setPageInput('1') }}
-                          className="text-[11px] md:text-sm text-primary hover:opacity-80 hover:underline text-left w-full truncate block"
-                          title={show.venue.venue_name}
-                        >
-                          {show.venue.venue_name}
-                        </button>
-                        {/* Festival badge — shown under venue name when festival exists */}
-                        {show.festival_name && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <button
-                            onClick={() => { setSelectedFestival({ value: show.festival_name!, label: show.festival_name! }); setCurrentPage(1); setPageInput('1') }}
-                            className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-accent/20 text-accent-foreground border border-accent/30 hover:bg-accent/40 transition truncate max-w-full"
-                            title={`Filter by ${show.festival_name}`}
+                            onClick={() => { setSelectedVenue({ value: show.venue.venue_id, label: show.venue.venue_name }); setCurrentPage(1); setPageInput('1') }}
+                            className="text-[11px] md:text-sm text-primary hover:opacity-80 hover:underline text-left truncate"
+                            title={show.venue.venue_name}
                           >
-                            <span className="font-bold">F</span>
-                            <span className="truncate">· {show.festival_name}</span>
+                            {show.venue.venue_name}
                           </button>
-                        )}
+                          {show.festival_name && (
+                            <button
+                              onClick={() => { setSelectedFestival({ value: show.festival_name!, label: show.festival_name! }); setCurrentPage(1); setPageInput('1') }}
+                              className={festivalBadgeClass}
+                              title={`Filter by ${show.festival_name}`}
+                            >
+                              <span className="font-bold">F</span>
+                              <span className="truncate max-w-[80px] md:max-w-[120px]">· {show.festival_name}</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-1 md:px-3 py-3 whitespace-nowrap text-sm text-center">
+                      {/* Setlist — centered */}
+                      <td className="px-1 md:px-3 py-3 text-sm text-center">
                         {show.setlist_url ? (
                           <a href={show.setlist_url} target="_blank" rel="noopener noreferrer"
                             className="inline-flex items-center justify-center hover:opacity-70 transition-opacity" title="View on setlist.fm">
@@ -602,7 +608,8 @@ function BrowseContent({
                           </a>
                         ) : <span className="text-muted-foreground">-</span>}
                       </td>
-                      <td className="px-1 md:px-3 py-3 whitespace-nowrap text-sm text-center">
+                      {/* Spotify — centered */}
+                      <td className="px-1 md:px-3 py-3 text-sm text-center">
                         {show.artist.spotify_artist_id ? (
                           <a href={`https://open.spotify.com/artist/${show.artist.spotify_artist_id}`} target="_blank" rel="noopener noreferrer"
                             className="inline-flex items-center justify-center hover:opacity-70 transition-opacity" title="Open in Spotify">
