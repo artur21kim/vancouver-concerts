@@ -63,9 +63,7 @@ function BrowseContent({
   const [mounted, setMounted] = useState(false)
   const [sliderColor, setSliderColor] = useState('#2d6be4')
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     if (!mounted) return
@@ -132,6 +130,9 @@ function BrowseContent({
   const [userShows, setUserShows] = useState<Set<number>>(new Set())
   const [loadingShows, setLoadingShows] = useState<Set<number>>(new Set())
 
+  // Whether festival context is active (show type = festival OR a festival is selected)
+  const showFestivalContext = selectedShowType === 'festival' || !!selectedFestival
+
   const handleCapacityButton = (category: string, range: [number, number]) => {
     if (category === 'Unknown') { setActiveCapacityButton('Unknown') }
     else { setCapacityRange(range); setActiveCapacityButton(category) }
@@ -142,6 +143,17 @@ function BrowseContent({
     const range = Array.isArray(value) ? value : [value, value]
     setCapacityRange([range[0], range[1]])
     setActiveCapacityButton(null)
+    setCurrentPage(1); setPageInput('1')
+  }
+
+  // Toggle festival sort — cycles asc/desc, or activates if not currently sorting by festival
+  const handleFestivalSort = () => {
+    if (sortField === 'festival') {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField('festival')
+      setSortDirection('asc')
+    }
     setCurrentPage(1); setPageInput('1')
   }
 
@@ -315,7 +327,6 @@ function BrowseContent({
   }, [shows, selectedShowType, selectedArtist, selectedVenue, selectedFestival, yearRange, urlMonth, hasManualYearChange])
 
   const sliderStyles = { track: { backgroundColor: sliderColor }, handle: { borderColor: sliderColor } }
-  const showFestivalColumn = selectedShowType === 'festival' || !!selectedFestival
 
   const thBase = 'bg-muted px-1 md:px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider'
   const thSortable = `${thBase} cursor-pointer hover:bg-muted/80`
@@ -398,9 +409,22 @@ function BrowseContent({
               </div>
             </div>
 
-            {/* Capacity Filter */}
+            {/* Capacity Filter — warning note inline beside label */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-foreground mb-2">Venue Capacity</label>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <label className="text-sm font-medium text-foreground">Venue Capacity</label>
+                {unknownCapacityCount > 0 && activeCapacityButton !== 'All' && activeCapacityButton !== 'Unknown' && (
+                  <span className="text-xs text-muted-foreground">
+                    · <strong className="text-foreground">{unknownCapacityCount.toLocaleString()}</strong> shows hidden —{' '}
+                    <button
+                      onClick={() => handleCapacityButton('All', [0, 65000])}
+                      className="text-primary hover:opacity-80 font-medium underline underline-offset-2"
+                    >
+                      click All to include
+                    </button>
+                  </span>
+                )}
+              </div>
               <div className="grid" style={{ gridTemplateColumns: '1fr', width: 'fit-content' }}>
                 <div className="flex flex-wrap gap-2 mb-3">
                   {[
@@ -416,11 +440,6 @@ function BrowseContent({
                       {label}
                     </button>
                   ))}
-                </div>
-                <div className={`bg-primary/10 border border-primary/30 rounded-md px-3 py-1.5 mb-3 ${unknownCapacityCount > 0 && activeCapacityButton !== 'All' && activeCapacityButton !== 'Unknown' ? '' : 'invisible'}`}>
-                  <p className="text-xs text-foreground">
-                    ℹ️ <strong>{unknownCapacityCount.toLocaleString()}</strong> shows at venues with unknown capacity are hidden. Click <strong>"All"</strong> to include them.
-                  </p>
                 </div>
                 <div>
                   <Slider range min={0} max={65000}
@@ -483,14 +502,12 @@ function BrowseContent({
             </div>
           </div>
 
-          {/* Shows Table - nuclear option: no outer card wrapper so sticky headers work */}
+          {/* Shows Table */}
           <div className="rounded-lg shadow-lg overflow-x-auto">
             <table className="min-w-full divide-y divide-border">
               <thead className="bg-muted">
                 <tr>
-                  {user && (
-                    <th className={`${thBase} w-8 md:w-12`}></th>
-                  )}
+                  {user && <th className={`${thBase} w-8 md:w-12`}></th>}
                   <th className={`${thSortable} w-20 md:w-28 whitespace-nowrap`} onClick={() => handleSort('date')}>
                     Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
@@ -498,10 +515,23 @@ function BrowseContent({
                     Artist {sortField === 'artist' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th className={`${thSortable} w-36 md:w-56`} onClick={() => handleSort('venue')}>
-                    Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}
-                  </th>
-                  <th className={`${thSortable} w-32 md:w-48 ${showFestivalColumn ? '' : 'hidden md:table-cell'}`} onClick={() => handleSort('festival')}>
-                    Festival {sortField === 'festival' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    <span className="flex items-center gap-2">
+                      <span>Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}</span>
+                      {/* Festival sort mini-button — only visible when festival context is active */}
+                      {showFestivalContext && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleFestivalSort() }}
+                          className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border transition ${
+                            sortField === 'festival'
+                              ? 'bg-accent text-accent-foreground border-accent'
+                              : 'bg-accent/20 text-accent-foreground border-accent/40 hover:bg-accent/40'
+                          }`}
+                          title="Sort by festival name"
+                        >
+                          F{sortField === 'festival' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        </button>
+                      )}
+                    </span>
                   </th>
                   <th className={`${thBase} w-10 md:w-16 text-center`}>Setlist</th>
                   <th className={`${thBase} w-10 md:w-16 text-center`}>Spotify</th>
@@ -552,18 +582,16 @@ function BrowseContent({
                         >
                           {show.venue.venue_name}
                         </button>
-                      </td>
-                      <td className={`px-1 md:px-3 py-3 max-w-[128px] md:max-w-[192px] ${showFestivalColumn ? '' : 'hidden md:table-cell'}`}>
-                        {show.festival_name ? (
+                        {/* Festival badge — shown under venue name when festival exists */}
+                        {show.festival_name && (
                           <button
                             onClick={() => { setSelectedFestival({ value: show.festival_name!, label: show.festival_name! }); setCurrentPage(1); setPageInput('1') }}
-                            className="text-[11px] md:text-sm text-primary hover:opacity-80 hover:underline text-left w-full truncate block"
-                            title={show.festival_name}
+                            className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-accent/20 text-accent-foreground border border-accent/30 hover:bg-accent/40 transition truncate max-w-full"
+                            title={`Filter by ${show.festival_name}`}
                           >
-                            {show.festival_name}
+                            <span className="font-bold">F</span>
+                            <span className="truncate">· {show.festival_name}</span>
                           </button>
-                        ) : (
-                          <span className="text-[11px] md:text-sm text-muted-foreground">-</span>
                         )}
                       </td>
                       <td className="px-1 md:px-3 py-3 whitespace-nowrap text-sm text-center">
@@ -591,7 +619,7 @@ function BrowseContent({
             </table>
           </div>
 
-          {/* Pagination - outside table, styled to match */}
+          {/* Pagination */}
           <div className="bg-muted px-4 py-3 border-t border-border rounded-b-lg shadow-lg">
             <div className="flex items-center justify-between">
               <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}
