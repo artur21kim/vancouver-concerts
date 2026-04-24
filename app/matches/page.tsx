@@ -10,15 +10,17 @@ type Artist = {
   spotify_artist_id: string;
   spotify_song_count: number;
   vancouver_show_count: number;
-  spotify_score: number;
-  vancouver_score: number;
+  vancouver_show_count_all: number;
   weighted_score: number;
+  weighted_score_all: number;
   has_pending_shows: boolean;
 };
 
 type Venue = {
   venue_id: number;
   venue_name: string;
+  capacity: number | null;
+  capacity_category: string | null;
   total_shows: number;
   unique_artists: number;
   average_artist_score: number;
@@ -32,19 +34,56 @@ type MatchData = {
   total_shows_count: number;
   total_venues_matched: number;
   top_artists: Artist[];
+  all_artists: Artist[];
   top_venues: Venue[];
   duration_seconds: number;
 };
 
-type VenueFilter = 'all' | 'confirmed' | 'unconfirmed';
+type CapacityFilter = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown';
 type ArtistFilter = 'current' | 'all';
+
+// Map capacity_category values to filter keys
+const CAPACITY_FILTER_MAP: Record<string, CapacityFilter> = {
+  'Small (<500)': 'small',
+  'Medium (500-3K)': 'medium',
+  'Large (3K-10K)': 'large',
+  'X-Large (10K+)': 'xlarge',
+};
+
+const CAPACITY_BUTTONS: { key: CapacityFilter; label: string; tooltip: string }[] = [
+  { key: 'all',     label: 'All',  tooltip: 'All venues'         },
+  { key: 'small',   label: 'S',    tooltip: 'Small (< 500)'      },
+  { key: 'medium',  label: 'M',    tooltip: 'Medium (500–3K)'    },
+  { key: 'large',   label: 'L',    tooltip: 'Large (3K–10K)'     },
+  { key: 'xlarge',  label: 'XL',   tooltip: 'X-Large (10K+)'     },
+  { key: 'unknown', label: '?',    tooltip: 'Unknown capacity'   },
+];
+
+function capacityFilterKey(category: string | null): CapacityFilter {
+  if (!category) return 'unknown';
+  return CAPACITY_FILTER_MAP[category] || 'unknown';
+}
+
+function CapacityBadge({ category, capacity }: { category: string | null; capacity: number | null }) {
+  if (!category && !capacity) return null;
+
+  const label = category
+    ? CAPACITY_BUTTONS.find(b => b.tooltip.toLowerCase().includes(category.toLowerCase().split(' ')[0]))?.label || '?'
+    : '?';
+
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+      {label}{capacity ? ` · ${capacity.toLocaleString()}` : ''}
+    </span>
+  );
+}
 
 export default function MatchesPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [matchData, setMatchData] = useState<MatchData | null>(null);
-  const [venueFilter, setVenueFilter] = useState<VenueFilter>('all');
+  const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all');
   const [artistFilter, setArtistFilter] = useState<ArtistFilter>('current');
 
   useEffect(() => {
@@ -118,27 +157,22 @@ export default function MatchesPage() {
     );
   }
 
-  // Filtered venues based on toggle
+  const confirmedCount = matchData.top_venues.filter(v => v.user_status === 'yes' || v.user_status === 'no').length;
+
   const filteredVenues = matchData.top_venues.filter(venue => {
-    if (venueFilter === 'all') return true;
-    if (venueFilter === 'confirmed') return venue.user_status === 'yes' || venue.user_status === 'no';
-    if (venueFilter === 'unconfirmed') return venue.user_status === 'not_sure' || venue.user_status === null;
-    return true;
+    if (capacityFilter === 'all') return true;
+    return capacityFilterKey(venue.capacity_category) === capacityFilter;
   });
 
-  // Filtered artists based on toggle
-  const filteredArtists = artistFilter === 'current'
+  const displayArtists = artistFilter === 'current'
     ? matchData.top_artists.filter(a => a.has_pending_shows)
-    : matchData.top_artists;
-
-  const confirmedCount = matchData.top_venues.filter(v => v.user_status === 'yes' || v.user_status === 'no').length;
+    : matchData.all_artists;
 
   return (
     <>
       <Navigation />
       <main className="min-h-screen bg-gray-50 py-8 px-4">
         <div className="max-w-6xl mx-auto">
-          {/* Header */}
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Your Concert Matches</h1>
             <p className="text-gray-600">
@@ -146,7 +180,6 @@ export default function MatchesPage() {
             </p>
           </div>
 
-          {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <StatCard label="Matched Artists" value={matchData.matched_artists_count.toLocaleString()} />
             <StatCard label="Total Shows" value={matchData.total_shows_count.toLocaleString()} />
@@ -156,23 +189,24 @@ export default function MatchesPage() {
 
           {/* Top Venues */}
           <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-            {/* Header with filter toggle */}
             <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
               <h2 className="text-2xl font-bold text-gray-900">
                 Top 15 Venues (out of {matchData.total_venues_matched} total)
               </h2>
+              {/* Capacity filter buttons */}
               <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-medium">
-                {(['all', 'confirmed', 'unconfirmed'] as VenueFilter[]).map(filter => (
+                {CAPACITY_BUTTONS.map(btn => (
                   <button
-                    key={filter}
-                    onClick={() => setVenueFilter(filter)}
-                    className={`px-3 py-1.5 capitalize transition ${
-                      venueFilter === filter
+                    key={btn.key}
+                    onClick={() => setCapacityFilter(btn.key)}
+                    title={btn.tooltip}
+                    className={`px-3 py-1.5 transition ${
+                      capacityFilter === btn.key
                         ? 'bg-blue-600 text-white'
                         : 'bg-white text-gray-600 hover:bg-gray-50'
                     }`}
                   >
-                    {filter}
+                    {btn.label}
                   </button>
                 ))}
               </div>
@@ -182,7 +216,7 @@ export default function MatchesPage() {
               These venues hosted the most shows by artists in your Spotify library
             </p>
             {confirmedCount > 0 && (
-              <p className="text-sm text-gray-500 mb-6">
+              <p className="text-sm text-gray-500 mb-4">
                 {confirmedCount} venue{confirmedCount !== 1 ? 's' : ''} already confirmed — badges show your previous answers
               </p>
             )}
@@ -204,6 +238,7 @@ export default function MatchesPage() {
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
                               <h3 className="text-lg font-semibold text-gray-900">{venue.venue_name}</h3>
+                              {/* Attended badge takes priority */}
                               {venue.user_status === 'yes' && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                   ✓ Attended
@@ -219,6 +254,11 @@ export default function MatchesPage() {
                                   ? Not sure
                                 </span>
                               )}
+                              {/* Capacity badge */}
+                              <CapacityBadge
+                                category={venue.capacity_category}
+                                capacity={venue.capacity}
+                              />
                             </div>
                             <div className="flex gap-4 text-sm text-gray-600 mt-1">
                               <span>{venue.total_shows} shows</span>
@@ -243,7 +283,6 @@ export default function MatchesPage() {
 
           {/* Top Artists */}
           <div className="bg-white rounded-lg shadow-lg p-6">
-            {/* Header with filter toggle */}
             <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
               <h2 className="text-2xl font-bold text-gray-900">Top Matched Artists</h2>
               <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-medium">
@@ -277,7 +316,7 @@ export default function MatchesPage() {
               }
             </p>
 
-            {filteredArtists.length === 0 ? (
+            {displayArtists.length === 0 ? (
               <p className="text-gray-500 text-center py-8">
                 All artist shows have been reviewed — switch to "All Artists" to see your full list
               </p>
@@ -294,15 +333,20 @@ export default function MatchesPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {filteredArtists.slice(0, 15).map((artist, index) => (
+                    {displayArtists.slice(0, 15).map((artist, index) => (
                       <tr key={artist.artist_id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm font-medium text-gray-900">{index + 1}</td>
                         <td className="px-4 py-3 text-sm text-gray-900">{artist.artist_name}</td>
                         <td className="px-4 py-3 text-sm text-center text-gray-600">{artist.spotify_song_count}</td>
-                        <td className="px-4 py-3 text-sm text-center text-gray-600">{artist.vancouver_show_count}</td>
+                        <td className="px-4 py-3 text-sm text-center text-gray-600">
+                          {artistFilter === 'current' ? artist.vancouver_show_count : artist.vancouver_show_count_all}
+                        </td>
                         <td className="px-4 py-3 text-sm text-center">
                           <span className="font-semibold text-blue-600">
-                            {artist.weighted_score.toFixed(1)}
+                            {artistFilter === 'current'
+                              ? artist.weighted_score.toFixed(1)
+                              : artist.weighted_score_all.toFixed(1)
+                            }
                           </span>
                         </td>
                       </tr>
