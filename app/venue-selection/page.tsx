@@ -85,7 +85,6 @@ function VenueSelectionContent() {
     }
   };
 
-  // Primary action — save and go to Likely Shows
   const handleContinue = async () => {
     setSaving(true);
     setError('');
@@ -100,7 +99,6 @@ function VenueSelectionContent() {
     }
   };
 
-  // Secondary action — save and load next batch of venues
   const handleReviewMore = async () => {
     setSavingMore(true);
     setError('');
@@ -134,7 +132,6 @@ function VenueSelectionContent() {
     );
   }
 
-  // All venues confirmed
   if (venues.length === 0) {
     return (
       <>
@@ -171,18 +168,13 @@ function VenueSelectionContent() {
       <Navigation />
       <main className="min-h-screen bg-gray-50 py-8 px-4">
         <div className="max-w-4xl mx-auto">
-          {/* Header */}
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Confirm Your Venues</h1>
-            <p className="text-gray-600 mb-1">
+            <p className="text-gray-600">
               Help us narrow down your concert history by confirming which venues you've actually attended.
-            </p>
-            <p className="text-sm text-gray-500">
-              We've selected the top 15 venues most likely to match your history — this is all you need to get started.
             </p>
           </div>
 
-          {/* Progress Stats */}
           <div className="bg-white rounded-lg shadow p-4 mb-6">
             <div className="grid grid-cols-3 gap-4">
               <div className="text-center">
@@ -206,11 +198,9 @@ function VenueSelectionContent() {
             </div>
           )}
 
-          {/* Venue List */}
           <div className="space-y-4 mb-8">
             {venues.map((venue, index) => {
               const status = confirmations.get(venue.venue_id) || 'not_sure';
-
               return (
                 <div key={venue.venue_id} className="bg-white rounded-lg shadow p-6">
                   <div className="mb-4">
@@ -224,7 +214,6 @@ function VenueSelectionContent() {
                       <span>{venue.unique_artists} artists</span>
                     </div>
                   </div>
-
                   <div className="flex gap-3">
                     <button
                       onClick={() => handleVenueConfirmation(venue.venue_id, 'yes')}
@@ -256,9 +245,7 @@ function VenueSelectionContent() {
             })}
           </div>
 
-          {/* Submit */}
           <div className="bg-white rounded-lg shadow p-6">
-            {/* Primary action */}
             <button
               onClick={handleContinue}
               disabled={saving || savingMore || !hasConfirmedSome}
@@ -277,7 +264,6 @@ function VenueSelectionContent() {
               </p>
             )}
 
-            {/* Secondary action — only shown if more venues exist */}
             {hasMoreVenues && hasConfirmedSome && (
               <div className="mt-4 pt-4 border-t border-gray-100 text-center">
                 <button

@@ -13,6 +13,7 @@ type Artist = {
   spotify_score: number;
   vancouver_score: number;
   weighted_score: number;
+  has_pending_shows: boolean;
 };
 
 type Venue = {
@@ -35,11 +36,16 @@ type MatchData = {
   duration_seconds: number;
 };
 
+type VenueFilter = 'all' | 'confirmed' | 'unconfirmed';
+type ArtistFilter = 'current' | 'all';
+
 export default function MatchesPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [matchData, setMatchData] = useState<MatchData | null>(null);
+  const [venueFilter, setVenueFilter] = useState<VenueFilter>('all');
+  const [artistFilter, setArtistFilter] = useState<ArtistFilter>('current');
 
   useEffect(() => {
     fetchMatches();
@@ -48,12 +54,10 @@ export default function MatchesPage() {
   const fetchMatches = async () => {
     try {
       const response = await fetch('/api/match');
-      
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to fetch matches');
       }
-
       const result = await response.json();
       setMatchData(result.data);
     } catch (err) {
@@ -114,6 +118,19 @@ export default function MatchesPage() {
     );
   }
 
+  // Filtered venues based on toggle
+  const filteredVenues = matchData.top_venues.filter(venue => {
+    if (venueFilter === 'all') return true;
+    if (venueFilter === 'confirmed') return venue.user_status === 'yes' || venue.user_status === 'no';
+    if (venueFilter === 'unconfirmed') return venue.user_status === 'not_sure' || venue.user_status === null;
+    return true;
+  });
+
+  // Filtered artists based on toggle
+  const filteredArtists = artistFilter === 'current'
+    ? matchData.top_artists.filter(a => a.has_pending_shows)
+    : matchData.top_artists;
+
   const confirmedCount = matchData.top_venues.filter(v => v.user_status === 'yes' || v.user_status === 'no').length;
 
   return (
@@ -139,11 +156,28 @@ export default function MatchesPage() {
 
           {/* Top Venues */}
           <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-            <div className="mb-2">
+            {/* Header with filter toggle */}
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
               <h2 className="text-2xl font-bold text-gray-900">
                 Top 15 Venues (out of {matchData.total_venues_matched} total)
               </h2>
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-medium">
+                {(['all', 'confirmed', 'unconfirmed'] as VenueFilter[]).map(filter => (
+                  <button
+                    key={filter}
+                    onClick={() => setVenueFilter(filter)}
+                    className={`px-3 py-1.5 capitalize transition ${
+                      venueFilter === filter
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
             </div>
+
             <p className="text-gray-600 mb-1">
               These venues hosted the most shows by artists in your Spotify library
             </p>
@@ -154,90 +188,129 @@ export default function MatchesPage() {
             )}
             {confirmedCount === 0 && <div className="mb-6" />}
 
-            <div className="space-y-4">
-              {matchData.top_venues.map((venue, index) => (
-                <div
-                  key={venue.venue_id}
-                  className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-2xl font-bold text-blue-600">#{index + 1}</span>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-lg font-semibold text-gray-900">{venue.venue_name}</h3>
-                            {venue.user_status === 'yes' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                ✓ Attended
-                              </span>
-                            )}
-                            {venue.user_status === 'no' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                ✗ Never been
-                              </span>
-                            )}
-                            {venue.user_status === 'not_sure' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                                ? Not sure
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex gap-4 text-sm text-gray-600 mt-1">
-                            <span>{venue.total_shows} shows</span>
-                            <span>•</span>
-                            <span>{venue.unique_artists} artists</span>
+            {filteredVenues.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No venues match this filter</p>
+            ) : (
+              <div className="space-y-4">
+                {filteredVenues.map((venue, index) => (
+                  <div
+                    key={venue.venue_id}
+                    className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="text-2xl font-bold text-blue-600">#{index + 1}</span>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="text-lg font-semibold text-gray-900">{venue.venue_name}</h3>
+                              {venue.user_status === 'yes' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  ✓ Attended
+                                </span>
+                              )}
+                              {venue.user_status === 'no' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  ✗ Never been
+                                </span>
+                              )}
+                              {venue.user_status === 'not_sure' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                  ? Not sure
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex gap-4 text-sm text-gray-600 mt-1">
+                              <span>{venue.total_shows} shows</span>
+                              <span>•</span>
+                              <span>{venue.unique_artists} artists</span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm text-gray-500">Match Score</div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {venue.venue_score.toFixed(0)}
+                      <div className="text-right">
+                        <div className="text-sm text-gray-500">Match Score</div>
+                        <div className="text-2xl font-bold text-gray-900">
+                          {venue.venue_score.toFixed(0)}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Top Artists */}
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Top Matched Artists</h2>
+            {/* Header with filter toggle */}
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
+              <h2 className="text-2xl font-bold text-gray-900">Top Matched Artists</h2>
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-medium">
+                <button
+                  onClick={() => setArtistFilter('current')}
+                  className={`px-3 py-1.5 transition ${
+                    artistFilter === 'current'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  Current Run
+                </button>
+                <button
+                  onClick={() => setArtistFilter('all')}
+                  className={`px-3 py-1.5 transition ${
+                    artistFilter === 'all'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  All Artists
+                </button>
+              </div>
+            </div>
+
             <p className="text-gray-600 mb-6">
-              Artists you listen to most who've played in Vancouver since {matchData.first_concert_year}
+              {artistFilter === 'current'
+                ? `Artists with shows still pending review since ${matchData.first_concert_year}`
+                : `All matched artists who've played in Vancouver since ${matchData.first_concert_year}`
+              }
             </p>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Artist</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Your Songs</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">YVR Shows</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Match Score</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {matchData.top_artists.slice(0, 15).map((artist, index) => (
-                    <tr key={artist.artist_id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{index + 1}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900">{artist.artist_name}</td>
-                      <td className="px-4 py-3 text-sm text-center text-gray-600">{artist.spotify_song_count}</td>
-                      <td className="px-4 py-3 text-sm text-center text-gray-600">{artist.vancouver_show_count}</td>
-                      <td className="px-4 py-3 text-sm text-center">
-                        <span className="font-semibold text-blue-600">
-                          {artist.weighted_score.toFixed(1)}
-                        </span>
-                      </td>
+            {filteredArtists.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">
+                All artist shows have been reviewed — switch to "All Artists" to see your full list
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Artist</th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Your Songs</th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">YVR Shows</th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Match Score</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredArtists.slice(0, 15).map((artist, index) => (
+                      <tr key={artist.artist_id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{index + 1}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900">{artist.artist_name}</td>
+                        <td className="px-4 py-3 text-sm text-center text-gray-600">{artist.spotify_song_count}</td>
+                        <td className="px-4 py-3 text-sm text-center text-gray-600">{artist.vancouver_show_count}</td>
+                        <td className="px-4 py-3 text-sm text-center">
+                          <span className="font-semibold text-blue-600">
+                            {artist.weighted_score.toFixed(1)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* Next Steps */}
