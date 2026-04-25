@@ -132,12 +132,10 @@ function BrowseContent({
 
   const showFestivalContext = selectedShowType === 'festival' || !!selectedFestival
 
-  // Violet festival badge — small, readable in both modes
   const festivalBadgeClass = isDark
     ? 'inline-flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-medium bg-violet-500/20 text-violet-300 border border-violet-500/30 hover:bg-violet-500/30 transition whitespace-nowrap'
     : 'inline-flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-medium bg-violet-50 text-violet-600 border border-violet-200 hover:bg-violet-100 transition whitespace-nowrap'
 
-  // Festival sort mini-button in header — violet, compact
   const festivalSortActiveClass = isDark
     ? 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold border bg-violet-500/30 text-violet-300 border-violet-400/50'
     : 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold border bg-violet-100 text-violet-700 border-violet-300'
@@ -338,8 +336,8 @@ function BrowseContent({
   }, [shows, selectedShowType, selectedArtist, selectedVenue, selectedFestival, yearRange, urlMonth, hasManualYearChange])
 
   const sliderStyles = { track: { backgroundColor: sliderColor }, handle: { borderColor: sliderColor } }
-
   const thBase = 'bg-muted px-1 md:px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider'
+  const thBaseCenter = 'bg-muted px-1 md:px-3 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider'
   const thSortable = `${thBase} cursor-pointer hover:bg-muted/80`
 
   return (
@@ -426,7 +424,9 @@ function BrowseContent({
                 <label className="text-sm font-medium text-foreground">Venue Capacity</label>
                 {unknownCapacityCount > 0 && activeCapacityButton !== 'All' && activeCapacityButton !== 'Unknown' && (
                   <span className="text-xs text-muted-foreground">
-                    · <strong className="text-foreground">{unknownCapacityCount.toLocaleString()}</strong> shows hidden —{' '}
+                    {'· '}
+                    <strong className="text-foreground">{unknownCapacityCount.toLocaleString()}</strong>
+                    {' shows hidden — '}
                     <button
                       onClick={() => handleCapacityButton('All', [0, 65000])}
                       className="text-primary hover:opacity-80 font-medium underline underline-offset-2"
@@ -515,7 +515,7 @@ function BrowseContent({
 
           {/* Shows Table */}
           <div className="rounded-lg shadow-lg overflow-x-auto">
-            <table className="min-w-full divide-y divide-border">
+            <table className="min-w-full divide-y divide-border table-fixed">
               <thead className="bg-muted">
                 <tr>
                   {user && <th className={`${thBase} w-8 md:w-12`}></th>}
@@ -525,7 +525,7 @@ function BrowseContent({
                   <th className={`${thSortable} w-40 md:w-64`} onClick={() => handleSort('artist')}>
                     Artist {sortField === 'artist' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className={`${thSortable} w-36 md:w-56`} onClick={() => handleSort('venue')}>
+                  <th className={`${thSortable} w-40 md:w-64`} onClick={() => handleSort('venue')}>
                     <span className="flex items-center gap-1.5">
                       <span>Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}</span>
                       {showFestivalContext && (
@@ -534,13 +534,13 @@ function BrowseContent({
                           className={sortField === 'festival' ? festivalSortActiveClass : festivalSortInactiveClass}
                           title="Sort by festival name"
                         >
-                          F{sortField === 'festival' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                          {sortField === 'festival' ? (sortDirection === 'asc' ? 'F↑' : 'F↓') : 'F'}
                         </button>
                       )}
                     </span>
                   </th>
-                  <th className={`${thBase} w-10 md:w-16 text-center`}>Setlist</th>
-                  <th className={`${thBase} w-10 md:w-16 text-center`}>Spotify</th>
+                  <th className={`${thBaseCenter} w-10 md:w-16`}>Setlist</th>
+                  <th className={`${thBaseCenter} w-10 md:w-16`}>Spotify</th>
                 </tr>
               </thead>
               <tbody className="bg-card divide-y divide-border">
@@ -580,9 +580,9 @@ function BrowseContent({
                           {show.artist.artist_name}
                         </button>
                       </td>
-                      {/* Venue + festival badge inline */}
-                      <td className="px-1 md:px-3 py-3 max-w-[144px] md:max-w-[224px]">
-                        <div className="flex items-center gap-1 flex-wrap">
+                      {/* Venue + festival badge inline on same line */}
+                      <td className="px-1 md:px-3 py-3 max-w-[160px] md:max-w-[256px]">
+                        <div className="flex items-center gap-1">
                           <button
                             onClick={() => { setSelectedVenue({ value: show.venue.venue_id, label: show.venue.venue_name }); setCurrentPage(1); setPageInput('1') }}
                             className="text-[11px] md:text-sm text-primary hover:opacity-80 hover:underline text-left truncate"
@@ -593,34 +593,42 @@ function BrowseContent({
                           {show.festival_name && (
                             <button
                               onClick={() => { setSelectedFestival({ value: show.festival_name!, label: show.festival_name! }); setCurrentPage(1); setPageInput('1') }}
-                              className={festivalBadgeClass}
+                              className={'ml-1 ' + festivalBadgeClass}
                               title={`Filter by ${show.festival_name}`}
                             >
                               <span className="font-bold">F</span>
-                              <span className="truncate max-w-[70px] md:max-w-[110px]">· {show.festival_name}</span>
+                              <span className="truncate max-w-[60px] md:max-w-[100px]">{'· ' + show.festival_name}</span>
                             </button>
                           )}
                         </div>
                       </td>
-                      {/* Setlist — properly centered */}
-                      <td className="px-1 md:px-3 py-3 text-center align-middle">
+                      {/* Setlist — table-native centering */}
+                      <td className="px-1 md:px-3 py-3 w-10 md:w-16 text-center align-middle">
                         {show.setlist_url ? (
                           <a href={show.setlist_url} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center hover:opacity-70 transition-opacity" title="View on setlist.fm">
-                            <img src="https://www.setlist.fm/favicon.ico" alt="setlist.fm" className="w-3.5 h-3.5 md:w-4 md:h-4 dark:invert" />
+                            className="hover:opacity-70 transition-opacity" title="View on setlist.fm">
+                            <img
+                              src="https://www.setlist.fm/favicon.ico"
+                              alt="setlist.fm"
+                              className="w-3.5 h-3.5 md:w-4 md:h-4 dark:invert inline-block align-middle"
+                            />
                           </a>
-                        ) : <span className="text-muted-foreground text-sm">-</span>}
+                        ) : (
+                          <span className="text-muted-foreground text-sm inline-block align-middle">-</span>
+                        )}
                       </td>
-                      {/* Spotify — properly centered */}
-                      <td className="px-1 md:px-3 py-3 text-center align-middle">
+                      {/* Spotify — table-native centering */}
+                      <td className="px-1 md:px-3 py-3 w-10 md:w-16 text-center align-middle">
                         {show.artist.spotify_artist_id ? (
                           <a href={`https://open.spotify.com/artist/${show.artist.spotify_artist_id}`} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center hover:opacity-70 transition-opacity" title="Open in Spotify">
-                            <svg className="w-3.5 h-3.5 md:w-4 md:h-4" viewBox="0 0 24 24" fill="#1DB954">
+                            className="hover:opacity-70 transition-opacity" title="Open in Spotify">
+                            <svg className="w-3.5 h-3.5 md:w-4 md:h-4 inline-block align-middle" viewBox="0 0 24 24" fill="#1DB954">
                               <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
                             </svg>
                           </a>
-                        ) : <span className="text-muted-foreground text-sm">-</span>}
+                        ) : (
+                          <span className="text-muted-foreground text-sm inline-block align-middle">-</span>
+                        )}
                       </td>
                     </tr>
                   )
