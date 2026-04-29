@@ -117,7 +117,7 @@ function BrowseContent({
   const [selectedFestival, setSelectedFestival] = useState<{ value: string; label: string } | null>(null)
   const [yearRange, setYearRange] = useState<[number | string, number | string]>(() => {
     if (urlYear) { const year = parseInt(urlYear); return [year, year] }
-    return [1900, 2025]
+    return [1900, 2026]
   })
   const [sortField, setSortField] = useState<SortField>('date')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
@@ -178,7 +178,7 @@ function BrowseContent({
 
   useEffect(() => {
     if (urlYear) { const year = parseInt(urlYear); setYearRange([year, year]); return }
-    if (!selectedArtist && !selectedVenue && !initialArtistId && !initialVenueId) { setYearRange([1900, 2025]); return }
+    if (!selectedArtist && !selectedVenue && !initialArtistId && !initialVenueId) { setYearRange([1900, 2026]); return }
     let relevantShows = shows
     if (selectedArtist) relevantShows = relevantShows.filter((s) => s.artist.artist_id === selectedArtist.value)
     if (selectedVenue) relevantShows = relevantShows.filter((s) => s.venue.venue_id === selectedVenue.value)
@@ -235,7 +235,7 @@ function BrowseContent({
       return capacity >= capacityRange[0] && capacity <= capacityRange[1]
     })
     const startYear = typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900
-    const endYear = typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025
+    const endYear = typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2026
     filtered = filtered.filter((s) => { const y = new Date(s.date).getFullYear(); return y >= startYear && y <= endYear })
     if (urlMonth && !hasManualYearChange) {
       const monthNum = parseInt(urlMonth)
@@ -346,7 +346,7 @@ function BrowseContent({
     if (selectedVenue) pre = pre.filter(s => s.venue.venue_id === selectedVenue.value)
     if (selectedFestival) pre = pre.filter(s => s.festival_name === selectedFestival.value)
     const startYear = typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900
-    const endYear = typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025
+    const endYear = typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2026
     pre = pre.filter(s => { const y = new Date(s.date).getFullYear(); return y >= startYear && y <= endYear })
     if (urlMonth && !hasManualYearChange) {
       const m = parseInt(urlMonth)
@@ -397,7 +397,7 @@ function BrowseContent({
                 onClick={() => {
                   setSelectedShowType(null); setSelectedArtist(null); setSelectedVenue(null)
                   setSelectedFestival(null); setCapacityRange([0, 65000]); setActiveCapacityButton('All')
-                  setYearRange([1900, 2025]); setHasManualYearChange(false); setCurrentPage(1); setPageInput('1')
+                  setYearRange([1900, 2026]); setHasManualYearChange(false); setCurrentPage(1); setPageInput('1')
                 }}
                 className="text-sm text-primary hover:opacity-80 font-medium"
               >
@@ -495,22 +495,22 @@ function BrowseContent({
                     }
                   }}
                   onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                  min={1900} max={2025}
+                  min={1900} max={2026}
                   className="w-16 md:w-20 px-2 py-1 text-xs md:text-sm text-center text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring" />
                 <span className="text-sm text-foreground">—</span>
-                <input type="number" value={typeof yearRange[1] === 'number' ? yearRange[1] : 2025}
+                <input type="number" value={typeof yearRange[1] === 'number' ? yearRange[1] : 2026}
                   onChange={(e) => {
                     const v = parseInt(e.target.value)
-                    if (!isNaN(v) && v <= 2025 && v >= (typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]))) {
+                    if (!isNaN(v) && v <= 2026 && v >= (typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]))) {
                       setYearRange([yearRange[0], v]); setHasManualYearChange(true); setCurrentPage(1); setPageInput('1')
                     }
                   }}
                   onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                  min={1900} max={2025}
+                  min={1900} max={2026}
                   className="w-16 md:w-20 px-2 py-1 text-xs md:text-sm text-center text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring" />
               </div>
-              <Slider range min={1900} max={2025}
-                value={[typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900, typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2025]}
+              <Slider range min={1900} max={2026}
+                value={[typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900, typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2026]}
                 onChange={(value) => { const v = value as number[]; setYearRange([v[0], v[1]] as [number, number]); setHasManualYearChange(true); setCurrentPage(1); setPageInput('1') }}
                 marks={{
                   1900: '1900',
@@ -526,7 +526,7 @@ function BrowseContent({
                   2000: { label: <span className="hidden md:inline">2000</span> },
                   2010: { label: <span className="hidden md:inline">2010</span> },
                   2020: { label: <span className="hidden md:inline">2020</span> },
-                  2025: '2025',
+                  2026: '2026',
                 }}
                 styles={sliderStyles} />
             </div>

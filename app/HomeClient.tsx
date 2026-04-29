@@ -232,7 +232,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
       return {
         previous: prevYear >= 1900 ? { label: prevYear.toString(), onClick: () => { setSelectedYear(prevYear); setSelectedDecade(`${Math.floor(prevYear / 10) * 10}s` as Decade) } } : null,
         current: selectedYear.toString(),
-        next: nextYear <= 2025 ? { label: nextYear.toString(), onClick: () => { setSelectedYear(nextYear); setSelectedDecade(`${Math.floor(nextYear / 10) * 10}s` as Decade) } } : null
+        next: nextYear <= 2026 ? { label: nextYear.toString(), onClick: () => { setSelectedYear(nextYear); setSelectedDecade(`${Math.floor(nextYear / 10) * 10}s` as Decade) } } : null
       }
     }
     if (selectedDecade !== 'all') {
@@ -259,7 +259,7 @@ export default function HomeClient({ shows }: { shows: Show[] }) {
           </h1>
           <div className="flex items-center justify-between md:justify-center gap-4 md:relative">
             <p className="text-sm md:text-xl text-muted-foreground">
-              {shows.length.toLocaleString()} shows • 1900-2025
+              {shows.length.toLocaleString()} shows • 1900-2026
             </p>
             <a href="/browse" className="text-sm md:text-lg text-primary hover:opacity-80 font-medium whitespace-nowrap md:absolute md:right-0">
               → Browse All
