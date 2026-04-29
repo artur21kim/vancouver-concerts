@@ -163,7 +163,12 @@ function BrowseContent({
 
   const handleFestivalSort = () => {
     if (sortField === 'festival') {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+      if (sortDirection === 'asc') {
+        setSortDirection('desc')
+      } else {
+        setSortField('date')
+        setSortDirection('desc')
+      }
     } else {
       setSortField('festival')
       setSortDirection('asc')
@@ -270,8 +275,18 @@ function BrowseContent({
   }, [filteredShows, currentPage])
 
   const handleSort = (field: SortField) => {
-    if (sortField === field) setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
-    else { setSortField(field); setSortDirection('asc') }
+    if (sortField === field) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc')
+      } else {
+        // Third click: clear sort, revert to default date desc
+        setSortField('date')
+        setSortDirection('desc')
+      }
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
     setCurrentPage(1); setPageInput('1')
   }
 
@@ -549,20 +564,28 @@ function BrowseContent({
 
                   {/* ── MOBILE headers (hidden on desktop) ── */}
                   {user && <th className={`md:hidden ${thBase} w-8 px-1`}></th>}
-                  <th
-                    className={`md:hidden ${thSortable} px-1`}
-                    onClick={() => handleSort('date')}
-                  >
+                  <th className={`md:hidden ${thSortable} px-1`} onClick={() => handleSort('date')}>
                     Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th
-                    className={`md:hidden ${thSortable} px-1`}
-                    onClick={() => handleSort('artist')}
-                  >
-                    Artist / Venue {sortField === 'artist' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  {/* Non-clickable th containing two independent sort buttons */}
+                  <th className={`md:hidden ${thBase} px-1`}>
+                    <span className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleSort('artist')}
+                        className={`hover:text-foreground transition-colors ${sortField === 'artist' ? 'text-foreground' : ''}`}
+                      >
+                        Artist {sortField === 'artist' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </button>
+                      <button
+                        onClick={() => handleSort('venue')}
+                        className={`hover:text-foreground transition-colors ${sortField === 'venue' ? 'text-foreground' : ''}`}
+                      >
+                        Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </button>
+                    </span>
                   </th>
                   {/* Empty header for the icons column */}
-                  <th className={`md:hidden ${thBase} w-10 px-0 text-center`}></th>
+                  <th className={`md:hidden ${thBase} px-0 text-center`}></th>
                 </tr>
               </thead>
               <tbody className="bg-card divide-y divide-border">
@@ -644,11 +667,15 @@ function BrowseContent({
                           )}
                         </div>
                       </td>
-                      <td className="hidden md:table-cell py-3 w-14 px-0 text-center align-middle">
-                        {setlistIcon}
+                      <td className="hidden md:table-cell py-3 w-14 px-0 align-middle">
+                        <div className="flex items-center justify-center">
+                          {setlistIcon}
+                        </div>
                       </td>
-                      <td className="hidden md:table-cell py-3 w-14 px-0 text-center align-middle">
-                        {spotifyIcon}
+                      <td className="hidden md:table-cell py-3 w-14 px-0 align-middle">
+                        <div className="flex items-center justify-center">
+                          {spotifyIcon}
+                        </div>
                       </td>
 
                       {/* ── MOBILE cells (hidden on desktop) ── */}
@@ -659,7 +686,9 @@ function BrowseContent({
                       )}
                       {/* Date */}
                       <td className="md:hidden px-1 py-2 align-top whitespace-nowrap">
-                        <span className="text-[11px] text-foreground">{show.date}</span>
+                        <span className="text-[11px] text-foreground">
+                          {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                        </span>
                       </td>
                       {/* Artist (line 1) + Venue + F badge (line 2) */}
                       <td className="md:hidden px-1 py-2">
@@ -689,9 +718,9 @@ function BrowseContent({
                           )}
                         </div>
                       </td>
-                      {/* Setlist + Spotify icons stacked */}
+                      {/* Setlist + Spotify icons horizontal */}
                       <td className="md:hidden py-2 px-1 w-10 align-middle">
-                        <div className="flex flex-col items-center gap-1.5">
+                        <div className="flex items-center justify-center gap-2">
                           {setlistIcon}
                           {spotifyIcon}
                         </div>
