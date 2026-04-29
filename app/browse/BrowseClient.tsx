@@ -136,6 +136,11 @@ function BrowseContent({
     ? 'inline-flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-medium bg-violet-500/20 text-violet-300 border border-violet-500/30 hover:bg-violet-500/30 transition whitespace-nowrap'
     : 'inline-flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-medium bg-violet-50 text-violet-600 border border-violet-200 hover:bg-violet-100 transition whitespace-nowrap'
 
+  // Mobile festival badge — just the "F" letter, no name
+  const festivalBadgeMobileClass = isDark
+    ? 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 hover:bg-violet-500/30 transition flex-shrink-0'
+    : 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-violet-50 text-violet-600 border border-violet-200 hover:bg-violet-100 transition flex-shrink-0'
+
   const festivalSortActiveClass = isDark
     ? 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold border bg-violet-500/30 text-violet-300 border-violet-400/50'
     : 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold border bg-violet-100 text-violet-700 border-violet-300'
@@ -337,7 +342,6 @@ function BrowseContent({
 
   const sliderStyles = { track: { backgroundColor: sliderColor }, handle: { borderColor: sliderColor } }
   const thBase = 'bg-muted px-1 md:px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider'
-  const thBaseCenter = 'bg-muted px-1 md:px-3 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider'
   const thSortable = `${thBase} cursor-pointer hover:bg-muted/80`
 
   return (
@@ -515,17 +519,18 @@ function BrowseContent({
 
           {/* Shows Table */}
           <div className="rounded-lg shadow-lg overflow-x-auto">
-            <table className="min-w-full divide-y divide-border table-fixed">
+            <table className="min-w-full divide-y divide-border">
               <thead className="bg-muted">
                 <tr>
-                  {user && <th className={`${thBase} w-8 md:w-12`}></th>}
-                  <th className={`${thSortable} w-20 md:w-28 whitespace-nowrap`} onClick={() => handleSort('date')}>
+                  {/* ── DESKTOP headers (hidden on mobile) ── */}
+                  {user && <th className={`hidden md:table-cell ${thBase} w-12`}></th>}
+                  <th className={`hidden md:table-cell ${thSortable} w-28 whitespace-nowrap`} onClick={() => handleSort('date')}>
                     Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className={`${thSortable} w-40 md:w-64`} onClick={() => handleSort('artist')}>
+                  <th className={`hidden md:table-cell ${thSortable} w-64`} onClick={() => handleSort('artist')}>
                     Artist {sortField === 'artist' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className={`${thSortable} w-40 md:w-64`} onClick={() => handleSort('venue')}>
+                  <th className={`hidden md:table-cell ${thSortable} w-56`} onClick={() => handleSort('venue')}>
                     <span className="flex items-center gap-1.5">
                       <span>Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}</span>
                       {showFestivalContext && (
@@ -539,53 +544,90 @@ function BrowseContent({
                       )}
                     </span>
                   </th>
-                  <th className={`${thBaseCenter} w-10 md:w-16`}>Setlist</th>
-                  <th className={`${thBaseCenter} w-10 md:w-16`}>Spotify</th>
+                  <th className={`hidden md:table-cell ${thBase} w-14 text-center px-0`}>Setlist</th>
+                  <th className={`hidden md:table-cell ${thBase} w-14 text-center px-0`}>Spotify</th>
+
+                  {/* ── MOBILE headers (hidden on desktop) ── */}
+                  {user && <th className={`md:hidden ${thBase} w-8 px-1`}></th>}
+                  <th
+                    className={`md:hidden ${thSortable} px-1`}
+                    onClick={() => handleSort('date')}
+                  >
+                    Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    className={`md:hidden ${thSortable} px-1`}
+                    onClick={() => handleSort('artist')}
+                  >
+                    Artist / Venue {sortField === 'artist' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                  {/* Empty header for the icons column */}
+                  <th className={`md:hidden ${thBase} w-10 px-0 text-center`}></th>
                 </tr>
               </thead>
               <tbody className="bg-card divide-y divide-border">
                 {currentShows.map((show) => {
                   const isAdded = userShows.has(show.show_id)
                   const isLoading = loadingShows.has(show.show_id)
+
+                  const heartButton = (
+                    <button onClick={() => toggleShow(show.show_id)} disabled={isLoading}
+                      className="focus:outline-none disabled:opacity-50"
+                      title={isAdded ? 'Remove from My Shows' : 'Add to My Shows'}>
+                      {isLoading ? (
+                        <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin"></div>
+                      ) : (
+                        <svg className={`w-5 h-5 transition-colors ${isAdded ? 'fill-destructive text-destructive' : 'fill-none text-muted-foreground hover:text-destructive'}`}
+                          stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                        </svg>
+                      )}
+                    </button>
+                  )
+
+                  const setlistIcon = show.setlist_url ? (
+                    <a href={show.setlist_url} target="_blank" rel="noopener noreferrer"
+                      className="hover:opacity-70 transition-opacity inline-flex items-center justify-center" title="View on setlist.fm">
+                      <img src="https://www.setlist.fm/favicon.ico" alt="setlist.fm"
+                        className="w-3.5 h-3.5 md:w-4 md:h-4 dark:invert" />
+                    </a>
+                  ) : <span className="text-muted-foreground text-xs leading-none">–</span>
+
+                  const spotifyIcon = show.artist.spotify_artist_id ? (
+                    <a href={`https://open.spotify.com/artist/${show.artist.spotify_artist_id}`} target="_blank" rel="noopener noreferrer"
+                      className="hover:opacity-70 transition-opacity inline-flex items-center justify-center" title="Open in Spotify">
+                      <svg className="w-3.5 h-3.5 md:w-4 md:h-4" viewBox="0 0 24 24" fill="#1DB954">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                      </svg>
+                    </a>
+                  ) : <span className="text-muted-foreground text-xs leading-none">–</span>
+
                   return (
                     <tr key={show.show_id} className="hover:bg-muted/50">
+
+                      {/* ── DESKTOP cells (hidden on mobile) ── */}
                       {user && (
-                        <td className="px-1 md:px-3 py-3">
-                          <button onClick={() => toggleShow(show.show_id)} disabled={isLoading}
-                            className="focus:outline-none disabled:opacity-50"
-                            title={isAdded ? 'Remove from My Shows' : 'Add to My Shows'}>
-                            {isLoading ? (
-                              <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin"></div>
-                            ) : (
-                              <svg className={`w-5 h-5 transition-colors ${isAdded ? 'fill-destructive text-destructive' : 'fill-none text-muted-foreground hover:text-destructive'}`}
-                                stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                              </svg>
-                            )}
-                          </button>
+                        <td className="hidden md:table-cell px-3 py-3">
+                          {heartButton}
                         </td>
                       )}
-                      <td className="px-1 md:px-3 py-3 whitespace-nowrap text-[11px] md:text-sm text-foreground">
-                        <span className="md:hidden">{show.date}</span>
-                        <span className="hidden md:inline">
-                          {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                        </span>
+                      <td className="hidden md:table-cell px-3 py-3 whitespace-nowrap text-sm text-foreground">
+                        {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                       </td>
-                      <td className="px-1 md:px-3 py-3 max-w-[160px] md:max-w-[256px]">
+                      <td className="hidden md:table-cell px-3 py-3 max-w-[256px]">
                         <button
                           onClick={() => { setSelectedArtist({ value: show.artist.artist_id, label: show.artist.artist_name }); setCurrentPage(1); setPageInput('1') }}
-                          className="text-[11px] md:text-sm text-primary hover:opacity-80 hover:underline text-left w-full truncate block"
+                          className="text-sm text-primary hover:opacity-80 hover:underline text-left w-full truncate block"
                           title={show.artist.artist_name}
                         >
                           {show.artist.artist_name}
                         </button>
                       </td>
-                      {/* Venue + festival badge inline on same line */}
-                      <td className="px-1 md:px-3 py-3 max-w-[160px] md:max-w-[256px]">
+                      <td className="hidden md:table-cell px-3 py-3 max-w-[224px]">
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => { setSelectedVenue({ value: show.venue.venue_id, label: show.venue.venue_name }); setCurrentPage(1); setPageInput('1') }}
-                            className="text-[11px] md:text-sm text-primary hover:opacity-80 hover:underline text-left truncate"
+                            className="text-sm text-primary hover:opacity-80 hover:underline text-left truncate shrink-0 max-w-[140px]"
                             title={show.venue.venue_name}
                           >
                             {show.venue.venue_name}
@@ -597,39 +639,64 @@ function BrowseContent({
                               title={`Filter by ${show.festival_name}`}
                             >
                               <span className="font-bold">F</span>
-                              <span className="truncate max-w-[60px] md:max-w-[100px]">{'· ' + show.festival_name}</span>
+                              <span className="truncate max-w-[100px]">{'· ' + show.festival_name}</span>
                             </button>
                           )}
                         </div>
                       </td>
-                      {/* Setlist — table-native centering */}
-                      <td className="px-1 md:px-3 py-3 w-10 md:w-16 text-center align-middle">
-                        {show.setlist_url ? (
-                          <a href={show.setlist_url} target="_blank" rel="noopener noreferrer"
-                            className="hover:opacity-70 transition-opacity" title="View on setlist.fm">
-                            <img
-                              src="https://www.setlist.fm/favicon.ico"
-                              alt="setlist.fm"
-                              className="w-3.5 h-3.5 md:w-4 md:h-4 dark:invert inline-block align-middle"
-                            />
-                          </a>
-                        ) : (
-                          <span className="text-muted-foreground text-sm inline-block align-middle">-</span>
-                        )}
+                      <td className="hidden md:table-cell py-3 w-14 px-0 text-center align-middle">
+                        {setlistIcon}
                       </td>
-                      {/* Spotify — table-native centering */}
-                      <td className="px-1 md:px-3 py-3 w-10 md:w-16 text-center align-middle">
-                        {show.artist.spotify_artist_id ? (
-                          <a href={`https://open.spotify.com/artist/${show.artist.spotify_artist_id}`} target="_blank" rel="noopener noreferrer"
-                            className="hover:opacity-70 transition-opacity" title="Open in Spotify">
-                            <svg className="w-3.5 h-3.5 md:w-4 md:h-4 inline-block align-middle" viewBox="0 0 24 24" fill="#1DB954">
-                              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-                            </svg>
-                          </a>
-                        ) : (
-                          <span className="text-muted-foreground text-sm inline-block align-middle">-</span>
-                        )}
+                      <td className="hidden md:table-cell py-3 w-14 px-0 text-center align-middle">
+                        {spotifyIcon}
                       </td>
+
+                      {/* ── MOBILE cells (hidden on desktop) ── */}
+                      {user && (
+                        <td className="md:hidden px-1 py-2 align-middle w-7">
+                          {heartButton}
+                        </td>
+                      )}
+                      {/* Date */}
+                      <td className="md:hidden px-1 py-2 align-top whitespace-nowrap">
+                        <span className="text-[11px] text-foreground">{show.date}</span>
+                      </td>
+                      {/* Artist (line 1) + Venue + F badge (line 2) */}
+                      <td className="md:hidden px-1 py-2">
+                        <button
+                          onClick={() => { setSelectedArtist({ value: show.artist.artist_id, label: show.artist.artist_name }); setCurrentPage(1); setPageInput('1') }}
+                          className="text-[11px] text-primary hover:opacity-80 hover:underline text-left w-full truncate block leading-snug"
+                          title={show.artist.artist_name}
+                        >
+                          {show.artist.artist_name}
+                        </button>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <button
+                            onClick={() => { setSelectedVenue({ value: show.venue.venue_id, label: show.venue.venue_name }); setCurrentPage(1); setPageInput('1') }}
+                            className="text-[10px] text-muted-foreground hover:text-primary hover:underline text-left truncate leading-snug min-w-0"
+                            title={show.venue.venue_name}
+                          >
+                            {show.venue.venue_name}
+                          </button>
+                          {show.festival_name && (
+                            <button
+                              onClick={() => { setSelectedFestival({ value: show.festival_name!, label: show.festival_name! }); setCurrentPage(1); setPageInput('1') }}
+                              className={festivalBadgeMobileClass}
+                              title={`Filter by ${show.festival_name}`}
+                            >
+                              F
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      {/* Setlist + Spotify icons stacked */}
+                      <td className="md:hidden py-2 px-1 w-10 align-middle">
+                        <div className="flex flex-col items-center gap-1.5">
+                          {setlistIcon}
+                          {spotifyIcon}
+                        </div>
+                      </td>
+
                     </tr>
                   )
                 })}
