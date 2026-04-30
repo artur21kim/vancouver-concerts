@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import BrowseClient from './BrowseClient'
 
-export const revalidate = 3600
+export const dynamic = 'force-dynamic'
 
 export default async function BrowsePage() {
   const supabase = createClient(
@@ -11,7 +11,7 @@ export default async function BrowsePage() {
 
   const pageSize = 1000
 
-  // Fetch all shows in batches
+  // Fetch all shows in batches — only IDs, no repeated artist/venue data
   let allShowsRaw: any[] = []
   let showPage = 0
   let hasMoreShows = true
@@ -25,20 +25,8 @@ export default async function BrowsePage() {
         setlist_url,
         show_type,
         festival_name,
-        dim_artist!inner (
-          artist_id,
-          artist_name,
-          monthly_listeners,
-          spotify_artist_id
-        ),
-        dim_venue!inner (
-          venue_id,
-          venue_name,
-          capacity,
-          capacity_category,
-          status,
-          other_names
-        )
+        artist_id,
+        venue_id
       `)
       .order('date', { ascending: false })
       .range(showPage * pageSize, (showPage + 1) * pageSize - 1)
@@ -121,7 +109,6 @@ export default async function BrowsePage() {
     }
   }
 
-  // Check if we got any data
   if (allShowsRaw.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -133,27 +120,15 @@ export default async function BrowsePage() {
     )
   }
 
-  // Transform nested objects to flat structure
+  // Shows are lean — just IDs plus metadata, no embedded artist/venue objects
   const shows = allShowsRaw.map((show: any) => ({
     show_id: show.show_id,
     date: show.date,
     setlist_url: show.setlist_url,
     show_type: show.show_type,
     festival_name: show.festival_name,
-    artist: {
-      artist_id: show.dim_artist?.artist_id || 0,
-      artist_name: show.dim_artist?.artist_name || 'Unknown',
-      monthly_listeners: show.dim_artist?.monthly_listeners || null,
-      spotify_artist_id: show.dim_artist?.spotify_artist_id || null
-    },
-    venue: {
-      venue_id: show.dim_venue?.venue_id || 0,
-      venue_name: show.dim_venue?.venue_name || 'Unknown',
-      capacity: show.dim_venue?.capacity || null,
-      capacity_category: show.dim_venue?.capacity_category || null,
-      status: show.dim_venue?.status || null,
-      other_names: show.dim_venue?.other_names || null
-    }
+    artist_id: show.artist_id,
+    venue_id: show.venue_id,
   }))
 
   return <BrowseClient shows={shows} artists={allArtists} venues={allVenues} />
