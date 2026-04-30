@@ -42,6 +42,9 @@ type CapacityFilter = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown
 const DECADES: Decade[] = ['all', '1900s', '1910s', '1920s', '1930s', '1940s', '1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s']
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
+// Pre-1960s label used in all-time chart
+const PRE1960_LABEL = 'Pre-1960s'
+
 const CAPACITY_BUTTONS: {
   key: CapacityFilter
   label: string
@@ -62,6 +65,10 @@ const CAPACITY_COLORS = {
   large:   { bg: 'rgba(234, 88, 12, 0.75)',   border: 'rgba(234, 88, 12, 1)'   },
   xlarge:  { bg: 'rgba(225, 29, 72, 0.75)',   border: 'rgba(225, 29, 72, 1)'   },
   unknown: { bg: 'rgba(156, 163, 175, 0.5)',  border: 'rgba(156, 163, 175, 1)' },
+}
+
+const CAPACITY_DISPLAY_NAMES: Record<CapacityFilter, string> = {
+  small: 'Small', medium: 'Medium', large: 'Large', xlarge: 'X-Large', unknown: 'Unknown', all: 'All'
 }
 
 function capacityKey(category: string | null): CapacityFilter {
@@ -94,6 +101,16 @@ export default function HomeClient({
   const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all')
 
   useEffect(() => { setMounted(true) }, [])
+
+  const isDrilled = selectedDecade !== 'all' || selectedYear !== null || selectedMonth !== null
+  const hasActiveFilter = isDrilled || capacityFilter !== 'all'
+
+  const handleClearAll = () => {
+    setSelectedDecade('all')
+    setSelectedYear(null)
+    setSelectedMonth(null)
+    setCapacityFilter('all')
+  }
 
   const artistMap = useMemo(() => {
     const map = new Map<number, Artist>()
@@ -153,19 +170,25 @@ export default function HomeClient({
   const chartData = useMemo(() => {
     if (selectedMonth !== null && selectedYear) return { labels: [], datasets: [] }
 
+    const capacityKeys: CapacityFilter[] = ['small', 'medium', 'large', 'xlarge', 'unknown']
+
     let labels: string[] = []
     let getBucket: (show: Show) => string
 
     if (selectedYear) {
+      // Month view
       labels = MONTH_NAMES
       getBucket = (show) => MONTH_NAMES[parseInt(show.date.split('-')[1]) - 1]
     } else if (selectedDecade === 'all') {
-      labels = DECADES.filter(d => d !== 'all')
+      // All-time view: Pre-1960s combined + individual decades from 1960s
+      labels = [PRE1960_LABEL, '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s']
       getBucket = (show) => {
         const year = new Date(show.date + 'T12:00:00').getFullYear()
+        if (year < 1960) return PRE1960_LABEL
         return `${Math.floor(year / 10) * 10}s`
       }
     } else {
+      // Decade view: individual years
       const decadeStart = parseInt(selectedDecade.substring(0, 4))
       labels = Array.from({ length: 10 }, (_, i) => (decadeStart + i).toString())
       getBucket = (show) => new Date(show.date + 'T12:00:00').getFullYear().toString()
@@ -175,7 +198,7 @@ export default function HomeClient({
       ? (venueFilteredIds !== null ? shows.filter(s => venueFilteredIds.has(s.venue_id)) : shows)
       : filteredShows
 
-    const capacityKeys: CapacityFilter[] = ['small', 'medium', 'large', 'xlarge', 'unknown']
+    // Count by capacity per bucket
     const counts: Record<CapacityFilter, Record<string, number>> = {
       small: {}, medium: {}, large: {}, xlarge: {}, unknown: {}, all: {}
     }
@@ -189,20 +212,28 @@ export default function HomeClient({
       counts[cap][bucket] = (counts[cap][bucket] || 0) + 1
     })
 
-    const capacityLabels: Record<CapacityFilter, string> = {
-      small: 'Small (<500)', medium: 'Medium (500–1.5K)', large: 'Large (1.5K–10K)',
-      xlarge: 'X-Large (10K+)', unknown: 'Unknown', all: 'All'
+    // Compute column totals for % calculation in tooltip
+    const columnTotals: Record<string, number> = {}
+    labels.forEach(l => {
+      columnTotals[l] = capacityKeys.reduce((sum, k) => sum + (counts[k][l] || 0), 0)
+    })
+
+    const capacityLegendLabels: Record<CapacityFilter, string> = {
+      small: 'Small', medium: 'Medium', large: 'Large',
+      xlarge: 'X-Large', unknown: 'Unknown', all: 'All'
     }
 
     return {
       labels,
       datasets: capacityKeys.map(k => ({
-        label: capacityLabels[k],
+        label: capacityLegendLabels[k],
         data: labels.map(l => counts[k][l] || 0),
         backgroundColor: CAPACITY_COLORS[k].bg,
         borderColor: CAPACITY_COLORS[k].border,
         borderWidth: 0,
         stack: 'stack',
+        // Store totals for tooltip % calculation
+        columnTotals,
       }))
     }
   }, [shows, filteredShows, selectedDecade, selectedYear, selectedMonth, venueMap, venueFilteredIds])
@@ -230,15 +261,61 @@ export default function HomeClient({
       legend: {
         display: true,
         position: 'bottom' as const,
+        title: {
+          display: true,
+          text: 'Venue Size',
+          padding: { top: 6 },
+          font: { size: 10 },
+          color: 'rgba(100,100,100,0.8)',
+        },
         labels: { boxWidth: 12, padding: 10, font: { size: 10 } },
         onClick: () => {}
       },
       title: { display: false },
-      tooltip: { mode: 'index' as const, intersect: false }
+      tooltip: {
+        mode: 'index' as const,
+        intersect: false,
+        callbacks: {
+          // Show "Pre-1960s (1900–1959)" for the combined bar, normal labels otherwise
+          title: (items: any[]) => {
+            if (!items.length) return ''
+            const label = items[0].label
+            if (label === PRE1960_LABEL) return `${PRE1960_LABEL} (1900–1959)`
+            return label
+          },
+          // Show % instead of raw count, skip zero values
+          label: (item: any) => {
+            const dataset = item.chart.data.datasets[item.datasetIndex]
+            const columnTotals = dataset.columnTotals as Record<string, number>
+            const label = item.chart.data.labels[item.dataIndex] as string
+            const total = columnTotals[label] || 0
+            const value = item.parsed.y
+            if (value === 0) return null
+            const pct = total > 0 ? Math.round((value / total) * 100) : 0
+            return `${item.dataset.label}: ${pct}%`
+          },
+          // Add total show count at the bottom of tooltip
+          footer: (items: any[]) => {
+            if (!items.length) return ''
+            const total = items.reduce((sum: number, item: any) => sum + (item.parsed.y || 0), 0)
+            return `Total: ${total.toLocaleString()} shows`
+          }
+        }
+      }
     },
     scales: {
-      x: { stacked: true },
-      y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+      x: {
+        stacked: true,
+        grid: { display: false },
+        border: { display: false },
+      },
+      y: {
+        stacked: true,
+        beginAtZero: true,
+        ticks: { precision: 0 },
+        grid: { display: false },
+        border: { display: false },
+      }
     },
     onClick: (event: any, elements: any) => {
       if (elements.length > 0) {
@@ -246,15 +323,20 @@ export default function HomeClient({
         if (selectedYear) {
           router.push(`/browse?year=${selectedYear}&month=${index + 1}`)
         } else if (selectedDecade === 'all') {
-          const clickedDecade = DECADES.filter(d => d !== 'all')[index] as Decade
-          setSelectedDecade(clickedDecade); setSelectedYear(null); setSelectedMonth(null)
+          // Pre-1960s bar drills into 1950s (most recent pre-60s decade)
+          const label = chartData.labels?.[index] as string
+          if (label === PRE1960_LABEL) {
+            setSelectedDecade('1950s'); setSelectedYear(null); setSelectedMonth(null)
+          } else {
+            setSelectedDecade(label as Decade); setSelectedYear(null); setSelectedMonth(null)
+          }
         } else {
           setSelectedYear(parseInt(selectedDecade.substring(0, 4)) + index)
           setSelectedMonth(null)
         }
       }
     }
-  }), [selectedDecade, selectedYear, router])
+  }), [selectedDecade, selectedYear, chartData, router])
 
   const chartTitle = useMemo(() => {
     if (selectedMonth !== null && selectedYear) return `Shows in ${MONTH_NAMES[selectedMonth]} ${selectedYear}`
@@ -268,38 +350,9 @@ export default function HomeClient({
     if (selectedMonth !== null && selectedYear) parts.push(`${MONTH_NAMES[selectedMonth]} ${selectedYear}`)
     else if (selectedYear) parts.push(selectedYear.toString())
     else if (selectedDecade !== 'all') parts.push(selectedDecade)
-    if (capacityFilter !== 'all') {
-      const labels: Record<CapacityFilter, string> = {
-        small: 'Small', medium: 'Medium', large: 'Large', xlarge: 'X-Large', unknown: 'Unknown Capacity', all: ''
-      }
-      parts.push(`${labels[capacityFilter]} Venues`)
-    }
+    if (capacityFilter !== 'all') parts.push(`${CAPACITY_DISPLAY_NAMES[capacityFilter]} Venues`)
     return parts.length > 0 ? parts.join(' · ') : null
   }, [selectedDecade, selectedYear, selectedMonth, capacityFilter])
-
-  const breadcrumb = useMemo(() => {
-    const crumbs: { label: string; onClick: () => void; active: boolean }[] = []
-    crumbs.push({
-      label: 'All Time',
-      onClick: () => { setSelectedDecade('all'); setSelectedYear(null); setSelectedMonth(null) },
-      active: selectedDecade === 'all' && !selectedYear && selectedMonth === null
-    })
-    if (selectedDecade !== 'all' || selectedYear || selectedMonth !== null) {
-      const decade = selectedYear ? `${Math.floor(selectedYear / 10) * 10}s` as Decade : selectedDecade
-      crumbs.push({
-        label: decade,
-        onClick: () => { setSelectedDecade(decade); setSelectedYear(null); setSelectedMonth(null) },
-        active: selectedDecade !== 'all' && !selectedYear && selectedMonth === null
-      })
-    }
-    if (selectedYear) {
-      crumbs.push({ label: selectedYear.toString(), onClick: () => { setSelectedMonth(null) }, active: !!selectedYear && selectedMonth === null })
-    }
-    if (selectedMonth !== null && selectedYear) {
-      crumbs.push({ label: MONTH_NAMES[selectedMonth], onClick: () => { }, active: true })
-    }
-    return crumbs
-  }, [selectedDecade, selectedYear, selectedMonth])
 
   const navigation = useMemo(() => {
     if (selectedDecade === 'all' && !selectedYear) return null
@@ -311,7 +364,7 @@ export default function HomeClient({
         next: nextYear <= 2026 ? { label: `${nextYear} →`, onClick: () => { setSelectedYear(nextYear); setSelectedDecade(`${Math.floor(nextYear / 10) * 10}s` as Decade) } } : null
       }
     }
-    if (selectedDecade !== 'all') {
+    if (selectedDecade !== 'all' && !selectedYear) {
       const currentDecadeStart = parseInt(selectedDecade.substring(0, 4))
       const prevDecadeStart = currentDecadeStart - 10
       const nextDecadeStart = currentDecadeStart + 10
@@ -327,18 +380,18 @@ export default function HomeClient({
     <main className="min-h-screen bg-background py-4 md:py-8 px-4">
       <div className="max-w-7xl mx-auto">
 
-        {/* Header — Browse All removed */}
-        <div className="mb-4 md:mb-6 text-center">
-          <h1 className="hidden md:block text-5xl font-bold text-foreground mb-4">
+        {/* Header */}
+        <div className="mb-4 md:mb-5 text-center">
+          <h1 className="hidden md:block text-3xl md:text-4xl font-bold text-foreground mb-1">
             Vancouver Concert History
           </h1>
-          <p className="text-sm md:text-xl text-muted-foreground">
+          <p className="text-sm md:text-base text-muted-foreground">
             {shows.length.toLocaleString()} shows • 1900-2026
           </p>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-4 gap-2 md:gap-4 mb-4 md:mb-6">
+        <div className="grid grid-cols-4 gap-2 md:gap-4 mb-4 md:mb-5">
           <StatCard label="Shows" value={stats.totalShows.toLocaleString()} />
           <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
           <StatCard label="Venues" value={stats.uniqueVenues.toLocaleString()} />
@@ -349,99 +402,105 @@ export default function HomeClient({
           )}
         </div>
 
-        {/* Shows Chart */}
-        <div className="bg-card rounded-lg shadow-lg p-4 md:p-5 mb-4 md:mb-6">
+        {/* Chart controls row — Clear All left, title center, capacity right */}
+        <div className="mb-2 flex items-center px-1 gap-2">
 
-          {/* Breadcrumb */}
-          <div className="mb-3 min-h-[1.25rem] flex items-center gap-2 text-xs md:text-sm">
-            {breadcrumb.map((crumb, index) => (
-              <div key={crumb.label} className="flex items-center gap-2">
-                {index > 0 && <span className="text-muted-foreground">›</span>}
-                <button
-                  onClick={crumb.onClick}
-                  className={`${crumb.active ? 'text-foreground font-medium cursor-default' : 'text-primary hover:opacity-80 hover:underline'}`}
-                  disabled={crumb.active}
-                >
-                  {crumb.label}
+          {/* Left: Clear All + Prev */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {hasActiveFilter && (
+              <button
+                onClick={handleClearAll}
+                className="text-xs border border-border rounded px-2 py-1.5 text-muted-foreground hover:border-destructive hover:text-destructive transition-colors whitespace-nowrap"
+              >
+                Clear All
+              </button>
+            )}
+            <div className="w-20 md:w-28 flex justify-start">
+              {navigation?.previous && (
+                <button onClick={navigation.previous.onClick}
+                  className="text-primary hover:opacity-80 font-medium text-xs md:text-sm whitespace-nowrap">
+                  {navigation.previous.label}
                 </button>
-              </div>
-            ))}
-          </div>
-
-          {/* Title row — capacity buttons top-right, prev/next flank title */}
-          <div className="mb-3 md:mb-4 min-h-[2rem]">
-            {/* Capacity buttons — top right */}
-            <div className="flex justify-end mb-1">
-              <div className="flex rounded-lg border border-border overflow-hidden text-xs font-medium">
-                {CAPACITY_BUTTONS.map(btn => (
-                  <button
-                    key={btn.key}
-                    onClick={() => setCapacityFilter(btn.key)}
-                    title={btn.tooltip}
-                    className={`px-2 py-1.5 transition-colors ${capacityFilter === btn.key
-                        ? 'bg-primary text-primary-foreground'
-                        : `bg-card ${btn.unselectedClass} hover:bg-muted`
-                      }`}
-                  >
-                    {btn.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* Prev | Title | Next — truly centered */}
-            <div className="flex items-center justify-center gap-3 md:gap-6">
-              <div className="w-20 md:w-32 flex justify-start">
-                {navigation?.previous && (
-                  <button onClick={navigation.previous.onClick}
-                    className="text-primary hover:opacity-80 font-medium text-xs md:text-sm whitespace-nowrap">
-                    {navigation.previous.label}
-                  </button>
-                )}
-              </div>
-              <h2 className="text-base md:text-xl font-bold text-foreground text-center">
-                {chartTitle}
-              </h2>
-              <div className="w-20 md:w-32 flex justify-end">
-                {navigation?.next && (
-                  <button onClick={navigation.next.onClick}
-                    className="text-primary hover:opacity-80 font-medium text-xs md:text-sm whitespace-nowrap">
-                    {navigation.next.label}
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           </div>
 
-          <div style={{ height: '280px', cursor: 'pointer' }} className="md:h-[300px]">
-            <Bar data={chartData} options={chartOptions} />
-          </div>
-          <p className="text-xs md:text-sm text-muted-foreground mt-2 text-center">
-            {selectedYear ? 'Click a month to view shows in Browse' : 'Click a bar to drill down'}
-          </p>
-        </div>
+          {/* Center: title */}
+          <h2 className="flex-1 text-center text-base md:text-lg font-bold text-foreground whitespace-nowrap">
+            {chartTitle}
+          </h2>
 
-        {/* Decade/Year Filter */}
-        <div className="bg-card rounded-lg shadow-lg p-4 md:p-5 mb-4 md:mb-6">
-          <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">Filter by Decade</h2>
-          <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
-            <div className="flex md:flex-wrap gap-2 mb-4 min-w-max md:min-w-0">
-              {DECADES.map((decade) => (
+          {/* Right: Next + capacity buttons */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="w-20 md:w-28 flex justify-end">
+              {navigation?.next && (
+                <button onClick={navigation.next.onClick}
+                  className="text-primary hover:opacity-80 font-medium text-xs md:text-sm whitespace-nowrap">
+                  {navigation.next.label}
+                </button>
+              )}
+            </div>
+            <div className="flex rounded-lg border border-border overflow-hidden text-xs font-medium">
+              {CAPACITY_BUTTONS.map(btn => (
                 <button
-                  key={decade}
-                  onClick={() => { setSelectedDecade(decade); setSelectedYear(null); setSelectedMonth(null) }}
-                  className={`px-3 md:px-4 py-2 rounded-md text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
-                    selectedDecade === decade && !selectedYear && selectedMonth === null
+                  key={btn.key}
+                  onClick={() => setCapacityFilter(btn.key)}
+                  title={btn.tooltip}
+                  className={`px-2 py-1.5 transition-colors ${
+                    capacityFilter === btn.key
                       ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:text-foreground'
+                      : `bg-card ${btn.unselectedClass} hover:bg-muted`
                   }`}
                 >
-                  {decade === 'all' ? 'All Time' : decade}
+                  {btn.label}
                 </button>
               ))}
             </div>
           </div>
-          <div className="pt-2">
-            <label className="block text-xs md:text-sm font-medium text-foreground mb-2">Or view a specific year:</label>
+        </div>
+
+        {/* Chart card */}
+        <div className="bg-card rounded-lg shadow-lg p-4 md:p-5 mb-4 md:mb-5">
+          <div style={{ height: '320px', cursor: 'pointer' }} className="md:h-[380px]">
+            <Bar data={chartData} options={chartOptions} />
+          </div>
+          <p className="text-xs text-muted-foreground mt-2 text-center">
+            {selectedYear ? 'Click a month to view shows in Browse' : 'Click a bar to drill down'}
+          </p>
+        </div>
+
+        {/* Decade filter — hybrid breadcrumb buttons */}
+        <div className="bg-card rounded-lg shadow-lg p-4 md:p-5 mb-4 md:mb-5">
+          <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+            <div className="flex md:flex-wrap gap-2 mb-3 min-w-max md:min-w-0">
+              {DECADES.map((decade) => {
+                const isActive = selectedDecade === decade && !selectedYear && selectedMonth === null
+                const isParentDecade = selectedYear !== null && decade !== 'all' &&
+                  `${Math.floor(selectedYear / 10) * 10}s` === decade
+                return (
+                  <button
+                    key={decade}
+                    onClick={() => { setSelectedDecade(decade); setSelectedYear(null); setSelectedMonth(null) }}
+                    className={`px-3 md:px-4 py-2 rounded-md text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : isParentDecade
+                        ? 'bg-primary/20 text-primary border border-primary/40'
+                        : 'bg-muted text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {decade === 'all' ? 'All Time' : decade}
+                    {isParentDecade && (
+                      <span className="ml-1 text-[10px] opacity-75">› {selectedYear}</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="text-xs md:text-sm font-medium text-foreground whitespace-nowrap">View a specific year:</label>
             <select
               value={selectedYear || ''}
               onChange={(e) => {
@@ -449,7 +508,7 @@ export default function HomeClient({
                 setSelectedYear(year); setSelectedMonth(null)
                 if (year) setSelectedDecade(`${Math.floor(year / 10) * 10}s` as Decade)
               }}
-              className="w-full md:w-64 px-3 py-2 text-sm border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full md:w-48 px-3 py-2 text-sm border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Select year...</option>
               {Array.from({ length: 127 }, (_, i) => 1900 + i).map(year => (
@@ -461,7 +520,6 @@ export default function HomeClient({
 
         {/* Two columns for tables */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-          {/* Top Artists */}
           <div className="bg-card rounded-lg shadow-lg p-4 md:p-6">
             <h2 className="text-xl md:text-2xl font-bold text-foreground mb-4 md:mb-6">
               Top {showAllArtists ? '25' : '10'} Artists
@@ -494,7 +552,6 @@ export default function HomeClient({
             ) : <p className="text-sm text-muted-foreground">No shows in this period</p>}
           </div>
 
-          {/* Top Venues */}
           <div className="bg-card rounded-lg shadow-lg p-4 md:p-6">
             <h2 className="text-xl md:text-2xl font-bold text-foreground mb-4 md:mb-6">
               Top {showAllVenues ? '25' : '10'} Venues
