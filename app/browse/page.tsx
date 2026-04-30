@@ -34,7 +34,10 @@ export default async function BrowsePage() {
         dim_venue!inner (
           venue_id,
           venue_name,
-          capacity
+          capacity,
+          capacity_category,
+          status,
+          other_names
         )
       `)
       .order('date', { ascending: false })
@@ -100,7 +103,7 @@ export default async function BrowsePage() {
   while (hasMoreVenues) {
     const { data, error } = await supabase
       .from('dim_venue')
-      .select('venue_id, venue_name, capacity')
+      .select('venue_id, venue_name, capacity, capacity_category, status, other_names')
       .order('venue_name')
       .range(venuePage * pageSize, (venuePage + 1) * pageSize - 1)
 
@@ -146,7 +149,10 @@ export default async function BrowsePage() {
     venue: {
       venue_id: show.dim_venue?.venue_id || 0,
       venue_name: show.dim_venue?.venue_name || 'Unknown',
-      capacity: show.dim_venue?.capacity || null
+      capacity: show.dim_venue?.capacity || null,
+      capacity_category: show.dim_venue?.capacity_category || null,
+      status: show.dim_venue?.status || null,
+      other_names: show.dim_venue?.other_names || null
     }
   }))
 

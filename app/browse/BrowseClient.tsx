@@ -26,6 +26,9 @@ type Show = {
     venue_id: number
     venue_name: string
     capacity: number | null
+    capacity_category: string | null
+    status: string | null
+    other_names: string | null
   }
 }
 
@@ -40,12 +43,57 @@ type Venue = {
   venue_id: number
   venue_name: string
   capacity: number | null
+  capacity_category: string | null
+  status: string | null
+  other_names: string | null
 }
 
 type SortField = 'date' | 'artist' | 'venue' | 'festival'
 type SortDirection = 'asc' | 'desc'
+type CapacityFilter = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown'
+type StatusFilter = 'all' | 'open' | 'closed'
 
 const MONTH_NAMES_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+const CAPACITY_BUTTONS: {
+  key: CapacityFilter
+  label: string
+  tooltip: string
+  unselectedClass: string
+  range: [number, number]
+}[] = [
+  { key: 'small',   label: 'S',   tooltip: 'Small (< 500)',     unselectedClass: 'text-purple-600 dark:text-purple-400', range: [0, 500] },
+  { key: 'medium',  label: 'M',   tooltip: 'Medium (500–1.5K)', unselectedClass: 'text-blue-600 dark:text-blue-400',    range: [500, 1500] },
+  { key: 'large',   label: 'L',   tooltip: 'Large (1.5K–10K)',  unselectedClass: 'text-orange-600 dark:text-orange-400', range: [1500, 10000] },
+  { key: 'xlarge',  label: 'XL',  tooltip: 'X-Large (10K+)',    unselectedClass: 'text-rose-600 dark:text-rose-400',    range: [10000, 65000] },
+  { key: 'all',     label: 'All', tooltip: 'All venues',        unselectedClass: 'text-muted-foreground',               range: [0, 65000] },
+  { key: 'unknown', label: '?',   tooltip: 'Unknown capacity',  unselectedClass: 'text-gray-400 dark:text-gray-500',    range: [0, 65000] },
+]
+
+const STATUS_BUTTONS: { key: StatusFilter; label: string; unselectedClass: string }[] = [
+  { key: 'all',    label: 'All',    unselectedClass: 'text-muted-foreground' },
+  { key: 'open',   label: 'Open',   unselectedClass: 'text-teal-600 dark:text-teal-400' },
+  { key: 'closed', label: 'Closed', unselectedClass: 'text-slate-500 dark:text-slate-400' },
+]
+
+const CAPACITY_LABELS: Record<CapacityFilter, string> = {
+  small:   'Small Venues',
+  medium:  'Medium Venues',
+  large:   'Large Venues',
+  xlarge:  'X-Large Venues',
+  unknown: 'Unknown Capacity Venues',
+  all:     '',
+}
+
+function capacityFilterKey(category: string | null): CapacityFilter {
+  if (!category) return 'unknown'
+  const c = category.toLowerCase()
+  if (c.includes('small')) return 'small'
+  if (c.includes('medium')) return 'medium'
+  if (c.includes('x-large')) return 'xlarge'
+  if (c.includes('large')) return 'large'
+  return 'unknown'
+}
 
 function BrowseContent({
   shows,
@@ -125,8 +173,9 @@ function BrowseContent({
   const [pageInput, setPageInput] = useState('1')
   const showsPerPage = 50
   const [hasManualYearChange, setHasManualYearChange] = useState(false)
+  const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all')
   const [capacityRange, setCapacityRange] = useState<[number, number]>([0, 65000])
-  const [activeCapacityButton, setActiveCapacityButton] = useState<string | null>('All')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [userShows, setUserShows] = useState<Set<number>>(new Set())
   const [loadingShows, setLoadingShows] = useState<Set<number>>(new Set())
 
@@ -136,7 +185,6 @@ function BrowseContent({
     ? 'inline-flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-medium bg-violet-500/20 text-violet-300 border border-violet-500/30 hover:bg-violet-500/30 transition whitespace-nowrap'
     : 'inline-flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-medium bg-violet-50 text-violet-600 border border-violet-200 hover:bg-violet-100 transition whitespace-nowrap'
 
-  // Mobile festival badge — just the "F" letter, no name
   const festivalBadgeMobileClass = isDark
     ? 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 hover:bg-violet-500/30 transition flex-shrink-0'
     : 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-violet-50 text-violet-600 border border-violet-200 hover:bg-violet-100 transition flex-shrink-0'
@@ -148,16 +196,16 @@ function BrowseContent({
     ? 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold border bg-violet-500/10 text-violet-400 border-violet-500/20 hover:bg-violet-500/20 transition'
     : 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold border bg-violet-50 text-violet-500 border-violet-200 hover:bg-violet-100 transition'
 
-  const handleCapacityButton = (category: string, range: [number, number]) => {
-    if (category === 'Unknown') { setActiveCapacityButton('Unknown') }
-    else { setCapacityRange(range); setActiveCapacityButton(category) }
+  const handleCapacityButton = (key: CapacityFilter, range: [number, number]) => {
+    setCapacityFilter(key)
+    if (key !== 'unknown') setCapacityRange(range)
     setCurrentPage(1); setPageInput('1')
   }
 
   const handleCapacitySlider = (value: number | number[]) => {
     const range = Array.isArray(value) ? value : [value, value]
     setCapacityRange([range[0], range[1]])
-    setActiveCapacityButton(null)
+    setCapacityFilter('all')
     setCurrentPage(1); setPageInput('1')
   }
 
@@ -227,13 +275,22 @@ function BrowseContent({
     if (selectedArtist) filtered = filtered.filter((s) => s.artist.artist_id === selectedArtist.value)
     if (selectedVenue) filtered = filtered.filter((s) => s.venue.venue_id === selectedVenue.value)
     if (selectedFestival) filtered = filtered.filter((s) => s.festival_name === selectedFestival.value)
+
     filtered = filtered.filter((show) => {
       const capacity = show.venue.capacity
-      if (activeCapacityButton === 'Unknown') return capacity === null
-      if (activeCapacityButton === 'All') return true
-      if (capacity === null) return false
-      return capacity >= capacityRange[0] && capacity <= capacityRange[1]
+      if (capacityFilter === 'unknown') return capacity === null
+      if (capacityFilter === 'all') return true
+      const key = capacityFilterKey(show.venue.capacity_category)
+      return key === capacityFilter
     })
+
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter((show) => {
+        const s = (show.venue.status || '').toLowerCase()
+        return statusFilter === 'open' ? s === 'open' : s === 'closed'
+      })
+    }
+
     const startYear = typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900
     const endYear = typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2026
     filtered = filtered.filter((s) => { const y = new Date(s.date).getFullYear(); return y >= startYear && y <= endYear })
@@ -254,7 +311,7 @@ function BrowseContent({
       return 0
     })
     return filtered
-  }, [shows, selectedShowType, selectedArtist, selectedVenue, selectedFestival, capacityRange, yearRange, urlMonth, hasManualYearChange, sortField, sortDirection, activeCapacityButton])
+  }, [shows, selectedShowType, selectedArtist, selectedVenue, selectedFestival, capacityFilter, capacityRange, statusFilter, yearRange, urlMonth, hasManualYearChange, sortField, sortDirection])
 
   const stats = useMemo(() => {
     const totalShows = filteredShows.length
@@ -268,6 +325,31 @@ function BrowseContent({
     return { totalShows, uniqueArtists, uniqueVenues, monthlyListeners, capacity, firstShow, lastShow }
   }, [filteredShows, selectedArtist, selectedVenue, artists, venues])
 
+  const unknownCapacityCount = useMemo(() => {
+    let pre = shows
+    if (selectedShowType) {
+      if (selectedShowType === 'music') pre = pre.filter(s => s.show_type === 'music' || s.show_type === null)
+      else pre = pre.filter(s => s.show_type === selectedShowType)
+    }
+    if (selectedArtist) pre = pre.filter(s => s.artist.artist_id === selectedArtist.value)
+    if (selectedVenue) pre = pre.filter(s => s.venue.venue_id === selectedVenue.value)
+    if (selectedFestival) pre = pre.filter(s => s.festival_name === selectedFestival.value)
+    if (statusFilter !== 'all') {
+      pre = pre.filter(s => {
+        const st = (s.venue.status || '').toLowerCase()
+        return statusFilter === 'open' ? st === 'open' : st === 'closed'
+      })
+    }
+    const startYear = typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900
+    const endYear = typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2026
+    pre = pre.filter(s => { const y = new Date(s.date).getFullYear(); return y >= startYear && y <= endYear })
+    if (urlMonth && !hasManualYearChange) {
+      const m = parseInt(urlMonth)
+      if (m >= 1 && m <= 12) pre = pre.filter(s => parseInt(s.date.split('-')[1]) === m)
+    }
+    return pre.filter(s => s.venue.capacity === null).length
+  }, [shows, selectedShowType, selectedArtist, selectedVenue, selectedFestival, statusFilter, yearRange, urlMonth, hasManualYearChange])
+
   const totalPages = Math.ceil(filteredShows.length / showsPerPage)
   const currentShows = useMemo(() => {
     const startIndex = (currentPage - 1) * showsPerPage
@@ -279,7 +361,6 @@ function BrowseContent({
       if (sortDirection === 'asc') {
         setSortDirection('desc')
       } else {
-        // Third click: clear sort, revert to default date desc
         setSortField('date')
         setSortDirection('desc')
       }
@@ -308,6 +389,7 @@ function BrowseContent({
     return Array.from(uniqueFestivals).sort().map(f => ({ value: f, label: f }))
   }, [shows])
 
+  // Page title — priority: Artist > Venue > Festival > Show Type > Capacity > Status
   const pageTitle = useMemo(() => {
     if (selectedArtist && selectedVenue) return `Browse: ${selectedArtist.label} @ ${selectedVenue.label}`
     if (selectedArtist) return `Browse: ${selectedArtist.label}`
@@ -318,8 +400,20 @@ function BrowseContent({
       const names: Record<string, string> = { 'music': 'Music', 'comedy': 'Comedy', 'festival': 'Festivals' }
       return `Browse: ${names[selectedShowType]}`
     }
+    // Capacity + status combinations
+    if (capacityFilter !== 'all') {
+      const capacityLabel = CAPACITY_LABELS[capacityFilter]
+      if (statusFilter !== 'all') {
+        const statusLabel = statusFilter === 'open' ? 'Open' : 'Closed'
+        return `Browse: ${capacityLabel} (${statusLabel})`
+      }
+      return `Browse: ${capacityLabel}`
+    }
+    if (statusFilter !== 'all') {
+      return `Browse: ${statusFilter === 'open' ? 'Open' : 'Closed'} Venues`
+    }
     return 'Browse Shows'
-  }, [selectedArtist, selectedVenue, selectedFestival, selectedShowType, urlYear, urlMonth, hasManualYearChange])
+  }, [selectedArtist, selectedVenue, selectedFestival, selectedShowType, urlYear, urlMonth, hasManualYearChange, capacityFilter, statusFilter])
 
   const dateRangeDisplay = useMemo(() => {
     if (!stats.firstShow || !stats.lastShow) return null
@@ -336,28 +430,10 @@ function BrowseContent({
     return firstYear === lastYear ? firstYear : `${firstYear}-${lastYear}`
   }, [stats.firstShow, stats.lastShow])
 
-  const unknownCapacityCount = useMemo(() => {
-    let pre = shows
-    if (selectedShowType) {
-      if (selectedShowType === 'music') pre = pre.filter(s => s.show_type === 'music' || s.show_type === null)
-      else pre = pre.filter(s => s.show_type === selectedShowType)
-    }
-    if (selectedArtist) pre = pre.filter(s => s.artist.artist_id === selectedArtist.value)
-    if (selectedVenue) pre = pre.filter(s => s.venue.venue_id === selectedVenue.value)
-    if (selectedFestival) pre = pre.filter(s => s.festival_name === selectedFestival.value)
-    const startYear = typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900
-    const endYear = typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2026
-    pre = pre.filter(s => { const y = new Date(s.date).getFullYear(); return y >= startYear && y <= endYear })
-    if (urlMonth && !hasManualYearChange) {
-      const m = parseInt(urlMonth)
-      if (m >= 1 && m <= 12) pre = pre.filter(s => parseInt(s.date.split('-')[1]) === m)
-    }
-    return pre.filter(s => s.venue.capacity === null).length
-  }, [shows, selectedShowType, selectedArtist, selectedVenue, selectedFestival, yearRange, urlMonth, hasManualYearChange])
-
   const sliderStyles = { track: { backgroundColor: sliderColor }, handle: { borderColor: sliderColor } }
   const thBase = 'bg-muted px-1 md:px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider'
   const thSortable = `${thBase} cursor-pointer hover:bg-muted/80`
+  const thCenter = 'bg-muted px-0 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider'
 
   return (
     <>
@@ -396,10 +472,11 @@ function BrowseContent({
               <button
                 onClick={() => {
                   setSelectedShowType(null); setSelectedArtist(null); setSelectedVenue(null)
-                  setSelectedFestival(null); setCapacityRange([0, 65000]); setActiveCapacityButton('All')
-                  setYearRange([1900, 2026]); setHasManualYearChange(false); setCurrentPage(1); setPageInput('1')
+                  setSelectedFestival(null); setCapacityFilter('all'); setCapacityRange([0, 65000])
+                  setStatusFilter('all'); setYearRange([1900, 2026]); setHasManualYearChange(false)
+                  setCurrentPage(1); setPageInput('1')
                 }}
-                className="text-sm text-primary hover:opacity-80 font-medium"
+                className="text-xs border border-border rounded px-2 py-0.5 text-muted-foreground hover:border-destructive hover:text-destructive transition-colors"
               >
                 Clear All
               </button>
@@ -437,54 +514,83 @@ function BrowseContent({
               </div>
             </div>
 
-            {/* Capacity Filter */}
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-2 flex-wrap">
-                <label className="text-sm font-medium text-foreground">Venue Capacity</label>
-                {unknownCapacityCount > 0 && activeCapacityButton !== 'All' && activeCapacityButton !== 'Unknown' && (
+            {/* Venue Filters */}
+            <div className="mb-5">
+              <div className="flex items-center gap-2 mb-3">
+                <label className="text-sm font-medium text-foreground">Venue Filters</label>
+                {unknownCapacityCount > 0 && capacityFilter !== 'unknown' && capacityFilter !== 'all' && (
                   <span className="text-xs text-muted-foreground">
-                    {'· '}
-                    <strong className="text-foreground">{unknownCapacityCount.toLocaleString()}</strong>
-                    {' shows hidden — '}
+                    ·{' '}
                     <button
-                      onClick={() => handleCapacityButton('All', [0, 65000])}
+                      onClick={() => handleCapacityButton('unknown', [0, 65000])}
                       className="text-primary hover:opacity-80 font-medium underline underline-offset-2"
                     >
-                      click All to include
+                      {unknownCapacityCount.toLocaleString()} shows with unknown capacity hidden
                     </button>
                   </span>
                 )}
               </div>
-              <div className="grid" style={{ gridTemplateColumns: '1fr', width: 'fit-content' }}>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {[
-                    { label: 'Small', range: [0, 500] as [number, number] },
-                    { label: 'Medium', range: [500, 3000] as [number, number] },
-                    { label: 'Large', range: [3000, 10000] as [number, number] },
-                    { label: 'X-Large', range: [10000, 65000] as [number, number] },
-                    { label: 'All', range: [0, 65000] as [number, number] },
-                    { label: 'Unknown', range: [0, 65000] as [number, number] },
-                  ].map(({ label, range }) => (
-                    <button key={label} onClick={() => handleCapacityButton(label, range)}
-                      className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition ${activeCapacityButton === label ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'}`}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <div>
-                  <Slider range min={0} max={65000}
-                    value={activeCapacityButton === 'Unknown' ? [0, 65000] : capacityRange}
-                    onChange={handleCapacitySlider} disabled={activeCapacityButton === 'Unknown'}
-                    styles={sliderStyles} />
-                  <div className="text-center text-xs text-muted-foreground mt-2">
-                    {activeCapacityButton === 'Unknown' ? 'Unknown capacity' : `${capacityRange[0].toLocaleString()} – ${capacityRange[1] === 65000 ? '65,000+' : capacityRange[1].toLocaleString()}`}
+
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Size</span>
+                  <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
+                    {CAPACITY_BUTTONS.map(btn => (
+                      <button
+                        key={btn.key}
+                        onClick={() => handleCapacityButton(btn.key, btn.range)}
+                        title={btn.tooltip}
+                        className={`px-2.5 py-1.5 transition-colors ${
+                          capacityFilter === btn.key
+                            ? 'bg-primary text-primary-foreground'
+                            : `bg-card ${btn.unselectedClass} hover:bg-muted`
+                        }`}
+                      >
+                        {btn.label}
+                      </button>
+                    ))}
                   </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Status</span>
+                  <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
+                    {STATUS_BUTTONS.map(btn => (
+                      <button
+                        key={btn.key}
+                        onClick={() => { setStatusFilter(btn.key); setCurrentPage(1); setPageInput('1') }}
+                        className={`px-2.5 py-1.5 transition-colors ${
+                          statusFilter === btn.key
+                            ? 'bg-primary text-primary-foreground'
+                            : `bg-card ${btn.unselectedClass} hover:bg-muted`
+                        }`}
+                      >
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 max-w-sm">
+                <Slider
+                  range min={0} max={65000}
+                  value={capacityFilter === 'unknown' ? [0, 65000] : capacityRange}
+                  onChange={handleCapacitySlider}
+                  disabled={capacityFilter === 'unknown'}
+                  styles={sliderStyles}
+                />
+                <div className="text-xs text-muted-foreground mt-1 text-center">
+                  {capacityFilter === 'unknown'
+                    ? 'Unknown capacity'
+                    : `${capacityRange[0].toLocaleString()} – ${capacityRange[1] === 65000 ? '65,000+' : capacityRange[1].toLocaleString()}`
+                  }
                 </div>
               </div>
             </div>
 
             {/* Year Range */}
-            <div className="mb-6">
+            <div className="mb-2">
               <div className="flex items-center gap-2 mb-2">
                 <label className="block text-sm font-medium text-foreground">Year Range:</label>
                 <input type="number" value={typeof yearRange[0] === 'number' ? yearRange[0] : 1900}
@@ -534,10 +640,9 @@ function BrowseContent({
 
           {/* Shows Table */}
           <div className="rounded-lg shadow-lg overflow-x-auto">
-            <table className="min-w-full divide-y divide-border">
+            <table className="min-w-full divide-y divide-border table-fixed">
               <thead className="bg-muted">
                 <tr>
-                  {/* ── DESKTOP headers (hidden on mobile) ── */}
                   {user && <th className={`hidden md:table-cell ${thBase} w-12`}></th>}
                   <th className={`hidden md:table-cell ${thSortable} w-28 whitespace-nowrap`} onClick={() => handleSort('date')}>
                     Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
@@ -559,15 +664,13 @@ function BrowseContent({
                       )}
                     </span>
                   </th>
-                  <th className={`hidden md:table-cell ${thBase} w-14 text-center px-0`}>Setlist</th>
-                  <th className={`hidden md:table-cell ${thBase} w-14 text-center px-0`}>Spotify</th>
+                  <th className={`hidden md:table-cell ${thCenter} w-14`}>Setlist</th>
+                  <th className={`hidden md:table-cell ${thCenter} w-14`}>Spotify</th>
 
-                  {/* ── MOBILE headers (hidden on desktop) ── */}
                   {user && <th className={`md:hidden ${thBase} w-8 px-1`}></th>}
                   <th className={`md:hidden ${thSortable} px-1`} onClick={() => handleSort('date')}>
                     Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  {/* Non-clickable th containing two independent sort buttons */}
                   <th className={`md:hidden ${thBase} px-1`}>
                     <span className="flex items-center gap-3">
                       <button
@@ -584,14 +687,16 @@ function BrowseContent({
                       </button>
                     </span>
                   </th>
-                  {/* Empty header for the icons column */}
-                  <th className={`md:hidden ${thBase} px-0 text-center`}></th>
+                  <th className={`md:hidden ${thCenter}`}></th>
                 </tr>
               </thead>
               <tbody className="bg-card divide-y divide-border">
                 {currentShows.map((show) => {
                   const isAdded = userShows.has(show.show_id)
                   const isLoading = loadingShows.has(show.show_id)
+                  const venueTooltip = show.venue.other_names
+                    ? `Also known as: ${show.venue.other_names}`
+                    : show.venue.venue_name
 
                   const heartButton = (
                     <button onClick={() => toggleShow(show.show_id)} disabled={isLoading}
@@ -627,12 +732,8 @@ function BrowseContent({
 
                   return (
                     <tr key={show.show_id} className="hover:bg-muted/50">
-
-                      {/* ── DESKTOP cells (hidden on mobile) ── */}
                       {user && (
-                        <td className="hidden md:table-cell px-3 py-3">
-                          {heartButton}
-                        </td>
+                        <td className="hidden md:table-cell px-3 py-3">{heartButton}</td>
                       )}
                       <td className="hidden md:table-cell px-3 py-3 whitespace-nowrap text-sm text-foreground">
                         {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
@@ -651,7 +752,7 @@ function BrowseContent({
                           <button
                             onClick={() => { setSelectedVenue({ value: show.venue.venue_id, label: show.venue.venue_name }); setCurrentPage(1); setPageInput('1') }}
                             className="text-sm text-primary hover:opacity-80 hover:underline text-left truncate shrink-0 max-w-[140px]"
-                            title={show.venue.venue_name}
+                            title={venueTooltip}
                           >
                             {show.venue.venue_name}
                           </button>
@@ -668,29 +769,20 @@ function BrowseContent({
                         </div>
                       </td>
                       <td className="hidden md:table-cell py-3 w-14 px-0 align-middle">
-                        <div className="flex items-center justify-center">
-                          {setlistIcon}
-                        </div>
+                        <div className="flex items-center justify-center">{setlistIcon}</div>
                       </td>
                       <td className="hidden md:table-cell py-3 w-14 px-0 align-middle">
-                        <div className="flex items-center justify-center">
-                          {spotifyIcon}
-                        </div>
+                        <div className="flex items-center justify-center">{spotifyIcon}</div>
                       </td>
 
-                      {/* ── MOBILE cells (hidden on desktop) ── */}
                       {user && (
-                        <td className="md:hidden px-1 py-2 align-middle w-7">
-                          {heartButton}
-                        </td>
+                        <td className="md:hidden px-1 py-2 align-middle w-7">{heartButton}</td>
                       )}
-                      {/* Date */}
                       <td className="md:hidden px-1 py-2 align-top whitespace-nowrap">
                         <span className="text-[11px] text-foreground">
                           {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                         </span>
                       </td>
-                      {/* Artist (line 1) + Venue + F badge (line 2) */}
                       <td className="md:hidden px-1 py-2">
                         <button
                           onClick={() => { setSelectedArtist({ value: show.artist.artist_id, label: show.artist.artist_name }); setCurrentPage(1); setPageInput('1') }}
@@ -703,7 +795,7 @@ function BrowseContent({
                           <button
                             onClick={() => { setSelectedVenue({ value: show.venue.venue_id, label: show.venue.venue_name }); setCurrentPage(1); setPageInput('1') }}
                             className="text-[10px] text-muted-foreground hover:text-primary hover:underline text-left truncate leading-snug min-w-0"
-                            title={show.venue.venue_name}
+                            title={venueTooltip}
                           >
                             {show.venue.venue_name}
                           </button>
@@ -718,14 +810,12 @@ function BrowseContent({
                           )}
                         </div>
                       </td>
-                      {/* Setlist + Spotify icons horizontal */}
                       <td className="md:hidden py-2 px-1 w-10 align-middle">
                         <div className="flex items-center justify-center gap-2">
                           {setlistIcon}
                           {spotifyIcon}
                         </div>
                       </td>
-
                     </tr>
                   )
                 })}
