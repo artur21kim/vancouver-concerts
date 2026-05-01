@@ -44,25 +44,19 @@ type StatusFilter = 'all' | 'open' | 'closed'
 
 const MONTH_NAMES_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-const CAPACITY_BUTTONS: {
-  key: CapacityFilter
-  label: string
-  tooltip: string
-  unselectedClass: string
-  range: [number, number]
-}[] = [
-  { key: 'small',   label: 'S',   tooltip: 'Small (< 500)',     unselectedClass: 'text-purple-600 dark:text-purple-400', range: [0, 500] },
-  { key: 'medium',  label: 'M',   tooltip: 'Medium (500–1.5K)', unselectedClass: 'text-blue-600 dark:text-blue-400',    range: [500, 1500] },
-  { key: 'large',   label: 'L',   tooltip: 'Large (1.5K–10K)',  unselectedClass: 'text-orange-600 dark:text-orange-400', range: [1500, 10000] },
-  { key: 'xlarge',  label: 'XL',  tooltip: 'X-Large (10K+)',    unselectedClass: 'text-rose-600 dark:text-rose-400',    range: [10000, 65000] },
-  { key: 'all',     label: 'All', tooltip: 'All venues',        unselectedClass: 'text-muted-foreground',               range: [0, 65000] },
-  { key: 'unknown', label: '?',   tooltip: 'Unknown capacity',  unselectedClass: 'text-gray-400 dark:text-gray-500',    range: [0, 65000] },
+const CAPACITY_BUTTONS = [
+  { key: 'small', label: 'S', tooltip: 'Small (< 500)', unselectedClass: 'text-purple-400 dark:text-purple-300', range: [0, 500] },
+  { key: 'medium', label: 'M', tooltip: 'Medium (500–1.5K)', unselectedClass: 'text-teal-600 dark:text-teal-400', range: [500, 1500] },
+  { key: 'large', label: 'L', tooltip: 'Large (1.5K–10K)', unselectedClass: 'text-orange-600 dark:text-orange-400', range: [1500, 10000] },
+  { key: 'xlarge', label: 'XL', tooltip: 'X-Large (10K+)', unselectedClass: 'text-rose-600 dark:text-rose-400', range: [10000, 65000] },
+  { key: 'all', label: 'All', tooltip: 'All venues', unselectedClass: 'text-muted-foreground', range: [0, 65000] },
+  { key: 'unknown', label: '?', tooltip: 'Unknown capacity', unselectedClass: 'text-gray-400 dark:text-gray-500', range: [0, 65000] },
 ]
 
-const STATUS_BUTTONS: { key: StatusFilter; label: string; unselectedClass: string }[] = [
-  { key: 'all',    label: 'All',    unselectedClass: 'text-muted-foreground' },
-  { key: 'open',   label: 'Open',   unselectedClass: 'text-teal-600 dark:text-teal-400' },
-  { key: 'closed', label: 'Closed', unselectedClass: 'text-slate-500 dark:text-slate-400' },
+const STATUS_BUTTONS = [
+  { key: 'all', label: 'All', unselectedClass: 'text-muted-foreground' },
+  { key: 'open', label: 'Open', unselectedClass: 'text-muted-foreground' },
+  { key: 'closed', label: 'Closed', unselectedClass: 'text-muted-foreground' },
 ]
 
 const CAPACITY_LABELS: Record<CapacityFilter, string> = {
