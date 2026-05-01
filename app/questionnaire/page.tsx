@@ -190,8 +190,8 @@ export default function QuestionnairePage() {
 
   const pageTitle = matchScope === 'past' ? 'Find Your Concert History' : 'Find Upcoming Shows';
   const pageSubtitle = matchScope === 'past'
-    ? "We'll match your Spotify listening history with Vancouver shows to help you discover ones you may have attended."
-    : "We'll match your Spotify library with upcoming Vancouver shows so you never miss a show.";
+    ? "We'll match your Spotify library with Vancouver shows to help you discover ones you may have attended."
+    : "We'll only search for shows from this year onwards to match your history.";
 
   return (
     <div className="min-h-screen bg-background py-12 px-4">
