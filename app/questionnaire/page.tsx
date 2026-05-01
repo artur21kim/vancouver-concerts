@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import AuthModal from '@/components/AuthModal';
 
 type MatchScope = 'past' | 'upcoming';
 
@@ -30,10 +31,17 @@ export default function QuestionnairePage() {
   const [hasExistingData, setHasExistingData] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [showTooltip, setShowTooltip] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
     checkUserStatus();
   }, []);
+
+  // Re-check user status when auth modal closes in case they just signed in
+  const handleAuthModalClose = () => {
+    setShowAuthModal(false);
+    checkUserStatus();
+  };
 
   const checkUserStatus = async () => {
     try {
@@ -48,6 +56,12 @@ export default function QuestionnairePage() {
           .limit(1);
 
         setHasExistingData(!!(existingSongs && existingSongs.length > 0));
+
+        // Restore localStorage values if returning from auth modal
+        const savedYear = localStorage.getItem('firstConcertYear');
+        const savedScope = localStorage.getItem('matchScope') as MatchScope | null;
+        if (savedScope) setMatchScope(savedScope);
+        if (savedYear) setYear(parseInt(savedYear));
       }
     } catch (err) {
       console.error('Error checking user status:', err);
@@ -90,7 +104,7 @@ export default function QuestionnairePage() {
     if (!user) {
       if (matchScope === 'past') localStorage.setItem('firstConcertYear', year.toString());
       localStorage.setItem('matchScope', matchScope);
-      router.push('/login?return_to=/questionnaire');
+      setShowAuthModal(true);
       return;
     }
 
@@ -277,7 +291,7 @@ export default function QuestionnairePage() {
           ) : (
             <div>
               <label className="block text-lg font-semibold text-card-foreground mb-4">
-                Show upcoming concerts from when?
+                Find upcoming concerts from when?
               </label>
 
               <input
@@ -329,6 +343,12 @@ export default function QuestionnairePage() {
           )}
         </div>
       </div>
+
+      {/* Auth modal — rendered inline so we can open it without a redirect */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={handleAuthModalClose}
+      />
     </div>
   );
 }
