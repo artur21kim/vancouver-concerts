@@ -16,7 +16,7 @@ function getVancouverToday(): string {
   }).format(new Date());
 }
 
-export default function QuestionnairePage() {
+export default function Page() {
   const router = useRouter();
   const supabase = createClient();
 

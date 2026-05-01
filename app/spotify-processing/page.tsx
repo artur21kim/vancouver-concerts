@@ -64,10 +64,10 @@ export default function SpotifyProcessingPage() {
               <h2 className="text-2xl font-bold text-destructive mb-2">Processing Failed</h2>
               <p className="text-destructive/80 mb-6">{error}</p>
               <button
-                onClick={() => router.push('/questionnaire')}
+                onClick={() => router.push('/discover')}
                 className="px-6 py-3 bg-destructive text-white font-semibold rounded-lg hover:bg-destructive/90 transition"
               >
-                Return to Questionnaire
+                Return to Discover
               </button>
             </div>
           </div>

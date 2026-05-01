@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
     if (profileError || !profile?.first_concert_year) {
       return NextResponse.json({ 
-        error: 'First concert year not found. Please complete the questionnaire.' 
+        error: 'First concert year not found. Please complete the Discover setup.' 
       }, { status: 400 });
     }
 

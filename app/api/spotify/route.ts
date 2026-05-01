@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   if (!user) {
     // Redirect to login with return path
     return NextResponse.redirect(
-      new URL('/login?return_to=/questionnaire', requestUrl.origin)
+      new URL('/login?return_to=/discover', requestUrl.origin)
     );
   }
 

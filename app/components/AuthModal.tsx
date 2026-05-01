@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 type AuthModalProps = {
     isOpen: boolean
     onClose: () => void
-    returnPath?: string // path to return to after OAuth login, e.g. '/questionnaire'
+    returnPath?: string // path to return to after OAuth login, e.g. '/discover'
 }
 
 export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProps) {

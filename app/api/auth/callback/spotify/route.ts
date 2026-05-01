@@ -8,7 +8,7 @@ export async function GET(request: Request) {
 
   if (!code || !state) {
     return NextResponse.redirect(
-      new URL('/questionnaire?error=spotify_auth_failed', requestUrl.origin)
+      new URL('/discover?error=spotify_auth_failed', requestUrl.origin)
     );
   }
 
@@ -99,7 +99,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('❌ Spotify OAuth error:', error);
     return NextResponse.redirect(
-      new URL('/questionnaire?error=spotify_processing_failed', requestUrl.origin)
+      new URL('/discover?error=spotify_processing_failed', requestUrl.origin)
     );
   }
 }

@@ -132,10 +132,10 @@ export default function MatchesPage() {
               <h2 className="text-xl font-bold text-destructive mb-2">Error Loading Matches</h2>
               <p className="text-destructive/80">{error}</p>
               <button
-                onClick={() => router.push('/questionnaire')}
+                onClick={() => router.push('/discover')}
                 className="mt-4 px-4 py-2 bg-destructive text-white rounded-lg hover:bg-destructive/90"
               >
-                Back to Questionnaire
+                Back to Discover
               </button>
             </div>
           </div>
