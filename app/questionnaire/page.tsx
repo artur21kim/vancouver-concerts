@@ -162,7 +162,7 @@ export default function QuestionnairePage() {
         <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-8">
           <h1 className="text-3xl font-bold text-card-foreground mb-4">Spotify Already Connected</h1>
           <p className="text-foreground mb-8">
-            You've already connected your Spotify account and we've matched your listening history to Vancouver concerts.
+            You've already connected your Spotify account and we've matched your listening history to Vancouver shows.
           </p>
           <div className="space-y-4">
             <button
@@ -190,8 +190,8 @@ export default function QuestionnairePage() {
 
   const pageTitle = matchScope === 'past' ? 'Find Your Concert History' : 'Find Upcoming Shows';
   const pageSubtitle = matchScope === 'past'
-    ? "We'll match your Spotify listening history with Vancouver concerts to help you discover shows you may have attended."
-    : "We'll match your Spotify library with upcoming Vancouver concerts so you never miss a show.";
+    ? "We'll match your Spotify listening history with Vancouver shows to help you discover ones you may have attended."
+    : "We'll match your Spotify library with upcoming Vancouver shows so you never miss a show.";
 
   return (
     <div className="min-h-screen bg-background py-12 px-4">
@@ -271,7 +271,7 @@ export default function QuestionnairePage() {
               )}
 
               <p className="text-sm text-foreground/70 italic mt-4">
-                💡 We'll only search for concerts from this year onwards to match your concert-going history.
+                💡 We'll search for shows from this year onwards to match your history.
               </p>
             </div>
           ) : (
@@ -289,7 +289,7 @@ export default function QuestionnairePage() {
               />
 
               <p className="text-sm text-foreground/70 italic mt-4">
-                💡 We'll find upcoming Vancouver shows featuring artists from your Spotify library from this date onwards.
+                💡 We'll find Vancouver shows with artists from your Spotify library, from this date onwards.
               </p>
             </div>
           )}
