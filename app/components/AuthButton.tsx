@@ -1,20 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { createClient } from '@/lib/supabase/client'
 import AuthModal from './AuthModal'
 
 export default function AuthButton() {
     const router = useRouter()
+    const pathname = usePathname()
     const { user, loading } = useAuth()
     const [showAuthModal, setShowAuthModal] = useState(false)
     const [showUserMenu, setShowUserMenu] = useState(false)
     const [username, setUsername] = useState<string | null>(null)
     const supabase = createClient()
 
-    // Fetch username when user is available
     useEffect(() => {
         const fetchUsername = async () => {
             if (!user) {
@@ -59,6 +59,7 @@ export default function AuthButton() {
                 <AuthModal
                     isOpen={showAuthModal}
                     onClose={() => setShowAuthModal(false)}
+                    returnPath={pathname}
                 />
             </>
         )

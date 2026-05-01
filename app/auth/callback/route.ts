@@ -4,7 +4,11 @@ import { NextResponse } from 'next/server'
 export async function GET(request: Request) {
     const requestUrl = new URL(request.url)
     const code = requestUrl.searchParams.get('code')
+    const next = requestUrl.searchParams.get('next')
     const origin = requestUrl.origin
+
+    // Sanitize next param — only allow relative paths starting with /
+    const redirectTo = next && next.startsWith('/') ? next : '/'
 
     if (code) {
         const supabase = await createClient()
@@ -25,6 +29,6 @@ export async function GET(request: Request) {
         }
     }
 
-    // User has profile with username, redirect to home
-    return NextResponse.redirect(`${origin}`)
+    // Redirect to next param if provided, otherwise home
+    return NextResponse.redirect(`${origin}${redirectTo}`)
 }
