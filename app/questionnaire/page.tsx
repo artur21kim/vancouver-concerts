@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import AuthModal from '@/components/AuthModal';
+import AuthModal from '@/app/components/AuthModal';
 
 type MatchScope = 'past' | 'upcoming';
 
