@@ -277,7 +277,7 @@ export default function HomeClient({
             const label = item.chart.data.labels[item.dataIndex] as string
             const total = columnTotals[label] || 0
             const value = item.parsed.y
-            if (value === 0) return null
+            if (value === 0) return undefined
             const pct = total > 0 ? Math.round((value / total) * 100) : 0
             return `${item.dataset.label}: ${pct}%`
           },
