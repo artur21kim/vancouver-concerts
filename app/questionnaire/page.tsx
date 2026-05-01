@@ -4,13 +4,27 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
+type MatchScope = 'past' | 'upcoming';
+
+function getVancouverToday(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Vancouver',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
 export default function QuestionnairePage() {
   const router = useRouter();
   const supabase = createClient();
 
   const currentYear = new Date().getFullYear();
+  const todayVancouver = getVancouverToday(); // YYYY-MM-DD
 
+  const [matchScope, setMatchScope] = useState<MatchScope>('past');
   const [year, setYear] = useState<number | ''>('');
+  const [fromDate, setFromDate] = useState<string>(todayVancouver);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [hasExistingData, setHasExistingData] = useState(false);
@@ -42,6 +56,11 @@ export default function QuestionnairePage() {
     }
   };
 
+  const handleScopeChange = (scope: MatchScope) => {
+    setMatchScope(scope);
+    setError('');
+  };
+
   const handleYearChange = (value: string) => {
     if (value === '') {
       setYear('');
@@ -57,33 +76,63 @@ export default function QuestionnairePage() {
     } else if (numValue < 1900) {
       setYear(numValue); setError('Year must be 1900 or later');
     } else {
-      setYear(numValue); setError('Year cannot be in the future');
+      setYear(numValue); setError(`Year cannot be later than ${currentYear}`);
     }
   };
 
-  const isYearValid = year !== '' && !error && (year as number) >= 1900 && (year as number) <= currentYear;
+  const isPastValid = matchScope === 'past' && year !== '' && !error && (year as number) >= 1900 && (year as number) <= currentYear;
+  const isUpcomingValid = matchScope === 'upcoming' && fromDate !== '';
+  const isFormValid = isPastValid || isUpcomingValid;
 
   const handleConnectSpotify = async () => {
-    if (!isYearValid) return;
+    if (!isFormValid) return;
 
     if (!user) {
-      localStorage.setItem('firstConcertYear', year.toString());
+      if (matchScope === 'past') localStorage.setItem('firstConcertYear', year.toString());
+      localStorage.setItem('matchScope', matchScope);
       router.push('/login?return_to=/questionnaire');
       return;
     }
 
     try {
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({ first_concert_year: year })
-        .eq('user_id', user.id);
+      const profileUpdate: Record<string, any> = {};
 
-      if (updateError) {
-        setError('Failed to save concert year. Please try again.');
-        return;
+      // Only write initial_match_scope on first run, never overwrite
+      const { data: existingProfile } = await supabase
+        .from('user_profiles')
+        .select('initial_match_scope')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!existingProfile?.initial_match_scope) {
+        profileUpdate.initial_match_scope = matchScope;
       }
 
-      router.push(`/api/auth/spotify?first_concert_year=${year}`);
+      if (matchScope === 'past') {
+        profileUpdate.first_concert_year = year;
+      }
+
+      if (Object.keys(profileUpdate).length > 0) {
+        const { error: updateError } = await supabase
+          .from('user_profiles')
+          .update(profileUpdate)
+          .eq('user_id', user.id);
+
+        if (updateError) {
+          setError('Failed to save preferences. Please try again.');
+          return;
+        }
+      }
+
+      // Build URL params for Spotify auth route
+      const params = new URLSearchParams({ match_scope: matchScope });
+      if (matchScope === 'past') {
+        params.set('first_concert_year', year.toString());
+      } else {
+        params.set('from_date', fromDate);
+      }
+
+      router.push(`/api/auth/spotify?${params.toString()}`);
     } catch (err) {
       setError('An error occurred. Please try again.');
     }
@@ -148,63 +197,119 @@ export default function QuestionnairePage() {
         </p>
 
         <div className="space-y-6">
+
+          {/* Scope toggle */}
           <div>
-            <label className="block text-lg font-semibold text-card-foreground mb-4">
-              What year did you go to your first concert?
+            <label className="block text-lg font-semibold text-card-foreground mb-3">
+              What would you like to explore?
             </label>
-
-            <input
-              type="number"
-              min="1900"
-              max={currentYear}
-              value={year}
-              onChange={(e) => handleYearChange(e.target.value)}
-              placeholder="Enter year (e.g., 2010)"
-              className="w-full px-4 py-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground text-lg"
-            />
-
-            {error && <p className="text-destructive text-sm mt-2">{error}</p>}
-
-            {year !== '' && (
-              <div className="mt-6">
-                <div className="flex justify-between text-sm text-muted-foreground mb-2">
-                  <span>1900</span>
-                  <span className="font-semibold text-foreground">{year}</span>
-                  <span>{currentYear}</span>
-                </div>
-                <input
-                  type="range"
-                  min="1900"
-                  max={currentYear}
-                  value={year || 1900}
-                  onChange={(e) => { setYear(parseInt(e.target.value)); setError(''); }}
-                  className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-                />
-              </div>
-            )}
+            <div className="flex rounded-lg border border-input overflow-hidden">
+              <button
+                onClick={() => handleScopeChange('past')}
+                className={`flex-1 px-4 py-2.5 text-sm font-semibold transition ${
+                  matchScope === 'past'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background text-foreground hover:bg-muted'
+                }`}
+              >
+                Past Shows
+              </button>
+              <button
+                onClick={() => handleScopeChange('upcoming')}
+                className={`flex-1 px-4 py-2.5 text-sm font-semibold transition border-l border-input ${
+                  matchScope === 'upcoming'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background text-foreground hover:bg-muted'
+                }`}
+              >
+                Upcoming Shows
+              </button>
+            </div>
+            <p className="text-sm text-foreground/60 italic mt-2">
+              Once connected, you can check both past and upcoming shows anytime — choose whichever you'd like to explore first.
+            </p>
           </div>
 
-          <p className="text-sm text-foreground/70 italic">
-            💡 We'll only search for concerts from this year onwards to match your concert-going history.
-          </p>
+          {/* Conditional field */}
+          {matchScope === 'past' ? (
+            <div>
+              <label className="block text-lg font-semibold text-card-foreground mb-4">
+                What year did you go to your first concert?
+              </label>
 
-          {/* Spotify button — always green, gated by tooltip + pointer-events when year invalid */}
+              <input
+                type="number"
+                min="1900"
+                max={currentYear}
+                value={year}
+                onChange={(e) => handleYearChange(e.target.value)}
+                placeholder="Enter year (e.g., 2010)"
+                className="w-full px-4 py-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground text-lg"
+              />
+
+              {error && <p className="text-destructive text-sm mt-2">{error}</p>}
+
+              {year !== '' && (
+                <div className="mt-6">
+                  <div className="flex justify-between text-sm text-muted-foreground mb-2">
+                    <span>1900</span>
+                    <span className="font-semibold text-foreground">{year}</span>
+                    <span>{currentYear}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1900"
+                    max={currentYear}
+                    value={year || 1900}
+                    onChange={(e) => { setYear(parseInt(e.target.value)); setError(''); }}
+                    className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+                </div>
+              )}
+
+              <p className="text-sm text-foreground/70 italic mt-4">
+                💡 We'll only search for concerts from this year onwards to match your concert-going history.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-lg font-semibold text-card-foreground mb-4">
+                Show upcoming concerts from when?
+              </label>
+
+              <input
+                type="date"
+                min={todayVancouver}
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="w-full px-4 py-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground text-lg"
+              />
+
+              <p className="text-sm text-foreground/70 italic mt-4">
+                💡 We'll find upcoming Vancouver shows featuring artists in your Spotify library from this date onwards.
+              </p>
+            </div>
+          )}
+
+          {/* Spotify button */}
           <div
             className="relative"
-            onMouseEnter={() => { if (!isYearValid) setShowTooltip(true); }}
+            onMouseEnter={() => { if (!isFormValid) setShowTooltip(true); }}
             onMouseLeave={() => setShowTooltip(false)}
           >
-            {showTooltip && !isYearValid && (
+            {showTooltip && !isFormValid && (
               <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-3 py-1.5 rounded-md whitespace-nowrap z-10 shadow-lg">
-                Enter your first concert year to continue
+                {matchScope === 'past'
+                  ? 'Enter your first concert year to continue'
+                  : 'Select a date to continue'}
                 <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
               </div>
             )}
             <button
               onClick={handleConnectSpotify}
-              disabled={!isYearValid}
+              disabled={!isFormValid}
               className={`w-full px-6 py-4 rounded-lg font-semibold text-white text-lg transition flex items-center justify-center gap-3 bg-green-600 hover:bg-green-700 ${
-                !isYearValid ? 'opacity-75 cursor-not-allowed hover:bg-green-600' : ''
+                !isFormValid ? 'opacity-75 cursor-not-allowed hover:bg-green-600' : ''
               }`}
             >
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
