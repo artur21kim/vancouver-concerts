@@ -271,7 +271,7 @@ export default function QuestionnairePage() {
               )}
 
               <p className="text-sm text-foreground/70 italic mt-4">
-                💡 We'll search for shows from this year onwards to match your history.
+                💡 We'll find Vancouver shows with artists from your Spotify library, from this year onwards.
               </p>
             </div>
           ) : (
