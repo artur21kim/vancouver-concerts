@@ -50,6 +50,15 @@ export default function Navigation() {
                                     : 'text-muted-foreground hover:text-foreground'
                                     }`}
                             >
+                                Discover
+                            </a>
+                            <a         
+                            href="/browse"
+                            className={`text-sm font-medium transition-colors ${isActive('/browse')
+                                ? 'text-primary border-b-2 border-primary pb-1'
+                                : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                            >
                                 Browse
                             </a>
                             <a
