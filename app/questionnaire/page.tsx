@@ -188,13 +188,16 @@ export default function QuestionnairePage() {
     );
   }
 
+  const pageTitle = matchScope === 'past' ? 'Find Your Concert History' : 'Find Upcoming Shows';
+  const pageSubtitle = matchScope === 'past'
+    ? "We'll match your Spotify listening history with Vancouver concerts to help you discover shows you may have attended."
+    : "We'll match your Spotify library with upcoming Vancouver concerts so you never miss a show.";
+
   return (
     <div className="min-h-screen bg-background py-12 px-4">
       <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-8">
-        <h1 className="text-3xl font-bold text-card-foreground mb-2">Find Your Concert History</h1>
-        <p className="text-foreground mb-8">
-          We'll match your Spotify listening history with Vancouver concerts to help you discover shows you may have attended.
-        </p>
+        <h1 className="text-3xl font-bold text-card-foreground mb-2">{pageTitle}</h1>
+        <p className="text-foreground mb-8">{pageSubtitle}</p>
 
         <div className="space-y-6">
 
@@ -286,7 +289,7 @@ export default function QuestionnairePage() {
               />
 
               <p className="text-sm text-foreground/70 italic mt-4">
-                💡 We'll find upcoming Vancouver shows featuring artists in your Spotify library from this date onwards.
+                💡 We'll find upcoming Vancouver shows featuring artists from your Spotify library from this date onwards.
               </p>
             </div>
           )}
