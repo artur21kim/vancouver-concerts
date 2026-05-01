@@ -165,10 +165,10 @@ export default function HomeClient({
     let fourthCard: { label: string; value: string } | null = null
     if (selectedYear && !selectedMonth) {
       const avg = Math.round(totalShows / 12)
-      fourthCard = { label: 'per Month', value: avg.toLocaleString() }
+      fourthCard = { label: 'Shows per Month', value: avg.toLocaleString() }
     } else if (selectedDecade !== 'all' && !selectedYear) {
       const avg = Math.round(totalShows / 10)
-      fourthCard = { label: 'per Year', value: avg.toLocaleString() }
+      fourthCard = { label: 'Shows per Year', value: avg.toLocaleString() }
     } else if (selectedDecade === 'all' && !selectedYear) {
       fourthCard = { label: 'Date Range', value: '1900–2026' }
     }
