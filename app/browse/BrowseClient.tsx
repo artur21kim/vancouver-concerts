@@ -59,9 +59,13 @@ const CAPACITY_BUTTONS: {
     { key: 'unknown', label: '?', tooltip: 'Unknown capacity', unselectedClass: 'text-gray-400 dark:text-gray-500', range: [0, 65000] },
   ]
 
-const STATUS_BUTTONS = [
-  { key: 'all', label: 'All', unselectedClass: 'text-muted-foreground' },
-  { key: 'open', label: 'Open', unselectedClass: 'text-muted-foreground' },
+const STATUS_BUTTONS: {
+  key: StatusFilter
+  label: string
+  unselectedClass: string
+}[] = [
+  { key: 'all',    label: 'All',    unselectedClass: 'text-muted-foreground' },
+  { key: 'open',   label: 'Open',   unselectedClass: 'text-muted-foreground' },
   { key: 'closed', label: 'Closed', unselectedClass: 'text-muted-foreground' },
 ]
 
