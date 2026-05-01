@@ -43,19 +43,23 @@ type Decade = 'all' | '1900s' | '1910s' | '1920s' | '1930s' | '1940s' | '1950s' 
 const CAPACITY_META: Record<CapacityBucket, {
   label: string
   legendLabel: string
+  tooltipLabel: string
   tooltip: string
   unselectedClass: string
   bg: string
   border: string
   hoverBg: string
 }> = {
-  // Small: desaturated purple — toned down from original (147,51,234) to reduce visual dominance
-  small:   { label: 'S',  legendLabel: 'Small (<500)',      tooltip: 'Small (< 500)',     unselectedClass: 'text-purple-400 dark:text-purple-300',  bg: 'rgba(139, 92, 192, 0.7)',   border: 'rgba(139, 92, 192, 1)',  hoverBg: 'rgba(139, 92, 192, 0.9)' },
-  medium:  { label: 'M',  legendLabel: 'Medium (500–1.5K)', tooltip: 'Medium (500–1.5K)', unselectedClass: 'text-teal-600 dark:text-teal-400',      bg: 'rgba(13, 148, 136, 0.75)',  border: 'rgba(13, 148, 136, 1)',  hoverBg: 'rgba(13, 148, 136, 0.95)' },
-  large:   { label: 'L',  legendLabel: 'Large (1.5K–10K)',  tooltip: 'Large (1.5K–10K)',  unselectedClass: 'text-orange-600 dark:text-orange-400',  bg: 'rgba(234, 88, 12, 0.75)',   border: 'rgba(234, 88, 12, 1)',   hoverBg: 'rgba(234, 88, 12, 0.95)' },
-  xlarge:  { label: 'XL', legendLabel: 'X-Large (10K+)',    tooltip: 'X-Large (10K+)',    unselectedClass: 'text-rose-600 dark:text-rose-400',      bg: 'rgba(225, 29, 72, 0.75)',   border: 'rgba(225, 29, 72, 1)',   hoverBg: 'rgba(225, 29, 72, 0.95)' },
-  unknown: { label: '?',  legendLabel: 'Unknown',           tooltip: 'Unknown capacity',  unselectedClass: 'text-gray-400 dark:text-gray-500',      bg: 'rgba(156, 163, 175, 0.65)',  border: 'rgba(156, 163, 175, 1)', hoverBg: 'rgba(156, 163, 175, 0.8)' },
+  small:   { label: 'S',  legendLabel: 'Small (<500)',      tooltipLabel: 'Small',   tooltip: 'Small (< 500)',     unselectedClass: 'text-purple-400 dark:text-purple-300',  bg: 'rgba(139, 92, 192, 0.7)',   border: 'rgba(139, 92, 192, 1)',  hoverBg: 'rgba(139, 92, 192, 0.9)' },
+  medium:  { label: 'M',  legendLabel: 'Medium (500–1.5K)', tooltipLabel: 'Medium',  tooltip: 'Medium (500–1.5K)', unselectedClass: 'text-teal-600 dark:text-teal-400',      bg: 'rgba(13, 148, 136, 0.75)',  border: 'rgba(13, 148, 136, 1)',  hoverBg: 'rgba(13, 148, 136, 0.95)' },
+  large:   { label: 'L',  legendLabel: 'Large (1.5K–10K)',  tooltipLabel: 'Large',   tooltip: 'Large (1.5K–10K)',  unselectedClass: 'text-orange-600 dark:text-orange-400',  bg: 'rgba(234, 88, 12, 0.75)',   border: 'rgba(234, 88, 12, 1)',   hoverBg: 'rgba(234, 88, 12, 0.95)' },
+  xlarge:  { label: 'XL', legendLabel: 'X-Large (10K+)',    tooltipLabel: 'X-Large', tooltip: 'X-Large (10K+)',    unselectedClass: 'text-rose-600 dark:text-rose-400',      bg: 'rgba(225, 29, 72, 0.75)',   border: 'rgba(225, 29, 72, 1)',   hoverBg: 'rgba(225, 29, 72, 0.95)' },
+  unknown: { label: '?',  legendLabel: 'Unknown',           tooltipLabel: 'Unknown', tooltip: 'Unknown capacity',  unselectedClass: 'text-gray-400 dark:text-gray-500',      bg: 'rgba(156, 163, 175, 0.65)', border: 'rgba(156, 163, 175, 1)', hoverBg: 'rgba(156, 163, 175, 0.8)' },
 }
+
+const LEGEND_TO_TOOLTIP: Record<string, string> = Object.fromEntries(
+  Object.values(CAPACITY_META).map(m => [m.legendLabel, m.tooltipLabel])
+)
 
 const CAPACITY_BUCKETS: CapacityBucket[] = ['small', 'medium', 'large', 'xlarge', 'unknown']
 const CAPACITY_BUTTON_ORDER: (CapacityFilter)[] = ['small', 'medium', 'large', 'xlarge', 'all', 'unknown']
@@ -66,6 +70,7 @@ const CAPACITY_DISPLAY_NAMES: Record<CapacityBucket, string> = {
 
 const DECADES: Decade[] = ['all', '1900s', '1910s', '1920s', '1930s', '1940s', '1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s']
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const MONTH_NAMES_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const PRE1960_LABEL = 'Pre-1960s'
 
 function capacityKey(category: string | null): CapacityBucket {
@@ -269,7 +274,13 @@ export default function HomeClient({
           title: (items: any[]) => {
             if (!items.length) return ''
             const label = items[0].label
-            return label === PRE1960_LABEL ? `${PRE1960_LABEL} (1900–1959)` : label
+            if (label === PRE1960_LABEL) return `${PRE1960_LABEL} (1900–1959)`
+            // Expand short month name to full name + year in year drilldown
+            if (selectedYear) {
+              const monthIndex = MONTH_NAMES.indexOf(label)
+              if (monthIndex !== -1) return `${MONTH_NAMES_FULL[monthIndex]} ${selectedYear}`
+            }
+            return label
           },
           label: (item: any) => {
             const dataset = item.chart.data.datasets[item.datasetIndex]
@@ -279,7 +290,8 @@ export default function HomeClient({
             const value = item.parsed.y
             if (value === 0) return undefined
             const pct = total > 0 ? Math.round((value / total) * 100) : 0
-            return `${item.dataset.label}: ${pct}%`
+            const shortLabel = LEGEND_TO_TOOLTIP[item.dataset.label] ?? item.dataset.label
+            return `${shortLabel}: ${pct}%`
           },
           footer: (items: any[]) => {
             if (!items.length) return ''
@@ -347,11 +359,11 @@ export default function HomeClient({
   }, [selectedDecade, selectedYear, selectedMonth, capacityFilter])
 
   return (
-    <main className="min-h-screen bg-background py-4 md:py-8 px-4">
+    <main className="min-h-screen bg-background py-4 md:py-6 px-4">
       <div className="max-w-7xl mx-auto">
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-4 gap-2 md:gap-4 mb-4 md:mb-5">
+        <div className="grid grid-cols-4 gap-2 md:gap-3 mb-3 md:mb-4">
           <StatCard label="Shows" value={stats.totalShows.toLocaleString()} />
           <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
           <StatCard label="Venues" value={stats.uniqueVenues.toLocaleString()} />
@@ -362,8 +374,8 @@ export default function HomeClient({
           )}
         </div>
 
-        {/* Chart nav — justify-center so prev/next naturally hug the title */}
-        <div className="flex items-center justify-center gap-4 mb-2 min-h-[36px]">
+        {/* Chart nav */}
+        <div className="flex items-center justify-center gap-4 mb-2 min-h-[32px]">
           {chartNav.prev ? (
             <button
               onClick={chartNav.prev.onClick}
@@ -396,14 +408,14 @@ export default function HomeClient({
         </div>
 
         {/* Chart card */}
-        <div className="bg-card rounded-lg shadow-lg p-4 md:p-5 mb-4 md:mb-5">
-          <div style={{ height: '320px', cursor: 'pointer' }} className="md:h-[380px]">
+        <div className="bg-card rounded-lg shadow-lg p-4 md:p-4 mb-3 md:mb-4">
+          <div style={{ height: '320px', cursor: 'pointer' }} className="md:h-[420px]">
             <Bar data={chartData} options={chartOptions} />
           </div>
         </div>
 
         {/* Filters card */}
-        <div className="bg-card rounded-lg shadow-lg p-4 md:p-5 mb-4 md:mb-5 space-y-3">
+        <div className="bg-card rounded-lg shadow-lg p-3 md:p-4 mb-3 md:mb-4 space-y-3">
 
           {/* Row 1: Venue buttons + Year dropdown + Clear All */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -462,8 +474,8 @@ export default function HomeClient({
 
           <div className="border-t border-border" />
 
-          {/* Row 2: Decade buttons — horizontal scroll only, never wraps */}
-          <div className="overflow-x-auto -mx-4 px-4 md:-mx-5 md:px-5">
+          {/* Row 2: Decade buttons — horizontal scroll only */}
+          <div className="overflow-x-auto -mx-3 px-3 md:-mx-4 md:px-4">
             <div className="flex gap-2 min-w-max">
               {DECADES.map((decade) => {
                 const isActive = selectedDecade === decade && !selectedYear && selectedMonth === null
@@ -494,9 +506,9 @@ export default function HomeClient({
         </div>
 
         {/* Top tables */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-          <div className="bg-card rounded-lg shadow-lg p-4 md:p-6">
-            <h2 className="text-xl md:text-2xl font-bold text-foreground mb-4 md:mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+          <div className="bg-card rounded-lg shadow-lg p-4 md:p-5">
+            <h2 className="text-xl md:text-2xl font-bold text-foreground mb-3 md:mb-4">
               Top {showAllArtists ? '25' : '10'} Artists
               {filterContext && <span className="text-sm md:text-base font-normal text-muted-foreground ml-2">({filterContext})</span>}
             </h2>
@@ -504,7 +516,7 @@ export default function HomeClient({
               <>
                 <div className="space-y-2 md:space-y-3">
                   {topArtists.slice(0, showAllArtists ? 25 : 10).map((artist, index) => (
-                    <div key={artist.artist_id} className="flex items-center justify-between py-1">
+                    <div key={artist.artist_id} className="flex items-center justify-between py-0.5">
                       <div className="flex items-center gap-2 md:gap-3 min-w-0">
                         <span className="text-base md:text-lg font-semibold text-muted-foreground w-4 md:w-6 flex-shrink-0">{index + 1}</span>
                         <button onClick={() => router.push(`/browse?artist_id=${artist.artist_id}`)}
@@ -519,7 +531,7 @@ export default function HomeClient({
                   ))}
                 </div>
                 {topArtists.length > 10 && (
-                  <button onClick={() => setShowAllArtists(!showAllArtists)} className="mt-4 text-primary hover:opacity-80 text-xs md:text-sm font-medium">
+                  <button onClick={() => setShowAllArtists(!showAllArtists)} className="mt-3 text-primary hover:opacity-80 text-xs md:text-sm font-medium">
                     {showAllArtists ? '← Show less' : 'View more →'}
                   </button>
                 )}
@@ -527,8 +539,8 @@ export default function HomeClient({
             ) : <p className="text-sm text-muted-foreground">No shows in this period</p>}
           </div>
 
-          <div className="bg-card rounded-lg shadow-lg p-4 md:p-6">
-            <h2 className="text-xl md:text-2xl font-bold text-foreground mb-4 md:mb-6">
+          <div className="bg-card rounded-lg shadow-lg p-4 md:p-5">
+            <h2 className="text-xl md:text-2xl font-bold text-foreground mb-3 md:mb-4">
               Top {showAllVenues ? '25' : '10'} Venues
               {filterContext && <span className="text-sm md:text-base font-normal text-muted-foreground ml-2">({filterContext})</span>}
             </h2>
@@ -536,7 +548,7 @@ export default function HomeClient({
               <>
                 <div className="space-y-2 md:space-y-3">
                   {topVenues.slice(0, showAllVenues ? 25 : 10).map((venue, index) => (
-                    <div key={venue.venue_id} className="flex items-center justify-between py-1">
+                    <div key={venue.venue_id} className="flex items-center justify-between py-0.5">
                       <div className="flex items-center gap-2 md:gap-3 min-w-0">
                         <span className="text-base md:text-lg font-semibold text-muted-foreground w-4 md:w-6 flex-shrink-0">{index + 1}</span>
                         <button onClick={() => router.push(`/browse?venue_id=${venue.venue_id}`)}
@@ -551,7 +563,7 @@ export default function HomeClient({
                   ))}
                 </div>
                 {topVenues.length > 10 && (
-                  <button onClick={() => setShowAllVenues(!showAllVenues)} className="mt-4 text-primary hover:opacity-80 text-xs md:text-sm font-medium">
+                  <button onClick={() => setShowAllVenues(!showAllVenues)} className="mt-3 text-primary hover:opacity-80 text-xs md:text-sm font-medium">
                     {showAllVenues ? '← Show less' : 'View more →'}
                   </button>
                 )}
