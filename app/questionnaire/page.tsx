@@ -7,12 +7,15 @@ import { createClient } from '@/lib/supabase/client';
 export default function QuestionnairePage() {
   const router = useRouter();
   const supabase = createClient();
-  
+
+  const currentYear = new Date().getFullYear();
+
   const [year, setYear] = useState<number | ''>('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [hasExistingData, setHasExistingData] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [showTooltip, setShowTooltip] = useState(false);
 
   useEffect(() => {
     checkUserStatus();
@@ -45,11 +48,11 @@ export default function QuestionnairePage() {
       setError('');
       return;
     }
-    
+
     const numValue = parseInt(value);
     if (isNaN(numValue)) { setError('Please enter a valid year'); return; }
-    
-    if (numValue >= 1900 && numValue <= 2025) {
+
+    if (numValue >= 1900 && numValue <= currentYear) {
       setYear(numValue); setError('');
     } else if (numValue < 1900) {
       setYear(numValue); setError('Year must be 1900 or later');
@@ -58,11 +61,10 @@ export default function QuestionnairePage() {
     }
   };
 
+  const isYearValid = year !== '' && !error && (year as number) >= 1900 && (year as number) <= currentYear;
+
   const handleConnectSpotify = async () => {
-    if (!year || year < 1900 || year > 2025) {
-      setError('Please enter a valid year between 1900 and 2025');
-      return;
-    }
+    if (!isYearValid) return;
 
     if (!user) {
       localStorage.setItem('firstConcertYear', year.toString());
@@ -110,7 +112,7 @@ export default function QuestionnairePage() {
       <div className="min-h-screen bg-background py-12 px-4">
         <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-8">
           <h1 className="text-3xl font-bold text-card-foreground mb-4">Spotify Already Connected</h1>
-          <p className="text-muted-foreground mb-8">
+          <p className="text-foreground mb-8">
             You've already connected your Spotify account and we've matched your listening history to Vancouver concerts.
           </p>
           <div className="space-y-4">
@@ -120,12 +122,17 @@ export default function QuestionnairePage() {
             >
               View My Matches
             </button>
-            <button
-              onClick={handleRerunMatcher}
-              className="w-full bg-muted text-muted-foreground px-6 py-3 rounded-lg font-semibold hover:bg-muted/80 transition"
-            >
-              Re-run Matcher (Refresh Data)
-            </button>
+            <div>
+              <button
+                onClick={handleRerunMatcher}
+                className="w-full bg-muted text-muted-foreground px-6 py-3 rounded-lg font-semibold hover:bg-muted/80 transition"
+              >
+                Re-sync Spotify Data
+              </button>
+              <p className="text-sm text-muted-foreground text-center mt-2">
+                Use this if your match results seem incomplete
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -136,7 +143,7 @@ export default function QuestionnairePage() {
     <div className="min-h-screen bg-background py-12 px-4">
       <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-8">
         <h1 className="text-3xl font-bold text-card-foreground mb-2">Find Your Concert History</h1>
-        <p className="text-muted-foreground mb-8">
+        <p className="text-foreground mb-8">
           We'll match your Spotify listening history with Vancouver concerts to help you discover shows you may have attended.
         </p>
 
@@ -145,30 +152,30 @@ export default function QuestionnairePage() {
             <label className="block text-lg font-semibold text-card-foreground mb-4">
               What year did you go to your first concert?
             </label>
-            
+
             <input
               type="number"
               min="1900"
-              max="2025"
+              max={currentYear}
               value={year}
               onChange={(e) => handleYearChange(e.target.value)}
               placeholder="Enter year (e.g., 2010)"
               className="w-full px-4 py-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground text-lg"
             />
-            
+
             {error && <p className="text-destructive text-sm mt-2">{error}</p>}
-            
+
             {year !== '' && (
               <div className="mt-6">
                 <div className="flex justify-between text-sm text-muted-foreground mb-2">
                   <span>1900</span>
                   <span className="font-semibold text-foreground">{year}</span>
-                  <span>2025</span>
+                  <span>{currentYear}</span>
                 </div>
                 <input
                   type="range"
                   min="1900"
-                  max="2025"
+                  max={currentYear}
                   value={year || 1900}
                   onChange={(e) => { setYear(parseInt(e.target.value)); setError(''); }}
                   className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
@@ -177,27 +184,38 @@ export default function QuestionnairePage() {
             )}
           </div>
 
-          <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
-            <p className="text-sm text-foreground">
-              💡 We'll only search for concerts from this year onwards to match your concert-going history.
-            </p>
+          <p className="text-sm text-foreground/70 italic">
+            💡 We'll only search for concerts from this year onwards to match your concert-going history.
+          </p>
+
+          {/* Spotify button — always green, gated by tooltip + pointer-events when year invalid */}
+          <div
+            className="relative"
+            onMouseEnter={() => { if (!isYearValid) setShowTooltip(true); }}
+            onMouseLeave={() => setShowTooltip(false)}
+          >
+            {showTooltip && !isYearValid && (
+              <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-3 py-1.5 rounded-md whitespace-nowrap z-10 shadow-lg">
+                Enter your first concert year to continue
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+              </div>
+            )}
+            <button
+              onClick={handleConnectSpotify}
+              disabled={!isYearValid}
+              className={`w-full px-6 py-4 rounded-lg font-semibold text-white text-lg transition flex items-center justify-center gap-3 bg-green-600 hover:bg-green-700 ${
+                !isYearValid ? 'opacity-75 cursor-not-allowed hover:bg-green-600' : ''
+              }`}
+            >
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+              </svg>
+              Connect with Spotify
+            </button>
           </div>
 
-          <button
-            onClick={handleConnectSpotify}
-            disabled={!year || !!error}
-            className={`w-full px-6 py-4 rounded-lg font-semibold text-white text-lg transition flex items-center justify-center gap-3 ${
-              !year || !!error ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
-            }`}
-          >
-            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-            </svg>
-            Connect with Spotify
-          </button>
-
           {!user && (
-            <p className="text-sm text-muted-foreground text-center">
+            <p className="text-sm text-foreground/60 text-center">
               You'll be asked to log in before connecting Spotify
             </p>
           )}
