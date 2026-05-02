@@ -10,7 +10,6 @@ import { createClient } from '@/lib/supabase/client'
 import Navigation from '../components/Navigation'
 import { useTheme } from 'next-themes'
 
-// Lean show type — only IDs, no embedded artist/venue objects
 type Show = {
   show_id: number
   date: string
@@ -44,6 +43,8 @@ type StatusFilter = 'all' | 'open' | 'closed'
 
 const MONTH_NAMES_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
+const TEAL = '#00BFA8'
+
 const CAPACITY_BUTTONS: {
   key: CapacityFilter
   label: string
@@ -51,12 +52,12 @@ const CAPACITY_BUTTONS: {
   unselectedClass: string
   range: [number, number]
 }[] = [
-    { key: 'small', label: 'S', tooltip: 'Small (< 500)', unselectedClass: 'text-purple-400 dark:text-purple-300', range: [0, 500] },
-    { key: 'medium', label: 'M', tooltip: 'Medium (500–1.5K)', unselectedClass: 'text-teal-600 dark:text-teal-400', range: [500, 1500] },
-    { key: 'large', label: 'L', tooltip: 'Large (1.5K–10K)', unselectedClass: 'text-orange-600 dark:text-orange-400', range: [1500, 10000] },
-    { key: 'xlarge', label: 'XL', tooltip: 'X-Large (10K+)', unselectedClass: 'text-rose-600 dark:text-rose-400', range: [10000, 65000] },
-    { key: 'all', label: 'All', tooltip: 'All venues', unselectedClass: 'text-muted-foreground', range: [0, 65000] },
-    { key: 'unknown', label: '?', tooltip: 'Unknown capacity', unselectedClass: 'text-gray-400 dark:text-gray-500', range: [0, 65000] },
+    { key: 'small',   label: 'S',   tooltip: 'Small (< 500)',      unselectedClass: 'text-purple-400 dark:text-purple-300', range: [0, 500] },
+    { key: 'medium',  label: 'M',   tooltip: 'Medium (500–1.5K)',  unselectedClass: 'text-[#3A8FBD]',                       range: [500, 1500] },
+    { key: 'large',   label: 'L',   tooltip: 'Large (1.5K–10K)',   unselectedClass: 'text-orange-600 dark:text-orange-400', range: [1500, 10000] },
+    { key: 'xlarge',  label: 'XL',  tooltip: 'X-Large (10K+)',     unselectedClass: 'text-rose-600 dark:text-rose-400',     range: [10000, 65000] },
+    { key: 'all',     label: 'All', tooltip: 'All venues',         unselectedClass: 'text-muted-foreground',                range: [0, 65000] },
+    { key: 'unknown', label: '?',   tooltip: 'Unknown capacity',   unselectedClass: 'text-gray-400 dark:text-gray-500',     range: [0, 65000] },
   ]
 
 const STATUS_BUTTONS: {
@@ -89,9 +90,7 @@ function capacityFilterKey(category: string | null): CapacityFilter {
 }
 
 function BrowseContent({
-  shows,
-  artists,
-  venues,
+  shows, artists, venues,
 }: {
   shows: Show[]
   artists: Artist[]
@@ -115,7 +114,6 @@ function BrowseContent({
 
   const isDark = mounted && resolvedTheme === 'dark'
 
-  // Build lookup maps from dim arrays — O(1) access per show
   const artistMap = useMemo(() => {
     const map = new Map<number, Artist>()
     artists.forEach(a => map.set(a.artist_id, a))
@@ -128,32 +126,37 @@ function BrowseContent({
     return map
   }, [venues])
 
+  // Teal border when field has a value, neutral otherwise
   const customSelectStyles = {
-    control: (base: any) => ({
+    control: (base: any, state: any) => ({
       ...base,
       fontSize: '0.875rem',
-      backgroundColor: isDark ? 'oklch(0.2 0.02 260)' : 'white',
-      borderColor: isDark ? 'oklch(0.3 0.02 260)' : '#d1d5db',
-      '&:hover': { borderColor: isDark ? 'oklch(0.4 0.02 260)' : '#9ca3af' }
+      backgroundColor: isDark ? 'oklch(0.200 0.03 260)' : 'oklch(0.951 0.02 85)',
+      borderColor: state.hasValue ? TEAL : isDark ? 'oklch(0.248 0.03 260)' : 'oklch(0.873 0.02 85)',
+      borderWidth: state.hasValue ? '1.5px' : '1px',
+      boxShadow: 'none',
+      '&:hover': {
+        borderColor: state.hasValue ? TEAL : isDark ? 'oklch(0.38 0.03 260)' : 'oklch(0.820 0.02 85)'
+      }
     }),
     menu: (base: any) => ({
       ...base,
-      backgroundColor: isDark ? 'oklch(0.2 0.02 260)' : 'white',
-      borderColor: isDark ? 'oklch(0.3 0.02 260)' : '#d1d5db',
+      backgroundColor: isDark ? 'oklch(0.200 0.03 260)' : 'oklch(0.951 0.02 85)',
+      borderColor: isDark ? 'oklch(0.248 0.03 260)' : 'oklch(0.873 0.02 85)',
     }),
-    singleValue: (base: any) => ({ ...base, color: isDark ? 'oklch(0.95 0 0)' : '#111827' }),
-    placeholder: (base: any) => ({ ...base, color: isDark ? 'oklch(0.65 0.01 260)' : '#6B7280' }),
+    singleValue: (base: any) => ({ ...base, color: isDark ? 'oklch(0.95 0 0)' : 'oklch(0.145 0 0)' }),
+    placeholder: (base: any) => ({ ...base, color: isDark ? 'oklch(0.55 0.04 220)' : 'oklch(0.45 0.02 85)' }),
     option: (base: any, state: any) => ({
       ...base,
       backgroundColor: state.isFocused
-        ? isDark ? 'oklch(0.25 0.02 260)' : '#f3f4f6'
-        : isDark ? 'oklch(0.2 0.02 260)' : 'white',
-      color: isDark ? 'oklch(0.95 0 0)' : '#111827',
+        ? isDark ? 'oklch(0.228 0.03 260)' : 'oklch(0.910 0.02 85)'
+        : isDark ? 'oklch(0.200 0.03 260)' : 'oklch(0.951 0.02 85)',
+      color: isDark ? 'oklch(0.95 0 0)' : 'oklch(0.145 0 0)',
     }),
-    input: (base: any) => ({ ...base, color: isDark ? 'oklch(0.95 0 0)' : '#111827' }),
-    indicatorSeparator: (base: any) => ({ ...base, backgroundColor: isDark ? 'oklch(0.3 0.02 260)' : '#d1d5db' }),
-    dropdownIndicator: (base: any) => ({ ...base, color: isDark ? 'oklch(0.65 0.01 260)' : '#6B7280' }),
-    clearIndicator: (base: any) => ({ ...base, color: isDark ? 'oklch(0.65 0.01 260)' : '#6B7280' }),
+    input: (base: any) => ({ ...base, color: isDark ? 'oklch(0.95 0 0)' : 'oklch(0.145 0 0)' }),
+    indicatorSeparator: (base: any) => ({ ...base, backgroundColor: isDark ? 'oklch(0.248 0.03 260)' : 'oklch(0.873 0.02 85)' }),
+    dropdownIndicator: (base: any) => ({ ...base, color: isDark ? 'oklch(0.55 0.04 220)' : 'oklch(0.45 0.02 85)' }),
+    clearIndicator: (base: any) => ({ ...base, color: isDark ? 'oklch(0.55 0.04 220)' : 'oklch(0.45 0.02 85)' }),
   }
 
   const initialArtistId = searchParams.get('artist_id')
@@ -217,16 +220,9 @@ function BrowseContent({
 
   const handleFestivalSort = () => {
     if (sortField === 'festival') {
-      if (sortDirection === 'asc') {
-        setSortDirection('desc')
-      } else {
-        setSortField('date')
-        setSortDirection('desc')
-      }
-    } else {
-      setSortField('festival')
-      setSortDirection('asc')
-    }
+      if (sortDirection === 'asc') { setSortDirection('desc') }
+      else { setSortField('date'); setSortDirection('desc') }
+    } else { setSortField('festival'); setSortDirection('asc') }
     setCurrentPage(1); setPageInput('1')
   }
 
@@ -281,8 +277,6 @@ function BrowseContent({
     if (selectedArtist) filtered = filtered.filter((s) => s.artist_id === selectedArtist.value)
     if (selectedVenue) filtered = filtered.filter((s) => s.venue_id === selectedVenue.value)
     if (selectedFestival) filtered = filtered.filter((s) => s.festival_name === selectedFestival.value)
-
-    // Capacity filter — looks up venue from map
     filtered = filtered.filter((show) => {
       const venue = venueMap.get(show.venue_id)
       const capacity = venue?.capacity ?? null
@@ -291,8 +285,6 @@ function BrowseContent({
       const key = capacityFilterKey(venue?.capacity_category ?? null)
       return key === capacityFilter
     })
-
-    // Status filter
     if (statusFilter !== 'all') {
       filtered = filtered.filter((show) => {
         const venue = venueMap.get(show.venue_id)
@@ -300,7 +292,6 @@ function BrowseContent({
         return statusFilter === 'open' ? s === 'open' : s === 'closed'
       })
     }
-
     const startYear = typeof yearRange[0] === 'number' ? yearRange[0] : parseInt(yearRange[0]) || 1900
     const endYear = typeof yearRange[1] === 'number' ? yearRange[1] : parseInt(yearRange[1]) || 2026
     filtered = filtered.filter((s) => { const y = new Date(s.date).getFullYear(); return y >= startYear && y <= endYear })
@@ -308,12 +299,10 @@ function BrowseContent({
       const monthNum = parseInt(urlMonth)
       if (monthNum >= 1 && monthNum <= 12) filtered = filtered.filter((s) => parseInt(s.date.split('-')[1]) === monthNum)
     }
-
     filtered.sort((a, b) => {
       let aVal: any, bVal: any
       switch (sortField) {
-        case 'date':
-          aVal = new Date(a.date).getTime(); bVal = new Date(b.date).getTime(); break
+        case 'date': aVal = new Date(a.date).getTime(); bVal = new Date(b.date).getTime(); break
         case 'artist':
           aVal = (artistMap.get(a.artist_id)?.artist_name || '').toLowerCase()
           bVal = (artistMap.get(b.artist_id)?.artist_name || '').toLowerCase(); break
@@ -446,7 +435,6 @@ function BrowseContent({
       <Navigation />
       <main className="min-h-screen bg-background py-8 px-4">
         <div className="max-w-7xl mx-auto">
-
           <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-4 md:mb-6">{pageTitle}</h1>
 
           {/* Stats Cards */}
@@ -491,9 +479,16 @@ function BrowseContent({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Show Type</label>
-                <select value={selectedShowType || ''}
+                {/* Native select — bg-card to match react-select, teal border when active */}
+                <select
+                  value={selectedShowType || ''}
                   onChange={(e) => { setSelectedShowType(e.target.value || null); setCurrentPage(1); setPageInput('1') }}
-                  className="w-full px-3 py-2 text-sm text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring">
+                  className={`w-full px-3 py-2 text-sm text-foreground bg-card rounded-md focus:outline-none focus:ring-2 focus:ring-ring transition-colors ${
+                    selectedShowType
+                      ? 'border-[1.5px] border-primary'
+                      : 'border border-border'
+                  }`}
+                >
                   <option value="">All Shows</option>
                   <option value="music">Music</option>
                   <option value="comedy">Comedy</option>
@@ -527,16 +522,13 @@ function BrowseContent({
                 {unknownCapacityCount > 0 && capacityFilter !== 'unknown' && capacityFilter !== 'all' && (
                   <span className="text-xs text-muted-foreground">
                     ·{' '}
-                    <button
-                      onClick={() => handleCapacityButton('unknown', [0, 65000])}
-                      className="text-primary hover:opacity-80 font-medium underline underline-offset-2"
-                    >
+                    <button onClick={() => handleCapacityButton('unknown', [0, 65000])}
+                      className="text-primary hover:opacity-80 font-medium underline underline-offset-2">
                       {unknownCapacityCount.toLocaleString()} shows with unknown capacity hidden
                     </button>
                   </span>
                 )}
               </div>
-
               <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">Size</span>
@@ -561,7 +553,6 @@ function BrowseContent({
                   </div>
                 </div>
               </div>
-
               <div className="mt-3 max-w-sm">
                 <Slider range min={0} max={65000}
                   value={capacityFilter === 'unknown' ? [0, 65000] : capacityRange}
@@ -710,24 +701,19 @@ function BrowseContent({
                         {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                       </td>
                       <td className="hidden md:table-cell px-3 py-3 max-w-[256px]">
-                        <button
-                          onClick={() => { setSelectedArtist({ value: show.artist_id, label: artist?.artist_name || '' }); setCurrentPage(1); setPageInput('1') }}
-                          className="text-sm text-primary hover:opacity-80 hover:underline text-left w-full truncate block"
-                          title={artist?.artist_name || ''}>
+                        <button onClick={() => { setSelectedArtist({ value: show.artist_id, label: artist?.artist_name || '' }); setCurrentPage(1); setPageInput('1') }}
+                          className="text-sm text-primary hover:opacity-80 hover:underline text-left w-full truncate block" title={artist?.artist_name || ''}>
                           {artist?.artist_name || ''}
                         </button>
                       </td>
                       <td className="hidden md:table-cell px-3 py-3 max-w-[224px]">
                         <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => { setSelectedVenue({ value: show.venue_id, label: venue?.venue_name || '' }); setCurrentPage(1); setPageInput('1') }}
-                            className="text-sm text-primary hover:opacity-80 hover:underline text-left truncate shrink-0 max-w-[140px]"
-                            title={venueTooltip}>
+                          <button onClick={() => { setSelectedVenue({ value: show.venue_id, label: venue?.venue_name || '' }); setCurrentPage(1); setPageInput('1') }}
+                            className="text-sm text-primary hover:opacity-80 hover:underline text-left truncate shrink-0 max-w-[140px]" title={venueTooltip}>
                             {venue?.venue_name || ''}
                           </button>
                           {show.festival_name && (
-                            <button
-                              onClick={() => { setSelectedFestival({ value: show.festival_name!, label: show.festival_name! }); setCurrentPage(1); setPageInput('1') }}
+                            <button onClick={() => { setSelectedFestival({ value: show.festival_name!, label: show.festival_name! }); setCurrentPage(1); setPageInput('1') }}
                               className={'ml-1 ' + festivalBadgeClass} title={`Filter by ${show.festival_name}`}>
                               <span className="font-bold">F</span>
                               <span className="truncate max-w-[100px]">{'· ' + show.festival_name}</span>
@@ -741,7 +727,6 @@ function BrowseContent({
                       <td className="hidden md:table-cell py-3 w-14 px-0 align-middle">
                         <div className="flex items-center justify-center">{spotifyIcon}</div>
                       </td>
-
                       {user && <td className="md:hidden px-1 py-2 align-middle w-7">{heartButton}</td>}
                       <td className="md:hidden px-1 py-2 align-top whitespace-nowrap">
                         <span className="text-[11px] text-foreground">
@@ -749,22 +734,17 @@ function BrowseContent({
                         </span>
                       </td>
                       <td className="md:hidden px-1 py-2">
-                        <button
-                          onClick={() => { setSelectedArtist({ value: show.artist_id, label: artist?.artist_name || '' }); setCurrentPage(1); setPageInput('1') }}
-                          className="text-[11px] text-primary hover:opacity-80 hover:underline text-left w-full truncate block leading-snug"
-                          title={artist?.artist_name || ''}>
+                        <button onClick={() => { setSelectedArtist({ value: show.artist_id, label: artist?.artist_name || '' }); setCurrentPage(1); setPageInput('1') }}
+                          className="text-[11px] text-primary hover:opacity-80 hover:underline text-left w-full truncate block leading-snug" title={artist?.artist_name || ''}>
                           {artist?.artist_name || ''}
                         </button>
                         <div className="flex items-center gap-1 mt-0.5">
-                          <button
-                            onClick={() => { setSelectedVenue({ value: show.venue_id, label: venue?.venue_name || '' }); setCurrentPage(1); setPageInput('1') }}
-                            className="text-[10px] text-muted-foreground hover:text-primary hover:underline text-left truncate leading-snug min-w-0"
-                            title={venueTooltip}>
+                          <button onClick={() => { setSelectedVenue({ value: show.venue_id, label: venue?.venue_name || '' }); setCurrentPage(1); setPageInput('1') }}
+                            className="text-[10px] text-muted-foreground hover:text-primary hover:underline text-left truncate leading-snug min-w-0" title={venueTooltip}>
                             {venue?.venue_name || ''}
                           </button>
                           {show.festival_name && (
-                            <button
-                              onClick={() => { setSelectedFestival({ value: show.festival_name!, label: show.festival_name! }); setCurrentPage(1); setPageInput('1') }}
+                            <button onClick={() => { setSelectedFestival({ value: show.festival_name!, label: show.festival_name! }); setCurrentPage(1); setPageInput('1') }}
                               className={festivalBadgeMobileClass} title={`Filter by ${show.festival_name}`}>
                               F
                             </button>
@@ -818,9 +798,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
 }
 
 export default function BrowseClient({
-  shows,
-  artists,
-  venues,
+  shows, artists, venues,
 }: {
   shows: Show[]
   artists: Artist[]

@@ -49,88 +49,76 @@
 }
 
 :root {
-  /* Dark Concert Vibe - Light Mode (for fallback) */
-  --background: oklch(0.98 0 0);
+  /* Light mode — warm cream base, teal accent, cream button text */
+  /* bg #FAF3E8, card #F5EEE0, muted #EAE0CE, border #DDD4C4 */
+  --background: oklch(0.966 0.02 85);
   --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
+  --card: oklch(0.951 0.02 85);            /* #F5EEE0 — narrowed delta */
   --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
+  --popover: oklch(0.951 0.02 85);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.55 0.2 240);
-  /* Clean blue */
-  --primary-foreground: oklch(0.98 0 0);
+  --primary: oklch(0.737 0.14 180);        /* teal #00BFA8 */
+  --primary-foreground: oklch(0.966 0.02 85); /* cream */
   --secondary: oklch(0.65 0.25 340);
-  /* Pink */
   --secondary-foreground: oklch(0.98 0 0);
-  --muted: oklch(0.94 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.75 0.15 85);
-  /* Gold - reserved for Phase 4 Discover buttons */
+  --muted: oklch(0.910 0.02 85);
+  --muted-foreground: oklch(0.45 0.02 85);
+  --accent: oklch(0.75 0.15 85);           /* gold — Phase 4 reserved */
   --accent-foreground: oklch(0.145 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.9 0 0);
-  --input: oklch(0.9 0 0);
-  --ring: oklch(0.55 0.2 240);
+  --border: oklch(0.873 0.02 85);
+  --input: oklch(0.873 0.02 85);
+  --ring: oklch(0.737 0.14 180);
   --chart-1: oklch(0.55 0.2 240);
   --chart-2: oklch(0.65 0.25 340);
   --chart-3: oklch(0.75 0.15 85);
   --chart-4: oklch(0.5 0.2 260);
   --chart-5: oklch(0.7 0.2 350);
   --radius: 0.625rem;
-  --sidebar: oklch(0.98 0 0);
+  --sidebar: oklch(0.951 0.02 85);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.55 0.2 240);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.94 0 0);
+  --sidebar-primary: oklch(0.737 0.14 180);
+  --sidebar-primary-foreground: oklch(0.966 0.02 85);
+  --sidebar-accent: oklch(0.910 0.02 85);
   --sidebar-accent-foreground: oklch(0.145 0 0);
-  --sidebar-border: oklch(0.9 0 0);
-  --sidebar-ring: oklch(0.55 0.2 240);
+  --sidebar-border: oklch(0.873 0.02 85);
+  --sidebar-ring: oklch(0.737 0.14 180);
 }
 
 .dark {
-  /* Dark Concert Vibe - Dark Mode (Primary theme) */
-  --background: oklch(0.15 0.02 260);
-  /* Deep navy */
+  /* Dark mode — deep navy base, teal accent, cream button text */
+  /* bg #070F1C, card slightly darker than live (0.200 vs live 0.217) */
+  --background: oklch(0.168 0.03 260);     /* #070F1C — unchanged */
   --foreground: oklch(0.95 0 0);
-  /* Off-white */
-  --card: oklch(0.2 0.02 260);
-  /* Slightly lighter navy */
+  --card: oklch(0.200 0.03 260);           /* slightly darker than live 0.217 */
   --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.2 0.02 260);
+  --popover: oklch(0.200 0.03 260);
   --popover-foreground: oklch(0.95 0 0);
-  --primary: oklch(0.65 0.2 240);
-  /* Slightly lighter blue for dark bg */
-  --primary-foreground: oklch(0.95 0 0);
+  --primary: oklch(0.737 0.14 180);        /* teal #00BFA8 */
+  --primary-foreground: oklch(0.966 0.02 85); /* cream */
   --secondary: oklch(0.65 0.25 340);
-  /* Hot pink */
   --secondary-foreground: oklch(0.95 0 0);
-  --muted: oklch(0.25 0.02 260);
-  --muted-foreground: oklch(0.65 0.01 260);
-  --accent: oklch(0.75 0.15 85);
-  /* Gold - reserved for Phase 4 Discover buttons */
-  --accent-foreground: oklch(0.15 0.02 260);
+  --muted: oklch(0.228 0.03 260);          /* scales from card */
+  --muted-foreground: oklch(0.55 0.04 220);
+  --accent: oklch(0.75 0.15 85);           /* gold — Phase 4 reserved */
+  --accent-foreground: oklch(0.966 0.02 85);
   --destructive: oklch(0.65 0.25 25);
-  --border: oklch(0.3 0.02 260);
-  --input: oklch(0.3 0.02 260);
-  --ring: oklch(0.65 0.2 240);
+  --border: oklch(0.248 0.03 260);         /* scales from card */
+  --input: oklch(0.248 0.03 260);
+  --ring: oklch(0.737 0.14 180);
   --chart-1: oklch(0.65 0.2 240);
-  /* Blue */
   --chart-2: oklch(0.65 0.25 340);
-  /* Pink */
   --chart-3: oklch(0.75 0.15 85);
-  /* Gold */
   --chart-4: oklch(0.6 0.2 260);
-  /* Blue-purple */
   --chart-5: oklch(0.7 0.2 350);
-  /* Magenta */
-  --sidebar: oklch(0.18 0.02 260);
+  --sidebar: oklch(0.185 0.03 260);        /* between bg and card */
   --sidebar-foreground: oklch(0.95 0 0);
-  --sidebar-primary: oklch(0.65 0.2 240);
-  --sidebar-primary-foreground: oklch(0.95 0 0);
-  --sidebar-accent: oklch(0.25 0.02 260);
+  --sidebar-primary: oklch(0.737 0.14 180);
+  --sidebar-primary-foreground: oklch(0.966 0.02 85);
+  --sidebar-accent: oklch(0.228 0.03 260);
   --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(0.3 0.02 260);
-  --sidebar-ring: oklch(0.65 0.2 240);
+  --sidebar-border: oklch(0.248 0.03 260);
+  --sidebar-ring: oklch(0.737 0.14 180);
 }
 
 @layer base {
