@@ -345,13 +345,13 @@ function ShowTable({
             <div className="flex gap-2">
               <button
                 onClick={onSaveAll}
-                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
+                className="px-3 py-1.5 text-sm font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition"
               >
                 Save All
               </button>
               <button
                 onClick={onSkipAll}
-                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-destructive text-white hover:bg-destructive/90 transition"
+                className="px-3 py-1.5 text-sm font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition"
               >
                 Skip All
               </button>
@@ -362,7 +362,7 @@ function ShowTable({
       <table className="w-full">
         <thead className="bg-muted">
           <tr>
-            <th className="w-16 px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase"></th>
+            <th className="w-16 px-4 py-3"></th>
             <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
             <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
             <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
@@ -373,11 +373,11 @@ function ShowTable({
             <tr key={show.show_id} className="hover:bg-muted/30">
               {/* Icon pair column */}
               <td className="w-16 px-4 py-4">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-3">
                   <button
                     onClick={() => onHeart(show)}
                     title={show.status === 'added' ? 'Remove from saved' : 'Save show'}
-                    className="text-xl leading-none transition-colors"
+                    className="text-2xl leading-none transition-colors"
                   >
                     {show.status === 'added'
                       ? <span className="text-red-500">♥</span>
@@ -387,7 +387,7 @@ function ShowTable({
                   <button
                     onClick={() => onSkip(show)}
                     title={show.status === 'skipped' ? 'Unskip show' : 'Skip show'}
-                    className="text-base leading-none transition-colors font-medium"
+                    className="text-lg leading-none transition-colors font-medium"
                   >
                     {show.status === 'skipped'
                       ? <span className="text-destructive">✕</span>
