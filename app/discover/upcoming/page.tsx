@@ -31,7 +31,7 @@ function formatDate(dateStr: string) {
   });
 }
 
-export default function UpcomingShowsContent() {
+function UpcomingShowsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pastDestination = searchParams.get('past_destination') || 'matches';
@@ -126,7 +126,6 @@ export default function UpcomingShowsContent() {
   const skippedShows = sortShows(allShows.filter(s => s.status === 'skipped'));
   const allReviewed  = allShows.length > 0 && newShows.length === 0;
 
-  // In 'all' scope, split new shows into matched vs unmatched for display
   const newMatchedShows   = newShows.filter(s => s.is_spotify_match);
   const newUnmatchedShows = newShows.filter(s => !s.is_spotify_match);
 
@@ -401,6 +400,10 @@ export default function UpcomingShowsContent() {
         </div>
       </main>
     </>
+  );
+}
+
+export default function UpcomingShowsPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -458,7 +461,6 @@ function ShowTable({
             key={show.show_id}
             className={`hover:bg-muted/30 ${showSpotifyBadge && show.is_spotify_match ? 'bg-primary/5' : ''}`}
           >
-            {/* Heart + X */}
             <td className="px-4 py-4">
               <div className="flex items-center gap-3">
                 <button onClick={() => onHeart(show)} title={show.status === 'added' ? 'Remove from saved' : 'Save show'} className="focus:outline-none">
@@ -473,15 +475,12 @@ function ShowTable({
                 </button>
               </div>
             </td>
-            {/* Date */}
             <td className="px-4 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
-            {/* Artist + Venue */}
             <td className="px-4 py-4">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <span className={`text-sm font-medium truncate ${show.is_spotify_match ? 'text-primary' : 'text-foreground'}`}>
                   {show.artist_name}
                 </span>
-                {/* Spotify icon — always shown if artist has a spotify_artist_id */}
                 {show.spotify_artist_id ? (
                   <a
                     href={`https://open.spotify.com/artist/${show.spotify_artist_id}`}
@@ -500,7 +499,6 @@ function ShowTable({
                     </svg>
                   </a>
                 ) : null}
-                {/* Spotify match pill — only in All Shows mode */}
                 {showSpotifyBadge && show.is_spotify_match && (
                   <span className="text-xs text-green-500 font-medium shrink-0">● match</span>
                 )}
