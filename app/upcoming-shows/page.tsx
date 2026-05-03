@@ -27,12 +27,6 @@ function formatDate(dateStr: string) {
   });
 }
 
-// Shared column widths across all tables
-const COL_DATE    = 'w-36';
-const COL_ARTIST  = 'w-56';
-const COL_VENUE   = 'w-64';  // capped so actions stay close to content
-const COL_ACTIONS = 'w-48';  // wide enough for badge + Undo on one line
-
 export default function UpcomingShowsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -69,7 +63,7 @@ export default function UpcomingShowsPage() {
     setBannerVisible(false);
   };
 
-  const updateShowStatus = async (showId: number, status: 'added' | 'skipped') => {
+  const updateShowStatus = async (showId: number, status: 'added' | 'skipped' | 'pending') => {
     try {
       const response = await fetch('/api/shows/update-status', {
         method: 'POST',
@@ -97,18 +91,14 @@ export default function UpcomingShowsPage() {
     }
   };
 
-  const undoShowStatus = async (showId: number) => {
-    try {
-      const response = await fetch('/api/shows/update-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ show_id: showId, status: 'pending', source: 'upcoming_shows' }),
-      });
-      if (!response.ok) throw new Error('Failed to undo show status');
-      setAllShows(prev => prev.map(s => s.show_id === showId ? { ...s, status: 'pending' } : s));
-    } catch {
-      alert('Failed to undo. Please try again.');
-    }
+  // Toggle heart: if already saved, move back to pending; otherwise save
+  const handleHeart = (show: Show) => {
+    updateShowStatus(show.show_id, show.status === 'added' ? 'pending' : 'added');
+  };
+
+  // Toggle X: if already skipped, move back to pending; otherwise skip
+  const handleSkip = (show: Show) => {
+    updateShowStatus(show.show_id, show.status === 'skipped' ? 'pending' : 'skipped');
   };
 
   const sortShows = (shows: Show[]) => {
@@ -175,7 +165,7 @@ export default function UpcomingShowsPage() {
             </p>
           </div>
 
-          {/* Dismissible banner — no empty space when closed */}
+          {/* Dismissible banner */}
           {bannerVisible && (
             <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 mb-6 flex items-start justify-between gap-4">
               <p className="text-sm text-foreground">
@@ -257,8 +247,8 @@ export default function UpcomingShowsPage() {
             <ShowTable
               title="New Shows"
               shows={newShows}
-              onSave={(id) => updateShowStatus(id, 'added')}
-              onSkip={(id) => updateShowStatus(id, 'skipped')}
+              onHeart={handleHeart}
+              onSkip={handleSkip}
               onSaveAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'added')}
               onSkipAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'skipped')}
               showBulk
@@ -270,10 +260,8 @@ export default function UpcomingShowsPage() {
             <ShowTable
               title="Saved"
               shows={savedShows}
-              onSave={(id) => updateShowStatus(id, 'added')}
-              onSkip={(id) => updateShowStatus(id, 'skipped')}
-              onUndo={undoShowStatus}
-              reviewed
+              onHeart={handleHeart}
+              onSkip={handleSkip}
             />
           )}
 
@@ -291,46 +279,13 @@ export default function UpcomingShowsPage() {
                 <span className="text-muted-foreground font-mono text-sm">{skippedOpen ? '▼' : '▶'}</span>
               </button>
               {skippedOpen && (
-                <div className="border-t border-border">
-                  <table className="w-full table-fixed">
-                    <colgroup>
-                      <col className={COL_DATE} />
-                      <col className={COL_ARTIST} />
-                      <col className={COL_VENUE} />
-                      <col className={COL_ACTIONS} />
-                    </colgroup>
-                    <thead className="bg-muted">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {skippedShows.map(show => (
-                        <tr key={show.show_id} className="hover:bg-muted/30">
-                          <td className="px-6 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
-                          <td className="px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
-                          <td className="px-6 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
-                          <td className="px-6 py-4 text-sm text-right">
-                            <div className="flex justify-end items-center gap-2">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-600 text-zinc-100">
-                                Skipped ✓
-                              </span>
-                              <button
-                                onClick={() => undoShowStatus(show.show_id)}
-                                className="text-xs px-2 py-0.5 rounded border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition"
-                              >
-                                Undo
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <ShowTable
+                  title=""
+                  shows={skippedShows}
+                  onHeart={handleHeart}
+                  onSkip={handleSkip}
+                  hideTitleBar
+                />
               )}
             </div>
           )}
@@ -362,107 +317,88 @@ export default function UpcomingShowsPage() {
 function ShowTable({
   title,
   shows,
-  onSave,
+  onHeart,
   onSkip,
-  onUndo,
   onSaveAll,
   onSkipAll,
   showBulk = false,
-  reviewed = false,
+  hideTitleBar = false,
 }: {
   title: string;
   shows: Show[];
-  onSave: (id: number) => void;
-  onSkip: (id: number) => void;
-  onUndo?: (id: number) => void;
+  onHeart: (show: Show) => void;
+  onSkip: (show: Show) => void;
   onSaveAll?: () => void;
   onSkipAll?: () => void;
   showBulk?: boolean;
-  reviewed?: boolean;
+  hideTitleBar?: boolean;
 }) {
   return (
-    <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-        <h2 className="font-semibold text-card-foreground">
-          {title}
-          <span className="text-muted-foreground font-normal ml-2">({shows.length})</span>
-        </h2>
-        {showBulk && onSaveAll && onSkipAll && shows.length > 1 && (
-          <div className="flex gap-2">
-            <button
-              onClick={onSaveAll}
-              className="px-3 py-1.5 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
-            >
-              Save All
-            </button>
-            <button
-              onClick={onSkipAll}
-              className="px-3 py-1.5 text-sm font-medium rounded-lg bg-destructive text-white hover:bg-destructive/90 transition"
-            >
-              Skip All
-            </button>
-          </div>
-        )}
-      </div>
-      <table className="w-full table-fixed">
-        <colgroup>
-          <col className={COL_DATE} />
-          <col className={COL_ARTIST} />
-          <col className={COL_VENUE} />
-          <col className={COL_ACTIONS} />
-        </colgroup>
+    <div className={`bg-card rounded-lg shadow overflow-hidden mb-6 ${hideTitleBar ? 'shadow-none rounded-none mb-0' : ''}`}>
+      {!hideTitleBar && (
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h2 className="font-semibold text-card-foreground">
+            {title}
+            <span className="text-muted-foreground font-normal ml-2">({shows.length})</span>
+          </h2>
+          {showBulk && onSaveAll && onSkipAll && shows.length > 1 && (
+            <div className="flex gap-2">
+              <button
+                onClick={onSaveAll}
+                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
+              >
+                Save All
+              </button>
+              <button
+                onClick={onSkipAll}
+                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-destructive text-white hover:bg-destructive/90 transition"
+              >
+                Skip All
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      <table className="w-full">
         <thead className="bg-muted">
           <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
-              {reviewed ? 'Status' : 'Actions'}
-            </th>
+            <th className="w-16 px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase"></th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
           {shows.map(show => (
             <tr key={show.show_id} className="hover:bg-muted/30">
-              <td className="px-6 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
-              <td className="px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
-              <td className="px-6 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
-              <td className="px-6 py-4 text-sm text-right">
-                {reviewed ? (
-                  <div className="flex justify-end items-center gap-2">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                      show.status === 'added'
-                        ? 'bg-green-900/50 text-green-300'
-                        : 'bg-zinc-600 text-zinc-100'
-                    }`}>
-                      {show.status === 'added' ? 'Saved ✓' : 'Skipped ✓'}
-                    </span>
-                    {onUndo && (
-                      <button
-                        onClick={() => onUndo(show.show_id)}
-                        className="text-xs px-2 py-0.5 rounded border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition"
-                      >
-                        Undo
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => onSave(show.show_id)}
-                      className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => onSkip(show.show_id)}
-                      className="text-xs px-3 py-1 rounded-lg bg-destructive text-white hover:bg-destructive/90 transition"
-                    >
-                      Skip
-                    </button>
-                  </div>
-                )}
+              {/* Icon pair column */}
+              <td className="w-16 px-4 py-4">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => onHeart(show)}
+                    title={show.status === 'added' ? 'Remove from saved' : 'Save show'}
+                    className="text-xl leading-none transition-colors"
+                  >
+                    {show.status === 'added'
+                      ? <span className="text-red-500">♥</span>
+                      : <span className="text-muted-foreground hover:text-red-400">♡</span>
+                    }
+                  </button>
+                  <button
+                    onClick={() => onSkip(show)}
+                    title={show.status === 'skipped' ? 'Unskip show' : 'Skip show'}
+                    className="text-base leading-none transition-colors font-medium"
+                  >
+                    {show.status === 'skipped'
+                      ? <span className="text-destructive">✕</span>
+                      : <span className="text-muted-foreground hover:text-destructive">✕</span>
+                    }
+                  </button>
+                </div>
               </td>
+              <td className="px-4 py-4 text-sm text-foreground whitespace-nowrap">{formatDate(show.date)}</td>
+              <td className="px-4 py-4 text-sm text-foreground">{show.artist_name}</td>
+              <td className="px-4 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
             </tr>
           ))}
         </tbody>
