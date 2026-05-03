@@ -27,13 +27,19 @@ function formatDate(dateStr: string) {
   });
 }
 
+// Shared column widths across all tables
+const COL_DATE    = 'w-36';
+const COL_ARTIST  = 'w-56';
+const COL_VENUE   = '';     // flex-fill
+const COL_ACTIONS = 'w-32';
+
 export default function UpcomingShowsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [allShows, setAllShows] = useState<Show[]>([]);
   const [sortBy, setSortBy] = useState<SortKey>('date');
-  const [dismissedOpen, setDismissedOpen] = useState(false);
+  const [skippedOpen, setSkippedOpen] = useState(false);
   const [bannerVisible, setBannerVisible] = useState(false);
 
   useEffect(() => {
@@ -77,7 +83,7 @@ export default function UpcomingShowsPage() {
     }
   };
 
-  const bulkUpdateStatus = async (showIds: number[], status: 'added' | 'skipped' | 'pending') => {
+  const bulkUpdateStatus = async (showIds: number[], status: 'added' | 'skipped') => {
     try {
       const response = await fetch('/api/shows/bulk-update', {
         method: 'POST',
@@ -93,17 +99,17 @@ export default function UpcomingShowsPage() {
 
   const sortShows = (shows: Show[]) => {
     return [...shows].sort((a, b) => {
-      if (sortBy === 'date') return new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (sortBy === 'date')   return new Date(a.date).getTime() - new Date(b.date).getTime();
       if (sortBy === 'artist') return a.artist_name.localeCompare(b.artist_name);
-      if (sortBy === 'score') return b.match_score - a.match_score;
+      if (sortBy === 'score')  return b.match_score - a.match_score;
       return 0;
     });
   };
 
-  const newShows = sortShows(allShows.filter(s => s.status === 'pending'));
-  const savedShows = sortShows(allShows.filter(s => s.status === 'added'));
-  const dismissedShows = sortShows(allShows.filter(s => s.status === 'skipped'));
-  const allReviewed = allShows.length > 0 && newShows.length === 0;
+  const newShows     = sortShows(allShows.filter(s => s.status === 'pending'));
+  const savedShows   = sortShows(allShows.filter(s => s.status === 'added'));
+  const skippedShows = sortShows(allShows.filter(s => s.status === 'skipped'));
+  const allReviewed  = allShows.length > 0 && newShows.length === 0;
 
   if (loading) {
     return (
@@ -124,7 +130,7 @@ export default function UpcomingShowsPage() {
       <>
         <Navigation />
         <div className="min-h-screen bg-background py-12 px-4">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-7xl mx-auto">
             <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-6">
               <h2 className="text-xl font-bold text-destructive mb-2">Error Loading Shows</h2>
               <p className="text-destructive/80">{error}</p>
@@ -145,7 +151,7 @@ export default function UpcomingShowsPage() {
     <>
       <Navigation />
       <main className="min-h-screen bg-background py-8 px-4">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-7xl mx-auto">
 
           {/* Header */}
           <div className="mb-8">
@@ -155,16 +161,16 @@ export default function UpcomingShowsPage() {
             </p>
           </div>
 
-          {/* Dismissible banner — renders above stats, no empty space when closed */}
+          {/* Dismissible banner — no empty space when closed */}
           {bannerVisible && (
             <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 mb-6 flex items-start justify-between gap-4">
               <p className="text-sm text-foreground">
-                💡 Your matches update automatically — come back any time to see new upcoming shows based on your Spotify library. Your saved and dismissed choices are remembered.
+                💡 Your matches update automatically — come back any time to see new upcoming shows based on your Spotify library. Your saved and skipped choices are remembered.
               </p>
               <button
                 onClick={dismissBanner}
                 className="text-muted-foreground hover:text-foreground transition shrink-0 text-lg leading-none"
-                title="Dismiss"
+                title="Close"
               >
                 ×
               </button>
@@ -174,9 +180,9 @@ export default function UpcomingShowsPage() {
           {/* Stats + Sort row */}
           <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
             <div className="flex gap-4">
-              <StatPill label="New" value={newShows.length} color="default" />
-              <StatPill label="Saved" value={savedShows.length} color="green" />
-              <StatPill label="Dismissed" value={dismissedShows.length} color="muted" />
+              <StatPill label="New"     value={newShows.length}     color="default" />
+              <StatPill label="Saved"   value={savedShows.length}   color="green"   />
+              <StatPill label="Skipped" value={skippedShows.length} color="muted"   />
             </div>
             <div className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">Sort by</span>
@@ -185,7 +191,7 @@ export default function UpcomingShowsPage() {
                   <button
                     key={key}
                     onClick={() => setSortBy(key)}
-                    className={`px-3 py-1.5 transition capitalize ${
+                    className={`px-3 py-1.5 transition ${
                       sortBy === key
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-card text-muted-foreground hover:bg-muted'
@@ -202,7 +208,9 @@ export default function UpcomingShowsPage() {
           {allReviewed && (
             <div className="bg-primary/10 border border-primary/20 rounded-lg p-6 mb-6 text-center">
               <p className="text-foreground font-semibold mb-1">You're all set!</p>
-              <p className="text-muted-foreground text-sm mb-4">Saved shows will appear in My Shows. Check back soon for new upcoming shows.</p>
+              <p className="text-muted-foreground text-sm mb-4">
+                Saved shows will appear in My Shows. Check back soon for new upcoming shows.
+              </p>
               <div className="flex justify-center gap-3">
                 <button
                   onClick={() => router.push('/my-shows')}
@@ -223,7 +231,9 @@ export default function UpcomingShowsPage() {
           {/* No shows at all */}
           {allShows.length === 0 && (
             <div className="bg-card rounded-lg shadow p-12 text-center">
-              <p className="text-muted-foreground text-lg mb-2">No upcoming Vancouver shows found for artists in your Spotify library.</p>
+              <p className="text-muted-foreground text-lg mb-2">
+                No upcoming Vancouver shows found for artists in your Spotify library.
+              </p>
               <p className="text-muted-foreground text-sm">Check back soon — new shows are added regularly.</p>
             </div>
           )}
@@ -233,11 +243,10 @@ export default function UpcomingShowsPage() {
             <ShowTable
               title="New Shows"
               shows={newShows}
-              emptyMessage="No new shows to review."
               onSave={(id) => updateShowStatus(id, 'added')}
-              onDismiss={(id) => updateShowStatus(id, 'skipped')}
+              onSkip={(id) => updateShowStatus(id, 'skipped')}
               onSaveAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'added')}
-              onDismissAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'skipped')}
+              onSkipAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'skipped')}
               showBulk
             />
           )}
@@ -247,43 +256,48 @@ export default function UpcomingShowsPage() {
             <ShowTable
               title="Saved"
               shows={savedShows}
-              emptyMessage="No saved shows yet."
               onSave={(id) => updateShowStatus(id, 'added')}
-              onDismiss={(id) => updateShowStatus(id, 'skipped')}
+              onSkip={(id) => updateShowStatus(id, 'skipped')}
             />
           )}
 
-          {/* Dismissed — collapsed by default */}
-          {dismissedShows.length > 0 && (
+          {/* Skipped — collapsed by default */}
+          {skippedShows.length > 0 && (
             <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
               <button
-                onClick={() => setDismissedOpen(o => !o)}
+                onClick={() => setSkippedOpen(o => !o)}
                 className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition text-left"
               >
                 <span className="font-semibold text-card-foreground">
-                  Dismissed
-                  <span className="text-muted-foreground font-normal ml-2">({dismissedShows.length})</span>
+                  Skipped
+                  <span className="text-muted-foreground font-normal ml-2">({skippedShows.length})</span>
                 </span>
-                <span className="text-muted-foreground font-mono text-sm">{dismissedOpen ? '▼' : '▶'}</span>
+                <span className="text-muted-foreground font-mono text-sm">{skippedOpen ? '▼' : '▶'}</span>
               </button>
-              {dismissedOpen && (
+              {skippedOpen && (
                 <div className="border-t border-border">
                   <table className="min-w-full table-fixed">
+                    <colgroup>
+                      <col className={COL_DATE} />
+                      <col className={COL_ARTIST} />
+                      <col className={COL_VENUE} />
+                      <col className={COL_ACTIONS} />
+                    </colgroup>
                     <thead className="bg-muted">
                       <tr>
-                        <th className="w-36 px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
-                        <th className="w-1/3 px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
-                        <th className="w-36 px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Actions</th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {dismissedShows.map(show => (
+                      {skippedShows.map(show => (
                         <tr key={show.show_id} className="hover:bg-muted/30">
-                          <td className="w-36 px-6 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
-                          <td className="w-1/3 px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
+                          <td className="px-6 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
+                          <td className="px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
                           <td className="px-6 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
-                          <td className="w-36 px-6 py-4 text-sm text-center">
+                          <td className="px-6 py-4 text-sm text-center">
                             <button
                               onClick={() => updateShowStatus(show.show_id, 'added')}
                               className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
@@ -300,7 +314,7 @@ export default function UpcomingShowsPage() {
             </div>
           )}
 
-          {/* Bottom nav links — always visible */}
+          {/* Bottom nav links */}
           {allShows.length > 0 && !allReviewed && (
             <div className="mt-4 flex justify-center gap-4 text-sm">
               <button
@@ -327,20 +341,18 @@ export default function UpcomingShowsPage() {
 function ShowTable({
   title,
   shows,
-  emptyMessage,
   onSave,
-  onDismiss,
+  onSkip,
   onSaveAll,
-  onDismissAll,
+  onSkipAll,
   showBulk = false,
 }: {
   title: string;
   shows: Show[];
-  emptyMessage: string;
   onSave: (id: number) => void;
-  onDismiss: (id: number) => void;
+  onSkip: (id: number) => void;
   onSaveAll?: () => void;
-  onDismissAll?: () => void;
+  onSkipAll?: () => void;
   showBulk?: boolean;
 }) {
   return (
@@ -350,7 +362,7 @@ function ShowTable({
           {title}
           <span className="text-muted-foreground font-normal ml-2">({shows.length})</span>
         </h2>
-        {showBulk && onSaveAll && onDismissAll && shows.length > 1 && (
+        {showBulk && onSaveAll && onSkipAll && shows.length > 1 && (
           <div className="flex gap-2">
             <button
               onClick={onSaveAll}
@@ -359,53 +371,55 @@ function ShowTable({
               Save All
             </button>
             <button
-              onClick={onDismissAll}
+              onClick={onSkipAll}
               className="px-3 py-1.5 text-sm font-medium rounded-lg bg-destructive text-white hover:bg-destructive/90 transition"
             >
-              Dismiss All
+              Skip All
             </button>
           </div>
         )}
       </div>
-      {shows.length === 0 ? (
-        <p className="text-muted-foreground text-center py-8">{emptyMessage}</p>
-      ) : (
-        <table className="min-w-full table-fixed">
-          <thead className="bg-muted">
-            <tr>
-              <th className="w-36 px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
-              <th className="w-1/3 px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
-              <th className="w-36 px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Actions</th>
+      <table className="min-w-full table-fixed">
+        <colgroup>
+          <col className={COL_DATE} />
+          <col className={COL_ARTIST} />
+          <col className={COL_VENUE} />
+          <col className={COL_ACTIONS} />
+        </colgroup>
+        <thead className="bg-muted">
+          <tr>
+            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
+            <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {shows.map(show => (
+            <tr key={show.show_id} className="hover:bg-muted/30">
+              <td className="px-6 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
+              <td className="px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
+              <td className="px-6 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
+              <td className="px-6 py-4 text-sm text-center">
+                <div className="flex justify-center gap-2">
+                  <button
+                    onClick={() => onSave(show.show_id)}
+                    className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => onSkip(show.show_id)}
+                    className="text-xs px-3 py-1 rounded-lg bg-destructive text-white hover:bg-destructive/90 transition"
+                  >
+                    Skip
+                  </button>
+                </div>
+              </td>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {shows.map(show => (
-              <tr key={show.show_id} className="hover:bg-muted/30">
-                <td className="w-36 px-6 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
-                <td className="w-1/3 px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
-                <td className="px-6 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
-                <td className="w-36 px-6 py-4 text-sm text-center">
-                  <div className="flex justify-center gap-2">
-                    <button
-                      onClick={() => onSave(show.show_id)}
-                      className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => onDismiss(show.show_id)}
-                      className="text-xs px-3 py-1 rounded-lg bg-destructive text-white hover:bg-destructive/90 transition"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
