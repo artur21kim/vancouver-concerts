@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Navigation from '../../../components/Navigation';
+import Navigation from '../components/Navigation';
 
 type Show = {
   show_id: number;
