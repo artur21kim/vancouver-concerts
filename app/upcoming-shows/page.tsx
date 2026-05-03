@@ -148,8 +148,8 @@ export default function UpcomingShowsPage() {
         <div className="max-w-5xl mx-auto">
 
           {/* Header */}
-          <div className="mb-6">
-            <h1 className="text-4xl font-bold text-foreground mb-2">Upcoming Shows For You</h1>
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold text-foreground mb-1">Upcoming Shows For You</h1>
             <p className="text-muted-foreground">
               Based on your Spotify library and upcoming Vancouver shows
             </p>
@@ -250,7 +250,6 @@ export default function UpcomingShowsPage() {
               emptyMessage="No saved shows yet."
               onSave={(id) => updateShowStatus(id, 'added')}
               onDismiss={(id) => updateShowStatus(id, 'skipped')}
-              onUnsave={(id) => updateShowStatus(id, 'pending' as any)}
             />
           )}
 
@@ -269,22 +268,22 @@ export default function UpcomingShowsPage() {
               </button>
               {dismissedOpen && (
                 <div className="border-t border-border">
-                  <table className="min-w-full">
+                  <table className="min-w-full table-fixed">
                     <thead className="bg-muted">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
+                        <th className="w-36 px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
+                        <th className="w-1/3 px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Actions</th>
+                        <th className="w-36 px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {dismissedShows.map(show => (
                         <tr key={show.show_id} className="hover:bg-muted/30">
-                          <td className="px-6 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
-                          <td className="px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
+                          <td className="w-36 px-6 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
+                          <td className="w-1/3 px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
                           <td className="px-6 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
-                          <td className="px-6 py-4 text-sm text-center">
+                          <td className="w-36 px-6 py-4 text-sm text-center">
                             <button
                               onClick={() => updateShowStatus(show.show_id, 'added')}
                               className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
@@ -331,7 +330,6 @@ function ShowTable({
   emptyMessage,
   onSave,
   onDismiss,
-  onUnsave,
   onSaveAll,
   onDismissAll,
   showBulk = false,
@@ -341,7 +339,6 @@ function ShowTable({
   emptyMessage: string;
   onSave: (id: number) => void;
   onDismiss: (id: number) => void;
-  onUnsave?: (id: number) => void;
   onSaveAll?: () => void;
   onDismissAll?: () => void;
   showBulk?: boolean;
@@ -373,38 +370,29 @@ function ShowTable({
       {shows.length === 0 ? (
         <p className="text-muted-foreground text-center py-8">{emptyMessage}</p>
       ) : (
-        <table className="min-w-full">
+        <table className="min-w-full table-fixed">
           <thead className="bg-muted">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
+              <th className="w-36 px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
+              <th className="w-1/3 px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Actions</th>
+              <th className="w-36 px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {shows.map(show => (
               <tr key={show.show_id} className="hover:bg-muted/30">
-                <td className="px-6 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
-                <td className="px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
+                <td className="w-36 px-6 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
+                <td className="w-1/3 px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
                 <td className="px-6 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
-                <td className="px-6 py-4 text-sm text-center">
+                <td className="w-36 px-6 py-4 text-sm text-center">
                   <div className="flex justify-center gap-2">
-                    {onUnsave ? (
-                      <button
-                        onClick={() => onUnsave(show.show_id)}
-                        className="text-xs px-3 py-1 rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 transition"
-                      >
-                        Unsave
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => onSave(show.show_id)}
-                        className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
-                      >
-                        Save
-                      </button>
-                    )}
+                    <button
+                      onClick={() => onSave(show.show_id)}
+                      className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
+                    >
+                      Save
+                    </button>
                     <button
                       onClick={() => onDismiss(show.show_id)}
                       className="text-xs px-3 py-1 rounded-lg bg-destructive text-white hover:bg-destructive/90 transition"
