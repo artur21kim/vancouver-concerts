@@ -5,90 +5,120 @@ import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
 import AuthButton from './AuthButton'
 
+const DISCOVER_PATHS = [
+  '/discover',
+  '/discover/upcoming',
+  '/matches',
+  '/venue-selection',
+  '/likely-shows',
+  '/review-summary',
+]
+
+const PAST_FLOW_BREADCRUMBS: Record<string, { label: string; path: string }[]> = {
+  '/matches': [
+    { label: 'Discover', path: '/discover' },
+    { label: 'Matches', path: '/matches' },
+  ],
+  '/venue-selection': [
+    { label: 'Discover', path: '/discover' },
+    { label: 'Matches', path: '/matches' },
+    { label: 'Venue Selection', path: '/venue-selection' },
+  ],
+  '/likely-shows': [
+    { label: 'Discover', path: '/discover' },
+    { label: 'Matches', path: '/matches' },
+    { label: 'Venue Selection', path: '/venue-selection' },
+    { label: 'Likely Shows', path: '/likely-shows' },
+  ],
+  '/review-summary': [
+    { label: 'Discover', path: '/discover' },
+    { label: 'Matches', path: '/matches' },
+    { label: 'Venue Selection', path: '/venue-selection' },
+    { label: 'Likely Shows', path: '/likely-shows' },
+    { label: 'Summary', path: '/review-summary' },
+  ],
+}
+
 export default function Navigation() {
-    const pathname = usePathname()
-    const { theme, setTheme } = useTheme()
-    const [mounted, setMounted] = useState(false)
+  const pathname = usePathname()
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
 
-    useEffect(() => {
-        setMounted(true)
-    }, [])
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
-    const isActive = (path: string) => pathname === path
+  const isDiscoverActive = DISCOVER_PATHS.includes(pathname)
+  const breadcrumbs = PAST_FLOW_BREADCRUMBS[pathname] || null
 
-    return (
-        <nav className="sticky top-0 z-50 bg-background border-b border-border shadow-sm">
-            <div className="max-w-7xl mx-auto px-4">
-                <div className="flex items-center justify-between h-16">
+  const navLinkClass = (active: boolean) =>
+    `text-sm font-medium transition-colors ${
+      active
+        ? 'text-primary border-b-2 border-primary pb-1'
+        : 'text-muted-foreground hover:text-foreground'
+    }`
 
-                    {/* Left: Brand + Nav Links */}
-                    <div className="flex items-center gap-0">
+  return (
+    <nav className="sticky top-0 z-50 bg-background border-b border-border shadow-sm">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="flex items-center justify-between h-16">
 
-                        {/* Brand */}
-                        <a
-                            href="/"
-                            className="text-xl md:text-2xl font-bold text-foreground hover:text-muted-foreground md:-ml-4 mr-4 md:mr-6"
-                        >
-                            Vancouver Concert History
-                        </a>
+          {/* Left: Brand + Nav Links */}
+          <div className="flex items-center gap-0">
+            <a
+              href="/"
+              className="text-xl md:text-2xl font-bold text-foreground hover:text-muted-foreground md:-ml-4 mr-4 md:mr-6"
+            >
+              Vancouver Concert History
+            </a>
 
-                        {/* Nav Links */}
-                        <div className="hidden md:flex items-center gap-6">
-                            <a
-                                href="/"
-                                className={`text-sm font-medium transition-colors ${isActive('/')
-                                    ? 'text-primary border-b-2 border-primary pb-1'
-                                    : 'text-muted-foreground hover:text-foreground'
-                                    }`}
-                            >
-                                Overview
-                            </a>
-                            <a
-                                href="/discover"
-                                className={`text-sm font-medium transition-colors ${isActive('/discover')
-                                    ? 'text-primary border-b-2 border-primary pb-1'
-                                    : 'text-muted-foreground hover:text-foreground'
-                                    }`}
-                            >
-                                Discover
-                            </a>
-                            <a         
-                            href="/browse"
-                            className={`text-sm font-medium transition-colors ${isActive('/browse')
-                                ? 'text-primary border-b-2 border-primary pb-1'
-                                : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                            >
-                                Browse
-                            </a>
-                            <a
-                                href="/my-shows"
-                                className={`text-sm font-medium transition-colors ${isActive('/my-shows')
-                                    ? 'text-primary border-b-2 border-primary pb-1'
-                                    : 'text-muted-foreground hover:text-foreground'
-                                    }`}
-                            >
-                                My Shows
-                            </a>
-                        </div>
-                    </div>
-
-                    {/* Right: Theme Toggle + Auth Button */}
-                    <div className="flex items-center gap-2 -mr-2 md:-mr-4">
-                        {mounted && (
-                            <button
-                                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                                className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                                aria-label="Toggle theme"
-                            >
-                                {theme === 'dark' ? '☀️' : '🌙'}
-                            </button>
-                        )}
-                        <AuthButton />
-                    </div>
-
-                </div>
+            <div className="hidden md:flex items-center gap-6">
+              <a href="/" className={navLinkClass(pathname === '/')}>Overview</a>
+              <a href="/discover" className={navLinkClass(isDiscoverActive)}>Discover</a>
+              <a href="/browse" className={navLinkClass(pathname === '/browse')}>Browse</a>
+              <a href="/my-shows" className={navLinkClass(pathname === '/my-shows')}>My Shows</a>
             </div>
-        </nav>
-    )
+          </div>
+
+          {/* Right: Theme Toggle + Auth */}
+          <div className="flex items-center gap-2 -mr-2 md:-mr-4">
+            {mounted && (
+              <button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                aria-label="Toggle theme"
+              >
+                {theme === 'dark' ? '☀️' : '🌙'}
+              </button>
+            )}
+            <AuthButton />
+          </div>
+        </div>
+
+        {/* Breadcrumb row — only shown in Past flow */}
+        {breadcrumbs && (
+          <div className="hidden md:flex items-center gap-1.5 pb-2 text-xs text-muted-foreground">
+            {breadcrumbs.map((crumb, i) => {
+              const isLast = i === breadcrumbs.length - 1
+              return (
+                <span key={crumb.path} className="flex items-center gap-1.5">
+                  {isLast ? (
+                    <span className="text-foreground font-medium">{crumb.label}</span>
+                  ) : (
+                    <a
+                      href={crumb.path}
+                      className="hover:text-foreground transition-colors"
+                    >
+                      {crumb.label}
+                    </a>
+                  )}
+                  {!isLast && <span className="text-border">›</span>}
+                </span>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </nav>
+  )
 }

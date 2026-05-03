@@ -129,66 +129,46 @@ function UpcomingShowsContent() {
   const newMatchedShows   = newShows.filter(s => s.is_spotify_match);
   const newUnmatchedShows = newShows.filter(s => !s.is_spotify_match);
 
-  if (loading) {
-    return (
-      <>
-        <Navigation />
-        <div className="min-h-screen flex items-center justify-center bg-background">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground text-lg">
-              {scope === 'all' ? 'Loading all upcoming shows...' : 'Finding upcoming shows for you...'}
-            </p>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  if (error) {
-    return (
-      <>
-        <Navigation />
-        <div className="min-h-screen bg-background py-12 px-4">
-          <div className="max-w-7xl mx-auto">
-            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-6">
-              <h2 className="text-xl font-bold text-destructive mb-2">Error Loading Shows</h2>
-              <p className="text-destructive/80">{error}</p>
-              <button
-                onClick={() => router.push('/discover')}
-                className="mt-4 px-4 py-2 bg-destructive text-white rounded-lg hover:bg-destructive/90"
-              >
-                Back to Discover
-              </button>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
-
   return (
     <>
       <Navigation />
       <main className="min-h-screen bg-background py-8 px-4">
         <div className="max-w-7xl mx-auto">
 
-          {/* Header */}
-          <div className="mb-8 flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-4xl font-bold text-foreground mb-1">Upcoming Shows For You</h1>
-              <p className="text-muted-foreground">
-                {scope === 'spotify'
-                  ? 'Based on your Spotify library and upcoming Vancouver shows'
-                  : 'All upcoming Vancouver shows — your Spotify matches are highlighted'}
-              </p>
+          {/* Header with view switcher */}
+          <div className="mb-8">
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <h1 className="text-4xl font-bold text-foreground mb-1">Discover</h1>
+                <p className="text-muted-foreground text-sm">
+                  {scope === 'spotify'
+                    ? 'Based on your Spotify library and upcoming Vancouver shows'
+                    : 'All upcoming Vancouver shows — your Spotify matches are highlighted'}
+                </p>
+              </div>
             </div>
-            <button
-              onClick={() => router.push(`/${pastDestination}`)}
-              className="shrink-0 px-4 py-2 text-sm font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition"
-            >
-              ← Past Shows
-            </button>
+
+            {/* View switcher — prominent tab-style */}
+            <div className="flex rounded-xl border border-border overflow-hidden w-fit">
+              <button
+                className="flex items-center gap-2.5 px-6 py-3 text-sm font-semibold transition bg-primary text-primary-foreground"
+                aria-current="page"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Upcoming Shows
+              </button>
+              <button
+                onClick={() => router.push(`/${pastDestination}`)}
+                className="flex items-center gap-2.5 px-6 py-3 text-sm font-semibold transition bg-card text-muted-foreground hover:text-foreground hover:bg-muted border-l border-border"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Past Shows
+              </button>
+            </div>
           </div>
 
           {/* Dismissible banner */}
@@ -261,140 +241,170 @@ function UpcomingShowsContent() {
             </div>
           </div>
 
-          {/* Completion banner */}
-          {allReviewed && (
-            <div className="bg-primary/10 border border-primary/20 rounded-lg p-6 mb-6 text-center">
-              <p className="text-foreground font-semibold mb-1">You're all set!</p>
-              <p className="text-muted-foreground text-sm mb-4">
-                Saved shows will appear in My Shows. Check back soon for new upcoming shows.
-              </p>
-              <div className="flex justify-center gap-3">
-                <button
-                  onClick={() => router.push('/my-shows')}
-                  className="px-5 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition"
-                >
-                  View My Shows →
-                </button>
-                <button
-                  onClick={() => router.push('/browse')}
-                  className="px-5 py-2 bg-card border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition"
-                >
-                  Browse All Shows →
-                </button>
+          {/* Loading state */}
+          {loading && (
+            <div className="flex items-center justify-center py-24">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted-foreground text-lg">
+                  {scope === 'all' ? 'Loading all upcoming shows...' : 'Finding upcoming shows for you...'}
+                </p>
               </div>
             </div>
           )}
 
-          {/* No shows */}
-          {allShows.length === 0 && (
-            <div className="bg-card rounded-lg shadow p-12 text-center">
-              <p className="text-muted-foreground text-lg mb-2">
-                {scope === 'spotify'
-                  ? 'No upcoming Vancouver shows found for artists in your Spotify library.'
-                  : 'No upcoming Vancouver shows found.'}
-              </p>
-              <p className="text-muted-foreground text-sm">Check back soon — new shows are added regularly.</p>
+          {/* Error state */}
+          {error && !loading && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-6">
+              <h2 className="text-xl font-bold text-destructive mb-2">Error Loading Shows</h2>
+              <p className="text-destructive/80">{error}</p>
+              <button
+                onClick={fetchUpcomingShows}
+                className="mt-4 px-4 py-2 bg-destructive text-white rounded-lg hover:bg-destructive/90"
+              >
+                Try Again
+              </button>
             </div>
           )}
 
-          {/* Spotify scope: single New Shows table */}
-          {scope === 'spotify' && newShows.length > 0 && (
-            <ShowTable
-              title="New Shows"
-              shows={newShows}
-              onHeart={handleHeart}
-              onSkip={handleSkip}
-              onSaveAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'added')}
-              onSkipAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'skipped')}
-              showBulk
-              showSpotifyBadge={false}
-            />
-          )}
-
-          {/* All scope: split into Spotify Matches + Other Shows */}
-          {scope === 'all' && newShows.length > 0 && (
+          {!loading && !error && (
             <>
-              {newMatchedShows.length > 0 && (
+              {/* Completion banner */}
+              {allReviewed && (
+                <div className="bg-primary/10 border border-primary/20 rounded-lg p-6 mb-6 text-center">
+                  <p className="text-foreground font-semibold mb-1">You're all set!</p>
+                  <p className="text-muted-foreground text-sm mb-4">
+                    Saved shows will appear in My Shows. Check back soon for new upcoming shows.
+                  </p>
+                  <div className="flex justify-center gap-3">
+                    <button
+                      onClick={() => router.push('/my-shows')}
+                      className="px-5 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition"
+                    >
+                      View My Shows →
+                    </button>
+                    <button
+                      onClick={() => router.push('/browse')}
+                      className="px-5 py-2 bg-card border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition"
+                    >
+                      Browse All Shows →
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* No shows */}
+              {allShows.length === 0 && (
+                <div className="bg-card rounded-lg shadow p-12 text-center">
+                  <p className="text-muted-foreground text-lg mb-2">
+                    {scope === 'spotify'
+                      ? 'No upcoming Vancouver shows found for artists in your Spotify library.'
+                      : 'No upcoming Vancouver shows found.'}
+                  </p>
+                  <p className="text-muted-foreground text-sm">Check back soon — new shows are added regularly.</p>
+                </div>
+              )}
+
+              {/* Spotify scope: single New Shows table */}
+              {scope === 'spotify' && newShows.length > 0 && (
                 <ShowTable
-                  title="Your Spotify Matches"
-                  shows={newMatchedShows}
+                  title="New Shows"
+                  shows={newShows}
                   onHeart={handleHeart}
                   onSkip={handleSkip}
-                  onSaveAll={() => bulkUpdateStatus(newMatchedShows.map(s => s.show_id), 'added')}
-                  onSkipAll={() => bulkUpdateStatus(newMatchedShows.map(s => s.show_id), 'skipped')}
+                  onSaveAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'added')}
+                  onSkipAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'skipped')}
                   showBulk
                   showSpotifyBadge={false}
-                  highlightHeader
                 />
               )}
-              {newUnmatchedShows.length > 0 && (
-                <ShowTable
-                  title="All Other Shows"
-                  shows={newUnmatchedShows}
-                  onHeart={handleHeart}
-                  onSkip={handleSkip}
-                  onSaveAll={() => bulkUpdateStatus(newUnmatchedShows.map(s => s.show_id), 'added')}
-                  onSkipAll={() => bulkUpdateStatus(newUnmatchedShows.map(s => s.show_id), 'skipped')}
-                  showBulk
-                  showSpotifyBadge={false}
-                />
+
+              {/* All scope: split into Spotify Matches + Other Shows */}
+              {scope === 'all' && newShows.length > 0 && (
+                <>
+                  {newMatchedShows.length > 0 && (
+                    <ShowTable
+                      title="Your Spotify Matches"
+                      shows={newMatchedShows}
+                      onHeart={handleHeart}
+                      onSkip={handleSkip}
+                      onSaveAll={() => bulkUpdateStatus(newMatchedShows.map(s => s.show_id), 'added')}
+                      onSkipAll={() => bulkUpdateStatus(newMatchedShows.map(s => s.show_id), 'skipped')}
+                      showBulk
+                      showSpotifyBadge={false}
+                      highlightHeader
+                    />
+                  )}
+                  {newUnmatchedShows.length > 0 && (
+                    <ShowTable
+                      title="All Other Shows"
+                      shows={newUnmatchedShows}
+                      onHeart={handleHeart}
+                      onSkip={handleSkip}
+                      onSaveAll={() => bulkUpdateStatus(newUnmatchedShows.map(s => s.show_id), 'added')}
+                      onSkipAll={() => bulkUpdateStatus(newUnmatchedShows.map(s => s.show_id), 'skipped')}
+                      showBulk
+                      showSpotifyBadge={false}
+                    />
+                  )}
+                </>
               )}
-            </>
-          )}
 
-          {/* Saved */}
-          {savedShows.length > 0 && (
-            <ShowTable
-              title="Saved"
-              shows={savedShows}
-              onHeart={handleHeart}
-              onSkip={handleSkip}
-              showSpotifyBadge={scope === 'all'}
-            />
-          )}
-
-          {/* Skipped — collapsed */}
-          {skippedShows.length > 0 && (
-            <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
-              <button
-                onClick={() => setSkippedOpen(o => !o)}
-                className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition text-left"
-              >
-                <span className="font-semibold text-card-foreground">
-                  Skipped
-                  <span className="text-muted-foreground font-normal ml-2">({skippedShows.length})</span>
-                </span>
-                <span className="text-muted-foreground font-mono text-sm">{skippedOpen ? '▼' : '▶'}</span>
-              </button>
-              {skippedOpen && (
+              {/* Saved */}
+              {savedShows.length > 0 && (
                 <ShowTable
-                  title=""
-                  shows={skippedShows}
+                  title="Saved"
+                  shows={savedShows}
                   onHeart={handleHeart}
                   onSkip={handleSkip}
-                  hideTitleBar
                   showSpotifyBadge={scope === 'all'}
                 />
               )}
-            </div>
-          )}
 
-          {/* Bottom nav */}
-          {allShows.length > 0 && !allReviewed && (
-            <div className="mt-4 flex justify-center gap-4 text-sm">
-              <button
-                onClick={() => router.push('/my-shows')}
-                className="text-primary hover:text-primary/80 font-medium transition"
-              >
-                View My Shows →
-              </button>
-              <button
-                onClick={() => router.push('/browse')}
-                className="text-primary hover:text-primary/80 font-medium transition"
-              >
-                Browse All Shows →
-              </button>
-            </div>
+              {/* Skipped — collapsed */}
+              {skippedShows.length > 0 && (
+                <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
+                  <button
+                    onClick={() => setSkippedOpen(o => !o)}
+                    className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition text-left"
+                  >
+                    <span className="font-semibold text-card-foreground">
+                      Skipped
+                      <span className="text-muted-foreground font-normal ml-2">({skippedShows.length})</span>
+                    </span>
+                    <span className="text-muted-foreground font-mono text-sm">{skippedOpen ? '▼' : '▶'}</span>
+                  </button>
+                  {skippedOpen && (
+                    <ShowTable
+                      title=""
+                      shows={skippedShows}
+                      onHeart={handleHeart}
+                      onSkip={handleSkip}
+                      hideTitleBar
+                      showSpotifyBadge={scope === 'all'}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Bottom nav */}
+              {allShows.length > 0 && !allReviewed && (
+                <div className="mt-4 flex justify-center gap-4 text-sm">
+                  <button
+                    onClick={() => router.push('/my-shows')}
+                    className="text-primary hover:text-primary/80 font-medium transition"
+                  >
+                    View My Shows →
+                  </button>
+                  <button
+                    onClick={() => router.push('/browse')}
+                    className="text-primary hover:text-primary/80 font-medium transition"
+                  >
+                    Browse All Shows →
+                  </button>
+                </div>
+              )}
+            </>
           )}
 
         </div>

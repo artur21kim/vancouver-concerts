@@ -47,7 +47,6 @@ export default function Page() {
       setUser(currentUser);
 
       if (currentUser) {
-        // Check if user has Spotify data
         const { data: existingSongs } = await supabase
           .from('user_spotify_songs')
           .select('id')
@@ -57,7 +56,6 @@ export default function Page() {
         const hasSpotifyData = !!(existingSongs && existingSongs.length > 0);
 
         if (hasSpotifyData) {
-          // Check if they've completed a past run
           const { data: profile } = await supabase
             .from('user_profiles')
             .select('completed_past_run')
@@ -67,10 +65,8 @@ export default function Page() {
           const completedPastRun = profile?.completed_past_run === true;
 
           if (completedPastRun) {
-            // Completed past run → Upcoming Shows, Past button → /likely-shows
             router.replace('/discover/upcoming?past_destination=likely-shows');
           } else {
-            // Has Spotify data but no completed past run → check for any likely_shows reviews
             const { data: likelyShowsReviews } = await supabase
               .from('user_show_reviews')
               .select('show_id')
@@ -81,17 +77,16 @@ export default function Page() {
             const hasStartedPast = !!(likelyShowsReviews && likelyShowsReviews.length > 0);
 
             if (hasStartedPast) {
-              // Started past run but didn't finish → Upcoming Shows, Past button → /likely-shows
               router.replace('/discover/upcoming?past_destination=likely-shows');
             } else {
-              // Has Spotify data, never started past → Upcoming Shows, Past button → /matches
               router.replace('/discover/upcoming?past_destination=matches');
             }
           }
+          // Don't setLoading(false) here — we're redirecting, keep showing nothing
           return;
         }
 
-        // Has account but no Spotify data — restore any saved state
+        // Has account but no Spotify data — restore saved state then show questionnaire
         const savedYear = localStorage.getItem('firstConcertYear');
         const savedScope = localStorage.getItem('matchScope') as MatchScope | null;
         if (savedScope) setMatchScope(savedScope);
@@ -110,15 +105,9 @@ export default function Page() {
   };
 
   const handleYearChange = (value: string) => {
-    if (value === '') {
-      setYear('');
-      setError('');
-      return;
-    }
-
+    if (value === '') { setYear(''); setError(''); return; }
     const numValue = parseInt(value);
     if (isNaN(numValue)) { setError('Please enter a valid year'); return; }
-
     if (numValue >= 1900 && numValue <= currentYear) {
       setYear(numValue); setError('');
     } else if (numValue < 1900) {
@@ -184,16 +173,8 @@ export default function Page() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  // Return nothing while checking — prevents any flash of questionnaire content
+  if (loading) return null;
 
   const pageTitle = matchScope === 'past' ? 'Find Your Concert History' : 'Find Upcoming Shows';
   const pageSubtitle = matchScope === 'past'
@@ -246,7 +227,6 @@ export default function Page() {
               <label className="block text-lg font-semibold text-card-foreground mb-4">
                 What year did you go to your first concert?
               </label>
-
               <input
                 type="number"
                 min="1900"
@@ -256,9 +236,7 @@ export default function Page() {
                 placeholder="Enter year (e.g., 2010)"
                 className="w-full px-4 py-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground text-lg"
               />
-
               {error && <p className="text-destructive text-sm mt-2">{error}</p>}
-
               {year !== '' && (
                 <div className="mt-6">
                   <div className="flex justify-between text-sm text-muted-foreground mb-2">
@@ -276,7 +254,6 @@ export default function Page() {
                   />
                 </div>
               )}
-
               <p className="text-sm text-foreground/70 italic mt-4">
                 💡 We'll find Vancouver shows with artists from your Spotify library, from this year onwards.
               </p>
@@ -286,7 +263,6 @@ export default function Page() {
               <label className="block text-lg font-semibold text-card-foreground mb-4">
                 Find upcoming concerts from when?
               </label>
-
               <input
                 type="date"
                 min={todayVancouver}
@@ -294,7 +270,6 @@ export default function Page() {
                 onChange={(e) => setFromDate(e.target.value)}
                 className="w-full px-4 py-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground text-lg"
               />
-
               <p className="text-sm text-foreground/70 italic mt-4">
                 💡 We'll find Vancouver shows with artists from your Spotify library, from this date onwards.
               </p>
