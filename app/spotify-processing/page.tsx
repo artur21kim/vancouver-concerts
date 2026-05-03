@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Navigation from '../components/Navigation';
 
 type SpotifyStatus = {
@@ -14,6 +14,9 @@ type SpotifyStatus = {
 
 export default function SpotifyProcessingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const matchScope = searchParams.get('match_scope') || 'past';
+
   const [status, setStatus] = useState<SpotifyStatus | null>(null);
   const [error, setError] = useState('');
 
@@ -30,7 +33,8 @@ export default function SpotifyProcessingPage() {
 
         if (statusData.status === 'complete') {
           clearInterval(pollInterval);
-          setTimeout(() => router.push('/matches'), 1000);
+          const destination = matchScope === 'upcoming' ? '/upcoming-shows' : '/matches';
+          setTimeout(() => router.push(destination), 1000);
           return;
         }
 
@@ -128,7 +132,7 @@ export default function SpotifyProcessingPage() {
                         {status.status === 'complete' && '✅ Complete! Redirecting...'}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        We're matching your listening history with Vancouver concert data.
+                        We're matching your Spotify library with Vancouver show data.
                       </p>
                     </div>
                   </div>
@@ -153,7 +157,7 @@ export default function SpotifyProcessingPage() {
           </div>
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>💡 Tip: The more songs you have, the better we can match your concert history!</p>
+            <p>💡 Tip: The more songs you have, the better we can match your {matchScope === 'upcoming' ? 'upcoming shows' : 'concert history'}!</p>
           </div>
         </div>
       </div>

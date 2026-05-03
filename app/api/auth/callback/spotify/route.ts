@@ -38,9 +38,9 @@ export async function GET(request: Request) {
     // Initialize Supabase client
     const supabase = await createClient();
 
-    // IMPORTANT: Verify the user is actually logged in
+    // Verify the user is actually logged in
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
+
     if (authError || !user) {
       console.error('❌ User not authenticated:', authError);
       throw new Error('User not authenticated');
@@ -79,7 +79,7 @@ export async function GET(request: Request) {
     // Update user profile to mark Spotify as connected
     const { error: profileError } = await supabase
       .from('user_profiles')
-      .update({ 
+      .update({
         spotify_connected: true,
         updated_at: new Date().toISOString()
       })
@@ -89,12 +89,27 @@ export async function GET(request: Request) {
       console.error('❌ Error updating user profile:', profileError);
     }
 
-    console.log(`✅ Spotify token saved for user: ${user.id}`);
-    console.log(`📊 Redirecting to processing page`);
+    // Read back the scope that was saved before the OAuth redirect
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('last_match_scope, last_from_date')
+      .eq('user_id', user.id)
+      .single();
 
-    // Redirect to dedicated processing page
-    const redirectUrl = new URL('/spotify-processing', requestUrl.origin);
-    return NextResponse.redirect(redirectUrl);
+    const matchScope = profile?.last_match_scope || 'past';
+    const fromDate = profile?.last_from_date || null;
+
+    console.log(`✅ Spotify token saved for user: ${user.id}`);
+    console.log(`📊 Redirecting to processing page (scope: ${matchScope})`);
+
+    // Forward scope to processing page via URL params
+    const processingUrl = new URL('/spotify-processing', requestUrl.origin);
+    processingUrl.searchParams.set('match_scope', matchScope);
+    if (fromDate) {
+      processingUrl.searchParams.set('from_date', fromDate);
+    }
+
+    return NextResponse.redirect(processingUrl);
 
   } catch (error) {
     console.error('❌ Spotify OAuth error:', error);

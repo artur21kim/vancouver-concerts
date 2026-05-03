@@ -176,14 +176,14 @@ export default function Page() {
         <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-8">
           <h1 className="text-3xl font-bold text-card-foreground mb-4">Spotify Already Connected</h1>
           <p className="text-foreground mb-8">
-            You've already connected your Spotify account and we've matched your listening history to Vancouver shows.
+            You've already connected your Spotify account and we've matched your library to Vancouver shows.
           </p>
           <div className="space-y-4">
             <button
               onClick={() => router.push('/matches')}
               className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-lg font-semibold hover:bg-primary/90 transition"
             >
-              View My Matches
+              View My Matched Shows
             </button>
             <div>
               <button

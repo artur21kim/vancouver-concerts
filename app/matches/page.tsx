@@ -50,12 +50,12 @@ const CAPACITY_BUTTONS: {
   badgeBg: string;        // badge background
   badgeText: string;      // badge text color
 }[] = [
-  { key: 'all',     label: 'All', tooltip: 'All venues',        textColor: 'text-gray-500',   badgeBg: 'bg-gray-100',   badgeText: 'text-gray-600'   },
-  { key: 'small',   label: 'S',   tooltip: 'Small (< 500)',     textColor: 'text-purple-600', badgeBg: 'bg-purple-100', badgeText: 'text-purple-700' },
-  { key: 'medium',  label: 'M',   tooltip: 'Medium (500–3K)',   textColor: 'text-blue-600',   badgeBg: 'bg-blue-100',   badgeText: 'text-blue-700'   },
-  { key: 'large',   label: 'L',   tooltip: 'Large (3K–10K)',    textColor: 'text-orange-600', badgeBg: 'bg-orange-100', badgeText: 'text-orange-700' },
-  { key: 'xlarge',  label: 'XL',  tooltip: 'X-Large (10K+)',    textColor: 'text-rose-600',   badgeBg: 'bg-rose-100',   badgeText: 'text-rose-700'   },
-  { key: 'unknown', label: '?',   tooltip: 'Unknown capacity',  textColor: 'text-gray-400',   badgeBg: 'bg-gray-100',   badgeText: 'text-gray-500'   },
+  { key: 'all',     label: 'All', tooltip: 'All venues',        textColor: 'text-gray-500',                              badgeBg: 'bg-gray-100',   badgeText: 'text-gray-600'   },
+  { key: 'small',   label: 'S',   tooltip: 'Small (< 500)',     textColor: 'text-purple-400 dark:text-purple-300',       badgeBg: 'bg-purple-100', badgeText: 'text-purple-700' },
+  { key: 'medium',  label: 'M',   tooltip: 'Medium (500–1.5K)', textColor: 'text-[#3A8FBD]',                             badgeBg: 'bg-blue-100',   badgeText: 'text-[#3A8FBD]'  },
+  { key: 'large',   label: 'L',   tooltip: 'Large (1.5K–10K)',  textColor: 'text-orange-600 dark:text-orange-400',       badgeBg: 'bg-orange-100', badgeText: 'text-orange-700' },
+  { key: 'xlarge',  label: 'XL',  tooltip: 'X-Large (10K+)',    textColor: 'text-rose-600 dark:text-rose-400',           badgeBg: 'bg-rose-100',   badgeText: 'text-rose-700'   },
+  { key: 'unknown', label: '?',   tooltip: 'Unknown capacity',  textColor: 'text-gray-400 dark:text-gray-500',           badgeBg: 'bg-gray-100',   badgeText: 'text-gray-500'   },
 ];
 
 function capacityFilterKey(category: string | null): CapacityFilter {
@@ -174,9 +174,9 @@ export default function MatchesPage() {
       <main className="min-h-screen bg-background py-8 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="mb-8">
-            <h1 className="text-4xl font-bold text-foreground mb-2">Your Concert Matches</h1>
+            <h1 className="text-4xl font-bold text-foreground mb-2">Your Matched Shows</h1>
             <p className="text-muted-foreground">
-              Based on your Spotify listening history and Vancouver concert data from {matchData.first_concert_year} onwards
+              Based on your Spotify library and Vancouver show data from {matchData.first_concert_year} onwards
             </p>
           </div>
 
