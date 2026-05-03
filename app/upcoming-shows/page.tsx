@@ -362,7 +362,7 @@ function ShowTable({
       <table className="w-full">
         <thead className="bg-muted">
           <tr>
-            <th className="w-16 px-4 py-3"></th>
+            <th className="w-20 px-4 py-3"></th>
             <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
             <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
             <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
@@ -372,27 +372,39 @@ function ShowTable({
           {shows.map(show => (
             <tr key={show.show_id} className="hover:bg-muted/30">
               {/* Icon pair column */}
-              <td className="w-16 px-4 py-4">
+              <td className="w-20 px-4 py-4">
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => onHeart(show)}
                     title={show.status === 'added' ? 'Remove from saved' : 'Save show'}
-                    className="text-2xl leading-none transition-colors"
+                    className="focus:outline-none"
                   >
-                    {show.status === 'added'
-                      ? <span className="text-red-500">♥</span>
-                      : <span className="text-muted-foreground hover:text-red-400">♡</span>
-                    }
+                    <svg
+                      className={`w-5 h-5 transition-colors ${
+                        show.status === 'added'
+                          ? 'fill-destructive text-destructive'
+                          : 'fill-none text-muted-foreground hover:text-destructive'
+                      }`}
+                      stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                    </svg>
                   </button>
                   <button
                     onClick={() => onSkip(show)}
                     title={show.status === 'skipped' ? 'Unskip show' : 'Skip show'}
-                    className="text-lg leading-none transition-colors font-medium"
+                    className="focus:outline-none"
                   >
-                    {show.status === 'skipped'
-                      ? <span className="text-destructive">✕</span>
-                      : <span className="text-muted-foreground hover:text-destructive">✕</span>
-                    }
+                    <svg
+                      className={`w-4 h-4 transition-colors ${
+                        show.status === 'skipped'
+                          ? 'text-destructive'
+                          : 'text-muted-foreground hover:text-destructive'
+                      }`}
+                      stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" fill="none"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                   </button>
                 </div>
               </td>
