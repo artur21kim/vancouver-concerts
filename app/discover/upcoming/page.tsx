@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navigation from '../../components/Navigation';
@@ -30,7 +31,7 @@ function formatDate(dateStr: string) {
   });
 }
 
-export default function UpcomingShowsPage() {
+export default function UpcomingShowsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pastDestination = searchParams.get('past_destination') || 'matches';
@@ -400,6 +401,17 @@ export default function UpcomingShowsPage() {
         </div>
       </main>
     </>
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground text-lg">Loading...</p>
+        </div>
+      </div>
+    }>
+      <UpcomingShowsContent />
+    </Suspense>
   );
 }
 
