@@ -347,7 +347,7 @@ function ShowTable({
           <th className="px-4 py-3"></th>
           <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist / Venue</th>
-          <th className="px-4 py-3"></th>
+          <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Spotify</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
