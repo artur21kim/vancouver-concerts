@@ -30,7 +30,7 @@ function formatDate(dateStr: string) {
 // Shared column widths across all tables
 const COL_DATE    = 'w-36';
 const COL_ARTIST  = 'w-56';
-const COL_VENUE   = 'w-72';  // capped to reduce scan distance
+const COL_VENUE   = '';     // flex-fill
 const COL_ACTIONS = 'w-44';
 
 export default function UpcomingShowsPage() {
@@ -292,7 +292,7 @@ export default function UpcomingShowsPage() {
               </button>
               {skippedOpen && (
                 <div className="border-t border-border">
-                  <table className="min-w-full table-fixed">
+                  <table className="w-full">
                     <colgroup>
                       <col className={COL_DATE} />
                       <col className={COL_ARTIST} />
@@ -304,7 +304,7 @@ export default function UpcomingShowsPage() {
                         <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Actions</th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -313,8 +313,8 @@ export default function UpcomingShowsPage() {
                           <td className="px-6 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
                           <td className="px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
                           <td className="px-6 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
-                          <td className="px-6 py-4 text-sm text-center">
-                            <div className="flex justify-center items-center gap-2">
+                          <td className="px-6 py-4 text-sm text-right">
+                            <div className="flex justify-end items-center gap-2">
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-600 text-zinc-100">
                                 Skipped ✓
                               </span>
@@ -404,7 +404,7 @@ function ShowTable({
           </div>
         )}
       </div>
-      <table className="min-w-full table-fixed">
+      <table className="w-full">
         <colgroup>
           <col className={COL_DATE} />
           <col className={COL_ARTIST} />
@@ -427,9 +427,9 @@ function ShowTable({
               <td className="px-6 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
               <td className="px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
               <td className="px-6 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
-              <td className="px-6 py-4 text-sm text-center">
+              <td className="px-6 py-4 text-sm text-right">
                 {reviewed ? (
-                  <div className="flex justify-center items-center gap-2">
+                  <div className="flex justify-end items-center gap-2">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                       show.status === 'added'
                         ? 'bg-green-900/50 text-green-300'
@@ -447,7 +447,7 @@ function ShowTable({
                     )}
                   </div>
                 ) : (
-                  <div className="flex justify-center gap-2">
+                  <div className="flex justify-end gap-2">
                     <button
                       onClick={() => onSave(show.show_id)}
                       className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
