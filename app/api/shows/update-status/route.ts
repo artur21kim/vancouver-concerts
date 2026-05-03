@@ -14,10 +14,38 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { show_id, status, source = 'manual' } = body;
 
-    if (!show_id || !status || !['added', 'skipped'].includes(status)) {
+    if (!show_id || !status || !['added', 'skipped', 'pending'].includes(status)) {
       return NextResponse.json({ 
-        error: 'Invalid request. Expected show_id and status (added/skipped).' 
+        error: 'Invalid request. Expected show_id and status (added/skipped/pending).' 
       }, { status: 400 });
+    }
+
+    if (status === 'pending') {
+      // Undo — delete the review record so show returns to New
+      const { error: deleteReviewError } = await supabase
+        .from('user_show_reviews')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('show_id', show_id);
+
+      if (deleteReviewError) {
+        console.error('Error deleting review:', deleteReviewError);
+        return NextResponse.json({ error: 'Failed to undo review', details: deleteReviewError.message }, { status: 500 });
+      }
+
+      // Also remove from user_shows in case it was previously added
+      await supabase
+        .from('user_shows')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('show_id', show_id);
+
+      console.log(`↩️ Undid review for show ${show_id}, source: ${source}`);
+
+      return NextResponse.json({
+        success: true,
+        data: { show_id, status: 'pending', source }
+      });
     }
 
     if (status === 'added') {
@@ -37,7 +65,6 @@ export async function POST(request: Request) {
       }
 
       // Auto-populate user_venues with 'yes' when a show is added
-      // Fetch the venue_id for this show
       const { data: show, error: showError } = await supabase
         .from('fact_shows')
         .select('venue_id')
@@ -55,14 +82,13 @@ export async function POST(request: Request) {
 
         if (venueError) {
           console.error('Error upserting user_venue:', venueError);
-          // Don't fail the request — venue upsert is best-effort
         } else {
           console.log(`📍 Auto-populated user_venues: venue ${show.venue_id} = yes`);
         }
       }
 
     } else {
-      // Skipped — remove from user_shows (final decision wins)
+      // Skipped — remove from user_shows
       const { error: deleteError } = await supabase
         .from('user_shows')
         .delete()

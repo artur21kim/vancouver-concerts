@@ -31,7 +31,7 @@ function formatDate(dateStr: string) {
 const COL_DATE    = 'w-36';
 const COL_ARTIST  = 'w-56';
 const COL_VENUE   = '';     // flex-fill
-const COL_ACTIONS = 'w-32';
+const COL_ACTIONS = 'w-44';
 
 export default function UpcomingShowsPage() {
   const router = useRouter();
