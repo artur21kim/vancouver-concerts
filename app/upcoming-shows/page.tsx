@@ -304,7 +304,7 @@ export default function UpcomingShowsPage() {
                         <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase pr-0">Actions</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -313,8 +313,8 @@ export default function UpcomingShowsPage() {
                           <td className="px-6 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
                           <td className="px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
                           <td className="px-6 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
-                          <td className="px-6 py-4 text-sm text-right">
-                            <div className="flex justify-end items-center gap-2">
+                          <td className="px-6 py-4 text-sm text-left">
+                            <div className="flex justify-start items-center gap-2">
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-600 text-zinc-100">
                                 Skipped ✓
                               </span>
@@ -416,7 +416,7 @@ function ShowTable({
             <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
             <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
             <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
+            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
               {reviewed ? 'Status' : 'Actions'}
             </th>
           </tr>
@@ -427,9 +427,9 @@ function ShowTable({
               <td className="px-6 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
               <td className="px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
               <td className="px-6 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
-              <td className="px-6 py-4 text-sm text-right">
+              <td className="px-6 py-4 text-sm text-left">
                 {reviewed ? (
-                  <div className="flex justify-end items-center gap-2">
+                  <div className="flex justify-start items-center gap-2">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                       show.status === 'added'
                         ? 'bg-green-900/50 text-green-300'
@@ -447,7 +447,7 @@ function ShowTable({
                     )}
                   </div>
                 ) : (
-                  <div className="flex justify-end gap-2">
+                  <div className="flex justify-start gap-2">
                     <button
                       onClick={() => onSave(show.show_id)}
                       className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition"

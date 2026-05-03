@@ -59,7 +59,6 @@ export default function MyShowsClient({ shows: initialShows }: MyShowsClientProp
         .eq('user_id', user.id)
         .eq('show_id', showId)
 
-      // Remove from local state
       setShows(shows.filter(s => s.show_id !== showId))
     } catch (error) {
       console.error('Error removing show:', error)
@@ -72,7 +71,6 @@ export default function MyShowsClient({ shows: initialShows }: MyShowsClientProp
     }
   }
 
-  // Sort shows
   const sortedShows = useMemo(() => {
     const sorted = [...shows]
 
@@ -107,23 +105,19 @@ export default function MyShowsClient({ shows: initialShows }: MyShowsClientProp
     return sorted
   }, [shows, sortField, sortDirection])
 
-  // Calculate stats
   const stats = useMemo(() => {
     const totalShows = shows.length
     const uniqueArtists = new Set(shows.map(s => s.artist.artist_id)).size
     const uniqueVenues = new Set(shows.map(s => s.venue.venue_id)).size
-
     return { totalShows, uniqueArtists, uniqueVenues }
   }, [shows])
 
-  // Pagination
   const totalPages = Math.ceil(sortedShows.length / showsPerPage)
   const currentShows = useMemo(() => {
     const startIndex = (currentPage - 1) * showsPerPage
     return sortedShows.slice(startIndex, startIndex + showsPerPage)
   }, [sortedShows, currentPage])
 
-  // Handle sort
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
@@ -135,7 +129,6 @@ export default function MyShowsClient({ shows: initialShows }: MyShowsClientProp
     setPageInput('1')
   }
 
-  // Handle page change
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page)
@@ -160,10 +153,11 @@ export default function MyShowsClient({ shows: initialShows }: MyShowsClientProp
   return (
     <>
       <Navigation />
-      <main className="min-h-screen bg-gray-50 py-8 px-4">
+      <main className="min-h-screen bg-background py-8 px-4">
         <div className="max-w-7xl mx-auto">
+
           {/* Header */}
-          <h1 className="text-4xl font-bold text-gray-900 mb-8">My Shows</h1>
+          <h1 className="text-4xl font-bold text-foreground mb-8">My Shows</h1>
 
           {/* Stats Cards */}
           <div className="mb-8">
@@ -175,57 +169,57 @@ export default function MyShowsClient({ shows: initialShows }: MyShowsClientProp
           </div>
 
           {shows.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-lg p-12 text-center">
-              <p className="text-gray-600 text-lg mb-4">You haven't added any shows yet!</p>
+            <div className="bg-card rounded-lg shadow-lg p-12 text-center border border-border">
+              <p className="text-muted-foreground text-lg mb-4">You haven't added any shows yet!</p>
               <button
                 onClick={() => router.push('/browse')}
-                className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
+                className="px-6 py-3 bg-primary text-primary-foreground rounded-md hover:opacity-90 font-medium transition-opacity"
               >
                 Browse Shows
               </button>
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div className="bg-card rounded-lg shadow-lg overflow-hidden border border-border">
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-border">
+                  <thead className="bg-muted">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16"></th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-16"></th>
                       <th
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-32"
+                        className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/80 w-32 transition-colors"
                         onClick={() => handleSort('date')}
                       >
                         Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
                       </th>
                       <th
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-80"
+                        className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/80 w-80 transition-colors"
                         onClick={() => handleSort('artist')}
                       >
                         Artist {sortField === 'artist' && (sortDirection === 'asc' ? '↑' : '↓')}
                       </th>
                       <th
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-64"
+                        className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/80 w-64 transition-colors"
                         onClick={() => handleSort('venue')}
                       >
                         Venue {sortField === 'venue' && (sortDirection === 'asc' ? '↑' : '↓')}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-48">
                         Festival
                       </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                      <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-24">
                         Setlist
                       </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                      <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-24">
                         Spotify
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-card divide-y divide-border">
                     {currentShows.map((show) => {
                       const isRemoving = removingShows.has(show.show_id)
 
                       return (
-                        <tr key={show.show_id} className="hover:bg-gray-50">
+                        <tr key={show.show_id} className="hover:bg-muted/50 transition-colors">
                           <td className="px-4 py-3">
                             <button
                               onClick={() => removeShow(show.show_id)}
@@ -234,10 +228,10 @@ export default function MyShowsClient({ shows: initialShows }: MyShowsClientProp
                               title="Remove from My Shows"
                             >
                               {isRemoving ? (
-                                <div className="w-5 h-5 border-2 border-gray-300 border-t-red-500 rounded-full animate-spin"></div>
+                                <div className="w-5 h-5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin"></div>
                               ) : (
                                 <svg
-                                  className="w-6 h-6 fill-red-500 text-red-500 hover:fill-red-600 hover:text-red-600 transition-colors"
+                                  className="w-6 h-6 fill-destructive text-destructive hover:opacity-70 transition-opacity"
                                   stroke="currentColor"
                                   strokeWidth="2"
                                   viewBox="0 0 24 24"
@@ -252,54 +246,54 @@ export default function MyShowsClient({ shows: initialShows }: MyShowsClientProp
                               )}
                             </button>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-foreground">
                             {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', {
                               year: 'numeric',
                               month: 'short',
                               day: 'numeric'
                             })}
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-900">
+                          <td className="px-4 py-3 text-sm text-foreground">
                             <button
                               onClick={() => router.push(`/browse?artist_id=${show.artist.artist_id}`)}
-                              className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+                              className="text-primary hover:opacity-70 hover:underline text-left transition-opacity"
                             >
                               {show.artist.artist_name}
                             </button>
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-900">
+                          <td className="px-4 py-3 text-sm text-foreground">
                             <button
                               onClick={() => router.push(`/browse?venue_id=${show.venue.venue_id}`)}
-                              className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+                              className="text-primary hover:opacity-70 hover:underline text-left transition-opacity"
                             >
                               {show.venue.venue_name}
                             </button>
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-600">
+                          <td className="px-4 py-3 text-sm text-muted-foreground">
                             {show.festival_name || '-'}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
                             {show.setlist_url ? (
-                              <a 
+                              <a
                                 href={show.setlist_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center justify-center hover:opacity-70 transition-opacity"
                                 title="View on setlist.fm"
                               >
-                                <img 
-                                  src="https://www.setlist.fm/favicon.ico" 
+                                <img
+                                  src="https://www.setlist.fm/favicon.ico"
                                   alt="setlist.fm"
                                   className="w-4 h-4"
                                 />
                               </a>
                             ) : (
-                              <span className="text-gray-400">-</span>
+                              <span className="text-muted-foreground">-</span>
                             )}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
                             {show.artist.spotify_artist_id ? (
-                              <a 
+                              <a
                                 href={`https://open.spotify.com/artist/${show.artist.spotify_artist_id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -311,7 +305,7 @@ export default function MyShowsClient({ shows: initialShows }: MyShowsClientProp
                                 </svg>
                               </a>
                             ) : (
-                              <span className="text-gray-400">-</span>
+                              <span className="text-muted-foreground">-</span>
                             )}
                           </td>
                         </tr>
@@ -323,32 +317,31 @@ export default function MyShowsClient({ shows: initialShows }: MyShowsClientProp
 
               {/* Pagination */}
               {totalPages > 1 && (
-                <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 sm:px-6">
+                <div className="bg-muted px-4 py-3 border-t border-border sm:px-6">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-700">
-                        Showing{' '}
-                        <span className="font-medium">
-                          {(currentPage - 1) * showsPerPage + 1}
-                        </span>{' '}
-                        to{' '}
-                        <span className="font-medium">
-                          {Math.min(currentPage * showsPerPage, sortedShows.length)}
-                        </span>{' '}
-                        of <span className="font-medium">{sortedShows.length}</span> shows
-                      </p>
-                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Showing{' '}
+                      <span className="font-medium text-foreground">
+                        {(currentPage - 1) * showsPerPage + 1}
+                      </span>{' '}
+                      to{' '}
+                      <span className="font-medium text-foreground">
+                        {Math.min(currentPage * showsPerPage, sortedShows.length)}
+                      </span>{' '}
+                      of{' '}
+                      <span className="font-medium text-foreground">{sortedShows.length}</span> shows
+                    </p>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handlePageChange(currentPage - 1)}
                         disabled={currentPage === 1}
-                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-border bg-card text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-50 transition-colors"
                       >
                         Previous
                       </button>
 
                       <form onSubmit={handlePageInputSubmit} className="flex items-center gap-1">
-                        <span className="text-sm text-gray-700">Page</span>
+                        <span className="text-sm text-muted-foreground">Page</span>
                         <input
                           type="number"
                           min="1"
@@ -361,15 +354,15 @@ export default function MyShowsClient({ shows: initialShows }: MyShowsClientProp
                               setPageInput(currentPage.toString())
                             }
                           }}
-                          className="w-16 px-2 py-1 text-sm text-center text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-16 px-2 py-1 text-sm text-center text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                         />
-                        <span className="text-sm text-gray-700">of {totalPages}</span>
+                        <span className="text-sm text-muted-foreground">of {totalPages}</span>
                       </form>
 
                       <button
                         onClick={() => handlePageChange(currentPage + 1)}
                         disabled={currentPage === totalPages}
-                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-border bg-card text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-50 transition-colors"
                       >
                         Next
                       </button>
@@ -387,9 +380,9 @@ export default function MyShowsClient({ shows: initialShows }: MyShowsClientProp
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <p className="text-sm text-gray-600 mb-1">{label}</p>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
+    <div className="bg-card rounded-lg shadow border border-border p-4">
+      <p className="text-sm text-muted-foreground mb-1">{label}</p>
+      <p className="text-2xl font-bold text-foreground">{value}</p>
     </div>
   )
 }
