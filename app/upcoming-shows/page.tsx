@@ -30,7 +30,7 @@ function formatDate(dateStr: string) {
 // Shared column widths across all tables
 const COL_DATE    = 'w-36';
 const COL_ARTIST  = 'w-56';
-const COL_VENUE   = '';     // flex-fill
+const COL_VENUE   = 'w-72';  // capped to reduce scan distance
 const COL_ACTIONS = 'w-44';
 
 export default function UpcomingShowsPage() {
