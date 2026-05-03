@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Navigation from '../components/Navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Navigation from '../../components/Navigation';
 
 type Show = {
   show_id: number;
@@ -16,9 +16,11 @@ type Show = {
   match_score: number;
   spotify_song_count: number;
   vancouver_show_count: number;
+  is_spotify_match: boolean;
 };
 
 type SortKey = 'date' | 'artist' | 'score';
+type Scope = 'spotify' | 'all';
 
 function formatDate(dateStr: string) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
@@ -30,22 +32,31 @@ function formatDate(dateStr: string) {
 
 export default function UpcomingShowsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pastDestination = searchParams.get('past_destination') || 'matches';
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [allShows, setAllShows] = useState<Show[]>([]);
   const [sortBy, setSortBy] = useState<SortKey>('date');
+  const [scope, setScope] = useState<Scope>('spotify');
   const [skippedOpen, setSkippedOpen] = useState(false);
   const [bannerVisible, setBannerVisible] = useState(false);
 
   useEffect(() => {
     const dismissed = localStorage.getItem('upcoming_banner_dismissed');
     if (!dismissed) setBannerVisible(true);
-    fetchUpcomingShows();
   }, []);
 
+  useEffect(() => {
+    fetchUpcomingShows();
+  }, [scope]);
+
   const fetchUpcomingShows = async () => {
+    setLoading(true);
+    setError('');
     try {
-      const response = await fetch('/api/upcoming-shows');
+      const response = await fetch(`/api/upcoming-shows?scope=${scope}`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to fetch upcoming shows');
@@ -92,12 +103,10 @@ export default function UpcomingShowsPage() {
     }
   };
 
-  // Toggle heart: if already saved, move back to pending; otherwise save
   const handleHeart = (show: Show) => {
     updateShowStatus(show.show_id, show.status === 'added' ? 'pending' : 'added');
   };
 
-  // Toggle X: if already skipped, move back to pending; otherwise skip
   const handleSkip = (show: Show) => {
     updateShowStatus(show.show_id, show.status === 'skipped' ? 'pending' : 'skipped');
   };
@@ -116,6 +125,10 @@ export default function UpcomingShowsPage() {
   const skippedShows = sortShows(allShows.filter(s => s.status === 'skipped'));
   const allReviewed  = allShows.length > 0 && newShows.length === 0;
 
+  // In 'all' scope, split new shows into matched vs unmatched for display
+  const newMatchedShows   = newShows.filter(s => s.is_spotify_match);
+  const newUnmatchedShows = newShows.filter(s => !s.is_spotify_match);
+
   if (loading) {
     return (
       <>
@@ -123,7 +136,9 @@ export default function UpcomingShowsPage() {
         <div className="min-h-screen flex items-center justify-center bg-background">
           <div className="text-center">
             <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground text-lg">Finding upcoming shows for you...</p>
+            <p className="text-muted-foreground text-lg">
+              {scope === 'all' ? 'Loading all upcoming shows...' : 'Finding upcoming shows for you...'}
+            </p>
           </div>
         </div>
       </>
@@ -159,11 +174,21 @@ export default function UpcomingShowsPage() {
         <div className="max-w-7xl mx-auto">
 
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-foreground mb-1">Upcoming Shows For You</h1>
-            <p className="text-muted-foreground">
-              Based on your Spotify library and upcoming Vancouver shows
-            </p>
+          <div className="mb-8 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-4xl font-bold text-foreground mb-1">Upcoming Shows For You</h1>
+              <p className="text-muted-foreground">
+                {scope === 'spotify'
+                  ? 'Based on your Spotify library and upcoming Vancouver shows'
+                  : 'All upcoming Vancouver shows — your Spotify matches are highlighted'}
+              </p>
+            </div>
+            <button
+              onClick={() => router.push(`/${pastDestination}`)}
+              className="shrink-0 px-4 py-2 text-sm font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition"
+            >
+              ← Past Shows
+            </button>
           </div>
 
           {/* Dismissible banner */}
@@ -182,29 +207,56 @@ export default function UpcomingShowsPage() {
             </div>
           )}
 
-          {/* Stats + Sort row */}
+          {/* Stats + controls row */}
           <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
             <div className="flex gap-4">
               <StatPill label="New"     value={newShows.length}     color="default" />
               <StatPill label="Saved"   value={savedShows.length}   color="green"   />
               <StatPill label="Skipped" value={skippedShows.length} color="muted"   />
             </div>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Sort by</span>
-              <div className="flex rounded-lg border border-border overflow-hidden font-medium">
-                {(['date', 'artist', 'score'] as SortKey[]).map(key => (
-                  <button
-                    key={key}
-                    onClick={() => setSortBy(key)}
-                    className={`px-3 py-1.5 transition ${
-                      sortBy === key
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-card text-muted-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {key === 'score' ? 'Match' : key === 'date' ? 'Date' : 'Artist'}
-                  </button>
-                ))}
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Scope toggle */}
+              <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
+                <button
+                  onClick={() => setScope('spotify')}
+                  className={`px-3 py-1.5 transition ${
+                    scope === 'spotify'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-card text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  My Matches
+                </button>
+                <button
+                  onClick={() => setScope('all')}
+                  className={`px-3 py-1.5 transition ${
+                    scope === 'all'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-card text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  All Shows
+                </button>
+              </div>
+
+              {/* Sort */}
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Sort by</span>
+                <div className="flex rounded-lg border border-border overflow-hidden font-medium">
+                  {(['date', 'artist', ...(scope === 'spotify' ? ['score'] : [])] as SortKey[]).map(key => (
+                    <button
+                      key={key}
+                      onClick={() => setSortBy(key)}
+                      className={`px-3 py-1.5 transition ${
+                        sortBy === key
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-card text-muted-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {key === 'score' ? 'Match' : key === 'date' ? 'Date' : 'Artist'}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -233,18 +285,20 @@ export default function UpcomingShowsPage() {
             </div>
           )}
 
-          {/* No shows at all */}
+          {/* No shows */}
           {allShows.length === 0 && (
             <div className="bg-card rounded-lg shadow p-12 text-center">
               <p className="text-muted-foreground text-lg mb-2">
-                No upcoming Vancouver shows found for artists in your Spotify library.
+                {scope === 'spotify'
+                  ? 'No upcoming Vancouver shows found for artists in your Spotify library.'
+                  : 'No upcoming Vancouver shows found.'}
               </p>
               <p className="text-muted-foreground text-sm">Check back soon — new shows are added regularly.</p>
             </div>
           )}
 
-          {/* New Shows */}
-          {newShows.length > 0 && (
+          {/* Spotify scope: single New Shows table */}
+          {scope === 'spotify' && newShows.length > 0 && (
             <ShowTable
               title="New Shows"
               shows={newShows}
@@ -253,7 +307,39 @@ export default function UpcomingShowsPage() {
               onSaveAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'added')}
               onSkipAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'skipped')}
               showBulk
+              showSpotifyBadge={false}
             />
+          )}
+
+          {/* All scope: split into Spotify Matches + Other Shows */}
+          {scope === 'all' && newShows.length > 0 && (
+            <>
+              {newMatchedShows.length > 0 && (
+                <ShowTable
+                  title="Your Spotify Matches"
+                  shows={newMatchedShows}
+                  onHeart={handleHeart}
+                  onSkip={handleSkip}
+                  onSaveAll={() => bulkUpdateStatus(newMatchedShows.map(s => s.show_id), 'added')}
+                  onSkipAll={() => bulkUpdateStatus(newMatchedShows.map(s => s.show_id), 'skipped')}
+                  showBulk
+                  showSpotifyBadge={false}
+                  highlightHeader
+                />
+              )}
+              {newUnmatchedShows.length > 0 && (
+                <ShowTable
+                  title="All Other Shows"
+                  shows={newUnmatchedShows}
+                  onHeart={handleHeart}
+                  onSkip={handleSkip}
+                  onSaveAll={() => bulkUpdateStatus(newUnmatchedShows.map(s => s.show_id), 'added')}
+                  onSkipAll={() => bulkUpdateStatus(newUnmatchedShows.map(s => s.show_id), 'skipped')}
+                  showBulk
+                  showSpotifyBadge={false}
+                />
+              )}
+            </>
           )}
 
           {/* Saved */}
@@ -263,10 +349,11 @@ export default function UpcomingShowsPage() {
               shows={savedShows}
               onHeart={handleHeart}
               onSkip={handleSkip}
+              showSpotifyBadge={scope === 'all'}
             />
           )}
 
-          {/* Skipped — collapsed by default */}
+          {/* Skipped — collapsed */}
           {skippedShows.length > 0 && (
             <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
               <button
@@ -286,12 +373,13 @@ export default function UpcomingShowsPage() {
                   onHeart={handleHeart}
                   onSkip={handleSkip}
                   hideTitleBar
+                  showSpotifyBadge={scope === 'all'}
                 />
               )}
             </div>
           )}
 
-          {/* Bottom nav links */}
+          {/* Bottom nav */}
           {allShows.length > 0 && !allReviewed && (
             <div className="mt-4 flex justify-center gap-4 text-sm">
               <button
@@ -324,6 +412,8 @@ function ShowTable({
   onSkipAll,
   showBulk = false,
   hideTitleBar = false,
+  showSpotifyBadge = false,
+  highlightHeader = false,
 }: {
   title: string;
   shows: Show[];
@@ -333,6 +423,8 @@ function ShowTable({
   onSkipAll?: () => void;
   showBulk?: boolean;
   hideTitleBar?: boolean;
+  showSpotifyBadge?: boolean;
+  highlightHeader?: boolean;
 }) {
   const tableContent = (
     <table className="w-full table-fixed">
@@ -350,7 +442,10 @@ function ShowTable({
       </thead>
       <tbody className="divide-y divide-border">
         {shows.map(show => (
-          <tr key={show.show_id} className="hover:bg-muted/30">
+          <tr
+            key={show.show_id}
+            className={`hover:bg-muted/30 ${showSpotifyBadge && show.is_spotify_match ? 'bg-primary/5' : ''}`}
+          >
             {/* Heart + X */}
             <td className="px-4 py-4">
               <div className="flex items-center gap-3">
@@ -368,10 +463,13 @@ function ShowTable({
             </td>
             {/* Date */}
             <td className="px-4 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
-            {/* Stacked Artist + Spotify / Venue */}
+            {/* Artist + Venue */}
             <td className="px-4 py-4">
               <div className="flex items-center gap-1.5 mb-0.5">
-                <span className="text-sm font-medium text-primary truncate">{show.artist_name}</span>
+                <span className={`text-sm font-medium truncate ${show.is_spotify_match ? 'text-primary' : 'text-foreground'}`}>
+                  {show.artist_name}
+                </span>
+                {/* Spotify icon — always shown if artist has a spotify_artist_id */}
                 {show.spotify_artist_id ? (
                   <a
                     href={`https://open.spotify.com/artist/${show.spotify_artist_id}`}
@@ -380,11 +478,20 @@ function ShowTable({
                     title="Open in Spotify"
                     className="hover:opacity-70 transition-opacity inline-flex items-center justify-center shrink-0"
                   >
-                    <svg className="w-3.5 h-3.5 md:w-4 md:h-4" viewBox="0 0 24 24" fill="#1DB954">
+                    <svg
+                      className="w-3.5 h-3.5 md:w-4 md:h-4"
+                      viewBox="0 0 24 24"
+                      fill={show.is_spotify_match ? '#1DB954' : 'currentColor'}
+                      style={show.is_spotify_match ? {} : { color: 'var(--muted-foreground)', opacity: 0.4 }}
+                    >
                       <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
                     </svg>
                   </a>
                 ) : null}
+                {/* Spotify match pill — only in All Shows mode */}
+                {showSpotifyBadge && show.is_spotify_match && (
+                  <span className="text-xs text-green-500 font-medium shrink-0">● match</span>
+                )}
               </div>
               <div className="text-xs text-muted-foreground truncate">{show.venue_name}</div>
             </td>
@@ -398,10 +505,15 @@ function ShowTable({
 
   return (
     <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-        <h2 className="font-semibold text-card-foreground">
+      <div className={`flex items-center justify-between px-6 py-4 border-b border-border ${highlightHeader ? 'bg-primary/5' : ''}`}>
+        <h2 className="font-semibold text-card-foreground flex items-center gap-2">
+          {highlightHeader && (
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="#1DB954">
+              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+            </svg>
+          )}
           {title}
-          <span className="text-muted-foreground font-normal ml-2">({shows.length})</span>
+          <span className="text-muted-foreground font-normal ml-1">({shows.length})</span>
         </h2>
         {showBulk && onSaveAll && onSkipAll && shows.length > 1 && (
           <div className="flex gap-2">

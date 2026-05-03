@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import Navigation from '../components/Navigation';
 
 type SummaryData = {
@@ -17,7 +18,25 @@ export default function ReviewSummaryPage() {
   const [error, setError] = useState('');
   const [summary, setSummary] = useState<SummaryData | null>(null);
 
-  useEffect(() => { fetchSummary(); }, []);
+  useEffect(() => {
+    fetchSummary();
+    markPastRunComplete();
+  }, []);
+
+  const markPastRunComplete = async () => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase
+        .from('user_profiles')
+        .update({ completed_past_run: true })
+        .eq('user_id', user.id);
+    } catch (err) {
+      // Fire-and-forget — don't surface this error to the user
+      console.error('Failed to mark past run complete:', err);
+    }
+  };
 
   const fetchSummary = async () => {
     try {
@@ -180,6 +199,16 @@ export default function ReviewSummaryPage() {
               <p className="text-muted-foreground">You can continue reviewing anytime. Your progress is saved automatically.</p>
             </div>
           )}
+
+          {/* Forward-looking CTA */}
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => router.push('/discover/upcoming')}
+              className="text-primary hover:text-primary/80 font-medium text-sm transition"
+            >
+              Check upcoming shows for you →
+            </button>
+          </div>
         </div>
       </main>
     </>

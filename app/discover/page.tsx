@@ -21,14 +21,13 @@ export default function Page() {
   const supabase = createClient();
 
   const currentYear = new Date().getFullYear();
-  const todayVancouver = getVancouverToday(); // YYYY-MM-DD
+  const todayVancouver = getVancouverToday();
 
   const [matchScope, setMatchScope] = useState<MatchScope>('past');
   const [year, setYear] = useState<number | ''>('');
   const [fromDate, setFromDate] = useState<string>(todayVancouver);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [hasExistingData, setHasExistingData] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [showTooltip, setShowTooltip] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -37,7 +36,6 @@ export default function Page() {
     checkUserStatus();
   }, []);
 
-  // Re-check user status when auth modal closes in case they just signed in
   const handleAuthModalClose = () => {
     setShowAuthModal(false);
     checkUserStatus();
@@ -49,15 +47,51 @@ export default function Page() {
       setUser(currentUser);
 
       if (currentUser) {
+        // Check if user has Spotify data
         const { data: existingSongs } = await supabase
           .from('user_spotify_songs')
           .select('id')
           .eq('user_id', currentUser.id)
           .limit(1);
 
-        setHasExistingData(!!(existingSongs && existingSongs.length > 0));
+        const hasSpotifyData = !!(existingSongs && existingSongs.length > 0);
 
-        // Restore localStorage values if returning from auth modal
+        if (hasSpotifyData) {
+          // Check if they've completed a past run
+          const { data: profile } = await supabase
+            .from('user_profiles')
+            .select('completed_past_run')
+            .eq('user_id', currentUser.id)
+            .single();
+
+          const completedPastRun = profile?.completed_past_run === true;
+
+          if (completedPastRun) {
+            // Completed past run → Upcoming Shows, Past button → /likely-shows
+            router.replace('/discover/upcoming?past_destination=likely-shows');
+          } else {
+            // Has Spotify data but no completed past run → check for any likely_shows reviews
+            const { data: likelyShowsReviews } = await supabase
+              .from('user_show_reviews')
+              .select('show_id')
+              .eq('user_id', currentUser.id)
+              .eq('source', 'likely_shows')
+              .limit(1);
+
+            const hasStartedPast = !!(likelyShowsReviews && likelyShowsReviews.length > 0);
+
+            if (hasStartedPast) {
+              // Started past run but didn't finish → Upcoming Shows, Past button → /likely-shows
+              router.replace('/discover/upcoming?past_destination=likely-shows');
+            } else {
+              // Has Spotify data, never started past → Upcoming Shows, Past button → /matches
+              router.replace('/discover/upcoming?past_destination=matches');
+            }
+          }
+          return;
+        }
+
+        // Has account but no Spotify data — restore any saved state
         const savedYear = localStorage.getItem('firstConcertYear');
         const savedScope = localStorage.getItem('matchScope') as MatchScope | null;
         if (savedScope) setMatchScope(savedScope);
@@ -111,7 +145,6 @@ export default function Page() {
     try {
       const profileUpdate: Record<string, any> = {};
 
-      // Only write initial_match_scope on first run, never overwrite
       const { data: existingProfile } = await supabase
         .from('user_profiles')
         .select('initial_match_scope')
@@ -138,7 +171,6 @@ export default function Page() {
         }
       }
 
-      // Build URL params for Spotify auth route
       const params = new URLSearchParams({ match_scope: matchScope });
       if (matchScope === 'past') {
         params.set('first_concert_year', year.toString());
@@ -152,51 +184,12 @@ export default function Page() {
     }
   };
 
-  const handleRerunMatcher = async () => {
-    if (user) {
-      await supabase.from('user_spotify_songs').delete().eq('user_id', user.id);
-    }
-    setHasExistingData(false);
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (hasExistingData) {
-    return (
-      <div className="min-h-screen bg-background py-12 px-4">
-        <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-8">
-          <h1 className="text-3xl font-bold text-card-foreground mb-4">Spotify Already Connected</h1>
-          <p className="text-foreground mb-8">
-            You've already connected your Spotify account and we've matched your library to Vancouver shows.
-          </p>
-          <div className="space-y-4">
-            <button
-              onClick={() => router.push('/matches')}
-              className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-lg font-semibold hover:bg-primary/90 transition"
-            >
-              View My Matched Shows
-            </button>
-            <div>
-              <button
-                onClick={handleRerunMatcher}
-                className="w-full bg-muted text-muted-foreground px-6 py-3 rounded-lg font-semibold hover:bg-muted/80 transition"
-              >
-                Re-sync Spotify Data
-              </button>
-              <p className="text-sm text-muted-foreground text-center mt-2">
-                Use this if your match results seem incomplete
-              </p>
-            </div>
-          </div>
         </div>
       </div>
     );
@@ -344,7 +337,6 @@ export default function Page() {
         </div>
       </div>
 
-      {/* Auth modal — rendered inline so we can open it without a redirect */}
       <AuthModal
         isOpen={showAuthModal}
         onClose={handleAuthModalClose}

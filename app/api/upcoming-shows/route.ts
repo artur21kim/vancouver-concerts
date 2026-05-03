@@ -11,15 +11,18 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log(`🎯 Fetching upcoming shows for user: ${user.id}`);
+    const { searchParams } = new URL(request.url);
+    const scope = searchParams.get('scope') || 'spotify'; // 'spotify' | 'all'
+
+    console.log(`🎯 Fetching upcoming shows for user: ${user.id} (scope: ${scope})`);
     const startTime = Date.now();
 
     // Get today's date in Vancouver time
     const todayVancouver = new Date().toLocaleDateString('en-CA', {
       timeZone: 'America/Vancouver',
-    }); // yields YYYY-MM-DD
+    });
 
-    // Get user's Spotify artists
+    // Always fetch user's Spotify artists for highlighting purposes
     const { data: userSongs, error: songsError } = await supabase
       .from('user_spotify_songs')
       .select('spotify_artist_id')
@@ -29,14 +32,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Failed to fetch Spotify data' }, { status: 500 });
     }
 
-    if (!userSongs || userSongs.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: { shows: [], total_shows: 0, message: 'No Spotify data found. Please connect your Spotify account.' }
-      });
-    }
-
-    const artistSongCounts = userSongs.reduce((acc: any, song: any) => {
+    const artistSongCounts = (userSongs || []).reduce((acc: any, song: any) => {
       const artistId = song.spotify_artist_id;
       if (!acc[artistId]) acc[artistId] = 0;
       acc[artistId]++;
@@ -45,58 +41,101 @@ export async function GET(request: Request) {
 
     const uniqueSpotifyArtistIds = Object.keys(artistSongCounts);
 
-    // Match Spotify artists to Vancouver artists
+    // Match Spotify artists to dim_artist for scoring + highlighting
     const { data: matchedArtists, error: artistsError } = await supabase
       .from('dim_artist')
       .select('artist_id, artist_name, spotify_artist_id')
-      .in('spotify_artist_id', uniqueSpotifyArtistIds);
+      .in('spotify_artist_id', uniqueSpotifyArtistIds.length > 0 ? uniqueSpotifyArtistIds : ['__none__']);
 
     if (artistsError) {
       return NextResponse.json({ error: 'Failed to match artists' }, { status: 500 });
     }
 
-    if (!matchedArtists || matchedArtists.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: { shows: [], total_shows: 0, message: 'No matching artists found.' }
-      });
-    }
+    const matchedArtistIds = (matchedArtists || []).map(a => a.artist_id);
 
-    const matchedArtistIds = matchedArtists.map(a => a.artist_id);
+    // Build spotify_artist_id lookup by artist_id
+    const artistSpotifyIdMap = (matchedArtists || []).reduce((acc: any, artist: any) => {
+      acc[artist.artist_id] = artist.spotify_artist_id;
+      return acc;
+    }, {});
 
-    // Fetch all upcoming shows for matched artists
-    const { data: shows, error: showsError } = await supabase
-      .from('fact_shows')
-      .select(`
-        show_id,
-        date,
-        artist_id,
-        venue_id,
-        dim_artist!inner (
+    // Build set of matched artist_ids for quick lookup
+    const matchedArtistIdSet = new Set(matchedArtistIds);
+
+    let shows: any[] = [];
+
+    if (scope === 'all') {
+      // Fetch ALL upcoming shows regardless of artist
+      const { data: allShows, error: showsError } = await supabase
+        .from('fact_shows')
+        .select(`
+          show_id,
+          date,
           artist_id,
-          artist_name
-        ),
-        dim_venue!inner (
           venue_id,
-          venue_name
-        )
-      `)
-      .in('artist_id', matchedArtistIds)
-      .gte('date', todayVancouver)
-      .order('date', { ascending: true });
+          dim_artist!inner (
+            artist_id,
+            artist_name,
+            spotify_artist_id
+          ),
+          dim_venue!inner (
+            venue_id,
+            venue_name
+          )
+        `)
+        .gte('date', todayVancouver)
+        .order('date', { ascending: true });
 
-    if (showsError) {
-      return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
+      if (showsError) {
+        return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
+      }
+
+      shows = allShows || [];
+    } else {
+      // Spotify-only mode: only shows for matched artists
+      if (matchedArtistIds.length === 0) {
+        return NextResponse.json({
+          success: true,
+          data: { shows: [], total_shows: 0, matched_artists: 0, message: 'No matching artists found.' }
+        });
+      }
+
+      const { data: spotifyShows, error: showsError } = await supabase
+        .from('fact_shows')
+        .select(`
+          show_id,
+          date,
+          artist_id,
+          venue_id,
+          dim_artist!inner (
+            artist_id,
+            artist_name,
+            spotify_artist_id
+          ),
+          dim_venue!inner (
+            venue_id,
+            venue_name
+          )
+        `)
+        .in('artist_id', matchedArtistIds)
+        .gte('date', todayVancouver)
+        .order('date', { ascending: true });
+
+      if (showsError) {
+        return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
+      }
+
+      shows = spotifyShows || [];
     }
 
-    if (!shows || shows.length === 0) {
+    if (shows.length === 0) {
       return NextResponse.json({
         success: true,
-        data: { shows: [], total_shows: 0, message: 'No upcoming shows found for artists in your Spotify library.' }
+        data: { shows: [], total_shows: 0, matched_artists: matchedArtistIds.length, message: 'No upcoming shows found.' }
       });
     }
 
-    // Fetch existing user reviews for these shows (include all statuses — don't exclude)
+    // Fetch existing user reviews
     const showIds = shows.map((s: any) => s.show_id);
 
     const { data: existingReviews } = await supabase
@@ -110,39 +149,39 @@ export async function GET(request: Request) {
       return acc;
     }, {});
 
-    // Build artist_id -> spotify_artist_id lookup
-    const artistSpotifyIdMap = matchedArtists.reduce((acc: any, artist: any) => {
-      acc[artist.artist_id] = artist.spotify_artist_id;
-      return acc;
-    }, {});
-
     // Transform shows
     const transformedShows = shows.map((show: any) => {
       const artist = Array.isArray(show.dim_artist) ? show.dim_artist[0] : show.dim_artist;
       const venue = Array.isArray(show.dim_venue) ? show.dim_venue[0] : show.dim_venue;
+      const isSpotifyMatch = matchedArtistIdSet.has(artist.artist_id);
+
       return {
         show_id: show.show_id,
         date: show.date,
         artist_id: artist.artist_id,
         artist_name: artist.artist_name,
-        spotify_artist_id: artistSpotifyIdMap[artist.artist_id] || null,
+        // Use our lookup map for matched artists; fall back to dim_artist field for all-scope
+        spotify_artist_id: artistSpotifyIdMap[artist.artist_id] || artist.spotify_artist_id || null,
         venue_id: venue.venue_id,
         venue_name: venue.venue_name,
         status: (reviewStatusMap[show.show_id] || 'pending') as 'pending' | 'added' | 'skipped',
+        is_spotify_match: isSpotifyMatch,
       };
     });
 
-    // Calculate match scores
+    // Calculate match scores (only meaningful for matched artists)
     const artistShowCounts = transformedShows.reduce((acc: any, show: any) => {
       if (!acc[show.artist_id]) acc[show.artist_id] = 0;
       acc[show.artist_id]++;
       return acc;
     }, {});
 
-    const maxSpotifyCount = Math.max(...(Object.values(artistSongCounts) as number[]));
+    const maxSpotifyCount = uniqueSpotifyArtistIds.length > 0
+      ? Math.max(...(Object.values(artistSongCounts) as number[]))
+      : 1;
     const maxVancouverCount = Math.max(...(Object.values(artistShowCounts) as number[]), 1);
 
-    const artistMatchScores = matchedArtists.reduce((acc: any, artist: any) => {
+    const artistMatchScores = (matchedArtists || []).reduce((acc: any, artist: any) => {
       const spotifyCount = artistSongCounts[artist.spotify_artist_id] || 0;
       const vancouverCount = artistShowCounts[artist.artist_id] || 0;
       const spotifyScore = (spotifyCount / maxSpotifyCount) * 100;
@@ -163,7 +202,7 @@ export async function GET(request: Request) {
     }));
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`✅ UPCOMING SHOWS COMPLETE — ${showsWithScores.length} shows in ${duration}s`);
+    console.log(`✅ UPCOMING SHOWS COMPLETE — ${showsWithScores.length} shows in ${duration}s (scope: ${scope})`);
 
     return NextResponse.json({
       success: true,
@@ -171,6 +210,7 @@ export async function GET(request: Request) {
         shows: showsWithScores,
         total_shows: showsWithScores.length,
         matched_artists: matchedArtistIds.length,
+        scope,
       }
     });
 
