@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navigation from '../components/Navigation';
 
@@ -12,7 +12,7 @@ type SpotifyStatus = {
   error_message?: string;
 };
 
-export default function SpotifyProcessingPage() {
+function SpotifyProcessingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const matchScope = searchParams.get('match_scope') || 'past';
@@ -162,5 +162,20 @@ export default function SpotifyProcessingPage() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function SpotifyProcessingPage() {
+  return (
+    <Suspense fallback={
+      <>
+        <Navigation />
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+        </div>
+      </>
+    }>
+      <SpotifyProcessingContent />
+    </Suspense>
   );
 }
