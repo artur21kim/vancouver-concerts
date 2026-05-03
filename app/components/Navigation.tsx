@@ -49,7 +49,8 @@ export default function Navigation() {
   }, [])
 
   const isDiscoverActive = DISCOVER_PATHS.includes(pathname)
-  const breadcrumbs = PAST_FLOW_BREADCRUMBS[pathname] || null
+  // Derive breadcrumbs directly from pathname on every render — no state involved
+  const breadcrumbs = PAST_FLOW_BREADCRUMBS[pathname] ?? null
 
   const navLinkClass = (active: boolean) =>
     `text-sm font-medium transition-colors ${
@@ -61,9 +62,9 @@ export default function Navigation() {
   return (
     <nav className="sticky top-0 z-50 bg-background border-b border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
 
-          {/* Left: Brand + Nav Links */}
+        {/* Main nav row */}
+        <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-0">
             <a
               href="/"
@@ -71,7 +72,6 @@ export default function Navigation() {
             >
               Vancouver Concert History
             </a>
-
             <div className="hidden md:flex items-center gap-6">
               <a href="/" className={navLinkClass(pathname === '/')}>Overview</a>
               <a href="/discover" className={navLinkClass(isDiscoverActive)}>Discover</a>
@@ -80,7 +80,6 @@ export default function Navigation() {
             </div>
           </div>
 
-          {/* Right: Theme Toggle + Auth */}
           <div className="flex items-center gap-2 -mr-2 md:-mr-4">
             {mounted && (
               <button
@@ -95,29 +94,32 @@ export default function Navigation() {
           </div>
         </div>
 
-        {/* Breadcrumb row — only shown in Past flow */}
+        {/* Breadcrumb row — only shown in Past flow, aligned with nav links */}
         {breadcrumbs && (
-          <div className="hidden md:flex items-center gap-1.5 pb-2 text-xs text-muted-foreground">
+          <div className="hidden md:flex items-center gap-1.5 pb-2 text-xs">
             {breadcrumbs.map((crumb, i) => {
               const isLast = i === breadcrumbs.length - 1
               return (
                 <span key={crumb.path} className="flex items-center gap-1.5">
                   {isLast ? (
-                    <span className="text-foreground font-medium">{crumb.label}</span>
+                    <span className="text-foreground font-semibold">{crumb.label}</span>
                   ) : (
                     <a
                       href={crumb.path}
-                      className="hover:text-foreground transition-colors"
+                      className="text-muted-foreground hover:text-foreground transition-colors"
                     >
                       {crumb.label}
                     </a>
                   )}
-                  {!isLast && <span className="text-border">›</span>}
+                  {!isLast && (
+                    <span className="text-primary font-medium">›</span>
+                  )}
                 </span>
               )
             })}
           </div>
         )}
+
       </div>
     </nav>
   )
