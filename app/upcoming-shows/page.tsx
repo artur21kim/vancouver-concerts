@@ -334,10 +334,16 @@ function ShowTable({
   hideTitleBar?: boolean;
 }) {
   const tableContent = (
-    <table className="w-full">
+    <table className="w-full table-fixed">
+      <colgroup>
+        <col className="w-20" />
+        <col className="w-36" />
+        <col className="w-2/5" />
+        <col />
+      </colgroup>
       <thead className="bg-muted">
         <tr>
-          <th className="w-20 px-4 py-3"></th>
+          <th className="px-4 py-3"></th>
           <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
@@ -346,7 +352,7 @@ function ShowTable({
       <tbody className="divide-y divide-border">
         {shows.map(show => (
           <tr key={show.show_id} className="hover:bg-muted/30">
-            <td className="w-20 px-4 py-4">
+            <td className="px-4 py-4">
               <div className="flex items-center gap-3">
                 <button onClick={() => onHeart(show)} title={show.status === 'added' ? 'Remove from saved' : 'Save show'} className="focus:outline-none">
                   <svg className={`w-5 h-5 transition-colors ${show.status === 'added' ? 'fill-destructive text-destructive' : 'fill-none text-muted-foreground hover:text-destructive'}`} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -360,9 +366,9 @@ function ShowTable({
                 </button>
               </div>
             </td>
-            <td className="px-4 py-4 text-sm text-foreground whitespace-nowrap">{formatDate(show.date)}</td>
-            <td className="px-4 py-4 text-sm text-foreground">{show.artist_name}</td>
-            <td className="px-4 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
+            <td className="px-4 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
+            <td className="px-4 py-4 text-sm text-foreground truncate">{show.artist_name}</td>
+            <td className="px-4 py-4 text-sm text-muted-foreground truncate">{show.venue_name}</td>
           </tr>
         ))}
       </tbody>
