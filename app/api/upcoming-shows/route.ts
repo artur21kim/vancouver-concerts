@@ -110,6 +110,12 @@ export async function GET(request: Request) {
       return acc;
     }, {});
 
+    // Build artist_id -> spotify_artist_id lookup
+    const artistSpotifyIdMap = matchedArtists.reduce((acc: any, artist: any) => {
+      acc[artist.artist_id] = artist.spotify_artist_id;
+      return acc;
+    }, {});
+
     // Transform shows
     const transformedShows = shows.map((show: any) => {
       const artist = Array.isArray(show.dim_artist) ? show.dim_artist[0] : show.dim_artist;
@@ -119,6 +125,7 @@ export async function GET(request: Request) {
         date: show.date,
         artist_id: artist.artist_id,
         artist_name: artist.artist_name,
+        spotify_artist_id: artistSpotifyIdMap[artist.artist_id] || null,
         venue_id: venue.venue_id,
         venue_name: venue.venue_name,
         status: (reviewStatusMap[show.show_id] || 'pending') as 'pending' | 'added' | 'skipped',
