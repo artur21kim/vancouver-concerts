@@ -97,6 +97,20 @@ export default function UpcomingShowsPage() {
     }
   };
 
+  const undoShowStatus = async (showId: number) => {
+    try {
+      const response = await fetch('/api/shows/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ show_id: showId, status: 'pending', source: 'upcoming_shows' }),
+      });
+      if (!response.ok) throw new Error('Failed to undo show status');
+      setAllShows(prev => prev.map(s => s.show_id === showId ? { ...s, status: 'pending' } : s));
+    } catch {
+      alert('Failed to undo. Please try again.');
+    }
+  };
+
   const sortShows = (shows: Show[]) => {
     return [...shows].sort((a, b) => {
       if (sortBy === 'date')   return new Date(a.date).getTime() - new Date(b.date).getTime();
@@ -258,6 +272,8 @@ export default function UpcomingShowsPage() {
               shows={savedShows}
               onSave={(id) => updateShowStatus(id, 'added')}
               onSkip={(id) => updateShowStatus(id, 'skipped')}
+              onUndo={undoShowStatus}
+              reviewed
             />
           )}
 
@@ -298,12 +314,17 @@ export default function UpcomingShowsPage() {
                           <td className="px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
                           <td className="px-6 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
                           <td className="px-6 py-4 text-sm text-center">
-                            <button
-                              onClick={() => updateShowStatus(show.show_id, 'added')}
-                              className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
-                            >
-                              Save
-                            </button>
+                            <div className="flex justify-center items-center gap-2">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-600 text-zinc-100">
+                                Skipped ✓
+                              </span>
+                              <button
+                                onClick={() => undoShowStatus(show.show_id)}
+                                className="text-xs px-2 py-0.5 rounded border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition"
+                              >
+                                Undo
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -343,17 +364,21 @@ function ShowTable({
   shows,
   onSave,
   onSkip,
+  onUndo,
   onSaveAll,
   onSkipAll,
   showBulk = false,
+  reviewed = false,
 }: {
   title: string;
   shows: Show[];
   onSave: (id: number) => void;
   onSkip: (id: number) => void;
+  onUndo?: (id: number) => void;
   onSaveAll?: () => void;
   onSkipAll?: () => void;
   showBulk?: boolean;
+  reviewed?: boolean;
 }) {
   return (
     <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
@@ -391,7 +416,9 @@ function ShowTable({
             <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
             <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist</th>
             <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Venue</th>
-            <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Actions</th>
+            <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase">
+              {reviewed ? 'Status' : 'Actions'}
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -401,20 +428,40 @@ function ShowTable({
               <td className="px-6 py-4 text-sm text-foreground">{show.artist_name}</td>
               <td className="px-6 py-4 text-sm text-muted-foreground">{show.venue_name}</td>
               <td className="px-6 py-4 text-sm text-center">
-                <div className="flex justify-center gap-2">
-                  <button
-                    onClick={() => onSave(show.show_id)}
-                    className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={() => onSkip(show.show_id)}
-                    className="text-xs px-3 py-1 rounded-lg bg-destructive text-white hover:bg-destructive/90 transition"
-                  >
-                    Skip
-                  </button>
-                </div>
+                {reviewed ? (
+                  <div className="flex justify-center items-center gap-2">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      show.status === 'added'
+                        ? 'bg-green-900/50 text-green-300'
+                        : 'bg-zinc-600 text-zinc-100'
+                    }`}>
+                      {show.status === 'added' ? 'Saved ✓' : 'Skipped ✓'}
+                    </span>
+                    {onUndo && (
+                      <button
+                        onClick={() => onUndo(show.show_id)}
+                        className="text-xs px-2 py-0.5 rounded border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition"
+                      >
+                        Undo
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex justify-center gap-2">
+                    <button
+                      onClick={() => onSave(show.show_id)}
+                      className="text-xs px-3 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => onSkip(show.show_id)}
+                      className="text-xs px-3 py-1 rounded-lg bg-destructive text-white hover:bg-destructive/90 transition"
+                    >
+                      Skip
+                    </button>
+                  </div>
+                )}
               </td>
             </tr>
           ))}

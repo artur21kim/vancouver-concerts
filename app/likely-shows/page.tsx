@@ -264,7 +264,7 @@ export default function LikelyShowsPage() {
             <div>
               <h1 className="text-4xl font-bold text-foreground mb-1">Likely Shows You Attended</h1>
               <p className="text-muted-foreground">
-                Based on confirmed venues and your Spotify listening history
+                Based on confirmed venues and your Spotify library
               </p>
             </div>
             <button
@@ -390,22 +390,22 @@ export default function LikelyShowsPage() {
                           {allAdded ? (
                             <>
                               <button disabled className="px-4 py-2 text-sm font-medium rounded-lg bg-green-500/10 text-green-600 cursor-default">All Added ✓</button>
-                              <button onClick={() => handleClearAll(group.artist_id)} className="px-4 py-2 text-sm font-medium rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 transition">Clear</button>
+                              <button onClick={() => handleClearAll(group.artist_id)} className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-600 text-zinc-100 hover:bg-zinc-500 transition">Clear</button>
                             </>
                           ) : allSkipped ? (
                             <>
                               <button disabled className="px-4 py-2 text-sm font-medium rounded-lg bg-destructive/10 text-destructive cursor-default">All Skipped ✓</button>
-                              <button onClick={() => handleClearAll(group.artist_id)} className="px-4 py-2 text-sm font-medium rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 transition">Clear</button>
+                                <button onClick={() => handleClearAll(group.artist_id)} className="px-4 py-2 text-sm font-medium rounded-lg bg-bg-zinc-600 text-zinc-100 hover:bg-zinc-500 transition">Clear</button>
                             </>
                           ) : pendingCount === 0 && hasAdded && hasSkipped ? (
                             <>
-                              <button disabled className="px-4 py-2 text-sm font-medium rounded-lg bg-muted text-muted-foreground cursor-default">{addedCount + skippedCount} Reviewed ✓</button>
-                              <button onClick={() => handleClearAll(group.artist_id)} className="px-4 py-2 text-sm font-medium rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 transition">Clear</button>
+                                  <button disabled className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-600 text-zinc-100 cursor-defaultbg-zinc-600 text-zinc-100 cursor-default">{addedCount + skippedCount} Reviewed ✓</button>
+                                  <button onClick={() => handleClearAll(group.artist_id)} className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-600 text-zinc-100 hover:bg-zinc-500 transition">Clear</button>
                             </>
                           ) : hasAdded || hasSkipped ? (
                             <>
                               {hasAdded && hasSkipped ? (
-                                <button disabled className="px-4 py-2 text-sm font-medium rounded-lg bg-muted text-muted-foreground cursor-default">{addedCount + skippedCount} Reviewed ✓</button>
+                                      <button disabled className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-600 text-zinc-100 cursor-defaul">{addedCount + skippedCount} Reviewed ✓</button>
                               ) : hasAdded ? (
                                 <button disabled className="px-4 py-2 text-sm font-medium rounded-lg bg-green-500/10 text-green-600 cursor-default">{addedCount} Added ✓</button>
                               ) : (
@@ -413,7 +413,7 @@ export default function LikelyShowsPage() {
                               )}
                               <button onClick={() => handleRestAction(group.artist_id, 'add')} className="px-4 py-2 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition">Add Rest</button>
                               <button onClick={() => handleRestAction(group.artist_id, 'skip')} className="px-4 py-2 text-sm font-medium rounded-lg bg-destructive text-white hover:bg-destructive/90 transition">Skip Rest</button>
-                              <button onClick={() => handleClearAll(group.artist_id)} className="px-4 py-2 text-sm font-medium rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 transition">Clear</button>
+                                    <button onClick={() => handleClearAll(group.artist_id)} className="px-4 py-2 text-sm font-medium rounded-lg bg-bg-zinc-600 text-zinc-100 hover:bg-zinc-500 transition">Clear</button>
                             </>
                           ) : (
                             <>
