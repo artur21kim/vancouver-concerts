@@ -43,14 +43,18 @@ export default function Navigation() {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
+  const [currentPath, setCurrentPath] = useState(pathname)
 
+  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => { setCurrentPath(pathname) }, [pathname])
   useEffect(() => {
-    setMounted(true)
+    const handlePopState = () => setCurrentPath(window.location.pathname)
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
-  const isDiscoverActive = DISCOVER_PATHS.includes(pathname)
-  // Derive breadcrumbs directly from pathname on every render — no state involved
-  const breadcrumbs = PAST_FLOW_BREADCRUMBS[pathname] ?? null
+  const isDiscoverActive = DISCOVER_PATHS.includes(currentPath)
+  const breadcrumbs = PAST_FLOW_BREADCRUMBS[currentPath] ?? null
 
   const navLinkClass = (active: boolean) =>
     `text-sm font-medium transition-colors ${
@@ -65,18 +69,18 @@ export default function Navigation() {
 
         {/* Main nav row */}
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center gap-0">
+          <div className="flex items-center">
             <a
               href="/"
-              className="text-xl md:text-2xl font-bold text-foreground hover:text-muted-foreground md:-ml-4 mr-4 md:mr-6"
+              className="text-xl md:text-2xl font-bold text-foreground hover:text-muted-foreground md:-ml-4 mr-4 md:mr-6 shrink-0"
             >
               Vancouver Concert History
             </a>
             <div className="hidden md:flex items-center gap-6">
-              <a href="/" className={navLinkClass(pathname === '/')}>Overview</a>
+              <a href="/" className={navLinkClass(currentPath === '/')}>Overview</a>
               <a href="/discover" className={navLinkClass(isDiscoverActive)}>Discover</a>
-              <a href="/browse" className={navLinkClass(pathname === '/browse')}>Browse</a>
-              <a href="/my-shows" className={navLinkClass(pathname === '/my-shows')}>My Shows</a>
+              <a href="/browse" className={navLinkClass(currentPath === '/browse')}>Browse</a>
+              <a href="/my-shows" className={navLinkClass(currentPath === '/my-shows')}>My Shows</a>
             </div>
           </div>
 
@@ -94,9 +98,9 @@ export default function Navigation() {
           </div>
         </div>
 
-        {/* Breadcrumb row — only shown in Past flow, aligned with nav links */}
+        {/* Breadcrumb row — flush left, same container padding as nav */}
         {breadcrumbs && (
-          <div className="hidden md:flex items-center gap-1.5 pb-2 text-xs">
+          <div className="hidden md:flex items-center gap-1.5 pb-2 text-xs -ml-4">
             {breadcrumbs.map((crumb, i) => {
               const isLast = i === breadcrumbs.length - 1
               return (
@@ -104,16 +108,11 @@ export default function Navigation() {
                   {isLast ? (
                     <span className="text-foreground font-semibold">{crumb.label}</span>
                   ) : (
-                    <a
-                      href={crumb.path}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                    >
+                    <a href={crumb.path} className="text-muted-foreground hover:text-foreground transition-colors">
                       {crumb.label}
                     </a>
                   )}
-                  {!isLast && (
-                    <span className="text-primary font-medium">›</span>
-                  )}
+                  {!isLast && <span className="text-primary font-medium">›</span>}
                 </span>
               )
             })}
