@@ -60,16 +60,16 @@ function getCapacityButton(category: string | null) {
 
 function formatCapacityTooltip(category: string | null, capacity: number | null): string {
   const labels: Record<CapacityFilter, string> = {
-    small:   'Small (< 500)',
-    medium:  'Medium (500–1.5K)',
-    large:   'Large (1.5K–10K)',
-    xlarge:  'X-Large (10K+)',
+    small:   'Small',
+    medium:  'Medium',
+    large:   'Large',
+    xlarge:  'X-Large',
     unknown: 'Unknown capacity',
     all:     '',
   };
   const key = getCapacityKey(category);
   const label = labels[key];
-  if (capacity) return `${label} · ${capacity.toLocaleString()} cap`;
+  if (capacity) return `${label} · ${capacity.toLocaleString()}`;
   return label;
 }
 
@@ -599,11 +599,11 @@ function ShowTable({
                   )}
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground truncate">{show.venue_name}</span>
+                  <span className="text-[13px] text-muted-foreground truncate">{show.venue_name}</span>
                   {show.capacity_category && (
                     <span
                       title={capTooltip}
-                      className={`shrink-0 text-xs font-semibold ${capBtn.textColor}`}
+                      className={`shrink-0 text-[10px] font-semibold opacity-60 ${capBtn.textColor}`}
                     >
                       {capBtn.label}
                     </span>
