@@ -518,14 +518,14 @@ function ShowTable({
               </div>
               <div className="text-xs text-muted-foreground truncate">{show.venue_name}</div>
             </td>
-            <td className="px-4 py-4 text-center">
+            <td className="px-4 py-4 text-center align-middle">
               {show.ticketmaster_url ? (
                 <a
                   href={show.ticketmaster_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Buy tickets on Ticketmaster"
-                  className="hover:opacity-70 transition-opacity inline-flex items-center justify-center"
+                  className="hover:opacity-70 transition-opacity inline-flex items-center justify-center mx-auto"
                 >
                   <img
                     src="https://www.ticketmaster.ca/favicon.ico"
