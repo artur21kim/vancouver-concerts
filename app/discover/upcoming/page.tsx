@@ -13,6 +13,8 @@ type Show = {
   spotify_artist_id: string | null;
   venue_id: number;
   venue_name: string;
+  capacity: number | null;
+  capacity_category: string | null;
   ticketmaster_url: string | null;
   status: 'pending' | 'added' | 'skipped';
   match_score: number;
@@ -23,6 +25,44 @@ type Show = {
 
 type SortKey = 'date' | 'artist' | 'score';
 type Scope = 'spotify' | 'all';
+type CapacityFilter = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown';
+
+const CAPACITY_BUTTONS: {
+  key: CapacityFilter;
+  label: string;
+  tooltip: string;
+  textColor: string;
+  badgeBg: string;
+  badgeText: string;
+}[] = [
+  { key: 'all',     label: 'All', tooltip: 'All venues',        textColor: 'text-muted-foreground',                      badgeBg: 'bg-gray-100 dark:bg-gray-800',   badgeText: 'text-gray-600 dark:text-gray-400'   },
+  { key: 'small',   label: 'S',   tooltip: 'Small (< 500)',     textColor: 'text-purple-400 dark:text-purple-300',       badgeBg: 'bg-purple-100 dark:bg-purple-900/30', badgeText: 'text-purple-700 dark:text-purple-300' },
+  { key: 'medium',  label: 'M',   tooltip: 'Medium (500–1.5K)', textColor: 'text-[#3A8FBD]',                             badgeBg: 'bg-blue-100 dark:bg-blue-900/30',   badgeText: 'text-[#3A8FBD]'  },
+  { key: 'large',   label: 'L',   tooltip: 'Large (1.5K–10K)',  textColor: 'text-orange-600 dark:text-orange-400',       badgeBg: 'bg-orange-100 dark:bg-orange-900/30', badgeText: 'text-orange-700 dark:text-orange-400' },
+  { key: 'xlarge',  label: 'XL',  tooltip: 'X-Large (10K+)',    textColor: 'text-rose-600 dark:text-rose-400',           badgeBg: 'bg-rose-100 dark:bg-rose-900/30',   badgeText: 'text-rose-700 dark:text-rose-400'   },
+  { key: 'unknown', label: '?',   tooltip: 'Unknown capacity',  textColor: 'text-gray-400 dark:text-gray-500',           badgeBg: 'bg-gray-100 dark:bg-gray-800',   badgeText: 'text-gray-500'   },
+];
+
+function getCapacityKey(category: string | null): CapacityFilter {
+  if (!category) return 'unknown';
+  const c = category.toLowerCase();
+  if (c.includes('small'))   return 'small';
+  if (c.includes('medium'))  return 'medium';
+  if (c.includes('large') && !c.includes('x-large') && !c.includes('xlarge')) return 'large';
+  if (c.includes('x-large') || c.includes('xlarge')) return 'xlarge';
+  return 'unknown';
+}
+
+function getCapacityButton(category: string | null) {
+  const key = getCapacityKey(category);
+  return CAPACITY_BUTTONS.find(b => b.key === key) || CAPACITY_BUTTONS[CAPACITY_BUTTONS.length - 1];
+}
+
+function formatCapacity(capacity: number | null): string {
+  if (!capacity) return '';
+  if (capacity >= 1000) return `${(capacity / 1000).toFixed(capacity % 1000 === 0 ? 0 : 1)}K`;
+  return capacity.toString();
+}
 
 function formatDate(dateStr: string) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
@@ -42,6 +82,7 @@ function UpcomingShowsContent() {
   const [allShows, setAllShows] = useState<Show[]>([]);
   const [sortBy, setSortBy] = useState<SortKey>('date');
   const [scope, setScope] = useState<Scope>('spotify');
+  const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all');
   const [skippedOpen, setSkippedOpen] = useState(false);
   const [bannerVisible, setBannerVisible] = useState(false);
 
@@ -113,6 +154,11 @@ function UpcomingShowsContent() {
     updateShowStatus(show.show_id, show.status === 'skipped' ? 'pending' : 'skipped');
   };
 
+  const filterByCapacity = (shows: Show[]) => {
+    if (capacityFilter === 'all') return shows;
+    return shows.filter(s => getCapacityKey(s.capacity_category) === capacityFilter);
+  };
+
   const sortShows = (shows: Show[]) => {
     return [...shows].sort((a, b) => {
       if (sortBy === 'date')   return new Date(a.date).getTime() - new Date(b.date).getTime();
@@ -122,10 +168,12 @@ function UpcomingShowsContent() {
     });
   };
 
-  const newShows     = sortShows(allShows.filter(s => s.status === 'pending'));
-  const savedShows   = sortShows(allShows.filter(s => s.status === 'added'));
-  const skippedShows = sortShows(allShows.filter(s => s.status === 'skipped'));
-  const allReviewed  = allShows.length > 0 && newShows.length === 0;
+  const processShows = (shows: Show[]) => sortShows(filterByCapacity(shows));
+
+  const newShows     = processShows(allShows.filter(s => s.status === 'pending'));
+  const savedShows   = processShows(allShows.filter(s => s.status === 'added'));
+  const skippedShows = processShows(allShows.filter(s => s.status === 'skipped'));
+  const allReviewed  = allShows.length > 0 && allShows.filter(s => s.status === 'pending').length === 0;
 
   const newMatchedShows   = newShows.filter(s => s.is_spotify_match);
   const newUnmatchedShows = newShows.filter(s => !s.is_spotify_match);
@@ -149,7 +197,7 @@ function UpcomingShowsContent() {
               </div>
             </div>
 
-            {/* View switcher — prominent tab-style */}
+            {/* View switcher */}
             <div className="flex rounded-xl border border-border overflow-hidden w-fit">
               <button
                 className="flex items-center gap-2.5 px-6 py-3 text-sm font-semibold transition bg-primary text-primary-foreground"
@@ -169,6 +217,27 @@ function UpcomingShowsContent() {
                 </svg>
                 Past Shows
               </button>
+            </div>
+
+            {/* Venue size filter */}
+            <div className="flex items-center gap-2 mt-4">
+              <span className="text-sm text-muted-foreground">Venue:</span>
+              <div className="flex items-center gap-1">
+                {CAPACITY_BUTTONS.map(btn => (
+                  <button
+                    key={btn.key}
+                    onClick={() => setCapacityFilter(btn.key)}
+                    title={btn.tooltip}
+                    className={`px-2.5 py-1 rounded text-xs font-semibold transition border ${
+                      capacityFilter === btn.key
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : `bg-card border-border ${btn.textColor} hover:border-foreground/30`
+                    }`}
+                  >
+                    {btn.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -458,6 +527,7 @@ function ShowTable({
         <col className="w-20" />
         <col className="w-36" />
         <col />
+        <col className="w-28" />
         <col className="w-24" />
       </colgroup>
       <thead className="bg-muted">
@@ -465,80 +535,95 @@ function ShowTable({
           <th className="px-4 py-3"></th>
           <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist / Venue</th>
+          <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Size</th>
           <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Tickets</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
-        {shows.map(show => (
-          <tr
-            key={show.show_id}
-            className={`hover:bg-muted/30 ${showSpotifyBadge && show.is_spotify_match ? 'bg-primary/5' : ''}`}
-          >
-            <td className="px-4 py-4">
-              <div className="flex items-center gap-3">
-                <button onClick={() => onHeart(show)} title={show.status === 'added' ? 'Remove from saved' : 'Save show'} className="focus:outline-none">
-                  <svg className={`w-5 h-5 transition-colors ${show.status === 'added' ? 'fill-destructive text-destructive' : 'fill-none text-muted-foreground hover:text-destructive'}`} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                  </svg>
-                </button>
-                <button onClick={() => onSkip(show)} title={show.status === 'skipped' ? 'Unskip show' : 'Skip show'} className="focus:outline-none">
-                  <svg className={`w-4 h-4 transition-colors ${show.status === 'skipped' ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'}`} stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" fill="none">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </td>
-            <td className="px-4 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
-            <td className="px-4 py-4">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <span className={`text-sm font-medium truncate ${show.is_spotify_match ? 'text-primary' : 'text-foreground'}`}>
-                  {show.artist_name}
-                </span>
-                {show.spotify_artist_id ? (
+        {shows.map(show => {
+          const capBtn = getCapacityButton(show.capacity_category);
+          const capLabel = formatCapacity(show.capacity);
+
+          return (
+            <tr
+              key={show.show_id}
+              className={`hover:bg-muted/30 ${showSpotifyBadge && show.is_spotify_match ? 'bg-primary/5' : ''}`}
+            >
+              <td className="px-4 py-4">
+                <div className="flex items-center gap-3">
+                  <button onClick={() => onHeart(show)} title={show.status === 'added' ? 'Remove from saved' : 'Save show'} className="focus:outline-none">
+                    <svg className={`w-5 h-5 transition-colors ${show.status === 'added' ? 'fill-destructive text-destructive' : 'fill-none text-muted-foreground hover:text-destructive'}`} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                    </svg>
+                  </button>
+                  <button onClick={() => onSkip(show)} title={show.status === 'skipped' ? 'Unskip show' : 'Skip show'} className="focus:outline-none">
+                    <svg className={`w-4 h-4 transition-colors ${show.status === 'skipped' ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'}`} stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" fill="none">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </td>
+              <td className="px-4 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
+              <td className="px-4 py-4">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className={`text-sm font-medium truncate ${show.is_spotify_match ? 'text-primary' : 'text-foreground'}`}>
+                    {show.artist_name}
+                  </span>
+                  {show.spotify_artist_id ? (
+                    <a
+                      href={`https://open.spotify.com/artist/${show.spotify_artist_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open in Spotify"
+                      className="hover:opacity-70 transition-opacity inline-flex items-center justify-center shrink-0"
+                    >
+                      <svg
+                        className="w-3.5 h-3.5 md:w-4 md:h-4"
+                        viewBox="0 0 24 24"
+                        fill={show.is_spotify_match ? '#1DB954' : 'currentColor'}
+                        style={show.is_spotify_match ? {} : { color: 'var(--muted-foreground)', opacity: 0.4 }}
+                      >
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                      </svg>
+                    </a>
+                  ) : null}
+                  {showSpotifyBadge && show.is_spotify_match && (
+                    <span className="text-xs text-green-500 font-medium shrink-0">● match</span>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground truncate">{show.venue_name}</div>
+              </td>
+              <td className="px-4 py-4 text-center align-middle">
+                {show.capacity_category ? (
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold ${capBtn.badgeBg} ${capBtn.badgeText}`}>
+                    {capBtn.label}{capLabel ? `·${capLabel}` : ''}
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400">?</span>
+                )}
+              </td>
+              <td className="px-4 py-4 text-center align-middle">
+                {show.ticketmaster_url ? (
                   <a
-                    href={`https://open.spotify.com/artist/${show.spotify_artist_id}`}
+                    href={show.ticketmaster_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    title="Open in Spotify"
-                    className="hover:opacity-70 transition-opacity inline-flex items-center justify-center shrink-0"
+                    title="Buy tickets on Ticketmaster"
+                    className="hover:opacity-70 transition-opacity inline-flex items-center justify-center mx-auto"
                   >
-                    <svg
-                      className="w-3.5 h-3.5 md:w-4 md:h-4"
-                      viewBox="0 0 24 24"
-                      fill={show.is_spotify_match ? '#1DB954' : 'currentColor'}
-                      style={show.is_spotify_match ? {} : { color: 'var(--muted-foreground)', opacity: 0.4 }}
-                    >
-                      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-                    </svg>
+                    <img
+                      src="https://www.ticketmaster.ca/favicon.ico"
+                      alt="Ticketmaster"
+                      className="w-4 h-4"
+                    />
                   </a>
-                ) : null}
-                {showSpotifyBadge && show.is_spotify_match && (
-                  <span className="text-xs text-green-500 font-medium shrink-0">● match</span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
                 )}
-              </div>
-              <div className="text-xs text-muted-foreground truncate">{show.venue_name}</div>
-            </td>
-            <td className="px-4 py-4 text-center align-middle">
-              {show.ticketmaster_url ? (
-                <a
-                  href={show.ticketmaster_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Buy tickets on Ticketmaster"
-                  className="hover:opacity-70 transition-opacity inline-flex items-center justify-center mx-auto"
-                >
-                  <img
-                    src="https://www.ticketmaster.ca/favicon.ico"
-                    alt="Ticketmaster"
-                    className="w-4 h-4"
-                  />
-                </a>
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              )}
-            </td>
-          </tr>
-        ))}
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

@@ -65,7 +65,6 @@ export async function GET(request: Request) {
     let shows: any[] = [];
 
     if (scope === 'all') {
-      // Fetch ALL upcoming shows regardless of artist
       const { data: allShows, error: showsError } = await supabase
         .from('fact_shows')
         .select(`
@@ -81,7 +80,9 @@ export async function GET(request: Request) {
           ),
           dim_venue!inner (
             venue_id,
-            venue_name
+            venue_name,
+            capacity,
+            capacity_category
           )
         `)
         .gte('date', todayVancouver)
@@ -93,7 +94,6 @@ export async function GET(request: Request) {
 
       shows = allShows || [];
     } else {
-      // Spotify-only mode: only shows for matched artists
       if (matchedArtistIds.length === 0) {
         return NextResponse.json({
           success: true,
@@ -116,7 +116,9 @@ export async function GET(request: Request) {
           ),
           dim_venue!inner (
             venue_id,
-            venue_name
+            venue_name,
+            capacity,
+            capacity_category
           )
         `)
         .in('artist_id', matchedArtistIds)
@@ -137,7 +139,6 @@ export async function GET(request: Request) {
       });
     }
 
-    // Fetch existing user reviews
     const showIds = shows.map((s: any) => s.show_id);
 
     const { data: existingReviews } = await supabase
@@ -151,7 +152,6 @@ export async function GET(request: Request) {
       return acc;
     }, {});
 
-    // Transform shows
     const transformedShows = shows.map((show: any) => {
       const artist = Array.isArray(show.dim_artist) ? show.dim_artist[0] : show.dim_artist;
       const venue = Array.isArray(show.dim_venue) ? show.dim_venue[0] : show.dim_venue;
@@ -162,17 +162,17 @@ export async function GET(request: Request) {
         date: show.date,
         artist_id: artist.artist_id,
         artist_name: artist.artist_name,
-        // Use our lookup map for matched artists; fall back to dim_artist field for all-scope
         spotify_artist_id: artistSpotifyIdMap[artist.artist_id] || artist.spotify_artist_id || null,
         venue_id: venue.venue_id,
         venue_name: venue.venue_name,
+        capacity: venue.capacity || null,
+        capacity_category: venue.capacity_category || null,
         ticketmaster_url: show.ticketmaster_url || null,
         status: (reviewStatusMap[show.show_id] || 'pending') as 'pending' | 'added' | 'skipped',
         is_spotify_match: isSpotifyMatch,
       };
     });
 
-    // Calculate match scores (only meaningful for matched artists)
     const artistShowCounts = transformedShows.reduce((acc: any, show: any) => {
       if (!acc[show.artist_id]) acc[show.artist_id] = 0;
       acc[show.artist_id]++;
