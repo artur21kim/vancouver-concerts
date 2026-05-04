@@ -453,12 +453,12 @@ function ShowTable({
   highlightHeader?: boolean;
 }) {
   const tableContent = (
-    <table className="w-full table-fixed">
+    <table className="w-full table-auto">
       <colgroup>
         <col className="w-20" />
         <col className="w-36" />
         <col />
-        <col className="w-16" />
+        <col className="w-24" />
       </colgroup>
       <thead className="bg-muted">
         <tr>
