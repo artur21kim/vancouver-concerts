@@ -66,51 +66,24 @@ export default function Navigation() {
   return (
     <nav className="sticky top-0 z-50 bg-background border-b border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
 
-          {/* Left: Brand + Nav links */}
-          <div className="flex items-center gap-0">
+        {/* Main nav row */}
+        <div className="flex items-center justify-between h-16">
+          <div className="flex items-center">
             <a
               href="/"
               className="text-xl md:text-2xl font-bold text-foreground hover:text-muted-foreground md:-ml-4 mr-4 md:mr-6 shrink-0"
             >
               Vancouver Concert History
             </a>
-
-            {/* Nav links — Discover gets special treatment when breadcrumb is active */}
             <div className="hidden md:flex items-center gap-6">
               <a href="/" className={navLinkClass(currentPath === '/')}>Overview</a>
-
-              {/* Discover link — stacks breadcrumb below it when in Past flow */}
-              <div className="flex flex-col">
-                <a href="/discover" className={navLinkClass(isDiscoverActive)}>Discover</a>
-                {breadcrumbs && (
-                  <div className="flex items-center gap-1 text-xs mt-1 whitespace-nowrap">
-                    {breadcrumbs.map((crumb, i) => {
-                      const isLast = i === breadcrumbs.length - 1
-                      return (
-                        <span key={crumb.path} className="flex items-center gap-1">
-                          {isLast ? (
-                            <span className="text-foreground font-semibold">{crumb.label}</span>
-                          ) : (
-                            <a href={crumb.path} className="text-muted-foreground hover:text-foreground transition-colors">
-                              {crumb.label}
-                            </a>
-                          )}
-                          {!isLast && <span className="text-primary font-medium">›</span>}
-                        </span>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-
+              <a href="/discover" className={navLinkClass(isDiscoverActive)}>Discover</a>
               <a href="/browse" className={navLinkClass(currentPath === '/browse')}>Browse</a>
               <a href="/my-shows" className={navLinkClass(currentPath === '/my-shows')}>My Shows</a>
             </div>
           </div>
 
-          {/* Right: Theme + Auth */}
           <div className="flex items-center gap-2 -mr-2 md:-mr-4">
             {mounted && (
               <button
@@ -124,6 +97,28 @@ export default function Navigation() {
             <AuthButton />
           </div>
         </div>
+
+        {/* Breadcrumb row — clean second row, flush left with page content */}
+        {breadcrumbs && (
+          <div className="hidden md:flex items-center gap-1.5 pb-2 text-xs">
+            {breadcrumbs.map((crumb, i) => {
+              const isLast = i === breadcrumbs.length - 1
+              return (
+                <span key={crumb.path} className="flex items-center gap-1.5">
+                  {isLast ? (
+                    <span className="text-foreground font-semibold">{crumb.label}</span>
+                  ) : (
+                    <a href={crumb.path} className="text-muted-foreground hover:text-foreground transition-colors">
+                      {crumb.label}
+                    </a>
+                  )}
+                  {!isLast && <span className="text-primary font-medium">›</span>}
+                </span>
+              )
+            })}
+          </div>
+        )}
+
       </div>
     </nav>
   )
