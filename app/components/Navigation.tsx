@@ -39,11 +39,19 @@ const PAST_FLOW_BREADCRUMBS: Record<string, { label: string; path: string }[]> =
   ],
 }
 
+const NAV_LINKS = [
+  { label: 'Overview', path: '/' },
+  { label: 'Discover', path: '/discover' },
+  { label: 'Browse', path: '/browse' },
+  { label: 'My Shows', path: '/my-shows' },
+]
+
 export default function Navigation() {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const [currentPath, setCurrentPath] = useState(pathname)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
   useEffect(() => { setCurrentPath(pathname) }, [pathname])
@@ -53,14 +61,27 @@ export default function Navigation() {
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
+  // Close menu on route change
+  useEffect(() => { setMenuOpen(false) }, [currentPath])
+
   const isDiscoverActive = DISCOVER_PATHS.includes(currentPath)
   const breadcrumbs = PAST_FLOW_BREADCRUMBS[currentPath] ?? null
+
+  const isLinkActive = (path: string) =>
+    path === '/discover' ? isDiscoverActive : currentPath === path
 
   const navLinkClass = (active: boolean) =>
     `text-sm font-medium transition-colors ${
       active
         ? 'text-primary border-b-2 border-primary pb-1'
         : 'text-muted-foreground hover:text-foreground'
+    }`
+
+  const mobileLinkClass = (active: boolean) =>
+    `block w-full text-left px-4 py-3 text-sm font-medium transition-colors border-l-2 ${
+      active
+        ? 'text-primary border-primary bg-muted/50'
+        : 'text-muted-foreground hover:text-foreground border-transparent hover:bg-muted/30'
     }`
 
   return (
@@ -76,11 +97,13 @@ export default function Navigation() {
             >
               Vancouver Concert History
             </a>
+            {/* Desktop links */}
             <div className="hidden md:flex items-center gap-6">
-              <a href="/" className={navLinkClass(currentPath === '/')}>Overview</a>
-              <a href="/discover" className={navLinkClass(isDiscoverActive)}>Discover</a>
-              <a href="/browse" className={navLinkClass(currentPath === '/browse')}>Browse</a>
-              <a href="/my-shows" className={navLinkClass(currentPath === '/my-shows')}>My Shows</a>
+              {NAV_LINKS.map(({ label, path }) => (
+                <a key={path} href={path} className={navLinkClass(isLinkActive(path))}>
+                  {label}
+                </a>
+              ))}
             </div>
           </div>
 
@@ -94,11 +117,35 @@ export default function Navigation() {
                 {theme === 'dark' ? '☀️' : '🌙'}
               </button>
             )}
+
+            {/* Hamburger — mobile only */}
+            <button
+              onClick={() => setMenuOpen(prev => !prev)}
+              className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              aria-label="Toggle menu"
+              aria-expanded={menuOpen}
+            >
+              {menuOpen ? (
+                // ✕ close icon
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              ) : (
+                // ☰ hamburger icon
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              )}
+            </button>
+
             <AuthButton />
           </div>
         </div>
 
-        {/* Breadcrumb row — clean second row, flush left with page content */}
+        {/* Desktop breadcrumb row */}
         {breadcrumbs && (
           <div className="hidden md:flex items-center gap-1.5 pb-2 text-xs -ml-4">
             {breadcrumbs.map((crumb, i) => {
@@ -120,6 +167,22 @@ export default function Navigation() {
         )}
 
       </div>
+
+      {/* Mobile dropdown menu */}
+      {menuOpen && (
+        <div className="md:hidden border-t border-border bg-background py-2">
+          {NAV_LINKS.map(({ label, path }) => (
+            <a
+              key={path}
+              href={path}
+              className={mobileLinkClass(isLinkActive(path))}
+              onClick={() => setMenuOpen(false)}
+            >
+              {label}
+            </a>
+          ))}
+        </div>
+      )}
     </nav>
   )
 }

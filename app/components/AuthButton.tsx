@@ -52,7 +52,7 @@ export default function AuthButton() {
             <>
                 <button
                     onClick={() => setShowAuthModal(true)}
-                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 font-medium text-sm md:text-base"
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 font-medium text-sm whitespace-nowrap"
                 >
                     Sign In
                 </button>
