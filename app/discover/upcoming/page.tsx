@@ -191,7 +191,7 @@ function UpcomingShowsContent() {
     <>
       <Navigation />
       <main className="min-h-screen bg-background py-8 px-4">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-7xl mx-auto">
 
           {/* Header with view switcher */}
           <div className="mb-8">
@@ -531,11 +531,11 @@ function ShowTable({
   highlightHeader?: boolean;
 }) {
   const tableContent = (
-    <table className="w-full table-auto">
+    <table className="w-full table-fixed">
       <colgroup>
         <col className="w-20" />
         <col className="w-36" />
-        <col />
+        <col className="w-auto" />
         <col className="w-24" />
       </colgroup>
       <thead className="bg-muted">
