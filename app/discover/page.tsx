@@ -194,24 +194,24 @@ export default function Page() {
             </label>
             <div className="flex rounded-lg border border-input overflow-hidden">
               <button
-                onClick={() => handleScopeChange('upcoming')}
-                className={`flex-1 px-4 py-2.5 text-sm font-semibold transition ${
-                  matchScope === 'upcoming'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-background text-foreground hover:bg-muted'
-                }`}
-              >
-                Upcoming Shows
-              </button>
-              <button
                 onClick={() => handleScopeChange('past')}
-                className={`flex-1 px-4 py-2.5 text-sm font-semibold transition border-l border-input ${
+                className={`flex-1 px-4 py-2.5 text-sm font-semibold transition ${
                   matchScope === 'past'
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-background text-foreground hover:bg-muted'
                 }`}
               >
                 Past Shows
+              </button>
+              <button
+                onClick={() => handleScopeChange('upcoming')}
+                className={`flex-1 px-4 py-2.5 text-sm font-semibold transition border-l border-input ${
+                  matchScope === 'upcoming'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background text-foreground hover:bg-muted'
+                }`}
+              >
+                Upcoming Shows
               </button>
             </div>
             <p className="text-sm text-foreground/60 italic mt-2">
