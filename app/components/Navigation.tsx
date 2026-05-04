@@ -91,12 +91,34 @@ export default function Navigation() {
         {/* Main nav row */}
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
+            {/* Hamburger — mobile only, left of title */}
+            <button
+              onClick={() => setMenuOpen(prev => !prev)}
+              className="md:hidden p-2 -ml-2 mr-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              aria-label="Toggle menu"
+              aria-expanded={menuOpen}
+            >
+              {menuOpen ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              )}
+            </button>
+
             <a
               href="/"
               className="text-xl md:text-2xl font-bold text-foreground hover:text-muted-foreground md:-ml-4 mr-4 md:mr-6 shrink-0"
             >
               Grooveprint
             </a>
+
             {/* Desktop links */}
             <div className="hidden md:flex items-center gap-6">
               {NAV_LINKS.map(({ label, path }) => (
@@ -107,6 +129,7 @@ export default function Navigation() {
             </div>
           </div>
 
+          {/* Right side: theme toggle + sign in */}
           <div className="flex items-center gap-2 -mr-2 md:-mr-4">
             {mounted && (
               <button
@@ -117,30 +140,6 @@ export default function Navigation() {
                 {theme === 'dark' ? '☀️' : '🌙'}
               </button>
             )}
-
-            {/* Hamburger — mobile only */}
-            <button
-              onClick={() => setMenuOpen(prev => !prev)}
-              className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              aria-label="Toggle menu"
-              aria-expanded={menuOpen}
-            >
-              {menuOpen ? (
-                // ✕ close icon
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              ) : (
-                // ☰ hamburger icon
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                  <line x1="3" y1="18" x2="21" y2="18" />
-                </svg>
-              )}
-            </button>
-
             <AuthButton />
           </div>
         </div>
