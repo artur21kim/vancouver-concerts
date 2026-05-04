@@ -73,6 +73,7 @@ export async function GET(request: Request) {
           date,
           artist_id,
           venue_id,
+          ticketmaster_url,
           dim_artist!inner (
             artist_id,
             artist_name,
@@ -107,6 +108,7 @@ export async function GET(request: Request) {
           date,
           artist_id,
           venue_id,
+          ticketmaster_url,
           dim_artist!inner (
             artist_id,
             artist_name,
@@ -164,6 +166,7 @@ export async function GET(request: Request) {
         spotify_artist_id: artistSpotifyIdMap[artist.artist_id] || artist.spotify_artist_id || null,
         venue_id: venue.venue_id,
         venue_name: venue.venue_name,
+        ticketmaster_url: show.ticketmaster_url || null,
         status: (reviewStatusMap[show.show_id] || 'pending') as 'pending' | 'added' | 'skipped',
         is_spotify_match: isSpotifyMatch,
       };

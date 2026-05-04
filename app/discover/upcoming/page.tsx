@@ -13,6 +13,7 @@ type Show = {
   spotify_artist_id: string | null;
   venue_id: number;
   venue_name: string;
+  ticketmaster_url: string | null;
   status: 'pending' | 'added' | 'skipped';
   match_score: number;
   spotify_song_count: number;
@@ -457,12 +458,14 @@ function ShowTable({
         <col className="w-20" />
         <col className="w-36" />
         <col />
+        <col className="w-16" />
       </colgroup>
       <thead className="bg-muted">
         <tr>
           <th className="px-4 py-3"></th>
           <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist / Venue</th>
+          <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Tickets</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
@@ -514,6 +517,25 @@ function ShowTable({
                 )}
               </div>
               <div className="text-xs text-muted-foreground truncate">{show.venue_name}</div>
+            </td>
+            <td className="px-4 py-4 text-center">
+              {show.ticketmaster_url ? (
+                <a
+                  href={show.ticketmaster_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Buy tickets on Ticketmaster"
+                  className="hover:opacity-70 transition-opacity inline-flex items-center justify-center"
+                >
+                  <img
+                    src="https://www.ticketmaster.ca/favicon.ico"
+                    alt="Ticketmaster"
+                    className="w-4 h-4"
+                  />
+                </a>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )}
             </td>
           </tr>
         ))}
