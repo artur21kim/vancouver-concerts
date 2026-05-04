@@ -95,7 +95,7 @@ export default function Navigation() {
               href="/"
               className="text-xl md:text-2xl font-bold text-foreground hover:text-muted-foreground md:-ml-4 mr-4 md:mr-6 shrink-0"
             >
-              Vancouver Concert History
+              Grooveprint
             </a>
             {/* Desktop links */}
             <div className="hidden md:flex items-center gap-6">

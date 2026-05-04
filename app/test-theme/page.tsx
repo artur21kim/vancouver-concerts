@@ -92,7 +92,7 @@ function DarkPanel({ v }: { v: typeof VARIANTS[0] }) {
 
       {/* Nav */}
       <nav style={{ background: v.bg, borderBottom: `1px solid ${v.border}`, padding: '0 16px', height: 44, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontWeight: 800, fontSize: 12, color: '#FFFFFF' }}>Vancouver Concert History</span>
+        <span style={{ fontWeight: 800, fontSize: 12, color: '#FFFFFF' }}>Grooveprint</span>
         <button style={{ background: TEAL, color: CREAM, border: 'none', borderRadius: 6, padding: '4px 10px', fontWeight: 700, fontSize: 11 }}>Sign In</button>
       </nav>
 
@@ -205,7 +205,7 @@ function LightPanel() {
         <span style={{ fontSize: 11, color: '#6B7F8F' }}>cream #FAF3E8 — reference</span>
       </div>
       <nav style={{ background: CREAM, borderBottom: `1px solid ${CREAM_B}`, padding: '0 16px', height: 44, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontWeight: 800, fontSize: 12, color: NAVY }}>Vancouver Concert History</span>
+        <span style={{ fontWeight: 800, fontSize: 12, color: NAVY }}>Grooveprint</span>
         <button style={{ background: TEAL, color: CREAM, border: 'none', borderRadius: 6, padding: '4px 10px', fontWeight: 700, fontSize: 11 }}>Sign In</button>
       </nav>
       <div style={{ padding: '6px 16px 0', display: 'flex', gap: 8, borderBottom: `1px solid ${CREAM_B}` }}>

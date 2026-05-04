@@ -10,8 +10,8 @@ import { cn } from "@/lib/utils";
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: 'Vancouver Concert History',
-  description: 'Browse 35,000+ concerts in Vancouver since 1900',
+  title: 'Grooveprint',
+  description: 'Track your musical footprint. 36,000+ concerts in Vancouver since 1900.',
 }
 
 export default function RootLayout({

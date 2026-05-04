@@ -158,7 +158,7 @@ export default function OnboardingPage() {
                 </div>
 
                 <p className="mt-6 text-center text-sm text-gray-500">
-                    This will be your public display name on Vancouver Concert History
+                    This will be your public display name on Grooveprint
                 </p>
             </div>
         </div>
