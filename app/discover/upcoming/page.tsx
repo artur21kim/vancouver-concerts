@@ -35,21 +35,21 @@ const CAPACITY_BUTTONS: {
   badgeBg: string;
   badgeText: string;
 }[] = [
-  { key: 'all',     label: 'All', tooltip: 'All venues',        textColor: 'text-muted-foreground',                      badgeBg: 'bg-gray-100 dark:bg-gray-800',   badgeText: 'text-gray-600 dark:text-gray-400'   },
-  { key: 'small',   label: 'S',   tooltip: 'Small (< 500)',     textColor: 'text-purple-400 dark:text-purple-300',       badgeBg: 'bg-purple-100 dark:bg-purple-900/30', badgeText: 'text-purple-700 dark:text-purple-300' },
-  { key: 'medium',  label: 'M',   tooltip: 'Medium (500–1.5K)', textColor: 'text-[#3A8FBD]',                             badgeBg: 'bg-blue-100 dark:bg-blue-900/30',   badgeText: 'text-[#3A8FBD]'  },
-  { key: 'large',   label: 'L',   tooltip: 'Large (1.5K–10K)',  textColor: 'text-orange-600 dark:text-orange-400',       badgeBg: 'bg-orange-100 dark:bg-orange-900/30', badgeText: 'text-orange-700 dark:text-orange-400' },
-  { key: 'xlarge',  label: 'XL',  tooltip: 'X-Large (10K+)',    textColor: 'text-rose-600 dark:text-rose-400',           badgeBg: 'bg-rose-100 dark:bg-rose-900/30',   badgeText: 'text-rose-700 dark:text-rose-400'   },
-  { key: 'unknown', label: '?',   tooltip: 'Unknown capacity',  textColor: 'text-gray-400 dark:text-gray-500',           badgeBg: 'bg-gray-100 dark:bg-gray-800',   badgeText: 'text-gray-500'   },
+  { key: 'all',     label: 'All', tooltip: 'All venues',        textColor: 'text-muted-foreground',                          badgeBg: 'bg-gray-100 dark:bg-gray-800',        badgeText: 'text-gray-600 dark:text-gray-400'         },
+  { key: 'small',   label: 'S',   tooltip: 'Small (< 500)',     textColor: 'text-purple-400 dark:text-purple-300',           badgeBg: 'bg-purple-100 dark:bg-purple-900/30', badgeText: 'text-purple-700 dark:text-purple-300'     },
+  { key: 'medium',  label: 'M',   tooltip: 'Medium (500–1.5K)', textColor: 'text-[#3A8FBD]',                                 badgeBg: 'bg-blue-100 dark:bg-blue-900/30',     badgeText: 'text-[#3A8FBD]'                           },
+  { key: 'large',   label: 'L',   tooltip: 'Large (1.5K–10K)',  textColor: 'text-orange-600 dark:text-orange-400',           badgeBg: 'bg-orange-100 dark:bg-orange-900/30', badgeText: 'text-orange-700 dark:text-orange-400'     },
+  { key: 'xlarge',  label: 'XL',  tooltip: 'X-Large (10K+)',    textColor: 'text-rose-600 dark:text-rose-400',               badgeBg: 'bg-rose-100 dark:bg-rose-900/30',     badgeText: 'text-rose-700 dark:text-rose-400'         },
+  { key: 'unknown', label: '?',   tooltip: 'Unknown capacity',  textColor: 'text-gray-400 dark:text-gray-500',               badgeBg: 'bg-gray-100 dark:bg-gray-800',        badgeText: 'text-gray-500'                            },
 ];
 
 function getCapacityKey(category: string | null): CapacityFilter {
   if (!category) return 'unknown';
   const c = category.toLowerCase();
-  if (c.includes('small'))   return 'small';
-  if (c.includes('medium'))  return 'medium';
-  if (c.includes('large') && !c.includes('x-large') && !c.includes('xlarge')) return 'large';
   if (c.includes('x-large') || c.includes('xlarge')) return 'xlarge';
+  if (c.includes('large'))  return 'large';
+  if (c.includes('medium')) return 'medium';
+  if (c.includes('small'))  return 'small';
   return 'unknown';
 }
 
@@ -58,10 +58,19 @@ function getCapacityButton(category: string | null) {
   return CAPACITY_BUTTONS.find(b => b.key === key) || CAPACITY_BUTTONS[CAPACITY_BUTTONS.length - 1];
 }
 
-function formatCapacity(capacity: number | null): string {
-  if (!capacity) return '';
-  if (capacity >= 1000) return `${(capacity / 1000).toFixed(capacity % 1000 === 0 ? 0 : 1)}K`;
-  return capacity.toString();
+function formatCapacityTooltip(category: string | null, capacity: number | null): string {
+  const labels: Record<CapacityFilter, string> = {
+    small:   'Small (< 500)',
+    medium:  'Medium (500–1.5K)',
+    large:   'Large (1.5K–10K)',
+    xlarge:  'X-Large (10K+)',
+    unknown: 'Unknown capacity',
+    all:     '',
+  };
+  const key = getCapacityKey(category);
+  const label = labels[key];
+  if (capacity) return `${label} · ${capacity.toLocaleString()} cap`;
+  return label;
 }
 
 function formatDate(dateStr: string) {
@@ -527,7 +536,6 @@ function ShowTable({
         <col className="w-20" />
         <col className="w-36" />
         <col />
-        <col className="w-28" />
         <col className="w-24" />
       </colgroup>
       <thead className="bg-muted">
@@ -535,14 +543,13 @@ function ShowTable({
           <th className="px-4 py-3"></th>
           <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
           <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist / Venue</th>
-          <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Size</th>
           <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Tickets</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
         {shows.map(show => {
           const capBtn = getCapacityButton(show.capacity_category);
-          const capLabel = formatCapacity(show.capacity);
+          const capTooltip = formatCapacityTooltip(show.capacity_category, show.capacity);
 
           return (
             <tr
@@ -591,16 +598,17 @@ function ShowTable({
                     <span className="text-xs text-green-500 font-medium shrink-0">● match</span>
                   )}
                 </div>
-                <div className="text-xs text-muted-foreground truncate">{show.venue_name}</div>
-              </td>
-              <td className="px-4 py-4 text-center align-middle">
-                {show.capacity_category ? (
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold ${capBtn.badgeBg} ${capBtn.badgeText}`}>
-                    {capBtn.label}{capLabel ? `·${capLabel}` : ''}
-                  </span>
-                ) : (
-                  <span className="text-xs text-gray-400">?</span>
-                )}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground truncate">{show.venue_name}</span>
+                  {show.capacity_category && (
+                    <span
+                      title={capTooltip}
+                      className={`shrink-0 text-xs font-semibold ${capBtn.textColor}`}
+                    >
+                      {capBtn.label}
+                    </span>
+                  )}
+                </div>
               </td>
               <td className="px-4 py-4 text-center align-middle">
                 {show.ticketmaster_url ? (
