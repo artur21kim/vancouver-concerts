@@ -23,7 +23,7 @@ export default function Page() {
   const currentYear = new Date().getFullYear();
   const todayVancouver = getVancouverToday();
 
-  const [matchScope, setMatchScope] = useState<MatchScope>('past');
+  const [matchScope, setMatchScope] = useState<MatchScope>('upcoming');
   const [year, setYear] = useState<number | ''>('');
   const [fromDate, setFromDate] = useState<string>(todayVancouver);
   const [error, setError] = useState('');
@@ -82,7 +82,6 @@ export default function Page() {
               router.replace('/discover/upcoming?past_destination=matches');
             }
           }
-          // Don't setLoading(false) here — we're redirecting, keep showing nothing
           return;
         }
 
@@ -173,7 +172,6 @@ export default function Page() {
     }
   };
 
-  // Return nothing while checking — prevents any flash of questionnaire content
   if (loading) return null;
 
   const pageTitle = matchScope === 'past' ? 'Find Your Concert History' : 'Find Upcoming Shows';
@@ -189,31 +187,31 @@ export default function Page() {
 
         <div className="space-y-6">
 
-          {/* Scope toggle */}
+          {/* Scope toggle — Upcoming first */}
           <div>
             <label className="block text-lg font-semibold text-card-foreground mb-3">
               What would you like to explore?
             </label>
             <div className="flex rounded-lg border border-input overflow-hidden">
               <button
-                onClick={() => handleScopeChange('past')}
-                className={`flex-1 px-4 py-2.5 text-sm font-semibold transition ${
-                  matchScope === 'past'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-background text-foreground hover:bg-muted'
-                }`}
-              >
-                Past Shows
-              </button>
-              <button
                 onClick={() => handleScopeChange('upcoming')}
-                className={`flex-1 px-4 py-2.5 text-sm font-semibold transition border-l border-input ${
+                className={`flex-1 px-4 py-2.5 text-sm font-semibold transition ${
                   matchScope === 'upcoming'
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-background text-foreground hover:bg-muted'
                 }`}
               >
                 Upcoming Shows
+              </button>
+              <button
+                onClick={() => handleScopeChange('past')}
+                className={`flex-1 px-4 py-2.5 text-sm font-semibold transition border-l border-input ${
+                  matchScope === 'past'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background text-foreground hover:bg-muted'
+                }`}
+              >
+                Past Shows
               </button>
             </div>
             <p className="text-sm text-foreground/60 italic mt-2">
