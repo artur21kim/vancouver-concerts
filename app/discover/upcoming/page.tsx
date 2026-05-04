@@ -603,7 +603,7 @@ function ShowTable({
                   {show.capacity_category && (
                     <span
                       title={capTooltip}
-                      className={`shrink-0 text-[10px] font-semibold opacity-60 ${capBtn.textColor}`}
+                      className={`shrink-0 text-[10px] font-semibold ${capBtn.textColor}`}
                     >
                       {capBtn.label}
                     </span>
