@@ -100,7 +100,7 @@ export default function Navigation() {
 
         {/* Breadcrumb row — clean second row, flush left with page content */}
         {breadcrumbs && (
-          <div className="hidden md:flex items-center gap-1.5 pb-2 text-xs">
+          <div className="hidden md:flex items-center gap-1.5 pb-2 text-xs -ml-4">
             {breadcrumbs.map((crumb, i) => {
               const isLast = i === breadcrumbs.length - 1
               return (
