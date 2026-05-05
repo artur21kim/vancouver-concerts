@@ -536,7 +536,7 @@ function ShowTable({
         <col className="w-20" />
         <col className="w-36" />
         <col className="w-auto" />
-        <col className="w-16" />
+        <col className="w-24" />
       </colgroup>
       <thead className="bg-muted">
         <tr>
