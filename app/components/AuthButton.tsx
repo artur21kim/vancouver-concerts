@@ -74,7 +74,7 @@ export default function AuthButton() {
                 className="flex items-center gap-2 px-2 md:px-4 py-2 bg-muted hover:opacity-80 rounded-md"
             >
                 <div className="w-7 h-7 md:w-8 md:h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-semibold text-xs md:text-sm">
-                    {username ? username[0].toUpperCase() : user.email?.[0].toUpperCase()}
+                    {username ? username[0].toUpperCase() : (user.email?.[0]?.toUpperCase() ?? '?')}
                 </div>
                 <span className="text-foreground font-medium hidden md:block">
                     {displayName}
