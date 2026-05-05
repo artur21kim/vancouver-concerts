@@ -33,7 +33,7 @@ function SpotifyProcessingContent() {
 
         if (statusData.status === 'complete') {
           clearInterval(pollInterval);
-          const destination = matchScope === 'upcoming' ? '/upcoming-shows' : '/matches';
+          const destination = matchScope === 'upcoming' ? '/discover/upcoming' : '/matches';
           setTimeout(() => router.push(destination), 1000);
           return;
         }
