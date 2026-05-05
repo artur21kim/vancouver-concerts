@@ -78,7 +78,7 @@ export default function PastDiscoverSetupPage() {
       <Navigation />
       <div className="min-h-screen bg-background py-12 px-4">
         <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-8">
-          <h1 className="text-xl font-bold text-card-foreground mb-2">
+          <h1 className="text-2xl font-extrabold text-card-foreground mb-2">
             Discover Your Concert History
           </h1>
           <p className="text-foreground mb-8">

@@ -182,7 +182,7 @@ export default function Page() {
   return (
     <div className="min-h-screen bg-background py-6 md:py-12 px-4">
       <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-5 md:p-8">
-        <h1 className="text-xl md:text-3xl font-bold text-card-foreground mb-2">{pageTitle}</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold text-card-foreground mb-2">{pageTitle}</h1>
         <p className="text-sm md:text-base text-foreground mb-6 md:mb-8">{pageSubtitle}</p>
 
         <div className="space-y-5 md:space-y-6">
