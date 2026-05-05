@@ -174,22 +174,22 @@ export default function Page() {
 
   if (loading) return null;
 
-  const pageTitle = matchScope === 'past' ? 'Find Your Concert History' : 'Find Upcoming Shows';
+  const pageTitle = matchScope === 'past' ? 'Discover Your Concert History' : 'Discover Your Upcoming Shows';
   const pageSubtitle = matchScope === 'past'
     ? "We'll match your Spotify library with past Vancouver shows to help you discover ones you may have attended."
     : "We'll match your Spotify library with upcoming Vancouver shows to help you discover ones you may have missed.";
 
   return (
-    <div className="min-h-screen bg-background py-12 px-4">
-      <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-8">
-        <h1 className="text-3xl font-bold text-card-foreground mb-2">{pageTitle}</h1>
-        <p className="text-foreground mb-8">{pageSubtitle}</p>
+    <div className="min-h-screen bg-background py-6 md:py-12 px-4">
+      <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-5 md:p-8">
+        <h1 className="text-2xl md:text-3xl font-bold text-card-foreground mb-2">{pageTitle}</h1>
+        <p className="text-sm md:text-base text-foreground mb-6 md:mb-8">{pageSubtitle}</p>
 
-        <div className="space-y-6">
+        <div className="space-y-5 md:space-y-6">
 
           {/* Scope toggle — Upcoming first */}
           <div>
-            <label className="block text-lg font-semibold text-card-foreground mb-3">
+            <label className="block text-base md:text-lg font-semibold text-card-foreground mb-3">
               What would you like to explore?
             </label>
             <div className="flex rounded-lg border border-input overflow-hidden">
@@ -214,7 +214,7 @@ export default function Page() {
                 Upcoming Shows
               </button>
             </div>
-            <p className="text-sm text-foreground/60 italic mt-2">
+            <p className="text-xs md:text-sm text-foreground/60 italic mt-2">
               Once connected, you can check both past and upcoming shows anytime — choose whichever you'd like to explore first.
             </p>
           </div>
@@ -222,7 +222,7 @@ export default function Page() {
           {/* Conditional field */}
           {matchScope === 'past' ? (
             <div>
-              <label className="block text-lg font-semibold text-card-foreground mb-4">
+              <label className="block text-base md:text-lg font-semibold text-card-foreground mb-3 md:mb-4">
                 What year did you go to your first concert?
               </label>
               <input
@@ -232,11 +232,11 @@ export default function Page() {
                 value={year}
                 onChange={(e) => handleYearChange(e.target.value)}
                 placeholder="Enter year (e.g., 2010)"
-                className="w-full px-4 py-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground text-lg"
+                className="w-full px-4 py-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground text-base"
               />
               {error && <p className="text-destructive text-sm mt-2">{error}</p>}
               {year !== '' && (
-                <div className="mt-6">
+                <div className="mt-4 md:mt-6">
                   <div className="flex justify-between text-sm text-muted-foreground mb-2">
                     <span>1900</span>
                     <span className="font-semibold text-foreground">{year}</span>
@@ -252,13 +252,13 @@ export default function Page() {
                   />
                 </div>
               )}
-              <p className="text-sm text-foreground/70 italic mt-4">
+              <p className="text-xs md:text-sm text-foreground/70 italic mt-3 md:mt-4">
                 💡 We'll find Vancouver shows with artists from your Spotify library, from this year onwards.
               </p>
             </div>
           ) : (
             <div>
-              <label className="block text-lg font-semibold text-card-foreground mb-4">
+              <label className="block text-base md:text-lg font-semibold text-card-foreground mb-3 md:mb-4">
                 Find upcoming concerts from when?
               </label>
               <input
@@ -266,9 +266,9 @@ export default function Page() {
                 min={todayVancouver}
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className="w-full px-4 py-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground text-lg"
+                className="w-full px-4 py-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground text-base"
               />
-              <p className="text-sm text-foreground/70 italic mt-4">
+              <p className="text-xs md:text-sm text-foreground/70 italic mt-3 md:mt-4">
                 💡 We'll find Vancouver shows with artists from your Spotify library, from this date onwards.
               </p>
             </div>
@@ -291,11 +291,11 @@ export default function Page() {
             <button
               onClick={handleConnectSpotify}
               disabled={!isFormValid}
-              className={`w-full px-6 py-4 rounded-lg font-semibold text-white text-lg transition flex items-center justify-center gap-3 bg-green-600 hover:bg-green-700 ${
+              className={`w-full px-6 py-3 md:py-4 rounded-lg font-semibold text-white text-base md:text-lg transition flex items-center justify-center gap-3 bg-green-600 hover:bg-green-700 ${
                 !isFormValid ? 'opacity-75 cursor-not-allowed hover:bg-green-600' : ''
               }`}
             >
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
               </svg>
               Connect with Spotify
@@ -303,7 +303,7 @@ export default function Page() {
           </div>
 
           {!user && (
-            <p className="text-sm text-foreground/60 text-center">
+            <p className="text-xs md:text-sm text-foreground/60 text-center">
               You'll be asked to log in before connecting Spotify
             </p>
           )}

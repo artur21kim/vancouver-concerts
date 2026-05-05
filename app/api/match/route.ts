@@ -1,6 +1,17 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+function getVancouverYesterday(): string {
+  const now = new Date();
+  now.setDate(now.getDate() - 1);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Vancouver',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+}
+
 export async function GET(request: Request) {
   try {
     const supabase = await createClient();
@@ -31,6 +42,7 @@ export async function GET(request: Request) {
     }
 
     const firstConcertYear = profile.first_concert_year;
+    const yesterdayVancouver = getVancouverYesterday();
 
     const { data: userVenues } = await supabase
       .from('user_venues')
@@ -106,7 +118,8 @@ export async function GET(request: Request) {
         )
       `)
       .in('artist_id', matchedArtistIds)
-      .gte('date', `${firstConcertYear}-01-01`);
+      .gte('date', `${firstConcertYear}-01-01`)
+      .lte('date', yesterdayVancouver);
 
     if (showsError) {
       return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
@@ -134,7 +147,6 @@ export async function GET(request: Request) {
         .map((show: any) => show.artist_id)
     );
 
-    // Filtered counts (excludes 'no' venues — current run)
     const artistShowCountsFiltered = shows.reduce((acc: any, show: any) => {
       if (noVenueIds.has(show.venue_id)) return acc;
       if (!acc[show.artist_id]) acc[show.artist_id] = 0;
@@ -142,7 +154,6 @@ export async function GET(request: Request) {
       return acc;
     }, {});
 
-    // Unfiltered counts (all venues — clean slate)
     const artistShowCountsAll = shows.reduce((acc: any, show: any) => {
       if (!acc[show.artist_id]) acc[show.artist_id] = 0;
       acc[show.artist_id]++;
@@ -176,7 +187,6 @@ export async function GET(request: Request) {
     });
 
     const currentRunArtists = [...scoredArtists].sort((a, b) => b.weighted_score - a.weighted_score);
-    // Return full list for all_artists so frontend can display any top N without cutoff
     const allArtists = [...scoredArtists].sort((a, b) => b.weighted_score_all - a.weighted_score_all);
 
     const venueScores: any = {};
@@ -234,11 +244,12 @@ export async function GET(request: Request) {
       success: true,
       data: {
         first_concert_year: firstConcertYear,
+        upper_bound_date: yesterdayVancouver,
         matched_artists_count: matchedArtists.length,
         total_shows_count: shows.length,
         total_venues_matched: Object.keys(venueScores).length,
         top_artists: currentRunArtists.slice(0, 20),
-        all_artists: allArtists, // Full list — frontend slices to top 15 for display
+        all_artists: allArtists,
         top_venues: top15Venues,
         has_more_venues: isVenueSelection
           ? (allRankedVenues as any[]).filter(v => !confirmedVenueIds.has(v.venue_id)).length > 15
