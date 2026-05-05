@@ -385,6 +385,7 @@ function UpcomingShowsContent() {
               )}
 
               {/* Spotify scope: single New Shows table */}
+              <div className="max-w-3xl">
               {scope === 'spotify' && newShows.length > 0 && (
                 <ShowTable
                   title="New Shows"
@@ -465,6 +466,7 @@ function UpcomingShowsContent() {
                   )}
                 </div>
               )}
+              </div>
 
               {/* Bottom nav */}
               {allShows.length > 0 && !allReviewed && (
@@ -536,7 +538,7 @@ function ShowTable({
         <col className="w-20" />
         <col className="w-36" />
         <col className="w-auto" />
-        <col className="w-24" />
+        <col className="w-16" />
       </colgroup>
       <thead className="bg-muted">
         <tr>
