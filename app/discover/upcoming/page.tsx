@@ -2,8 +2,9 @@
 
 import { Suspense } from 'react';
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Navigation from '../../components/Navigation';
+import { createClient } from '@/lib/supabase/client';
 
 type Show = {
   show_id: number;
@@ -83,8 +84,7 @@ function formatDate(dateStr: string) {
 
 function UpcomingShowsContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const pastDestination = searchParams.get('past_destination') || 'matches';
+  const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -94,6 +94,7 @@ function UpcomingShowsContent() {
   const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all');
   const [skippedOpen, setSkippedOpen] = useState(false);
   const [bannerVisible, setBannerVisible] = useState(false);
+  const [pastNavLoading, setPastNavLoading] = useState(false);
 
   useEffect(() => {
     const dismissed = localStorage.getItem('upcoming_banner_dismissed');
@@ -125,6 +126,32 @@ function UpcomingShowsContent() {
   const dismissBanner = () => {
     localStorage.setItem('upcoming_banner_dismissed', 'true');
     setBannerVisible(false);
+  };
+
+  const handlePastShowsClick = async () => {
+    setPastNavLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push('/'); return; }
+
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('first_concert_year, completed_past_run')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile?.first_concert_year) {
+        router.push('/discover/past/setup');
+      } else if (profile.completed_past_run) {
+        router.push('/likely-shows');
+      } else {
+        router.push('/matches');
+      }
+    } catch {
+      router.push('/matches');
+    } finally {
+      setPastNavLoading(false);
+    }
   };
 
   const updateShowStatus = async (showId: number, status: 'added' | 'skipped' | 'pending') => {
@@ -218,12 +245,17 @@ function UpcomingShowsContent() {
                 Upcoming Shows
               </button>
               <button
-                onClick={() => router.push(`/${pastDestination}`)}
-                className="flex items-center gap-2.5 px-6 py-3 text-sm font-semibold transition bg-card text-muted-foreground hover:text-foreground hover:bg-muted border-l border-border"
+                onClick={handlePastShowsClick}
+                disabled={pastNavLoading}
+                className="flex items-center gap-2.5 px-6 py-3 text-sm font-semibold transition bg-card text-muted-foreground hover:text-foreground hover:bg-muted border-l border-border disabled:opacity-50"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                {pastNavLoading ? (
+                  <div className="w-4 h-4 animate-spin rounded-full border-b-2 border-current" />
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
                 Past Shows
               </button>
             </div>
