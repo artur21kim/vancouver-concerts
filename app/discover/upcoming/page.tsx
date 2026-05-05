@@ -385,7 +385,6 @@ function UpcomingShowsContent() {
               )}
 
               {/* Spotify scope: single New Shows table */}
-              <div className="max-w-3xl">
               {scope === 'spotify' && newShows.length > 0 && (
                 <ShowTable
                   title="New Shows"
@@ -466,7 +465,6 @@ function UpcomingShowsContent() {
                   )}
                 </div>
               )}
-              </div>
 
               {/* Bottom nav */}
               {allShows.length > 0 && !allReviewed && (
