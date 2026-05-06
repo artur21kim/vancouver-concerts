@@ -31,6 +31,7 @@ type MatchData = {
   first_concert_year: number;
   upper_bound_date: string;
   matched_artists_count: number;
+  total_spotify_artists: number;
   total_shows_count: number;
   total_venues_matched: number;
   top_artists: Artist[];
@@ -39,10 +40,11 @@ type MatchData = {
   duration_seconds: number;
 };
 
-type CapacityFilter = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown';
-type ArtistView    = 'current' | 'all';
-type VenueStatus   = 'yes' | 'no' | 'not_sure';
-type MobileTab     = 'unreviewed' | 'all';
+type CapacityFilter  = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown';
+type ArtistView     = 'current' | 'all';
+type ArtistDisplay  = 'chart' | 'table';
+type VenueStatus    = 'yes' | 'no' | 'not_sure';
+type MobileTab      = 'unreviewed' | 'all';
 
 const VENUES_PER_PAGE  = 10;
 const ARTISTS_PER_PAGE = 10;
@@ -339,6 +341,153 @@ function MobileVenueCard({
   );
 }
 
+// ─── Bubble chart ─────────────────────────────────────────────────────────────
+function ArtistBubbleChart({ artists, artistView }: { artists: Artist[]; artistView: ArtistView }) {
+  const [tooltip, setTooltip] = useState<{ artist: Artist; x: number; y: number } | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  const top15 = artists.slice(0, 15);
+  if (top15.length === 0) return <p className="text-muted-foreground text-center py-12">No artists to display</p>;
+
+  // Chart dimensions
+  const W = 560; const H = 340;
+  const PAD = { top: 20, right: 24, bottom: 48, left: 52 };
+  const CW = W - PAD.left - PAD.right;
+  const CH = H - PAD.top - PAD.bottom;
+
+  const maxShows = Math.max(...top15.map(a => artistView === 'current' ? a.vancouver_show_count : a.vancouver_show_count_all), 1);
+  const maxSongs = Math.max(...top15.map(a => a.spotify_song_count), 1);
+  const maxScore = Math.max(...top15.map(a => artistView === 'current' ? a.match_score : a.match_score_all), 1);
+
+  const cx = (a: Artist) => PAD.left + ((artistView === 'current' ? a.vancouver_show_count : a.vancouver_show_count_all) / maxShows) * CW;
+  const cy = (a: Artist) => PAD.top + (1 - a.spotify_song_count / maxSongs) * CH;
+  const cr = (a: Artist) => {
+    const score = artistView === 'current' ? a.match_score : a.match_score_all;
+    return 6 + (score / maxScore) * 14;
+  };
+
+  // X axis ticks
+  const xTicks = Array.from({ length: Math.min(maxShows + 1, 6) }, (_, i) =>
+    Math.round((i / Math.min(maxShows, 5)) * maxShows)
+  );
+  // Y axis ticks
+  const yTicks = [0, Math.round(maxSongs * 0.25), Math.round(maxSongs * 0.5), Math.round(maxSongs * 0.75), maxSongs];
+
+  const handleMouseEnter = (e: React.MouseEvent, artist: Artist) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const scaleX = rect.width / W;
+    const scaleY = rect.height / H;
+    setTooltip({ artist, x: cx(artist) * scaleX, y: cy(artist) * scaleY });
+  };
+
+  return (
+    <div className="relative w-full">
+      {/* Axis labels */}
+      <div className="text-[10px] text-muted-foreground text-center mb-1">YVR Shows →</div>
+      <div className="flex gap-0">
+        {/* Y label rotated */}
+        <div className="flex items-center justify-center" style={{ width: 14, minWidth: 14 }}>
+          <span className="text-[10px] text-muted-foreground whitespace-nowrap"
+            style={{ transform: 'rotate(-90deg)', display: 'block', transformOrigin: 'center' }}>
+            ← Your Songs
+          </span>
+        </div>
+        <div className="relative flex-1">
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${W} ${H}`}
+            className="w-full"
+            style={{ height: 'auto' }}
+          >
+            {/* Grid lines */}
+            {yTicks.map(t => {
+              const y = PAD.top + (1 - t / maxSongs) * CH;
+              return (
+                <g key={t}>
+                  <line x1={PAD.left} y1={y} x2={W - PAD.right} y2={y} stroke="currentColor" strokeOpacity={0.08} strokeWidth={1} />
+                  <text x={PAD.left - 6} y={y + 4} textAnchor="end" fontSize={9} fill="currentColor" fillOpacity={0.4}>{t}</text>
+                </g>
+              );
+            })}
+            {xTicks.map(t => {
+              const x = PAD.left + (t / maxShows) * CW;
+              return (
+                <g key={t}>
+                  <line x1={x} y1={PAD.top} x2={x} y2={H - PAD.bottom} stroke="currentColor" strokeOpacity={0.08} strokeWidth={1} />
+                  <text x={x} y={H - PAD.bottom + 14} textAnchor="middle" fontSize={9} fill="currentColor" fillOpacity={0.4}>{t}</text>
+                </g>
+              );
+            })}
+
+            {/* Bubbles */}
+            {top15.map((artist) => {
+              const x = cx(artist); const y = cy(artist); const r = cr(artist);
+              return (
+                <g key={artist.artist_id}
+                  onMouseEnter={e => handleMouseEnter(e, artist)}
+                  onMouseLeave={() => setTooltip(null)}
+                  onTouchStart={e => { e.preventDefault(); handleMouseEnter(e as any, artist); }}
+                  onTouchEnd={() => setTooltip(null)}
+                  className="cursor-pointer"
+                >
+                  <circle cx={x} cy={y} r={r + 6} fill="transparent" /> {/* hit area */}
+                  <circle cx={x} cy={y} r={r}
+                    fill="hsl(var(--primary))" fillOpacity={0.25}
+                    stroke="hsl(var(--primary))" strokeWidth={1.5}
+                    className="transition-all duration-150 hover:fill-opacity-40"
+                  />
+                  {/* Label for larger bubbles */}
+                  {r >= 13 && (
+                    <text x={x} y={y - r - 4} textAnchor="middle" fontSize={9} fill="currentColor" fillOpacity={0.7}
+                      className="pointer-events-none select-none">
+                      {artist.artist_name.length > 14 ? artist.artist_name.slice(0, 13) + '…' : artist.artist_name}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+
+          {/* Tooltip */}
+          {tooltip && (
+            <div
+              className="absolute z-10 pointer-events-none bg-card border border-border rounded-lg shadow-lg px-3 py-2 text-xs min-w-[140px]"
+              style={{
+                left: Math.min(tooltip.x + 12, (svgRef.current?.getBoundingClientRect().width ?? 300) - 155),
+                top: Math.max(tooltip.y - 70, 4),
+              }}
+            >
+              <p className="font-semibold text-card-foreground mb-1">{tooltip.artist.artist_name}</p>
+              <div className="space-y-0.5 text-muted-foreground">
+                <p>🎵 {tooltip.artist.spotify_song_count} songs in your library</p>
+                <p>📍 {artistView === 'current' ? tooltip.artist.vancouver_show_count : tooltip.artist.vancouver_show_count_all} Vancouver shows</p>
+                <p className="text-primary font-medium">
+                  {(artistView === 'current' ? tooltip.artist.match_score : tooltip.artist.match_score_all).toFixed(1)}% match
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center justify-center gap-4 mt-2 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1.5">
+          <svg width="28" height="12" viewBox="0 0 28 12">
+            <circle cx="6" cy="6" r="4" fill="hsl(var(--primary))" fillOpacity={0.25} stroke="hsl(var(--primary))" strokeWidth={1.5}/>
+            <circle cx="20" cy="6" r="6" fill="hsl(var(--primary))" fillOpacity={0.25} stroke="hsl(var(--primary))" strokeWidth={1.5}/>
+          </svg>
+          Bubble size = match score
+        </div>
+        <span className="text-muted-foreground/40">·</span>
+        <span>Hover a bubble for details</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function MatchesPage() {
   const router = useRouter();
@@ -354,8 +503,9 @@ export default function MatchesPage() {
   const [venuePage, setVenuePage]           = useState(1);
 
   // Artist state
-  const [artistView, setArtistView] = useState<ArtistView>('current');
-  const [artistPage, setArtistPage] = useState(1);
+  const [artistView, setArtistView]       = useState<ArtistView>('current');
+  const [artistDisplay, setArtistDisplay] = useState<ArtistDisplay>('chart');
+  const [artistPage, setArtistPage]       = useState(1);
 
   useEffect(() => { fetchMatches(); }, []);
 
@@ -488,18 +638,39 @@ export default function MatchesPage() {
 
           {/* Header */}
           <div className="mb-6 md:mb-8">
-            <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-1">Your Matched Shows</h1>
+            <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-1">Your Matched Artists & Venues</h1>
             <p className="text-sm md:text-base text-muted-foreground">
-              Based on your Spotify library and Vancouver show data from {matchData.first_concert_year} onwards
+              Based on your Spotify library and Vancouver show data from {matchData.first_concert_year} to {new Date().getFullYear()}
             </p>
           </div>
 
           {/* Stat cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-6 md:mb-8">
-            <StatCard label="Matched Artists" value={matchData.matched_artists_count.toLocaleString()} />
-            <StatCard label="Total Shows"     value={matchData.total_shows_count.toLocaleString()} />
-            <StatCard label="Total Venues"    value={matchData.total_venues_matched.toLocaleString()} />
-            <StatCard label="Date Range"      value={dateRangeValue} />
+          <div className="grid grid-cols-2 gap-2 md:gap-4 mb-6 md:mb-8">
+            {/* Spotify Artists card */}
+            <div className="bg-card rounded-lg shadow p-3 md:p-4 border border-border">
+              <div className="flex items-center gap-1.5 mb-0.5 md:mb-1">
+                <p className="text-[10px] md:text-sm text-muted-foreground leading-tight">Matched Artists</p>
+                <svg className="w-3 h-3 md:w-3.5 md:h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="#1DB954">
+                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                </svg>
+              </div>
+              <p className="text-base md:text-2xl font-bold text-card-foreground">
+                {matchData.matched_artists_count.toLocaleString()}
+                {matchData.total_spotify_artists > 0 && (
+                  <span className="text-sm md:text-base font-normal text-muted-foreground ml-1">
+                    of {matchData.total_spotify_artists.toLocaleString()}
+                  </span>
+                )}
+              </p>
+            </div>
+            {/* Venues reviewed card */}
+            <div className="bg-card rounded-lg shadow p-3 md:p-4 border border-border">
+              <p className="text-[10px] md:text-sm text-muted-foreground mb-0.5 md:mb-1 leading-tight">Venues Reviewed</p>
+              <p className="text-base md:text-2xl font-bold text-card-foreground">
+                <span className="text-primary">{reviewedCount}</span>
+                <span className="text-sm md:text-base font-normal text-muted-foreground ml-1">of {totalVenues}</span>
+              </p>
+            </div>
           </div>
 
           {/* ── Venues section ── */}
@@ -745,88 +916,114 @@ export default function MatchesPage() {
 
           {/* ── Artists section ── */}
           <div className="bg-card rounded-lg shadow-lg p-4 md:p-6">
+            {/* Header row */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-2">
               <h2 className="text-xl md:text-2xl font-bold text-card-foreground">Top Matched Artists</h2>
-              <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
-                <button onClick={() => { setArtistView('current'); setArtistPage(1); }}
-                  className={`px-3 py-1.5 transition-colors ${artistView === 'current' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                  Current Run
-                </button>
-                <button onClick={() => { setArtistView('all'); setArtistPage(1); }}
-                  className={`px-3 py-1.5 transition-colors ${artistView === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                  All Artists
-                </button>
+              <div className="flex gap-2 flex-wrap">
+                {/* Chart / Table toggle */}
+                <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
+                  <button onClick={() => setArtistDisplay('chart')}
+                    className={`px-3 py-1.5 transition-colors ${artistDisplay === 'chart' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                    Chart
+                  </button>
+                  <button onClick={() => setArtistDisplay('table')}
+                    className={`px-3 py-1.5 transition-colors ${artistDisplay === 'table' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                    Table
+                  </button>
+                </div>
+                {/* Current Run / All Artists toggle */}
+                <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
+                  <button onClick={() => { setArtistView('current'); setArtistPage(1); }}
+                    className={`px-3 py-1.5 transition-colors ${artistView === 'current' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                    Current Run
+                  </button>
+                  <button onClick={() => { setArtistView('all'); setArtistPage(1); }}
+                    className={`px-3 py-1.5 transition-colors ${artistView === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                    All Artists
+                  </button>
+                </div>
               </div>
             </div>
             <p className="text-xs md:text-sm text-muted-foreground mb-4">
               {artistView === 'current'
                 ? `Artists with past Vancouver shows since ${matchData.first_concert_year}`
                 : `All matched artists who've played in Vancouver since ${matchData.first_concert_year}`}
+              {artistDisplay === 'chart' && ' — top 15 plotted by your song count vs. Vancouver shows'}
             </p>
 
-            {pagedArtists.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No artists to show — switch to "All Artists"</p>
-            ) : (
-              <>
-                <div className="overflow-x-auto -mx-4 md:mx-0">
-                  <table className="min-w-full">
-                    <thead>
-                      <tr className="bg-muted">
-                        <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-10">#</th>
-                        <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Artist</th>
-                        <th className="px-3 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Your Songs</th>
-                        <th className="px-3 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">YVR Shows</th>
-                        <th className="px-3 md:px-4 py-3 pr-4 md:pr-6 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Match Score</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {pagedArtists.map((artist, index) => {
-                        const globalRank = (safeArtistPage - 1) * ARTISTS_PER_PAGE + index + 1;
-                        const score = artistView === 'current' ? artist.match_score : artist.match_score_all;
-                        const shows = artistView === 'current' ? artist.vancouver_show_count : artist.vancouver_show_count_all;
-                        return (
-                          <tr key={artist.artist_id} className="hover:bg-muted/50 transition-colors">
-                            <td className="px-3 md:px-4 py-3 text-sm font-bold text-primary">{globalRank}</td>
-                            <td className="px-3 md:px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-card-foreground">{artist.artist_name}</span>
-                                {artist.spotify_artist_id && <SpotifyIcon artistId={artist.spotify_artist_id} />}
-                              </div>
-                            </td>
-                            <td className="px-3 md:px-4 py-3 text-sm text-center text-muted-foreground tabular-nums">{artist.spotify_song_count}</td>
-                            <td className="px-3 md:px-4 py-3 text-sm text-center text-muted-foreground tabular-nums">{shows}</td>
-                            <td className="px-3 md:px-4 py-3 pr-4 md:pr-6">
-                              <div className="flex items-center justify-end gap-2">
-                                <div className="w-16 md:w-24 bg-muted rounded-full h-1.5 hidden sm:block flex-shrink-0">
-                                  <div className="bg-primary h-1.5 rounded-full" style={{ width: `${Math.min(score, 100)}%` }} />
-                                </div>
-                                <span className="text-sm font-semibold text-primary tabular-nums w-14 text-right">
-                                  {score.toFixed(1)}%
-                                </span>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+            {/* ── Bubble chart view ── */}
+            {artistDisplay === 'chart' && (
+              <ArtistBubbleChart artists={allDisplayArtists} artistView={artistView} />
+            )}
 
-                {totalArtistPages > 1 && (
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-                    <button onClick={() => setArtistPage(p => Math.max(1, p - 1))} disabled={safeArtistPage === 1}
-                      className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">
-                      ← Previous
-                    </button>
-                    <span className="text-xs md:text-sm text-muted-foreground">
-                      Page {safeArtistPage} of {totalArtistPages}
-                      <span className="text-muted-foreground/60 ml-1">· {allDisplayArtists.length} artists</span>
-                    </span>
-                    <button onClick={() => setArtistPage(p => Math.min(totalArtistPages, p + 1))} disabled={safeArtistPage === totalArtistPages}
-                      className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">
-                      Next →
-                    </button>
-                  </div>
+            {/* ── Table view ── */}
+            {artistDisplay === 'table' && (
+              <>
+                {pagedArtists.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">No artists to show — switch to "All Artists"</p>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto -mx-4 md:mx-0">
+                      <table className="min-w-full">
+                        <thead>
+                          <tr className="bg-muted">
+                            <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-10">#</th>
+                            <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Artist</th>
+                            <th className="px-3 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Your Songs</th>
+                            <th className="px-3 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">YVR Shows</th>
+                            <th className="px-3 md:px-4 py-3 pl-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Match Score</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {pagedArtists.map((artist, index) => {
+                            const globalRank = (safeArtistPage - 1) * ARTISTS_PER_PAGE + index + 1;
+                            const score = artistView === 'current' ? artist.match_score : artist.match_score_all;
+                            const shows = artistView === 'current' ? artist.vancouver_show_count : artist.vancouver_show_count_all;
+                            return (
+                              <tr key={artist.artist_id} className="hover:bg-muted/50 transition-colors">
+                                <td className="px-3 md:px-4 py-3 text-sm font-bold text-primary">{globalRank}</td>
+                                <td className="px-3 md:px-4 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-card-foreground">{artist.artist_name}</span>
+                                    {artist.spotify_artist_id && <SpotifyIcon artistId={artist.spotify_artist_id} />}
+                                  </div>
+                                </td>
+                                <td className="px-3 md:px-4 py-3 text-sm text-center text-muted-foreground tabular-nums">{artist.spotify_song_count}</td>
+                                <td className="px-3 md:px-4 py-3 text-sm text-center text-muted-foreground tabular-nums">{shows}</td>
+                                <td className="px-3 md:px-4 py-3 pl-4">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-16 md:w-24 bg-muted rounded-full h-1.5 hidden sm:block flex-shrink-0">
+                                      <div className="bg-primary h-1.5 rounded-full" style={{ width: `${Math.min(score, 100)}%` }} />
+                                    </div>
+                                    <span className="text-sm font-semibold text-primary tabular-nums w-14">
+                                      {score.toFixed(1)}%
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {totalArtistPages > 1 && (
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+                        <button onClick={() => setArtistPage(p => Math.max(1, p - 1))} disabled={safeArtistPage === 1}
+                          className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">
+                          ← Previous
+                        </button>
+                        <span className="text-xs md:text-sm text-muted-foreground">
+                          Page {safeArtistPage} of {totalArtistPages}
+                          <span className="text-muted-foreground/60 ml-1">· {allDisplayArtists.length} artists</span>
+                        </span>
+                        <button onClick={() => setArtistPage(p => Math.min(totalArtistPages, p + 1))} disabled={safeArtistPage === totalArtistPages}
+                          className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">
+                          Next →
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}

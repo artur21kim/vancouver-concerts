@@ -241,6 +241,7 @@ export async function GET(request: Request) {
         first_concert_year: firstConcertYear,
         upper_bound_date: yesterdayVancouver,
         matched_artists_count: artistsWithShows.length,
+        total_spotify_artists: uniqueSpotifyArtistIds.length,
         total_shows_count: shows.length,
         total_venues_matched: Object.keys(venueScores).length,
         top_artists: currentRunArtists.slice(0, 15),
