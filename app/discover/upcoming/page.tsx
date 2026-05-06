@@ -607,14 +607,15 @@ function UpcomingShowsContent() {
             </p>
           </div>
 
-          {/* ── Filter stack ──────────────────────────────────────────────────
-               Row 1: Upcoming/Past  +  My Matches/All Shows  (same line)
-               Row 2: Venue size  +  stat indicators
+          {/* ── Filter bar ────────────────────────────────────────────────────
+               Desktop: single row — Upcoming/Past · My Matches/All Shows · Venue · stats
+               Mobile:  stacked rows
           ── */}
           <div className="flex flex-col gap-2.5 mb-5">
 
-            {/* Row 1: scope toggles */}
+            {/* Shared controls — all on one line on desktop, wrap on mobile */}
             <div className="flex items-center gap-3 flex-wrap">
+
               {/* Upcoming / Past — large, primary */}
               <div className="flex rounded-xl border border-border overflow-hidden">
                 <button className="flex items-center gap-2.5 px-5 py-2.5 text-sm font-semibold bg-primary text-primary-foreground" aria-current="page">
@@ -638,7 +639,7 @@ function UpcomingShowsContent() {
               {/* Separator — desktop only */}
               <span className="hidden md:inline text-border select-none text-lg">|</span>
 
-              {/* My Matches / All Shows — smaller, secondary */}
+              {/* My Matches / All Shows */}
               <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
                 <button onClick={() => setScope('spotify')}
                   className={`px-4 py-2 transition ${scope === 'spotify' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
@@ -649,10 +650,11 @@ function UpcomingShowsContent() {
                   All Shows
                 </button>
               </div>
-            </div>
 
-            {/* Row 2: venue filter + stat indicators */}
-            <div className="flex items-center gap-3 flex-wrap">
+              {/* Separator — desktop only */}
+              <span className="hidden md:inline text-border select-none text-lg">|</span>
+
+              {/* Venue size buttons */}
               <div className="flex items-center gap-1.5">
                 <span className="text-sm text-muted-foreground">Venue:</span>
                 <div className="flex items-center gap-1">
@@ -669,8 +671,10 @@ function UpcomingShowsContent() {
                 </div>
               </div>
 
-              <span className="text-border select-none">·</span>
+              {/* Separator — desktop only */}
+              <span className="hidden md:inline text-border select-none">·</span>
 
+              {/* Stats — trailing, read-only */}
               <div className="flex items-center gap-3 text-sm">
                 <span className="text-muted-foreground">
                   New <span className="font-semibold text-primary ml-1">{newShows.length}</span>
@@ -684,6 +688,7 @@ function UpcomingShowsContent() {
                   Skipped <span className="font-semibold ml-1">{skippedShows.length}</span>
                 </span>
               </div>
+
             </div>
 
           </div>
