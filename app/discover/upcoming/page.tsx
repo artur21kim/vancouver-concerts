@@ -93,9 +93,6 @@ function SpotifyIcon({ artistId, isMatch }: { artistId: string; isMatch: boolean
 }
 
 // ─── Swipe config per context ─────────────────────────────────────────────────
-// new:     right → save (green),  left → skip (red)
-// saved:   right → amber "already saved" (no-op), left → skip (red)
-// skipped: right → save (green),  left → amber "already skipped" (no-op)
 const SWIPE_THRESHOLD = 72;
 const SWIPE_MAX = 110;
 
@@ -112,10 +109,10 @@ function getSwipeActions(context: SwipeContext): { right: SwipeAction; left: Swi
 function getSwipeColors(action: SwipeAction, progress: number) {
   const alpha = Math.min(progress, 1) * 0.25;
   switch (action) {
-    case 'save':         return `rgba(34,197,94,${alpha})`;   // green
-    case 'skip':         return `rgba(239,68,68,${alpha})`;   // red
-    case 'noop-saved':   return `rgba(234,179,8,${alpha})`;   // amber
-    case 'noop-skipped': return `rgba(234,179,8,${alpha})`;   // amber
+    case 'save':         return `rgba(34,197,94,${alpha})`;
+    case 'skip':         return `rgba(239,68,68,${alpha})`;
+    case 'noop-saved':   return `rgba(234,179,8,${alpha})`;
+    case 'noop-skipped': return `rgba(234,179,8,${alpha})`;
   }
 }
 
@@ -179,7 +176,6 @@ function SwipeableRow({
   const actions  = getSwipeActions(context);
   const progress = Math.min(Math.abs(offset) / SWIPE_THRESHOLD, 1);
 
-  // Which action is currently being hinted at
   const activeAction: SwipeAction | null =
     offset > 4  ? actions.right :
     offset < -4 ? actions.left  : null;
@@ -197,7 +193,6 @@ function SwipeableRow({
 
   const commit = (action: SwipeAction) => {
     if (action === 'noop-saved' || action === 'noop-skipped') {
-      // Snap back to 0, show amber label centered in row, no ghost, no slide
       setAnimating(true);
       setOffset(0);
       setNoopLabel(getNoopLabel(action));
@@ -255,16 +250,13 @@ function SwipeableRow({
     axisLocked.current  = null;
   };
 
-  // Desktop heart/X handlers
   const handleDesktopHeart = () => {
     if (context === 'new')     onSave(show);
     if (context === 'skipped') onSave(show);
-    // saved: heart does nothing (already saved)
   };
   const handleDesktopSkip = () => {
     if (context === 'new')   onSkip(show);
     if (context === 'saved') onSkip(show);
-    // skipped: X does nothing (already skipped)
   };
 
   const ticketIcon = show.ticketmaster_url
@@ -286,8 +278,9 @@ function SwipeableRow({
       onTouchEnd={onTouchEnd}
     >
       {/* ── Desktop: 4 separate cells ── */}
-      <td className="hidden md:table-cell px-4 py-4 w-20">
-        <div className="flex items-center gap-3">
+      {/* Actions cell — fixed narrow width */}
+      <td className="hidden md:table-cell px-4 py-4 w-16">
+        <div className="flex items-center gap-2">
           <button onClick={handleDesktopHeart} title="Save show" className="focus:outline-none">
             <svg
               className={`w-5 h-5 transition-colors ${
@@ -314,31 +307,34 @@ function SwipeableRow({
           </button>
         </div>
       </td>
-      <td className="hidden md:table-cell px-4 py-4 text-sm text-foreground whitespace-nowrap">
+      {/* Date cell — fixed width */}
+      <td className="hidden md:table-cell px-4 py-4 w-36 text-sm text-foreground whitespace-nowrap">
         {formatDate(show.date)}
       </td>
+      {/* Artist / Venue cell — grows to fill space */}
       <td className="hidden md:table-cell px-4 py-4">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="text-sm font-medium truncate text-primary">
+          <span className="text-sm font-medium text-primary">
             {show.artist_name}
           </span>
           {show.spotify_artist_id && <SpotifyIcon artistId={show.spotify_artist_id} isMatch={show.is_spotify_match} />}
           {showSpotifyBadge && show.is_spotify_match && <span className="text-xs text-green-500 font-medium shrink-0">● match</span>}
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-[13px] text-muted-foreground truncate">{show.venue_name}</span>
+          <span className="text-[13px] text-muted-foreground">{show.venue_name}</span>
           {show.capacity_category && (
             <span title={capTooltip} className={`shrink-0 text-[10px] font-semibold ${capBtn.textColor}`}>{capBtn.label}</span>
           )}
         </div>
       </td>
-      <td className="hidden md:table-cell px-4 py-4 text-center align-middle">{ticketIcon}</td>
+      {/* Tickets cell — fixed width, centred */}
+      <td className="hidden md:table-cell px-4 py-4 w-24 text-center align-middle">{ticketIcon}</td>
 
       {/* ── Mobile: single colSpan=3 cell, content slides as unit ── */}
       <td colSpan={3} className="md:hidden p-0">
         <div className="relative overflow-hidden">
 
-          {/* Ghost icon — hidden during noop flash */}
+          {/* Ghost icon */}
           {activeAction && !noopLabel && (
             <div
               className={`absolute top-0 bottom-0 flex items-center pointer-events-none ${
@@ -350,7 +346,7 @@ function SwipeableRow({
             </div>
           )}
 
-          {/* Noop state: show label only, row content hidden */}
+          {/* Noop state */}
           {noopLabel ? (
             <div className="flex items-center w-full justify-center" style={{ minHeight: '52px' }}>
               <span className="text-xs font-semibold text-amber-400">{noopLabel}</span>
@@ -399,17 +395,15 @@ function SwipeableRow({
 }
 
 // ─── Table headers ─────────────────────────────────────────────────────────────
-// Mobile widths must exactly mirror the sliding content layout above:
-//   date: w-[100px] pl-3  |  artist: flex-1  |  tix: w-[48px] pr-3
 function TableHeaders() {
   return (
     <thead className="bg-muted/60">
       <tr>
-        {/* Desktop */}
-        <th className="hidden md:table-cell px-4 py-3 w-20" />
-        <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Date</th>
+        {/* Desktop — widths must match the td widths in SwipeableRow */}
+        <th className="hidden md:table-cell px-4 py-3 w-16" />
+        <th className="hidden md:table-cell px-4 py-3 w-36 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Date</th>
         <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Artist / Venue</th>
-        <th className="hidden md:table-cell px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide w-24">Tickets</th>
+        <th className="hidden md:table-cell px-4 py-3 w-24 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Tickets</th>
         {/* Mobile — single th, internal flex mirrors the td sliding layout */}
         <th colSpan={3} className="md:hidden p-0">
           <div className="flex items-center w-full py-2.5">
@@ -751,8 +745,7 @@ function UpcomingShowsContent() {
             </div>
           </div>
 
-
-          {/* Swipe hint — mobile only, below filters/controls, above tables */}
+          {/* Swipe hint — mobile only */}
           <div className="md:hidden bg-muted/50 border border-border rounded-lg px-5 py-3.5 mb-6 flex items-center justify-center gap-4">
             <div className="flex items-center gap-2 text-muted-foreground">
               <svg className="w-4 h-4 text-destructive/80" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
