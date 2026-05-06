@@ -608,15 +608,17 @@ function UpcomingShowsContent() {
           </div>
 
           {/* ── Filter bar ────────────────────────────────────────────────────
-               Desktop: single row — Upcoming/Past · My Matches/All Shows · Venue · stats
-               Mobile:  stacked rows
+               Desktop: single row, stats right-aligned
+               Mobile:  Row 1 — both toggles side by side (shortened labels)
+                        Row 2 — venue buttons
+                        Row 3 — stats
           ── */}
-          <div className="flex flex-col gap-2.5 mb-5">
+          <div className="mb-5">
 
-            {/* Shared controls — all on one line on desktop, wrap on mobile */}
-            <div className="flex items-center gap-3 flex-wrap">
+            {/* Desktop: single flex row with ml-auto pushing stats right */}
+            <div className="hidden md:flex items-center gap-3">
 
-              {/* Upcoming / Past — large, primary */}
+              {/* Upcoming / Past */}
               <div className="flex rounded-xl border border-border overflow-hidden">
                 <button className="flex items-center gap-2.5 px-5 py-2.5 text-sm font-semibold bg-primary text-primary-foreground" aria-current="page">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -636,8 +638,7 @@ function UpcomingShowsContent() {
                 </button>
               </div>
 
-              {/* Separator — desktop only */}
-              <span className="hidden md:inline text-border select-none text-lg">|</span>
+              <span className="text-border select-none text-lg">|</span>
 
               {/* My Matches / All Shows */}
               <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
@@ -651,8 +652,7 @@ function UpcomingShowsContent() {
                 </button>
               </div>
 
-              {/* Separator — desktop only */}
-              <span className="hidden md:inline text-border select-none text-lg">|</span>
+              <span className="text-border select-none text-lg">|</span>
 
               {/* Venue size buttons */}
               <div className="flex items-center gap-1.5">
@@ -671,22 +671,79 @@ function UpcomingShowsContent() {
                 </div>
               </div>
 
-              {/* Separator — desktop only */}
-              <span className="hidden md:inline text-border select-none">·</span>
+              {/* Stats — pushed to far right */}
+              <div className="ml-auto flex items-center gap-3 text-sm text-muted-foreground/70">
+                <span>New <span className="font-semibold text-primary/80 ml-0.5">{newShows.length}</span></span>
+                <span className="text-border">·</span>
+                <span>Saved <span className="font-semibold text-green-500/80 ml-0.5">{savedShows.length}</span></span>
+                <span className="text-border">·</span>
+                <span>Skipped <span className="font-semibold ml-0.5">{skippedShows.length}</span></span>
+              </div>
 
-              {/* Stats — trailing, read-only */}
-              <div className="flex items-center gap-3 text-sm">
-                <span className="text-muted-foreground">
-                  New <span className="font-semibold text-primary ml-1">{newShows.length}</span>
-                </span>
-                <span className="text-border select-none">·</span>
-                <span className="text-muted-foreground">
-                  Saved <span className="font-semibold text-green-500 ml-1">{savedShows.length}</span>
-                </span>
-                <span className="text-border select-none">·</span>
-                <span className="text-muted-foreground">
-                  Skipped <span className="font-semibold ml-1">{skippedShows.length}</span>
-                </span>
+            </div>
+
+            {/* Mobile: stacked rows */}
+            <div className="flex flex-col gap-2.5 md:hidden">
+
+              {/* Row 1: both toggles side by side, equal weight, shortened labels */}
+              <div className="flex items-center gap-2.5">
+                {/* Upcoming / Past — fills left half */}
+                <div className="flex flex-1 rounded-lg border border-border overflow-hidden text-sm font-semibold">
+                  <button className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground" aria-current="page">
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Upcoming
+                  </button>
+                  <button onClick={handlePastShowsClick} disabled={pastNavLoading}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-card text-muted-foreground hover:text-foreground hover:bg-muted border-l border-border disabled:opacity-50 transition">
+                    {pastNavLoading
+                      ? <div className="w-3.5 h-3.5 animate-spin rounded-full border-b-2 border-current shrink-0" />
+                      : <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    }
+                    Past
+                  </button>
+                </div>
+
+                {/* My Matches / All Shows — fills right half */}
+                <div className="flex flex-1 rounded-lg border border-border overflow-hidden text-sm font-medium">
+                  <button onClick={() => setScope('spotify')}
+                    className={`flex-1 px-3 py-2 transition ${scope === 'spotify' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                    Matches
+                  </button>
+                  <button onClick={() => setScope('all')}
+                    className={`flex-1 px-3 py-2 transition ${scope === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                    All Shows
+                  </button>
+                </div>
+              </div>
+
+              {/* Row 2: venue size buttons */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-muted-foreground">Venue:</span>
+                <div className="flex items-center gap-1">
+                  {CAPACITY_BUTTONS.map(btn => (
+                    <button key={btn.key} onClick={() => setCapacityFilter(btn.key)} title={btn.tooltip}
+                      className={`px-2.5 py-1 rounded text-xs font-semibold transition border ${
+                        capacityFilter === btn.key
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : `bg-card border-border ${btn.textColor} hover:border-foreground/30`
+                      }`}>
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Row 3: stats */}
+              <div className="flex items-center gap-3 text-sm text-muted-foreground/70">
+                <span>New <span className="font-semibold text-primary/80 ml-0.5">{newShows.length}</span></span>
+                <span className="text-border">·</span>
+                <span>Saved <span className="font-semibold text-green-500/80 ml-0.5">{savedShows.length}</span></span>
+                <span className="text-border">·</span>
+                <span>Skipped <span className="font-semibold ml-0.5">{skippedShows.length}</span></span>
               </div>
 
             </div>
