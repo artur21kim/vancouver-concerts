@@ -82,14 +82,6 @@ function formatDate(dateStr: string) {
   });
 }
 
-function formatDateShort(dateStr: string) {
-  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: '2-digit',
-  });
-}
-
 function UpcomingShowsContent() {
   const router = useRouter();
   const supabase = createClient();
@@ -338,7 +330,7 @@ function UpcomingShowsContent() {
                 </button>
               </div>
 
-              {/* Sort */}
+              {/* Sort — always inline */}
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted-foreground">Sort by</span>
                 <div className="flex rounded-lg border border-border overflow-hidden font-medium">
@@ -388,25 +380,25 @@ function UpcomingShowsContent() {
 
           {!loading && !error && (
             <>
-              {/* Completion banner */}
+              {/* Completion banner — compact */}
               {allReviewed && (
-                <div className="bg-primary/10 border border-primary/20 rounded-lg p-6 mb-6 text-center">
-                  <p className="text-foreground font-semibold mb-1">You're all set!</p>
-                  <p className="text-muted-foreground text-sm mb-4">
+                <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 mb-6">
+                  <p className="text-foreground font-semibold text-sm mb-1">You're all set!</p>
+                  <p className="text-muted-foreground text-xs mb-3">
                     Saved shows will appear in My Shows. Check back soon for new upcoming shows.
                   </p>
-                  <div className="flex justify-center gap-3">
+                  <div className="flex gap-2">
                     <button
                       onClick={() => router.push('/my-shows')}
-                      className="px-5 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition"
+                      className="px-4 py-1.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition"
                     >
-                      View My Shows →
+                      View My Shows
                     </button>
                     <button
                       onClick={() => router.push('/browse')}
-                      className="px-5 py-2 bg-card border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition"
+                      className="px-4 py-1.5 bg-card border border-border text-foreground text-sm font-semibold rounded-lg hover:bg-muted transition"
                     >
-                      Browse All Shows →
+                      Browse All Shows
                     </button>
                   </div>
                 </div>
@@ -580,10 +572,10 @@ function ShowTable({
           <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist / Venue</th>
           <th className="hidden md:table-cell px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase w-24">Tickets</th>
           {/* Mobile headers */}
-          <th className="md:hidden px-2 py-3 w-14"></th>
+          <th className="md:hidden px-2 py-3 w-16"></th>
           <th className="md:hidden px-1 py-3 text-left text-xs font-medium text-muted-foreground uppercase whitespace-nowrap">Date</th>
           <th className="md:hidden px-1 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist / Venue</th>
-          <th className="md:hidden px-1 py-3 w-8"></th>
+          <th className="md:hidden px-1 py-3 text-center text-xs font-medium text-muted-foreground uppercase w-10">Tix</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
@@ -692,14 +684,14 @@ function ShowTable({
               </td>
 
               {/* Mobile cells */}
-              <td className="md:hidden px-2 py-3 align-middle w-14">
-                <div className="flex flex-col items-center gap-2">
+              <td className="md:hidden px-2 py-3 align-middle w-16">
+                <div className="flex items-center gap-2">
                   {heartButton}
                   {skipButton}
                 </div>
               </td>
               <td className="md:hidden px-1 py-3 align-top whitespace-nowrap">
-                <span className="text-[11px] text-foreground">{formatDateShort(show.date)}</span>
+                <span className="text-[10px] text-foreground">{formatDate(show.date)}</span>
               </td>
               <td className="md:hidden px-1 py-3 min-w-0">
                 <div className="flex items-center gap-1 mb-0.5">
@@ -720,7 +712,7 @@ function ShowTable({
                   )}
                 </div>
               </td>
-              <td className="md:hidden py-3 px-1 w-8 align-middle">
+              <td className="md:hidden py-3 px-1 w-10 align-middle">
                 <div className="flex items-center justify-center">
                   {ticketIcon}
                 </div>
