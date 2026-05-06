@@ -22,11 +22,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const url = new URL(request.url);
-    const mode = url.searchParams.get('mode');
-    const isVenueSelection = mode === 'venue-selection';
-
-    console.log(`🎯 Starting matching algorithm for user: ${user.id} (mode: ${mode || 'default'})`);
+    console.log(`🎯 Starting matching algorithm for user: ${user.id}`);
     const startTime = Date.now();
 
     const { data: profile, error: profileError } = await supabase
@@ -56,10 +52,6 @@ export async function GET(request: Request) {
 
     const noVenueIds = new Set(
       (userVenues || []).filter(v => v.status === 'no').map(v => v.venue_id)
-    );
-
-    const confirmedVenueIds = new Set(
-      (userVenues || []).filter(v => v.status === 'yes' || v.status === 'no').map(v => v.venue_id)
     );
 
     const { data: userSongs, error: songsError } = await supabase
@@ -103,6 +95,8 @@ export async function GET(request: Request) {
 
     const matchedArtistIds = matchedArtists.map(a => a.artist_id);
 
+    // Fetch shows within the user's concert history window, up to yesterday
+    // This ensures: no pre-first_concert_year shows, no future shows
     const { data: shows, error: showsError } = await supabase
       .from('fact_shows')
       .select(`
@@ -131,22 +125,7 @@ export async function GET(request: Request) {
       }, { status: 404 });
     }
 
-    const [attendedResult, skippedResult] = await Promise.all([
-      supabase.from('user_shows').select('show_id').eq('user_id', user.id).eq('status', 'attended'),
-      supabase.from('user_show_reviews').select('show_id').eq('user_id', user.id).eq('status', 'skipped')
-    ]);
-
-    const excludedShowIds = new Set([
-      ...(attendedResult.data || []).map((s: any) => s.show_id),
-      ...(skippedResult.data || []).map((s: any) => s.show_id)
-    ]);
-
-    const artistsWithPendingShows = new Set(
-      shows
-        .filter((show: any) => !excludedShowIds.has(show.show_id) && !noVenueIds.has(show.venue_id))
-        .map((show: any) => show.artist_id)
-    );
-
+    // Count shows per artist (excluding 'no' venues)
     const artistShowCountsFiltered = shows.reduce((acc: any, show: any) => {
       if (noVenueIds.has(show.venue_id)) return acc;
       if (!acc[show.artist_id]) acc[show.artist_id] = 0;
@@ -160,11 +139,22 @@ export async function GET(request: Request) {
       return acc;
     }, {});
 
-    const maxSpotifyCount = Math.max(...matchedArtists.map(a => artistSongCounts[a.spotify_artist_id]?.count || 0));
-    const maxVancouverCountFiltered = Math.max(...matchedArtists.map(a => artistShowCountsFiltered[a.artist_id] || 0), 1);
-    const maxVancouverCountAll = Math.max(...matchedArtists.map(a => artistShowCountsAll[a.artist_id] || 0), 1);
+    // Only include artists who actually have shows in the valid date range
+    const artistsWithShows = matchedArtists.filter(
+      a => (artistShowCountsAll[a.artist_id] || 0) > 0
+    );
 
-    const scoredArtists = matchedArtists.map(artist => {
+    if (artistsWithShows.length === 0) {
+      return NextResponse.json({ 
+        error: `No shows found for your artists from ${firstConcertYear} onwards.` 
+      }, { status: 404 });
+    }
+
+    const maxSpotifyCount = Math.max(...artistsWithShows.map(a => artistSongCounts[a.spotify_artist_id]?.count || 0));
+    const maxVancouverCountFiltered = Math.max(...artistsWithShows.map(a => artistShowCountsFiltered[a.artist_id] || 0), 1);
+    const maxVancouverCountAll = Math.max(...artistsWithShows.map(a => artistShowCountsAll[a.artist_id] || 0), 1);
+
+    const scoredArtists = artistsWithShows.map(artist => {
       const spotifyCount = artistSongCounts[artist.spotify_artist_id]?.count || 0;
       const vancouverCountFiltered = artistShowCountsFiltered[artist.artist_id] || 0;
       const vancouverCountAll = artistShowCountsAll[artist.artist_id] || 0;
@@ -173,29 +163,34 @@ export async function GET(request: Request) {
       const vancouverScoreFiltered = (vancouverCountFiltered / maxVancouverCountFiltered) * 100;
       const vancouverScoreAll = (vancouverCountAll / maxVancouverCountAll) * 100;
 
+      // Weighted score: 70% Spotify affinity, 30% Vancouver presence
+      const weightedScoreFiltered = (0.7 * spotifyScore) + (0.3 * vancouverScoreFiltered);
+      const weightedScoreAll = (0.7 * spotifyScore) + (0.3 * vancouverScoreAll);
+
       return {
         artist_id: artist.artist_id,
         artist_name: artist.artist_name,
         spotify_artist_id: artist.spotify_artist_id,
         spotify_song_count: spotifyCount,
         vancouver_show_count: vancouverCountFiltered,
-        weighted_score: (0.7 * spotifyScore) + (0.3 * vancouverScoreFiltered),
-        has_pending_shows: artistsWithPendingShows.has(artist.artist_id),
         vancouver_show_count_all: vancouverCountAll,
-        weighted_score_all: (0.7 * spotifyScore) + (0.3 * vancouverScoreAll),
+        // Normalized 0–100
+        match_score: Math.round(weightedScoreFiltered * 10) / 10,
+        match_score_all: Math.round(weightedScoreAll * 10) / 10,
       };
     });
 
-    const currentRunArtists = [...scoredArtists].sort((a, b) => b.weighted_score - a.weighted_score);
-    const allArtists = [...scoredArtists].sort((a, b) => b.weighted_score_all - a.weighted_score_all);
+    const currentRunArtists = [...scoredArtists].sort((a, b) => b.match_score - a.match_score);
+    const allArtists = [...scoredArtists].sort((a, b) => b.match_score_all - a.match_score_all);
 
+    // Build venue scores
     const venueScores: any = {};
 
     shows.forEach((show: any) => {
       if (noVenueIds.has(show.venue_id)) return;
       const venue = Array.isArray(show.dim_venue) ? show.dim_venue[0] : show.dim_venue;
       const venueId = venue.venue_id;
-      const artist = currentRunArtists.find(a => a.artist_id === show.artist_id);
+      const artist = scoredArtists.find(a => a.artist_id === show.artist_id);
 
       if (!venueScores[venueId]) {
         venueScores[venueId] = {
@@ -205,14 +200,18 @@ export async function GET(request: Request) {
           capacity_category: venue.capacity_category || null,
           total_shows: 0,
           unique_artists: new Set(),
-          total_score: 0
+          raw_score: 0,
         };
       }
 
       venueScores[venueId].total_shows++;
       venueScores[venueId].unique_artists.add(show.artist_id);
-      if (artist) venueScores[venueId].total_score += artist.weighted_score;
+      if (artist) venueScores[venueId].raw_score += artist.match_score;
     });
+
+    // Normalize venue scores to 0–100
+    const rawScores = Object.values(venueScores).map((v: any) => v.raw_score);
+    const maxRawScore = Math.max(...rawScores, 1);
 
     const allRankedVenues = Object.values(venueScores)
       .map((venue: any) => ({
@@ -222,18 +221,14 @@ export async function GET(request: Request) {
         capacity_category: venue.capacity_category,
         total_shows: venue.total_shows,
         unique_artists: venue.unique_artists.size,
-        average_artist_score: venue.total_score / venue.total_shows,
-        venue_score: venue.total_score,
-        user_status: userVenueStatusMap[venue.venue_id] || null
+        // Normalized 0–100
+        match_score: Math.round((venue.raw_score / maxRawScore) * 1000) / 10,
+        user_status: userVenueStatusMap[venue.venue_id] || null,
       }))
-      .sort((a: any, b: any) => b.venue_score - a.venue_score);
-
-    const top15Venues = isVenueSelection
-      ? (allRankedVenues as any[]).filter(v => !confirmedVenueIds.has(v.venue_id)).slice(0, 15)
-      : (allRankedVenues as any[]).slice(0, 15);
+      .sort((a: any, b: any) => b.match_score - a.match_score);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`✅ MATCHING COMPLETE — ${matchedArtists.length} artists, ${shows.length} shows, ${Object.keys(venueScores).length} venues in ${duration}s`);
+    console.log(`✅ MATCHING COMPLETE — ${artistsWithShows.length} artists, ${shows.length} shows, ${Object.keys(venueScores).length} venues in ${duration}s`);
 
     await supabase
       .from('user_profiles')
@@ -245,16 +240,14 @@ export async function GET(request: Request) {
       data: {
         first_concert_year: firstConcertYear,
         upper_bound_date: yesterdayVancouver,
-        matched_artists_count: matchedArtists.length,
+        matched_artists_count: artistsWithShows.length,
         total_shows_count: shows.length,
         total_venues_matched: Object.keys(venueScores).length,
-        top_artists: currentRunArtists.slice(0, 20),
+        top_artists: currentRunArtists.slice(0, 15),
         all_artists: allArtists,
-        top_venues: top15Venues,
-        has_more_venues: isVenueSelection
-          ? (allRankedVenues as any[]).filter(v => !confirmedVenueIds.has(v.venue_id)).length > 15
-          : false,
-        duration_seconds: parseFloat(duration)
+        // Return ALL ranked venues — frontend handles pagination
+        all_venues: allRankedVenues,
+        duration_seconds: parseFloat(duration),
       }
     });
 
