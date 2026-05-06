@@ -25,6 +25,7 @@ type Show = {
 };
 
 type SortKey = 'date' | 'artist';
+type SortDir = 'asc' | 'desc';
 type Scope = 'spotify' | 'all';
 type CapacityFilter = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown';
 type SwipeContext = 'new' | 'saved' | 'skipped';
@@ -92,7 +93,7 @@ function SpotifyIcon({ artistId, isMatch }: { artistId: string; isMatch: boolean
   );
 }
 
-// ─── Swipe config per context ─────────────────────────────────────────────────
+// ─── Swipe config ─────────────────────────────────────────────────────────────
 const SWIPE_THRESHOLD = 72;
 const SWIPE_MAX = 110;
 
@@ -153,11 +154,7 @@ function getNoopLabel(action: SwipeAction) {
 
 // ─── Swipeable row ────────────────────────────────────────────────────────────
 function SwipeableRow({
-  show,
-  context,
-  onSave,
-  onSkip,
-  showSpotifyBadge,
+  show, context, onSave, onSkip, showSpotifyBadge,
 }: {
   show: Show;
   context: SwipeContext;
@@ -169,46 +166,38 @@ function SwipeableRow({
   const [animating, setAnimating] = useState(false);
   const [noopLabel, setNoopLabel] = useState('');
 
-  const touchStartX  = useRef<number | null>(null);
-  const touchStartY  = useRef<number | null>(null);
-  const axisLocked   = useRef<'h' | 'v' | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const axisLocked  = useRef<'h' | 'v' | null>(null);
 
-  const actions  = getSwipeActions(context);
-  const progress = Math.min(Math.abs(offset) / SWIPE_THRESHOLD, 1);
-
+  const actions    = getSwipeActions(context);
+  const progress   = Math.min(Math.abs(offset) / SWIPE_THRESHOLD, 1);
   const activeAction: SwipeAction | null =
-    offset > 4  ? actions.right :
-    offset < -4 ? actions.left  : null;
+    offset > 4 ? actions.right : offset < -4 ? actions.left : null;
+  const rowBg = noopLabel
+    ? 'rgba(234,179,8,0.20)'
+    : activeAction ? getSwipeColors(activeAction, progress) : undefined;
 
-  const rowBg = noopLabel ? 'rgba(234,179,8,0.20)' : activeAction ? getSwipeColors(activeAction, progress) : undefined;
-
-  const capBtn    = getCapacityButton(show.capacity_category);
+  const capBtn     = getCapacityButton(show.capacity_category);
   const capTooltip = formatCapacityTooltip(show.capacity_category, show.capacity);
 
   const springBack = () => {
-    setAnimating(true);
-    setOffset(0);
+    setAnimating(true); setOffset(0);
     setTimeout(() => setAnimating(false), 280);
   };
 
   const commit = (action: SwipeAction) => {
     if (action === 'noop-saved' || action === 'noop-skipped') {
-      setAnimating(true);
-      setOffset(0);
+      setAnimating(true); setOffset(0);
       setNoopLabel(getNoopLabel(action));
-      setTimeout(() => {
-        setNoopLabel('');
-        setAnimating(false);
-      }, 900);
+      setTimeout(() => { setNoopLabel(''); setAnimating(false); }, 900);
       return;
     }
     setAnimating(true);
     setOffset(action === 'save' ? SWIPE_MAX : -SWIPE_MAX);
     setTimeout(() => {
-      if (action === 'save') onSave(show);
-      else onSkip(show);
-      setOffset(0);
-      setAnimating(false);
+      if (action === 'save') onSave(show); else onSkip(show);
+      setOffset(0); setAnimating(false);
     }, 220);
   };
 
@@ -234,29 +223,20 @@ function SwipeableRow({
 
   const onTouchEnd = () => {
     if (axisLocked.current !== 'h') {
-      touchStartX.current = null;
-      touchStartY.current = null;
-      return;
+      touchStartX.current = null; touchStartY.current = null; return;
     }
     const triggered =
       offset >= SWIPE_THRESHOLD  ? actions.right :
       offset <= -SWIPE_THRESHOLD ? actions.left  : null;
-
-    if (triggered) commit(triggered);
-    else springBack();
-
-    touchStartX.current = null;
-    touchStartY.current = null;
-    axisLocked.current  = null;
+    if (triggered) commit(triggered); else springBack();
+    touchStartX.current = null; touchStartY.current = null; axisLocked.current = null;
   };
 
   const handleDesktopHeart = () => {
-    if (context === 'new')     onSave(show);
-    if (context === 'skipped') onSave(show);
+    if (context === 'new' || context === 'skipped') onSave(show);
   };
   const handleDesktopSkip = () => {
-    if (context === 'new')   onSkip(show);
-    if (context === 'saved') onSkip(show);
+    if (context === 'new' || context === 'saved') onSkip(show);
   };
 
   const ticketIcon = show.ticketmaster_url
@@ -273,50 +253,31 @@ function SwipeableRow({
     <tr
       className={`relative overflow-hidden select-none border-b border-border last:border-0 ${showSpotifyBadge && show.is_spotify_match ? 'bg-primary/5' : ''}`}
       style={{ backgroundColor: rowBg }}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
+      onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
     >
-      {/* ── Desktop: 4 separate cells ── */}
-      {/* Actions cell — fixed narrow width */}
+      {/* Desktop */}
       <td className="hidden md:table-cell px-4 py-4 w-16">
         <div className="flex items-center gap-2">
           <button onClick={handleDesktopHeart} title="Save show" className="focus:outline-none">
-            <svg
-              className={`w-5 h-5 transition-colors ${
-                context === 'saved'
-                  ? 'fill-destructive text-destructive'
-                  : 'fill-none text-muted-foreground hover:text-destructive'
-              }`}
-              stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
-            >
+            <svg className={`w-5 h-5 transition-colors ${context === 'saved' ? 'fill-destructive text-destructive' : 'fill-none text-muted-foreground hover:text-destructive'}`}
+              stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
             </svg>
           </button>
           <button onClick={handleDesktopSkip} title="Skip show" className="focus:outline-none">
-            <svg
-              className={`w-4 h-4 transition-colors ${
-                context === 'skipped'
-                  ? 'text-destructive'
-                  : 'text-muted-foreground hover:text-destructive'
-              }`}
-              stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" fill="none"
-            >
+            <svg className={`w-4 h-4 transition-colors ${context === 'skipped' ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'}`}
+              stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" fill="none">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
       </td>
-      {/* Date cell — fixed width */}
       <td className="hidden md:table-cell px-4 py-4 w-36 text-sm text-foreground whitespace-nowrap">
         {formatDate(show.date)}
       </td>
-      {/* Artist / Venue cell — grows to fill space */}
       <td className="hidden md:table-cell px-4 py-4">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="text-sm font-medium text-primary">
-            {show.artist_name}
-          </span>
+          <span className="text-sm font-medium text-primary">{show.artist_name}</span>
           {show.spotify_artist_id && <SpotifyIcon artistId={show.spotify_artist_id} isMatch={show.is_spotify_match} />}
           {showSpotifyBadge && show.is_spotify_match && <span className="text-xs text-green-500 font-medium shrink-0">● match</span>}
         </div>
@@ -327,49 +288,30 @@ function SwipeableRow({
           )}
         </div>
       </td>
-      {/* Tickets cell — fixed width, centred */}
       <td className="hidden md:table-cell px-4 py-4 w-24 text-center align-middle">{ticketIcon}</td>
 
-      {/* ── Mobile: single colSpan=3 cell, content slides as unit ── */}
+      {/* Mobile */}
       <td colSpan={3} className="md:hidden p-0">
         <div className="relative overflow-hidden">
-
-          {/* Ghost icon */}
           {activeAction && !noopLabel && (
-            <div
-              className={`absolute top-0 bottom-0 flex items-center pointer-events-none ${
-                offset > 0 ? 'left-3' : 'right-3'
-              }`}
-              style={{ opacity: progress }}
-            >
+            <div className={`absolute top-0 bottom-0 flex items-center pointer-events-none ${offset > 0 ? 'left-3' : 'right-3'}`}
+              style={{ opacity: progress }}>
               {getGhostIcon(activeAction)}
             </div>
           )}
-
-          {/* Noop state */}
           {noopLabel ? (
             <div className="flex items-center w-full justify-center" style={{ minHeight: '52px' }}>
               <span className="text-xs font-semibold text-amber-400">{noopLabel}</span>
             </div>
           ) : (
-            /* Sliding content row */
-            <div
-              className="flex items-center w-full py-3"
-              style={{
-                transform: `translateX(${offset}px)`,
-                transition: animating ? 'transform 0.25s ease' : 'none',
-              }}
-            >
-              {/* Date — fixed width matches header */}
+            <div className="flex items-center w-full py-3"
+              style={{ transform: `translateX(${offset}px)`, transition: animating ? 'transform 0.25s ease' : 'none' }}>
               <div className="pl-3 shrink-0 w-[100px]">
                 <span className="text-xs text-foreground whitespace-nowrap">{formatDate(show.date)}</span>
               </div>
-              {/* Artist / Venue — grows */}
               <div className="flex-1 min-w-0 pr-2">
                 <div className="flex items-center gap-1 mb-0.5">
-                  <span className="text-[11px] font-medium truncate text-primary">
-                    {show.artist_name}
-                  </span>
+                  <span className="text-[11px] font-medium truncate text-primary">{show.artist_name}</span>
                   {show.spotify_artist_id && <SpotifyIcon artistId={show.spotify_artist_id} isMatch={show.is_spotify_match} />}
                   {showSpotifyBadge && show.is_spotify_match && (
                     <span className="text-[10px] text-green-500 font-medium shrink-0">● match</span>
@@ -382,10 +324,7 @@ function SwipeableRow({
                   )}
                 </div>
               </div>
-              {/* Tix — fixed width matches header */}
-              <div className="pr-3 shrink-0 w-[48px] flex items-center justify-center">
-                {ticketIcon}
-              </div>
+              <div className="pr-3 shrink-0 w-[48px] flex items-center justify-center">{ticketIcon}</div>
             </div>
           )}
         </div>
@@ -394,21 +333,40 @@ function SwipeableRow({
   );
 }
 
-// ─── Table headers ─────────────────────────────────────────────────────────────
-function TableHeaders() {
+// ─── Sortable table headers ───────────────────────────────────────────────────
+function TableHeaders({ sortBy, sortDir, onSort }: {
+  sortBy: SortKey; sortDir: SortDir; onSort: (key: SortKey) => void;
+}) {
+  const arrow = (key: SortKey) =>
+    sortBy === key
+      ? <span className="ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>
+      : <span className="ml-1 text-muted-foreground/30">↕</span>;
+
   return (
     <thead className="bg-muted/60">
       <tr>
-        {/* Desktop — widths must match the td widths in SwipeableRow */}
+        {/* Desktop */}
         <th className="hidden md:table-cell px-4 py-3 w-16" />
-        <th className="hidden md:table-cell px-4 py-3 w-36 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Date</th>
-        <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Artist / Venue</th>
+        <th className="hidden md:table-cell px-4 py-3 w-36 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:text-foreground transition-colors select-none"
+          onClick={() => onSort('date')}>
+          Date{arrow('date')}
+        </th>
+        <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:text-foreground transition-colors select-none"
+          onClick={() => onSort('artist')}>
+          Artist / Venue{arrow('artist')}
+        </th>
         <th className="hidden md:table-cell px-4 py-3 w-24 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Tickets</th>
-        {/* Mobile — single th, internal flex mirrors the td sliding layout */}
+        {/* Mobile */}
         <th colSpan={3} className="md:hidden p-0">
           <div className="flex items-center w-full py-2.5">
-            <div className="pl-3 shrink-0 w-[100px] text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Date</div>
-            <div className="flex-1 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Artist / Venue</div>
+            <div className="pl-3 shrink-0 w-[100px] text-left text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:text-foreground transition-colors select-none"
+              onClick={() => onSort('date')}>
+              Date{arrow('date')}
+            </div>
+            <div className="flex-1 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:text-foreground transition-colors select-none"
+              onClick={() => onSort('artist')}>
+              Artist / Venue{arrow('artist')}
+            </div>
             <div className="pr-3 shrink-0 w-[48px] text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Tix</div>
           </div>
         </th>
@@ -417,32 +375,21 @@ function TableHeaders() {
   );
 }
 
+// ─── Shared table props type ──────────────────────────────────────────────────
+type TableSortProps = { sortBy: SortKey; sortDir: SortDir; onSort: (key: SortKey) => void; };
+
 // ─── New Shows table ───────────────────────────────────────────────────────────
 function NewShowsTable({
-  title,
-  shows,
-  allReviewed,
-  onSave,
-  onSkip,
-  onSaveAll,
-  onSkipAll,
-  showSpotifyBadge,
-  highlightHeader = false,
-  onViewMyShows,
-  onBrowse,
+  title, shows, allReviewed, onSave, onSkip, onSaveAll, onSkipAll,
+  showSpotifyBadge, highlightHeader = false, onViewMyShows, onBrowse,
+  sortBy, sortDir, onSort,
 }: {
-  title: string;
-  shows: Show[];
-  allReviewed: boolean;
-  onSave: (show: Show) => void;
-  onSkip: (show: Show) => void;
-  onSaveAll: () => void;
-  onSkipAll: () => void;
-  showSpotifyBadge: boolean;
-  highlightHeader?: boolean;
-  onViewMyShows: () => void;
-  onBrowse: () => void;
-}) {
+  title: string; shows: Show[]; allReviewed: boolean;
+  onSave: (show: Show) => void; onSkip: (show: Show) => void;
+  onSaveAll: () => void; onSkipAll: () => void;
+  showSpotifyBadge: boolean; highlightHeader?: boolean;
+  onViewMyShows: () => void; onBrowse: () => void;
+} & TableSortProps) {
   return (
     <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
       <div className={`flex items-center justify-between px-6 py-4 border-b border-border ${highlightHeader ? 'bg-primary/5' : ''}`}>
@@ -459,7 +406,7 @@ function NewShowsTable({
         )}
       </div>
       <table className="w-full">
-        {shows.length > 0 && <TableHeaders />}
+        {shows.length > 0 && <TableHeaders sortBy={sortBy} sortDir={sortDir} onSort={onSort} />}
         <tbody>
           {shows.map(show => (
             <SwipeableRow key={show.show_id} show={show} context="new" onSave={onSave} onSkip={onSkip} showSpotifyBadge={showSpotifyBadge} />
@@ -482,35 +429,21 @@ function NewShowsTable({
   );
 }
 
-// ─── Generic show table (Saved, Skipped, All Other Shows) ─────────────────────
+// ─── Generic show table ────────────────────────────────────────────────────────
 function ShowTable({
-  title,
-  shows,
-  context,
-  onSave,
-  onSkip,
-  onSaveAll,
-  onSkipAll,
-  showBulk = false,
-  hideTitleBar = false,
-  showSpotifyBadge = false,
-  highlightHeader = false,
+  title, shows, context, onSave, onSkip, onSaveAll, onSkipAll,
+  showBulk = false, hideTitleBar = false, showSpotifyBadge = false,
+  highlightHeader = false, sortBy, sortDir, onSort,
 }: {
-  title: string;
-  shows: Show[];
-  context: SwipeContext;
-  onSave: (show: Show) => void;
-  onSkip: (show: Show) => void;
-  onSaveAll?: () => void;
-  onSkipAll?: () => void;
-  showBulk?: boolean;
-  hideTitleBar?: boolean;
-  showSpotifyBadge?: boolean;
-  highlightHeader?: boolean;
-}) {
+  title: string; shows: Show[]; context: SwipeContext;
+  onSave: (show: Show) => void; onSkip: (show: Show) => void;
+  onSaveAll?: () => void; onSkipAll?: () => void;
+  showBulk?: boolean; hideTitleBar?: boolean;
+  showSpotifyBadge?: boolean; highlightHeader?: boolean;
+} & TableSortProps) {
   const tableContent = (
     <table className="w-full">
-      <TableHeaders />
+      <TableHeaders sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
       <tbody>
         {shows.map(show => (
           <SwipeableRow key={show.show_id} show={show} context={context} onSave={onSave} onSkip={onSkip} showSpotifyBadge={showSpotifyBadge} />
@@ -551,17 +484,18 @@ function SpotifyHeaderIcon() {
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 function UpcomingShowsContent() {
-  const router  = useRouter();
+  const router   = useRouter();
   const supabase = createClient();
 
-  const [loading, setLoading]             = useState(true);
-  const [error, setError]                 = useState('');
-  const [allShows, setAllShows]           = useState<Show[]>([]);
-  const [sortBy, setSortBy]               = useState<SortKey>('date');
-  const [scope, setScope]                 = useState<Scope>('spotify');
+  const [loading, setLoading]               = useState(true);
+  const [error, setError]                   = useState('');
+  const [allShows, setAllShows]             = useState<Show[]>([]);
+  const [sortBy, setSortBy]                 = useState<SortKey>('date');
+  const [sortDir, setSortDir]               = useState<SortDir>('asc');
+  const [scope, setScope]                   = useState<Scope>('spotify');
   const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all');
-  const [skippedOpen, setSkippedOpen]     = useState(false);
-  const [bannerVisible, setBannerVisible] = useState(false);
+  const [skippedOpen, setSkippedOpen]       = useState(false);
+  const [bannerVisible, setBannerVisible]   = useState(false);
   const [pastNavLoading, setPastNavLoading] = useState(false);
 
   useEffect(() => {
@@ -572,8 +506,7 @@ function UpcomingShowsContent() {
   useEffect(() => { fetchUpcomingShows(); }, [scope]);
 
   const fetchUpcomingShows = async () => {
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
     try {
       const res = await fetch(`/api/upcoming-shows?scope=${scope}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch');
@@ -583,11 +516,16 @@ function UpcomingShowsContent() {
     } finally { setLoading(false); }
   };
 
+  // First click on a new column → asc; subsequent clicks → toggle asc/desc
+  const handleSort = (key: SortKey) => {
+    if (sortBy === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(key); setSortDir('asc'); }
+  };
+
   const updateShowStatus = async (showId: number, status: 'added' | 'skipped' | 'pending') => {
     try {
       const res = await fetch('/api/shows/update-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ show_id: showId, status, source: 'upcoming_shows' }),
       });
       if (!res.ok) throw new Error('Failed');
@@ -598,8 +536,7 @@ function UpcomingShowsContent() {
   const bulkUpdateStatus = async (showIds: number[], status: 'added' | 'skipped') => {
     try {
       const res = await fetch('/api/shows/bulk-update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ show_ids: showIds, status, source: 'upcoming_shows' }),
       });
       if (!res.ok) throw new Error('Failed');
@@ -607,13 +544,8 @@ function UpcomingShowsContent() {
     } catch { alert('Failed to update shows. Please try again.'); }
   };
 
-  const handleSave = useCallback((show: Show) => {
-    updateShowStatus(show.show_id, 'added');
-  }, []);
-
-  const handleSkip = useCallback((show: Show) => {
-    updateShowStatus(show.show_id, 'skipped');
-  }, []);
+  const handleSave = useCallback((show: Show) => { updateShowStatus(show.show_id, 'added'); }, []);
+  const handleSkip = useCallback((show: Show) => { updateShowStatus(show.show_id, 'skipped'); }, []);
 
   const handlePastShowsClick = async () => {
     setPastNavLoading(true);
@@ -621,10 +553,8 @@ function UpcomingShowsContent() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/'); return; }
       const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('first_concert_year, completed_past_run')
-        .eq('user_id', user.id)
-        .single();
+        .from('user_profiles').select('first_concert_year, completed_past_run')
+        .eq('user_id', user.id).single();
       if (!profile?.first_concert_year) router.push('/discover/past/setup');
       else if (profile.completed_past_run) router.push('/likely-shows');
       else router.push('/matches');
@@ -635,11 +565,12 @@ function UpcomingShowsContent() {
   const filterByCapacity = (shows: Show[]) =>
     capacityFilter === 'all' ? shows : shows.filter(s => getCapacityKey(s.capacity_category) === capacityFilter);
 
-  const sortShows = (shows: Show[]) => [...shows].sort((a, b) =>
-    sortBy === 'date'
+  const sortShows = (shows: Show[]) => [...shows].sort((a, b) => {
+    const cmp = sortBy === 'date'
       ? new Date(a.date).getTime() - new Date(b.date).getTime()
-      : a.artist_name.localeCompare(b.artist_name)
-  );
+      : a.artist_name.localeCompare(b.artist_name);
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
 
   const process = (shows: Show[]) => sortShows(filterByCapacity(shows));
 
@@ -651,25 +582,33 @@ function UpcomingShowsContent() {
   const newMatchedShows   = newShows.filter(s => s.is_spotify_match);
   const newUnmatchedShows = newShows.filter(s => !s.is_spotify_match);
 
+  const tableProps: TableSortProps = { sortBy, sortDir, onSort: handleSort };
+
   return (
     <>
       <Navigation />
       <main className="min-h-screen bg-background py-8 px-4">
         <div className="max-w-7xl mx-auto">
 
-          {/* Header */}
-          <div className="mb-8">
-            <div className="mb-5">
-              <h1 className="text-4xl font-bold text-foreground mb-1">Discover</h1>
-              <p className="text-muted-foreground text-sm">
-                {scope === 'spotify'
-                  ? 'Based on your Spotify library and upcoming Vancouver shows'
-                  : 'All upcoming Vancouver shows — your Spotify matches are highlighted'}
-              </p>
-            </div>
+          {/* ── Title ── */}
+          <div className="mb-6">
+            <h1 className="text-4xl font-bold text-foreground mb-1">Discover</h1>
+            <p className="text-muted-foreground text-sm">
+              {scope === 'spotify'
+                ? 'Based on your Spotify library and upcoming Vancouver shows'
+                : 'All upcoming Vancouver shows — your Spotify matches are highlighted'}
+            </p>
+          </div>
 
-            {/* View switcher */}
-            <div className="flex rounded-xl border border-border overflow-hidden w-fit mb-4">
+          {/* ── Filter stack ─────────────────────────────────────────────────
+               Row 1: Upcoming / Past  (large, primary nav)
+               Row 2: My Matches / All Shows
+               Row 3: Venue size buttons
+          ── */}
+          <div className="flex flex-col gap-3 mb-5">
+
+            {/* Row 1 */}
+            <div className="flex rounded-xl border border-border overflow-hidden w-fit">
               <button className="flex items-center gap-2.5 px-6 py-3 text-sm font-semibold bg-primary text-primary-foreground" aria-current="page">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -688,7 +627,19 @@ function UpcomingShowsContent() {
               </button>
             </div>
 
-            {/* Venue filter */}
+            {/* Row 2 */}
+            <div className="flex rounded-lg border border-border overflow-hidden w-fit text-sm font-medium">
+              <button onClick={() => setScope('spotify')}
+                className={`px-4 py-2 transition ${scope === 'spotify' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                My Matches
+              </button>
+              <button onClick={() => setScope('all')}
+                className={`px-4 py-2 transition ${scope === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                All Shows
+              </button>
+            </div>
+
+            {/* Row 3 */}
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Venue:</span>
               <div className="flex items-center gap-1">
@@ -704,48 +655,36 @@ function UpcomingShowsContent() {
                 ))}
               </div>
             </div>
+
           </div>
 
-          {/* Dismissible info banner */}
+          {/* ── Dismissible banner ── */}
           {bannerVisible && (
-            <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 mb-6 flex items-start justify-between gap-4">
+            <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 mb-5 flex items-start justify-between gap-4">
               <p className="text-sm text-foreground">
                 💡 Your matches update automatically — come back any time to see new upcoming shows based on your Spotify library.
               </p>
-              <button
-                onClick={() => { localStorage.setItem('upcoming_banner_dismissed', 'true'); setBannerVisible(false); }}
-                className="text-muted-foreground hover:text-foreground transition shrink-0 text-lg leading-none" title="Close"
-              >×</button>
+              <button onClick={() => { localStorage.setItem('upcoming_banner_dismissed', 'true'); setBannerVisible(false); }}
+                className="text-muted-foreground hover:text-foreground transition shrink-0 text-lg leading-none" title="Close">×</button>
             </div>
           )}
 
-          {/* Stats + controls */}
-          <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
-            <div className="flex gap-4">
-              <StatPill label="New"     value={newShows.length}     color="default" />
-              <StatPill label="Saved"   value={savedShows.length}   color="green"   />
-              <StatPill label="Skipped" value={skippedShows.length} color="muted"   />
-            </div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
-                <button onClick={() => setScope('spotify')} className={`px-3 py-1.5 transition ${scope === 'spotify' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>My Matches</button>
-                <button onClick={() => setScope('all')} className={`px-3 py-1.5 transition ${scope === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>All Shows</button>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">Sort by</span>
-                <div className="flex rounded-lg border border-border overflow-hidden font-medium">
-                  {(['date', 'artist'] as SortKey[]).map(key => (
-                    <button key={key} onClick={() => setSortBy(key)}
-                      className={`px-3 py-1.5 transition ${sortBy === key ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                      {key === 'date' ? 'Date' : 'Artist'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+          {/* ── Stat indicators (slim) ── */}
+          <div className="flex items-center gap-3 mb-6 text-sm">
+            <span className="text-muted-foreground">
+              New <span className="font-semibold text-primary ml-1">{newShows.length}</span>
+            </span>
+            <span className="text-border select-none">·</span>
+            <span className="text-muted-foreground">
+              Saved <span className="font-semibold text-green-500 ml-1">{savedShows.length}</span>
+            </span>
+            <span className="text-border select-none">·</span>
+            <span className="text-muted-foreground">
+              Skipped <span className="font-semibold ml-1">{skippedShows.length}</span>
+            </span>
           </div>
 
-          {/* Swipe hint — mobile only */}
+          {/* ── Mobile swipe hint ── */}
           <div className="md:hidden bg-muted/50 border border-border rounded-lg px-5 py-3.5 mb-6 flex items-center justify-center gap-4">
             <div className="flex items-center gap-2 text-muted-foreground">
               <svg className="w-4 h-4 text-destructive/80" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -762,7 +701,7 @@ function UpcomingShowsContent() {
             </div>
           </div>
 
-          {/* Loading */}
+          {/* ── Loading ── */}
           {loading && (
             <div className="flex items-center justify-center py-24">
               <div className="text-center">
@@ -774,7 +713,7 @@ function UpcomingShowsContent() {
             </div>
           )}
 
-          {/* Error */}
+          {/* ── Error ── */}
           {error && !loading && (
             <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-6">
               <h2 className="text-xl font-bold text-destructive mb-2">Error Loading Shows</h2>
@@ -783,6 +722,7 @@ function UpcomingShowsContent() {
             </div>
           )}
 
+          {/* ── Tables ── */}
           {!loading && !error && (
             <>
               {allShows.length === 0 && (
@@ -796,49 +736,39 @@ function UpcomingShowsContent() {
                 </div>
               )}
 
-              {/* Spotify scope */}
               {scope === 'spotify' && allShows.length > 0 && (
                 <NewShowsTable
-                  title="New Shows"
-                  shows={newShows}
-                  allReviewed={allReviewed}
-                  onSave={handleSave}
-                  onSkip={handleSkip}
+                  title="New Shows" shows={newShows} allReviewed={allReviewed}
+                  onSave={handleSave} onSkip={handleSkip}
                   onSaveAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'added')}
                   onSkipAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'skipped')}
                   showSpotifyBadge={false}
                   onViewMyShows={() => router.push('/my-shows')}
                   onBrowse={() => router.push('/browse')}
+                  {...tableProps}
                 />
               )}
 
-              {/* All Shows scope */}
               {scope === 'all' && allShows.length > 0 && (
                 <>
                   <NewShowsTable
-                    title="Your Spotify Matches"
-                    shows={newMatchedShows}
-                    allReviewed={allReviewed}
-                    onSave={handleSave}
-                    onSkip={handleSkip}
+                    title="Your Spotify Matches" shows={newMatchedShows} allReviewed={allReviewed}
+                    onSave={handleSave} onSkip={handleSkip}
                     onSaveAll={() => bulkUpdateStatus(newMatchedShows.map(s => s.show_id), 'added')}
                     onSkipAll={() => bulkUpdateStatus(newMatchedShows.map(s => s.show_id), 'skipped')}
-                    showSpotifyBadge={false}
-                    highlightHeader
+                    showSpotifyBadge={false} highlightHeader
                     onViewMyShows={() => router.push('/my-shows')}
                     onBrowse={() => router.push('/browse')}
+                    {...tableProps}
                   />
                   {newUnmatchedShows.length > 0 && (
                     <ShowTable
-                      title="All Other Shows"
-                      shows={newUnmatchedShows}
-                      context="new"
-                      onSave={handleSave}
-                      onSkip={handleSkip}
+                      title="All Other Shows" shows={newUnmatchedShows} context="new"
+                      onSave={handleSave} onSkip={handleSkip}
                       onSaveAll={() => bulkUpdateStatus(newUnmatchedShows.map(s => s.show_id), 'added')}
                       onSkipAll={() => bulkUpdateStatus(newUnmatchedShows.map(s => s.show_id), 'skipped')}
-                      showBulk
-                      showSpotifyBadge={false}
+                      showBulk showSpotifyBadge={false}
+                      {...tableProps}
                     />
                   )}
                 </>
@@ -846,12 +776,10 @@ function UpcomingShowsContent() {
 
               {savedShows.length > 0 && (
                 <ShowTable
-                  title="Saved"
-                  shows={savedShows}
-                  context="saved"
-                  onSave={handleSave}
-                  onSkip={handleSkip}
+                  title="Saved" shows={savedShows} context="saved"
+                  onSave={handleSave} onSkip={handleSkip}
                   showSpotifyBadge={scope === 'all'}
+                  {...tableProps}
                 />
               )}
 
@@ -866,13 +794,10 @@ function UpcomingShowsContent() {
                   </button>
                   {skippedOpen && (
                     <ShowTable
-                      title=""
-                      shows={skippedShows}
-                      context="skipped"
-                      onSave={handleSave}
-                      onSkip={handleSkip}
-                      hideTitleBar
-                      showSpotifyBadge={scope === 'all'}
+                      title="" shows={skippedShows} context="skipped"
+                      onSave={handleSave} onSkip={handleSkip}
+                      hideTitleBar showSpotifyBadge={scope === 'all'}
+                      {...tableProps}
                     />
                   )}
                 </div>
@@ -889,16 +814,6 @@ function UpcomingShowsContent() {
         </div>
       </main>
     </>
-  );
-}
-
-function StatPill({ label, value, color }: { label: string; value: number; color: 'default' | 'green' | 'muted' }) {
-  const colorClass = color === 'green' ? 'text-green-500' : color === 'muted' ? 'text-muted-foreground' : 'text-primary';
-  return (
-    <div className="bg-card rounded-lg shadow px-4 py-2 flex items-center gap-2">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className={`text-lg font-bold ${colorClass}`}>{value}</span>
-    </div>
   );
 }
 
