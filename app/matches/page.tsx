@@ -41,8 +41,10 @@ type MatchData = {
 type CapacityFilter = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown';
 type ArtistView = 'current' | 'all';
 type VenueStatus = 'yes' | 'no' | 'not_sure';
+type VenueReviewFilter = null | 'yes' | 'no';
 
 const VENUES_PER_PAGE = 10;
+const ARTISTS_PER_PAGE = 10;
 
 const CAPACITY_BUTTONS: {
   key: CapacityFilter;
@@ -52,12 +54,12 @@ const CAPACITY_BUTTONS: {
   badgeBg: string;
   badgeText: string;
 }[] = [
-  { key: 'all',     label: 'All', tooltip: 'All venues',        textColor: 'text-gray-500',                              badgeBg: 'bg-gray-100 dark:bg-gray-800',   badgeText: 'text-gray-600 dark:text-gray-400'   },
+  { key: 'all',     label: 'All', tooltip: 'All venues',        textColor: 'text-gray-500',                              badgeBg: 'bg-gray-100 dark:bg-gray-800',        badgeText: 'text-gray-600 dark:text-gray-400'    },
   { key: 'small',   label: 'S',   tooltip: 'Small (< 500)',     textColor: 'text-purple-400 dark:text-purple-300',       badgeBg: 'bg-purple-100 dark:bg-purple-900/30', badgeText: 'text-purple-700 dark:text-purple-300' },
-  { key: 'medium',  label: 'M',   tooltip: 'Medium (500–1.5K)', textColor: 'text-[#3A8FBD]',                             badgeBg: 'bg-blue-100 dark:bg-blue-900/30',   badgeText: 'text-[#3A8FBD]'  },
+  { key: 'medium',  label: 'M',   tooltip: 'Medium (500–1.5K)', textColor: 'text-[#3A8FBD]',                             badgeBg: 'bg-blue-100 dark:bg-blue-900/30',     badgeText: 'text-[#3A8FBD]'                      },
   { key: 'large',   label: 'L',   tooltip: 'Large (1.5K–10K)',  textColor: 'text-orange-600 dark:text-orange-400',       badgeBg: 'bg-orange-100 dark:bg-orange-900/30', badgeText: 'text-orange-700 dark:text-orange-400' },
-  { key: 'xlarge',  label: 'XL',  tooltip: 'X-Large (10K+)',    textColor: 'text-rose-600 dark:text-rose-400',           badgeBg: 'bg-rose-100 dark:bg-rose-900/30',   badgeText: 'text-rose-700 dark:text-rose-400'   },
-  { key: 'unknown', label: '?',   tooltip: 'Unknown capacity',  textColor: 'text-gray-400 dark:text-gray-500',           badgeBg: 'bg-gray-100 dark:bg-gray-800',   badgeText: 'text-gray-500'   },
+  { key: 'xlarge',  label: 'XL',  tooltip: 'X-Large (10K+)',    textColor: 'text-rose-600 dark:text-rose-400',           badgeBg: 'bg-rose-100 dark:bg-rose-900/30',     badgeText: 'text-rose-700 dark:text-rose-400'    },
+  { key: 'unknown', label: '?',   tooltip: 'Unknown capacity',  textColor: 'text-gray-400 dark:text-gray-500',           badgeBg: 'bg-gray-100 dark:bg-gray-800',        badgeText: 'text-gray-500'                       },
 ];
 
 function capacityFilterKey(category: string | null): CapacityFilter {
@@ -74,25 +76,42 @@ function CapacityBadge({ category, capacity }: { category: string | null; capaci
   const btn = CAPACITY_BUTTONS.find(b => b.key === key)!;
   const capacityText = capacity ? ` · ${capacity.toLocaleString()}` : '';
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${btn.badgeBg} ${btn.badgeText}`}>
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] md:text-xs font-medium whitespace-nowrap ${btn.badgeBg} ${btn.badgeText}`}>
       {btn.label}{capacityText}
     </span>
   );
 }
 
-function ScoreBar({ score }: { score: number }) {
+function ScoreBar({ score, compact = false }: { score: number; compact?: boolean }) {
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 bg-muted rounded-full h-1.5 min-w-[60px]">
+    <div className={`flex items-center ${compact ? 'gap-1' : 'gap-2'}`}>
+      <div className={`bg-muted rounded-full h-1.5 flex-shrink-0 ${compact ? 'w-10' : 'flex-1 min-w-[48px]'}`}>
         <div
           className="bg-primary h-1.5 rounded-full transition-all"
           style={{ width: `${Math.min(score, 100)}%` }}
         />
       </div>
-      <span className="text-sm font-semibold text-primary tabular-nums w-12 text-right">
+      <span className={`font-semibold text-primary tabular-nums text-right flex-shrink-0 ${compact ? 'text-xs w-10' : 'text-sm w-12'}`}>
         {score.toFixed(1)}%
       </span>
     </div>
+  );
+}
+
+function SpotifyIcon({ artistId }: { artistId: string }) {
+  return (
+    <a
+      href={`https://open.spotify.com/artist/${artistId}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Open in Spotify"
+      onClick={e => e.stopPropagation()}
+      className="hover:opacity-70 transition-opacity inline-flex items-center justify-center flex-shrink-0"
+    >
+      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="#1DB954">
+        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+      </svg>
+    </a>
   );
 }
 
@@ -106,14 +125,14 @@ export default function MatchesPage() {
   // Venue state
   const [venueStatuses, setVenueStatuses] = useState<Map<number, VenueStatus>>(new Map());
   const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all');
+  const [venueReviewFilter, setVenueReviewFilter] = useState<VenueReviewFilter>(null);
   const [venuePage, setVenuePage] = useState(1);
 
   // Artist state
   const [artistView, setArtistView] = useState<ArtistView>('current');
+  const [artistPage, setArtistPage] = useState(1);
 
-  useEffect(() => {
-    fetchMatches();
-  }, []);
+  useEffect(() => { fetchMatches(); }, []);
 
   const fetchMatches = async () => {
     try {
@@ -123,17 +142,14 @@ export default function MatchesPage() {
         throw new Error(errorData.error || 'Failed to fetch matches');
       }
       const result = await response.json();
-      // Normalise response — support both old shape (top_venues) and new shape (all_venues)
       const data = {
         ...result.data,
         all_venues: result.data.all_venues ?? result.data.top_venues ?? [],
       };
       setMatchData(data);
 
-      // Pre-populate venue statuses from existing user_status
       const initialStatuses = new Map<number, VenueStatus>();
-      const venues = result.data.all_venues ?? result.data.top_venues ?? [];
-      venues.forEach((v: Venue) => {
+      data.all_venues.forEach((v: Venue) => {
         if (v.user_status) initialStatuses.set(v.venue_id, v.user_status as VenueStatus);
       });
       setVenueStatuses(initialStatuses);
@@ -148,7 +164,6 @@ export default function MatchesPage() {
   const handleVenueStatus = useCallback((venueId: number, status: VenueStatus) => {
     setVenueStatuses(prev => {
       const next = new Map(prev);
-      // Toggle off if clicking the same status
       if (next.get(venueId) === status) {
         next.delete(venueId);
       } else {
@@ -166,18 +181,15 @@ export default function MatchesPage() {
         venue_id,
         status,
       }));
-
       const response = await fetch('/api/venues/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ confirmations }),
       });
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to save confirmations');
       }
-
       router.push('/likely-shows');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
@@ -186,34 +198,49 @@ export default function MatchesPage() {
     }
   };
 
-  // Derived venue data — guard against stale cache returning old shape (top_venues vs all_venues)
+  // ── Derived counts ──────────────────────────────────────────────────────────
+  const yesCount      = Array.from(venueStatuses.values()).filter(s => s === 'yes').length;
+  const noCount       = Array.from(venueStatuses.values()).filter(s => s === 'no').length;
+  const reviewedCount = venueStatuses.size;
+  const hasConfirmedSome = venueStatuses.size > 0;
+  const totalVenues   = matchData?.all_venues.length ?? 0;
+
+  // ── Filtered venue list ──────────────────────────────────────────────────────
   const filteredVenues = matchData && Array.isArray(matchData.all_venues)
-    ? matchData.all_venues.filter(v =>
-        capacityFilter === 'all' || capacityFilterKey(v.capacity_category) === capacityFilter
-      )
+    ? matchData.all_venues.filter(v => {
+        if (capacityFilter !== 'all' && capacityFilterKey(v.capacity_category) !== capacityFilter) return false;
+        if (venueReviewFilter === 'yes') return venueStatuses.get(v.venue_id) === 'yes';
+        if (venueReviewFilter === 'no')  return venueStatuses.get(v.venue_id) === 'no';
+        return true;
+      })
     : [];
 
-  const totalVenuePages = Math.ceil(filteredVenues.length / VENUES_PER_PAGE);
-  const pagedVenues = filteredVenues.slice(
-    (venuePage - 1) * VENUES_PER_PAGE,
-    venuePage * VENUES_PER_PAGE
+  const totalVenuePages = Math.max(1, Math.ceil(filteredVenues.length / VENUES_PER_PAGE));
+  const safePage        = Math.min(venuePage, totalVenuePages);
+  const pagedVenues     = filteredVenues.slice((safePage - 1) * VENUES_PER_PAGE, safePage * VENUES_PER_PAGE);
+
+  const setCapacityFilterAndReset = (f: CapacityFilter) => { setCapacityFilter(f); setVenuePage(1); };
+  const toggleReviewFilter = (f: 'yes' | 'no') => {
+    setVenueReviewFilter(prev => prev === f ? null : f);
+    setVenuePage(1);
+  };
+
+  // ── Artist pagination ────────────────────────────────────────────────────────
+  const allDisplayArtists = matchData
+    ? (artistView === 'current' ? matchData.top_artists : matchData.all_artists)
+    : [];
+  const totalArtistPages = Math.max(1, Math.ceil(allDisplayArtists.length / ARTISTS_PER_PAGE));
+  const safeArtistPage   = Math.min(artistPage, totalArtistPages);
+  const pagedArtists     = allDisplayArtists.slice(
+    (safeArtistPage - 1) * ARTISTS_PER_PAGE,
+    safeArtistPage * ARTISTS_PER_PAGE,
   );
 
-  const confirmedCount = venueStatuses.size;
-  const yesCount = Array.from(venueStatuses.values()).filter(s => s === 'yes').length;
-  const noCount = Array.from(venueStatuses.values()).filter(s => s === 'no').length;
-  const hasConfirmedSome = confirmedCount > 0;
-
-  // Date range display
   const dateRangeValue = matchData
     ? `${matchData.first_concert_year} – ${new Date().getFullYear()}`
     : '—';
 
-  // Artist display
-  const displayArtists = matchData
-    ? (artistView === 'current' ? matchData.top_artists : matchData.all_artists).slice(0, 15)
-    : [];
-
+  // ── Loading / error ──────────────────────────────────────────────────────────
   if (loading) {
     return (
       <>
@@ -234,14 +261,11 @@ export default function MatchesPage() {
       <>
         <Navigation />
         <div className="min-h-screen bg-background py-12 px-4">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-6">
               <h2 className="text-xl font-bold text-destructive mb-2">Error Loading Matches</h2>
               <p className="text-destructive/80">{error}</p>
-              <button
-                onClick={() => router.push('/discover')}
-                className="mt-4 px-4 py-2 bg-destructive text-white rounded-lg hover:bg-destructive/90"
-              >
+              <button onClick={() => router.push('/discover')} className="mt-4 px-4 py-2 bg-destructive text-white rounded-lg hover:bg-destructive/90">
                 Back to Discover
               </button>
             </div>
@@ -259,7 +283,7 @@ export default function MatchesPage() {
       <main className="min-h-screen bg-background py-6 md:py-8 px-4">
         <div className="max-w-6xl mx-auto">
 
-          {/* Header */}
+          {/* ── Header ── */}
           <div className="mb-6 md:mb-8">
             <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-1">Your Matched Shows</h1>
             <p className="text-sm md:text-base text-muted-foreground">
@@ -267,26 +291,21 @@ export default function MatchesPage() {
             </p>
           </div>
 
-          {/* Stats Cards */}
+          {/* ── Stat Cards ── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-6 md:mb-8">
             <StatCard label="Matched Artists" value={matchData.matched_artists_count.toLocaleString()} />
-            <StatCard label="Total Shows" value={matchData.total_shows_count.toLocaleString()} />
-            <StatCard label="Total Venues" value={matchData.total_venues_matched.toLocaleString()} />
-            <StatCard label="Date Range" value={dateRangeValue} />
+            <StatCard label="Total Shows"     value={matchData.total_shows_count.toLocaleString()} />
+            <StatCard label="Total Venues"    value={matchData.total_venues_matched.toLocaleString()} />
+            <StatCard label="Date Range"      value={dateRangeValue} />
           </div>
 
-          {/* ── Venues Section ── */}
+          {/* ── Venues ── */}
           <div className="bg-card rounded-lg shadow-lg p-4 md:p-6 mb-6 md:mb-8">
 
-            {/* Venue header row */}
+            {/* Header row */}
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-3">
               <div>
-                <h2 className="text-xl md:text-2xl font-bold text-card-foreground">
-                  Top Venues
-                  <span className="text-sm md:text-base font-normal text-muted-foreground ml-2">
-                    ({matchData.total_venues_matched} total)
-                  </span>
-                </h2>
+                <h2 className="text-xl md:text-2xl font-bold text-card-foreground">Top Venues</h2>
                 <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
                   These venues hosted the most shows by artists in your Spotify library
                 </p>
@@ -294,17 +313,16 @@ export default function MatchesPage() {
                   We recommend reviewing at least the top 10 venues — but the more you confirm, the better your results.
                 </p>
               </div>
-
-              {/* Capacity filter */}
+              {/* Size filter */}
               <div className="flex items-center gap-2 flex-shrink-0">
                 <span className="text-xs text-muted-foreground hidden md:inline">Size:</span>
-                <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs md:text-sm font-medium">
                   {CAPACITY_BUTTONS.map(btn => (
                     <button
                       key={btn.key}
-                      onClick={() => { setCapacityFilter(btn.key); setVenuePage(1); }}
+                      onClick={() => setCapacityFilterAndReset(btn.key)}
                       title={btn.tooltip}
-                      className={`px-2.5 py-1.5 transition-colors text-xs md:text-sm ${
+                      className={`px-2 md:px-2.5 py-1.5 transition-colors ${
                         capacityFilter === btn.key
                           ? 'bg-primary text-primary-foreground'
                           : `bg-card ${btn.textColor} hover:bg-muted`
@@ -317,147 +335,129 @@ export default function MatchesPage() {
               </div>
             </div>
 
-            {/* Confirmation summary */}
-            {confirmedCount > 0 && (
-              <div className="flex items-center gap-3 text-xs text-muted-foreground mb-4 bg-muted/50 rounded-lg px-3 py-2">
-                <span>{confirmedCount} confirmed</span>
-                {yesCount > 0 && <span className="text-green-500 font-medium">✓ {yesCount} attended</span>}
-                {noCount > 0 && <span className="text-destructive font-medium">✗ {noCount} never been</span>}
-              </div>
-            )}
+            {/* Review status pills */}
+            <div className="flex items-center gap-2 flex-wrap mb-4">
+              <span className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{reviewedCount}</span> of {totalVenues} reviewed
+              </span>
+              <span className="text-border select-none">·</span>
+              <button
+                onClick={() => toggleReviewFilter('yes')}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  venueReviewFilter === 'yes'
+                    ? 'bg-green-600 text-white border-green-600'
+                    : 'bg-green-500/10 text-green-600 border-green-500/30 hover:bg-green-500/20'
+                }`}
+              >
+                ✓ {yesCount} attended
+              </button>
+              <button
+                onClick={() => toggleReviewFilter('no')}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  venueReviewFilter === 'no'
+                    ? 'bg-destructive text-white border-destructive'
+                    : 'bg-destructive/10 text-destructive border-destructive/30 hover:bg-destructive/20'
+                }`}
+              >
+                ✗ {noCount} never been
+              </button>
+              {venueReviewFilter !== null && (
+                <button
+                  onClick={() => { setVenueReviewFilter(null); setVenuePage(1); }}
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                >
+                  clear filter
+                </button>
+              )}
+            </div>
 
             {/* Venue list */}
             {filteredVenues.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">No venues match this filter</p>
             ) : (
-              <div className="space-y-2 md:space-y-3">
-                {pagedVenues.map((venue, index) => {
-                  const globalRank = (venuePage - 1) * VENUES_PER_PAGE + index + 1;
+              <div className="space-y-2">
+                {pagedVenues.map((venue) => {
+                  const globalRank    = filteredVenues.indexOf(venue) + 1;
                   const currentStatus = venueStatuses.get(venue.venue_id) ?? null;
 
                   return (
                     <div
                       key={venue.venue_id}
                       className={`border rounded-lg p-3 md:p-4 transition-colors ${
-                        currentStatus === 'yes'
-                          ? 'border-green-500/40 bg-green-500/5'
-                          : currentStatus === 'no'
-                          ? 'border-destructive/30 bg-destructive/5'
-                          : currentStatus === 'not_sure'
-                          ? 'border-border bg-muted/30'
-                          : 'border-border hover:bg-muted/30'
+                        currentStatus === 'yes'       ? 'border-green-500/40 bg-green-500/5'
+                        : currentStatus === 'no'      ? 'border-destructive/30 bg-destructive/5'
+                        : currentStatus === 'not_sure' ? 'border-border bg-muted/20'
+                        : 'border-border hover:bg-muted/20'
                       }`}
                     >
-                      {/* Desktop layout */}
+                      {/* Desktop */}
                       <div className="hidden md:flex md:items-center md:gap-4">
-                        {/* Rank + name */}
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <span className="text-xl font-bold text-primary flex-shrink-0 w-8 text-center">
-                            #{globalRank}
-                          </span>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="font-semibold text-card-foreground truncate">{venue.venue_name}</h3>
-                              <CapacityBadge category={venue.capacity_category} capacity={venue.capacity} />
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {venue.total_shows} shows · {venue.unique_artists} artists
-                            </p>
+                        <span className="text-xl font-bold text-primary flex-shrink-0 w-9 text-center">#{globalRank}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold text-card-foreground">{venue.venue_name}</h3>
+                            <CapacityBadge category={venue.capacity_category} capacity={venue.capacity} />
                           </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {venue.total_shows} shows · {venue.unique_artists} artists
+                          </p>
                         </div>
-
-                        {/* Score bar */}
                         <div className="w-44 flex-shrink-0">
                           <ScoreBar score={venue.match_score} />
                         </div>
-
-                        {/* Confirmation buttons */}
                         <div className="flex gap-1.5 flex-shrink-0">
-                          <button
-                            onClick={() => handleVenueStatus(venue.venue_id, 'yes')}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                              currentStatus === 'yes'
-                                ? 'bg-green-600 text-white'
-                                : 'bg-muted text-muted-foreground hover:bg-green-600/10 hover:text-green-600 border border-border'
-                            }`}
-                          >
-                            ✓ Yes
-                          </button>
-                          <button
-                            onClick={() => handleVenueStatus(venue.venue_id, 'not_sure')}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                              currentStatus === 'not_sure'
-                                ? 'bg-muted border border-foreground/30 text-foreground'
-                                : 'bg-muted text-muted-foreground hover:bg-muted/80 border border-border'
-                            }`}
-                          >
-                            ? Maybe
-                          </button>
-                          <button
-                            onClick={() => handleVenueStatus(venue.venue_id, 'no')}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                              currentStatus === 'no'
-                                ? 'bg-destructive text-white'
-                                : 'bg-muted text-muted-foreground hover:bg-destructive/10 hover:text-destructive border border-border'
-                            }`}
-                          >
-                            ✗ No
-                          </button>
+                          {(['yes', 'not_sure', 'no'] as VenueStatus[]).map(s => (
+                            <button
+                              key={s}
+                              onClick={() => handleVenueStatus(venue.venue_id, s)}
+                              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+                                currentStatus === s
+                                  ? s === 'yes'       ? 'bg-green-600 text-white border-green-600'
+                                  : s === 'no'        ? 'bg-destructive text-white border-destructive'
+                                  :                     'bg-muted border-foreground/30 text-foreground'
+                                  : 'bg-card border-border text-muted-foreground hover:bg-muted'
+                              }`}
+                            >
+                              {s === 'yes' ? '✓ Yes' : s === 'not_sure' ? '? Maybe' : '✗ No'}
+                            </button>
+                          ))}
                         </div>
                       </div>
 
-                      {/* Mobile layout */}
+                      {/* Mobile */}
                       <div className="md:hidden">
                         <div className="flex items-start gap-2 mb-2">
-                          <span className="text-base font-bold text-primary flex-shrink-0 w-7">
-                            #{globalRank}
-                          </span>
+                          <span className="text-sm font-bold text-primary flex-shrink-0 w-7 pt-0.5">#{globalRank}</span>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <h3 className="text-sm font-semibold text-card-foreground">{venue.venue_name}</h3>
+                            <div className="flex items-start gap-1.5 flex-wrap">
+                              <h3 className="text-sm font-semibold text-card-foreground leading-snug">{venue.venue_name}</h3>
                               <CapacityBadge category={venue.capacity_category} capacity={venue.capacity} />
                             </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
                               {venue.total_shows} shows · {venue.unique_artists} artists
                             </p>
                           </div>
-                          <div className="flex-shrink-0 w-20">
-                            <ScoreBar score={venue.match_score} />
+                          {/* Score — right edge, compact */}
+                          <div className="flex-shrink-0 w-[84px]">
+                            <ScoreBar score={venue.match_score} compact />
                           </div>
                         </div>
-
-                        {/* Mobile buttons */}
                         <div className="flex gap-1.5">
-                          <button
-                            onClick={() => handleVenueStatus(venue.venue_id, 'yes')}
-                            className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                              currentStatus === 'yes'
-                                ? 'bg-green-600 text-white'
-                                : 'bg-muted text-muted-foreground border border-border'
-                            }`}
-                          >
-                            ✓ Yes
-                          </button>
-                          <button
-                            onClick={() => handleVenueStatus(venue.venue_id, 'not_sure')}
-                            className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                              currentStatus === 'not_sure'
-                                ? 'bg-muted border border-foreground/30 text-foreground'
-                                : 'bg-muted text-muted-foreground border border-border'
-                            }`}
-                          >
-                            ? Maybe
-                          </button>
-                          <button
-                            onClick={() => handleVenueStatus(venue.venue_id, 'no')}
-                            className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                              currentStatus === 'no'
-                                ? 'bg-destructive text-white'
-                                : 'bg-muted text-muted-foreground border border-border'
-                            }`}
-                          >
-                            ✗ No
-                          </button>
+                          {(['yes', 'not_sure', 'no'] as VenueStatus[]).map(s => (
+                            <button
+                              key={s}
+                              onClick={() => handleVenueStatus(venue.venue_id, s)}
+                              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                                currentStatus === s
+                                  ? s === 'yes'       ? 'bg-green-600 text-white border-green-600'
+                                  : s === 'no'        ? 'bg-destructive text-white border-destructive'
+                                  :                     'bg-muted border-foreground/30 text-foreground'
+                                  : 'bg-card border-border text-muted-foreground'
+                              }`}
+                            >
+                              {s === 'yes' ? '✓ Yes' : s === 'not_sure' ? '? Maybe' : '✗ No'}
+                            </button>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -466,34 +466,30 @@ export default function MatchesPage() {
               </div>
             )}
 
-            {/* Pagination */}
-            {totalVenuePages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-                <button
-                  onClick={() => setVenuePage(p => Math.max(1, p - 1))}
-                  disabled={venuePage === 1}
-                  className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  ← Previous
-                </button>
-                <span className="text-sm text-muted-foreground">
-                  Page {venuePage} of {totalVenuePages}
-                  <span className="hidden md:inline text-muted-foreground/60 ml-1">
-                    ({filteredVenues.length} venues total)
-                  </span>
-                </span>
-                <button
-                  onClick={() => setVenuePage(p => Math.min(totalVenuePages, p + 1))}
-                  disabled={venuePage === totalVenuePages}
-                  className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next →
-                </button>
-              </div>
-            )}
+            {/* Venue pagination */}
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+              <button
+                onClick={() => setVenuePage(p => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                ← Previous
+              </button>
+              <span className="text-xs md:text-sm text-muted-foreground text-center">
+                Page {safePage} of {totalVenuePages}
+                <span className="text-muted-foreground/60 ml-1">· {filteredVenues.length} venues</span>
+              </span>
+              <button
+                onClick={() => setVenuePage(p => Math.min(totalVenuePages, p + 1))}
+                disabled={safePage === totalVenuePages}
+                className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next →
+              </button>
+            </div>
 
-            {/* Save & Continue CTA */}
-            <div className="mt-6 pt-4 border-t border-border">
+            {/* Save & Continue */}
+            <div className="mt-4 pt-4 border-t border-border">
               {error && (
                 <div className="mb-3 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2">
                   {error}
@@ -502,13 +498,13 @@ export default function MatchesPage() {
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <p className="text-xs md:text-sm text-muted-foreground">
                   {hasConfirmedSome
-                    ? `${confirmedCount} venue${confirmedCount !== 1 ? 's' : ''} confirmed — you can continue or keep reviewing.`
-                    : 'Confirm at least one venue to continue to Likely Shows.'}
+                    ? `${reviewedCount} venue${reviewedCount !== 1 ? 's' : ''} reviewed — you can continue or keep reviewing.`
+                    : 'Review at least one venue to continue to Likely Shows.'}
                 </p>
                 <button
                   onClick={handleSaveAndContinue}
                   disabled={!hasConfirmedSome || saving}
-                  className={`px-6 py-3 rounded-lg font-semibold text-sm md:text-base transition-colors flex items-center justify-center gap-2 ${
+                  className={`px-6 py-3 rounded-lg font-semibold text-sm md:text-base transition-colors flex items-center justify-center gap-2 flex-shrink-0 ${
                     hasConfirmedSome && !saving
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'bg-muted text-muted-foreground cursor-not-allowed'
@@ -521,28 +517,20 @@ export default function MatchesPage() {
             </div>
           </div>
 
-          {/* ── Artists Section ── */}
+          {/* ── Artists ── */}
           <div className="bg-card rounded-lg shadow-lg p-4 md:p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-2">
               <h2 className="text-xl md:text-2xl font-bold text-card-foreground">Top Matched Artists</h2>
               <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
                 <button
-                  onClick={() => setArtistView('current')}
-                  className={`px-3 py-1.5 transition-colors ${
-                    artistView === 'current'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-card text-muted-foreground hover:bg-muted'
-                  }`}
+                  onClick={() => { setArtistView('current'); setArtistPage(1); }}
+                  className={`px-3 py-1.5 transition-colors ${artistView === 'current' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
                 >
                   Current Run
                 </button>
                 <button
-                  onClick={() => setArtistView('all')}
-                  className={`px-3 py-1.5 transition-colors ${
-                    artistView === 'all'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-card text-muted-foreground hover:bg-muted'
-                  }`}
+                  onClick={() => { setArtistView('all'); setArtistPage(1); }}
+                  className={`px-3 py-1.5 transition-colors ${artistView === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
                 >
                   All Artists
                 </button>
@@ -554,49 +542,83 @@ export default function MatchesPage() {
                 : `All matched artists who've played in Vancouver since ${matchData.first_concert_year}`}
             </p>
 
-            {displayArtists.length === 0 ? (
+            {pagedArtists.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">
                 No artists to show — switch to "All Artists" to see your full list
               </p>
             ) : (
-              <div className="overflow-x-auto -mx-4 md:mx-0">
-                <table className="min-w-full">
-                  <thead>
-                    <tr className="bg-muted">
-                      <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-8">#</th>
-                      <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Artist</th>
-                      <th className="px-3 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">Your Songs</th>
-                      <th className="px-3 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">YVR Shows</th>
-                      <th className="px-3 md:px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider pr-4 md:pr-6">Match Score</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {displayArtists.map((artist, index) => (
-                      <tr key={artist.artist_id} className="hover:bg-muted/50 transition-colors">
-                        <td className="px-3 md:px-4 py-3 text-sm font-medium text-muted-foreground">{index + 1}</td>
-                        <td className="px-3 md:px-4 py-3 text-sm font-medium text-card-foreground">{artist.artist_name}</td>
-                        <td className="px-3 md:px-4 py-3 text-sm text-center text-muted-foreground">{artist.spotify_song_count}</td>
-                        <td className="px-3 md:px-4 py-3 text-sm text-center text-muted-foreground">
-                          {artistView === 'current' ? artist.vancouver_show_count : artist.vancouver_show_count_all}
-                        </td>
-                        <td className="px-3 md:px-4 py-3 pr-4 md:pr-6">
-                          <div className="flex items-center justify-end gap-2">
-                            <div className="w-16 md:w-24 bg-muted rounded-full h-1.5 hidden sm:block">
-                              <div
-                                className="bg-primary h-1.5 rounded-full"
-                                style={{ width: `${Math.min(artistView === 'current' ? artist.match_score : artist.match_score_all, 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-sm font-semibold text-primary tabular-nums">
-                              {(artistView === 'current' ? artist.match_score : artist.match_score_all).toFixed(1)}%
-                            </span>
-                          </div>
-                        </td>
+              <>
+                <div className="overflow-x-auto -mx-4 md:mx-0">
+                  <table className="min-w-full">
+                    <thead>
+                      <tr className="bg-muted">
+                        <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-10">#</th>
+                        <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Artist</th>
+                        <th className="px-3 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Your Songs</th>
+                        <th className="px-3 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">YVR Shows</th>
+                        <th className="px-3 md:px-4 py-3 pr-4 md:pr-6 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Match Score</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {pagedArtists.map((artist, index) => {
+                        const globalRank = (safeArtistPage - 1) * ARTISTS_PER_PAGE + index + 1;
+                        const score  = artistView === 'current' ? artist.match_score : artist.match_score_all;
+                        const shows  = artistView === 'current' ? artist.vancouver_show_count : artist.vancouver_show_count_all;
+                        return (
+                          <tr key={artist.artist_id} className="hover:bg-muted/50 transition-colors">
+                            <td className="px-3 md:px-4 py-3 text-sm font-bold text-primary">{globalRank}</td>
+                            <td className="px-3 md:px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-card-foreground">{artist.artist_name}</span>
+                                {artist.spotify_artist_id && <SpotifyIcon artistId={artist.spotify_artist_id} />}
+                              </div>
+                            </td>
+                            <td className="px-3 md:px-4 py-3 text-sm text-center text-muted-foreground tabular-nums">{artist.spotify_song_count}</td>
+                            <td className="px-3 md:px-4 py-3 text-sm text-center text-muted-foreground tabular-nums">{shows}</td>
+                            <td className="px-3 md:px-4 py-3 pr-4 md:pr-6">
+                              <div className="flex items-center justify-end gap-2">
+                                <div className="w-16 md:w-24 bg-muted rounded-full h-1.5 hidden sm:block flex-shrink-0">
+                                  <div
+                                    className="bg-primary h-1.5 rounded-full"
+                                    style={{ width: `${Math.min(score, 100)}%` }}
+                                  />
+                                </div>
+                                <span className="text-sm font-semibold text-primary tabular-nums w-14 text-right">
+                                  {score.toFixed(1)}%
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Artist pagination */}
+                {totalArtistPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+                    <button
+                      onClick={() => setArtistPage(p => Math.max(1, p - 1))}
+                      disabled={safeArtistPage === 1}
+                      className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      ← Previous
+                    </button>
+                    <span className="text-xs md:text-sm text-muted-foreground">
+                      Page {safeArtistPage} of {totalArtistPages}
+                      <span className="text-muted-foreground/60 ml-1">· {allDisplayArtists.length} artists</span>
+                    </span>
+                    <button
+                      onClick={() => setArtistPage(p => Math.min(totalArtistPages, p + 1))}
+                      disabled={safeArtistPage === totalArtistPages}
+                      className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Next →
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
