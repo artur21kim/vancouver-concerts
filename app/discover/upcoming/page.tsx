@@ -654,18 +654,18 @@ function UpcomingShowsContent() {
 
               <span className="text-border select-none text-lg">|</span>
 
-              {/* Venue size buttons */}
-              <div className="flex items-center gap-1">
-                  {CAPACITY_BUTTONS.map(btn => (
-                    <button key={btn.key} onClick={() => setCapacityFilter(btn.key)} title={btn.tooltip}
-                      className={`px-2.5 py-1 rounded text-xs font-semibold transition border ${
-                        capacityFilter === btn.key
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : `bg-card border-border ${btn.textColor} hover:border-foreground/30`
-                      }`}>
-                      {btn.label}
-                    </button>
-                  ))}
+              {/* Venue size buttons — joined pill */}
+              <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
+                {CAPACITY_BUTTONS.map((btn, i) => (
+                  <button key={btn.key} onClick={() => setCapacityFilter(btn.key)} title={btn.tooltip}
+                    className={`px-3 py-1.5 transition ${i > 0 ? 'border-l border-border' : ''} ${
+                      capacityFilter === btn.key
+                        ? 'bg-primary text-primary-foreground'
+                        : `bg-card ${btn.textColor} hover:bg-muted`
+                    }`}>
+                    {btn.label}
+                  </button>
+                ))}
               </div>
 
               {/* Stats — pushed to far right */}
@@ -717,32 +717,32 @@ function UpcomingShowsContent() {
                 </div>
               </div>
 
-              {/* Row 2: venue buttons — joined pill matching toggle row structure */}
-              <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold w-full">
-                {CAPACITY_BUTTONS.map((btn, i) => (
-                  <button
-                    key={btn.key}
-                    onClick={() => setCapacityFilter(btn.key)}
-                    title={btn.tooltip}
-                    className={`${btn.key === 'all' ? 'flex-1' : 'w-9 shrink-0'} flex items-center justify-center py-1.5 transition ${
-                      i > 0 ? 'border-l border-border' : ''
-                    } ${
-                      capacityFilter === btn.key
-                        ? 'bg-primary text-primary-foreground'
-                        : `bg-card ${btn.textColor} hover:bg-muted`
-                    }`}>
-                    {btn.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Row 3: stats */}
-              <div className="flex items-center gap-2.5 text-xs text-muted-foreground/70">
-                <span>New <span className="font-semibold text-primary/80">{newShows.length}</span></span>
-                <span className="text-border">·</span>
-                <span>Saved <span className="font-semibold text-green-500/80">{savedShows.length}</span></span>
-                <span className="text-border">·</span>
-                <span>Skipped <span className="font-semibold">{skippedShows.length}</span></span>
+              {/* Row 2: venue buttons (natural width) + stats inline */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
+                  {CAPACITY_BUTTONS.map((btn, i) => (
+                    <button
+                      key={btn.key}
+                      onClick={() => setCapacityFilter(btn.key)}
+                      title={btn.tooltip}
+                      className={`${btn.key === 'all' ? 'w-20' : 'w-8'} flex items-center justify-center py-1.5 transition ${
+                        i > 0 ? 'border-l border-border' : ''
+                      } ${
+                        capacityFilter === btn.key
+                          ? 'bg-primary text-primary-foreground'
+                          : `bg-card ${btn.textColor} hover:bg-muted`
+                      }`}>
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground/70 shrink-0">
+                  <span>New <span className="font-semibold text-primary/80">{newShows.length}</span></span>
+                  <span className="text-border">·</span>
+                  <span>Saved <span className="font-semibold text-green-500/80">{savedShows.length}</span></span>
+                  <span className="text-border">·</span>
+                  <span>Skipped <span className="font-semibold">{skippedShows.length}</span></span>
+                </div>
               </div>
 
             </div>
