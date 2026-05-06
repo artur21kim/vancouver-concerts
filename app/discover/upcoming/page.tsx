@@ -352,7 +352,7 @@ function SwipeableRow({
 
           {/* Noop state: show label only, row content hidden */}
           {noopLabel ? (
-            <div className="flex items-center w-full py-3 justify-center">
+            <div className="flex items-center w-full justify-center" style={{ minHeight: '52px' }}>
               <span className="text-xs font-semibold text-amber-400">{noopLabel}</span>
             </div>
           ) : (
@@ -465,7 +465,7 @@ function NewShowsTable({
         )}
       </div>
       <table className="w-full">
-        <TableHeaders />
+        {shows.length > 0 && <TableHeaders />}
         <tbody>
           {shows.map(show => (
             <SwipeableRow key={show.show_id} show={show} context="new" onSave={onSave} onSkip={onSkip} showSpotifyBadge={showSpotifyBadge} />
@@ -725,23 +725,6 @@ function UpcomingShowsContent() {
             </div>
           )}
 
-          {/* Swipe hint — always visible on mobile, above tables */}
-          <div className="md:hidden bg-muted/50 border border-border rounded-lg px-5 py-3.5 mb-6 flex items-center justify-center gap-4">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <svg className="w-4 h-4 text-destructive/80" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              <span className="text-xs font-medium">Swipe left to skip</span>
-            </div>
-            <span className="text-muted-foreground/40 text-sm">·</span>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <span className="text-xs font-medium">Swipe right to save</span>
-              <svg className="w-4 h-4 fill-primary text-primary" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-              </svg>
-            </div>
-          </div>
-
           {/* Stats + controls */}
           <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
             <div className="flex gap-4">
@@ -765,6 +748,24 @@ function UpcomingShowsContent() {
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+
+
+          {/* Swipe hint — mobile only, below filters/controls, above tables */}
+          <div className="md:hidden bg-muted/50 border border-border rounded-lg px-5 py-3.5 mb-6 flex items-center justify-center gap-4">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <svg className="w-4 h-4 text-destructive/80" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              <span className="text-xs font-medium">Swipe left to skip</span>
+            </div>
+            <span className="text-muted-foreground/40 text-sm">·</span>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span className="text-xs font-medium">Swipe right to save</span>
+              <svg className="w-4 h-4 fill-primary text-primary" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+              </svg>
             </div>
           </div>
 
