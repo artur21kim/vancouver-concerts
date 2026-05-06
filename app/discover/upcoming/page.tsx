@@ -36,7 +36,7 @@ const CAPACITY_BUTTONS: {
   tooltip: string;
   textColor: string;
 }[] = [
-  { key: 'all',     label: 'All', tooltip: 'All venues',        textColor: 'text-muted-foreground'                },
+  { key: 'all',     label: 'All Venues', tooltip: 'All venues',  textColor: 'text-muted-foreground'                },
   { key: 'small',   label: 'S',   tooltip: 'Small (< 500)',     textColor: 'text-purple-400 dark:text-purple-300' },
   { key: 'medium',  label: 'M',   tooltip: 'Medium (500–1.5K)', textColor: 'text-[#3A8FBD]'                       },
   { key: 'large',   label: 'L',   tooltip: 'Large (1.5K–10K)',  textColor: 'text-orange-600 dark:text-orange-400' },
@@ -655,9 +655,7 @@ function UpcomingShowsContent() {
               <span className="text-border select-none text-lg">|</span>
 
               {/* Venue size buttons */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm text-muted-foreground">Venue:</span>
-                <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1">
                   {CAPACITY_BUTTONS.map(btn => (
                     <button key={btn.key} onClick={() => setCapacityFilter(btn.key)} title={btn.tooltip}
                       className={`px-2.5 py-1 rounded text-xs font-semibold transition border ${
@@ -668,7 +666,6 @@ function UpcomingShowsContent() {
                       {btn.label}
                     </button>
                   ))}
-                </div>
               </div>
 
               {/* Stats — pushed to far right */}
@@ -685,33 +682,27 @@ function UpcomingShowsContent() {
             {/* Mobile: stacked rows */}
             <div className="flex flex-col gap-2.5 md:hidden">
 
-              {/* Row 1: both toggles side by side, equal weight, shortened labels */}
+              {/* Row 1: both toggles side by side — no icons, full labels */}
               <div className="flex items-center gap-2.5">
-                {/* Upcoming / Past — fills left half */}
+                {/* Upcoming / Past */}
                 <div className="flex flex-1 rounded-lg border border-border overflow-hidden text-sm font-semibold">
-                  <button className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground" aria-current="page">
-                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
+                  <button className="flex-1 flex items-center justify-center px-3 py-2 bg-primary text-primary-foreground" aria-current="page">
                     Upcoming
                   </button>
                   <button onClick={handlePastShowsClick} disabled={pastNavLoading}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-card text-muted-foreground hover:text-foreground hover:bg-muted border-l border-border disabled:opacity-50 transition">
+                    className="flex-1 flex items-center justify-center px-3 py-2 bg-card text-muted-foreground hover:text-foreground hover:bg-muted border-l border-border disabled:opacity-50 transition">
                     {pastNavLoading
-                      ? <div className="w-3.5 h-3.5 animate-spin rounded-full border-b-2 border-current shrink-0" />
-                      : <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                      ? <div className="w-3.5 h-3.5 animate-spin rounded-full border-b-2 border-current" />
+                      : 'Past'
                     }
-                    Past
                   </button>
                 </div>
 
-                {/* My Matches / All Shows — fills right half */}
+                {/* My Matches / All Shows */}
                 <div className="flex flex-1 rounded-lg border border-border overflow-hidden text-sm font-medium">
                   <button onClick={() => setScope('spotify')}
                     className={`flex-1 px-3 py-2 transition ${scope === 'spotify' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                    Matches
+                    My Matches
                   </button>
                   <button onClick={() => setScope('all')}
                     className={`flex-1 px-3 py-2 transition ${scope === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
@@ -720,9 +711,8 @@ function UpcomingShowsContent() {
                 </div>
               </div>
 
-              {/* Row 2: venue size buttons */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm text-muted-foreground">Venue:</span>
+              {/* Row 2: venue buttons + stats inline */}
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
                   {CAPACITY_BUTTONS.map(btn => (
                     <button key={btn.key} onClick={() => setCapacityFilter(btn.key)} title={btn.tooltip}
@@ -735,15 +725,13 @@ function UpcomingShowsContent() {
                     </button>
                   ))}
                 </div>
-              </div>
-
-              {/* Row 3: stats */}
-              <div className="flex items-center gap-3 text-sm text-muted-foreground/70">
-                <span>New <span className="font-semibold text-primary/80 ml-0.5">{newShows.length}</span></span>
-                <span className="text-border">·</span>
-                <span>Saved <span className="font-semibold text-green-500/80 ml-0.5">{savedShows.length}</span></span>
-                <span className="text-border">·</span>
-                <span>Skipped <span className="font-semibold ml-0.5">{skippedShows.length}</span></span>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground/70 shrink-0">
+                  <span>New <span className="font-semibold text-primary/80">{newShows.length}</span></span>
+                  <span className="text-border">·</span>
+                  <span>Saved <span className="font-semibold text-green-500/80">{savedShows.length}</span></span>
+                  <span className="text-border">·</span>
+                  <span>Skipped <span className="font-semibold">{skippedShows.length}</span></span>
+                </div>
               </div>
 
             </div>
