@@ -24,7 +24,7 @@ type Show = {
   is_spotify_match: boolean;
 };
 
-type SortKey = 'date' | 'artist' | 'score';
+type SortKey = 'date' | 'artist';
 type Scope = 'spotify' | 'all';
 type CapacityFilter = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown';
 
@@ -199,7 +199,6 @@ function UpcomingShowsContent() {
     return [...shows].sort((a, b) => {
       if (sortBy === 'date')   return new Date(a.date).getTime() - new Date(b.date).getTime();
       if (sortBy === 'artist') return a.artist_name.localeCompare(b.artist_name);
-      if (sortBy === 'score')  return b.match_score - a.match_score;
       return 0;
     });
   };
@@ -330,11 +329,11 @@ function UpcomingShowsContent() {
                 </button>
               </div>
 
-              {/* Sort — always inline */}
+              {/* Sort — Date and Artist only */}
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted-foreground">Sort by</span>
                 <div className="flex rounded-lg border border-border overflow-hidden font-medium">
-                  {(['date', 'artist', ...(scope === 'spotify' ? ['score'] : [])] as SortKey[]).map(key => (
+                  {(['date', 'artist'] as SortKey[]).map(key => (
                     <button
                       key={key}
                       onClick={() => setSortBy(key)}
@@ -344,7 +343,7 @@ function UpcomingShowsContent() {
                           : 'bg-card text-muted-foreground hover:bg-muted'
                       }`}
                     >
-                      {key === 'score' ? 'Match' : key === 'date' ? 'Date' : 'Artist'}
+                      {key === 'date' ? 'Date' : 'Artist'}
                     </button>
                   ))}
                 </div>
@@ -566,15 +565,15 @@ function ShowTable({
     <table className="w-full">
       <thead className="bg-muted">
         <tr>
-          {/* Desktop headers */}
+          {/* Desktop headers: actions | date | artist/venue | tickets */}
           <th className="hidden md:table-cell px-4 py-3 w-20"></th>
           <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase w-36">Date</th>
           <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist / Venue</th>
           <th className="hidden md:table-cell px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase w-24">Tickets</th>
-          {/* Mobile headers */}
-          <th className="md:hidden px-2 py-3 w-16"></th>
+          {/* Mobile headers: date | artist/venue | actions | tix */}
           <th className="md:hidden px-1 py-3 text-left text-xs font-medium text-muted-foreground uppercase whitespace-nowrap">Date</th>
           <th className="md:hidden px-1 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist / Venue</th>
+          <th className="md:hidden px-1 py-3 w-12"></th>
           <th className="md:hidden px-1 py-3 text-center text-xs font-medium text-muted-foreground uppercase w-10">Tix</th>
         </tr>
       </thead>
@@ -635,7 +634,7 @@ function ShowTable({
               key={show.show_id}
               className={`hover:bg-muted/30 ${showSpotifyBadge && show.is_spotify_match ? 'bg-primary/5' : ''}`}
             >
-              {/* Desktop cells */}
+              {/* Desktop cells: actions | date | artist/venue | tickets */}
               <td className="hidden md:table-cell px-4 py-4">
                 <div className="flex items-center gap-3">
                   {heartButton}
@@ -683,13 +682,7 @@ function ShowTable({
                 {ticketIcon}
               </td>
 
-              {/* Mobile cells */}
-              <td className="md:hidden px-2 py-3 align-middle w-16">
-                <div className="flex items-center gap-2">
-                  {heartButton}
-                  {skipButton}
-                </div>
-              </td>
+              {/* Mobile cells: date | artist/venue | actions | tix */}
               <td className="md:hidden px-1 py-3 align-top whitespace-nowrap">
                 <span className="text-[10px] text-foreground">{formatDate(show.date)}</span>
               </td>
@@ -710,6 +703,12 @@ function ShowTable({
                       {capBtn.label}
                     </span>
                   )}
+                </div>
+              </td>
+              <td className="md:hidden px-1 py-3 align-middle w-12">
+                <div className="flex items-center gap-2">
+                  {heartButton}
+                  {skipButton}
                 </div>
               </td>
               <td className="md:hidden py-3 px-1 w-10 align-middle">
