@@ -184,7 +184,7 @@ function SwipeableRow({
     offset > 4  ? actions.right :
     offset < -4 ? actions.left  : null;
 
-  const rowBg = activeAction ? getSwipeColors(activeAction, progress) : undefined;
+  const rowBg = noopLabel ? 'rgba(234,179,8,0.20)' : activeAction ? getSwipeColors(activeAction, progress) : undefined;
 
   const capBtn    = getCapacityButton(show.capacity_category);
   const capTooltip = formatCapacityTooltip(show.capacity_category, show.capacity);
@@ -197,12 +197,14 @@ function SwipeableRow({
 
   const commit = (action: SwipeAction) => {
     if (action === 'noop-saved' || action === 'noop-skipped') {
-      // Flash amber, show label, spring back
+      // Snap back to 0, show amber label centered in row, no ghost, no slide
+      setAnimating(true);
+      setOffset(0);
       setNoopLabel(getNoopLabel(action));
       setTimeout(() => {
-        springBack();
-        setTimeout(() => setNoopLabel(''), 350);
-      }, 600);
+        setNoopLabel('');
+        setAnimating(false);
+      }, 900);
       return;
     }
     setAnimating(true);
@@ -336,8 +338,8 @@ function SwipeableRow({
       <td colSpan={3} className="md:hidden p-0">
         <div className="relative overflow-hidden">
 
-          {/* Ghost icons — fixed in place, revealed behind the sliding layer */}
-          {activeAction && (
+          {/* Ghost icon — hidden during noop flash */}
+          {activeAction && !noopLabel && (
             <div
               className={`absolute top-0 bottom-0 flex items-center pointer-events-none ${
                 offset > 0 ? 'left-3' : 'right-3'
@@ -348,48 +350,48 @@ function SwipeableRow({
             </div>
           )}
 
-          {/* Noop label overlay */}
-          {noopLabel && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-              <span className="text-[11px] font-semibold text-amber-400">{noopLabel}</span>
+          {/* Noop state: show label only, row content hidden */}
+          {noopLabel ? (
+            <div className="flex items-center w-full py-3 justify-center">
+              <span className="text-xs font-semibold text-amber-400">{noopLabel}</span>
+            </div>
+          ) : (
+            /* Sliding content row */
+            <div
+              className="flex items-center w-full py-3"
+              style={{
+                transform: `translateX(${offset}px)`,
+                transition: animating ? 'transform 0.25s ease' : 'none',
+              }}
+            >
+              {/* Date — fixed width matches header */}
+              <div className="pl-3 shrink-0 w-[100px]">
+                <span className="text-xs text-foreground whitespace-nowrap">{formatDate(show.date)}</span>
+              </div>
+              {/* Artist / Venue — grows */}
+              <div className="flex-1 min-w-0 pr-2">
+                <div className="flex items-center gap-1 mb-0.5">
+                  <span className="text-[11px] font-medium truncate text-primary">
+                    {show.artist_name}
+                  </span>
+                  {show.spotify_artist_id && <SpotifyIcon artistId={show.spotify_artist_id} isMatch={show.is_spotify_match} />}
+                  {showSpotifyBadge && show.is_spotify_match && (
+                    <span className="text-[10px] text-green-500 font-medium shrink-0">● match</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-[10px] text-muted-foreground truncate">{show.venue_name}</span>
+                  {show.capacity_category && (
+                    <span title={capTooltip} className={`shrink-0 text-[9px] font-semibold ${capBtn.textColor}`}>{capBtn.label}</span>
+                  )}
+                </div>
+              </div>
+              {/* Tix — fixed width matches header */}
+              <div className="pr-3 shrink-0 w-[48px] flex items-center justify-center">
+                {ticketIcon}
+              </div>
             </div>
           )}
-
-          {/* Sliding content row */}
-          <div
-            className="flex items-center w-full py-3"
-            style={{
-              transform: `translateX(${offset}px)`,
-              transition: animating ? 'transform 0.25s ease' : 'none',
-            }}
-          >
-            {/* Date — fixed width matches header */}
-            <div className="pl-3 shrink-0 w-[100px]">
-              <span className="text-xs text-foreground whitespace-nowrap">{formatDate(show.date)}</span>
-            </div>
-            {/* Artist / Venue — grows */}
-            <div className="flex-1 min-w-0 pr-2">
-              <div className="flex items-center gap-1 mb-0.5">
-                <span className="text-[11px] font-medium truncate text-primary">
-                  {show.artist_name}
-                </span>
-                {show.spotify_artist_id && <SpotifyIcon artistId={show.spotify_artist_id} isMatch={show.is_spotify_match} />}
-                {showSpotifyBadge && show.is_spotify_match && (
-                  <span className="text-[10px] text-green-500 font-medium shrink-0">● match</span>
-                )}
-              </div>
-              <div className="flex items-center gap-1 mt-0.5">
-                <span className="text-[10px] text-muted-foreground truncate">{show.venue_name}</span>
-                {show.capacity_category && (
-                  <span title={capTooltip} className={`shrink-0 text-[9px] font-semibold ${capBtn.textColor}`}>{capBtn.label}</span>
-                )}
-              </div>
-            </div>
-            {/* Tix — fixed width matches header */}
-            <div className="pr-3 shrink-0 w-[48px] flex items-center justify-center">
-              {ticketIcon}
-            </div>
-          </div>
         </div>
       </td>
     </tr>
