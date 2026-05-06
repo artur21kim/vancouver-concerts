@@ -658,7 +658,7 @@ function UpcomingShowsContent() {
               <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
                 {CAPACITY_BUTTONS.map((btn, i) => (
                   <button key={btn.key} onClick={() => setCapacityFilter(btn.key)} title={btn.tooltip}
-                    className={`px-3 py-2 transition ${i > 0 ? 'border-l border-border' : ''} ${
+                    className={`px-3 py-2.5 transition ${i > 0 ? 'border-l border-border' : ''} ${
                       capacityFilter === btn.key
                         ? 'bg-primary text-primary-foreground'
                         : `bg-card ${btn.textColor} hover:bg-muted`
@@ -717,41 +717,32 @@ function UpcomingShowsContent() {
                 </div>
               </div>
 
-              {/* Row 2: venue buttons (natural width) + stats inline */}
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
+              {/* Row 2: venue pill (matches toggle row width) + stats inline */}
+              <div className="flex items-center gap-2">
+                {/* Venue pill — flex-1 to match Upcoming/Past width */}
+                <div className="flex flex-1 rounded-lg border border-border overflow-hidden text-xs font-semibold">
                   {CAPACITY_BUTTONS.map((btn, i) => (
                     <button
                       key={btn.key}
                       onClick={() => setCapacityFilter(btn.key)}
                       title={btn.tooltip}
-                      className={`${btn.key === 'all' ? 'w-9' : 'w-8'} flex items-center justify-center py-1.5 transition ${
+                      className={`${btn.key === 'all' ? 'flex-1' : 'flex-1'} flex items-center justify-center py-1.5 transition ${
                         i > 0 ? 'border-l border-border' : ''
                       } ${
                         capacityFilter === btn.key
                           ? 'bg-primary text-primary-foreground'
                           : `bg-card ${btn.textColor} hover:bg-muted`
                       }`}>
-                      {btn.key === 'all'
-                        ? (
-                          /* Grid icon = "all sizes" */
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
-                            <rect x="1" y="1" width="6" height="6" rx="1"/>
-                            <rect x="9" y="1" width="6" height="6" rx="1"/>
-                            <rect x="1" y="9" width="6" height="6" rx="1"/>
-                            <rect x="9" y="9" width="6" height="6" rx="1"/>
-                          </svg>
-                        )
-                        : btn.label
-                      }
+                      {btn.key === 'all' ? 'All' : btn.label}
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground/70 shrink-0">
+                {/* Stats — right of venue pill, tighter spacing */}
+                <div className="flex items-center gap-1 text-xs text-muted-foreground/70 shrink-0">
                   <span>New <span className="font-semibold text-primary/80">{newShows.length}</span></span>
-                  <span className="text-border">·</span>
+                  <span className="text-border px-0.5">·</span>
                   <span>Saved <span className="font-semibold text-green-500/80">{savedShows.length}</span></span>
-                  <span className="text-border">·</span>
+                  <span className="text-border px-0.5">·</span>
                   <span>Skipped <span className="font-semibold">{skippedShows.length}</span></span>
                 </div>
               </div>
