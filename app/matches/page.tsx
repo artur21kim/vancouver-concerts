@@ -352,7 +352,7 @@ function ArtistBubbleChart({ artists, artistView }: { artists: Artist[]; artistV
   const svgRef   = useRef<SVGSVGElement>(null);
   const wrapRef  = useRef<HTMLDivElement>(null);
 
-  const top15 = artists.slice(0, 15);
+  const top15 = artists.slice(0, 10);
   if (top15.length === 0) return <p className="text-muted-foreground text-center py-12">No artists to display</p>;
 
   // Chart dimensions — extra top padding for labels above bubbles
@@ -368,9 +368,18 @@ function ArtistBubbleChart({ artists, artistView }: { artists: Artist[]; artistV
   const maxSongs = Math.max(...top15.map(a => a.spotify_song_count), 1);
   const maxScore = Math.max(...top15.map(score), 1);
 
-  const bx = (a: Artist) => PAD.left + (shows(a) / maxShows) * CW;
-  const by = (a: Artist) => PAD.top + (1 - a.spotify_song_count / maxSongs) * CH;
+  const bxRaw = (a: Artist) => PAD.left + (shows(a) / maxShows) * CW;
+  const byRaw = (a: Artist) => PAD.top + (1 - a.spotify_song_count / maxSongs) * CH;
   const br = (a: Artist) => 7 + (score(a) / maxScore) * 13;
+
+  // Seeded jitter: deterministic per artist so it doesn't shift on re-render
+  const jitter = (id: number, axis: 'x' | 'y') => {
+    const seed = id * (axis === 'x' ? 127 : 311);
+    return ((seed % 17) - 8) * 1.4; // ±11px max
+  };
+
+  const bx = (a: Artist) => bxRaw(a) + jitter(a.artist_id, 'x');
+  const by = (a: Artist) => byRaw(a) + jitter(a.artist_id, 'y');
 
   const xTicks = Array.from({ length: Math.min(maxShows + 1, 7) }, (_, i) =>
     Math.round((i / Math.min(maxShows, 6)) * maxShows)
@@ -688,9 +697,14 @@ export default function MatchesPage() {
               <p className="text-base md:text-2xl font-bold text-card-foreground">
                 {matchData.matched_artists_count.toLocaleString()}
                 {matchData.total_spotify_artists > 0 && (
-                  <span className="text-sm md:text-base font-normal text-muted-foreground ml-1">
-                    of {matchData.total_spotify_artists.toLocaleString()}
-                  </span>
+                  <>
+                    <span className="text-sm md:text-base font-normal text-muted-foreground ml-1">
+                      of {matchData.total_spotify_artists.toLocaleString()}
+                    </span>
+                    <span className="text-xs md:text-sm font-semibold text-primary ml-2">
+                      ({Math.round((matchData.matched_artists_count / matchData.total_spotify_artists) * 100)}%)
+                    </span>
+                  </>
                 )}
               </p>
             </div>
@@ -713,7 +727,7 @@ export default function MatchesPage() {
                 <div>
                   <h2 className="text-xl md:text-2xl font-bold text-card-foreground">Top Venues</h2>
                   <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
-                    These venues hosted the most shows by artists in your library — review more for better results.
+                    Which of these venues have you attended? Each hosted shows by artists in your Spotify library.
                   </p>
                 </div>
                 {/* Desktop size filter — hidden on mobile (moved below) */}
@@ -776,6 +790,13 @@ export default function MatchesPage() {
 
             {/* ── DESKTOP venue list ── */}
             <div className="hidden md:block space-y-2">
+              {/* Column header */}
+              <div className="flex items-center gap-4 px-4 pb-1">
+                <span className="w-9 flex-shrink-0" />
+                <span className="flex-1" />
+                <span className="flex-shrink-0 w-[148px]" />{/* button group width */}
+                <span className="flex-shrink-0 w-36 text-xs font-medium text-muted-foreground uppercase tracking-wider">Match Score</span>
+              </div>
               {desktopVenues.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">No venues match this filter</p>
               ) : (
@@ -979,7 +1000,7 @@ export default function MatchesPage() {
               {artistView === 'current'
                 ? `Artists with past Vancouver shows since ${matchData.first_concert_year}`
                 : `All matched artists who've played in Vancouver since ${matchData.first_concert_year}`}
-              {artistDisplay === 'chart' && ' — top 15 plotted by your song count vs. Vancouver shows'}
+              {artistDisplay === 'chart' && ' — top 10 plotted by your song count vs. Vancouver shows'}
             </p>
 
             {/* ── Bubble chart view ── */}
