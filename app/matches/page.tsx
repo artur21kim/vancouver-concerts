@@ -342,147 +342,178 @@ function MobileVenueCard({
 }
 
 // ─── Bubble chart ─────────────────────────────────────────────────────────────
+// Teal hardcoded so SVG doesn't need to inherit CSS vars (avoids black bubble bug)
+const BUBBLE_FILL   = '#0d9488'; // teal-600
+const BUBBLE_STROKE = '#14b8a6'; // teal-500
+const LABEL_COLOR   = '#99f6e4'; // teal-200
+
 function ArtistBubbleChart({ artists, artistView }: { artists: Artist[]; artistView: ArtistView }) {
   const [tooltip, setTooltip] = useState<{ artist: Artist; x: number; y: number } | null>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
+  const svgRef   = useRef<SVGSVGElement>(null);
+  const wrapRef  = useRef<HTMLDivElement>(null);
 
   const top15 = artists.slice(0, 15);
   if (top15.length === 0) return <p className="text-muted-foreground text-center py-12">No artists to display</p>;
 
-  // Chart dimensions
-  const W = 560; const H = 340;
-  const PAD = { top: 20, right: 24, bottom: 48, left: 52 };
+  // Chart dimensions — extra top padding for labels above bubbles
+  const W = 580; const H = 380;
+  const PAD = { top: 40, right: 24, bottom: 48, left: 52 };
   const CW = W - PAD.left - PAD.right;
   const CH = H - PAD.top - PAD.bottom;
 
-  const maxShows = Math.max(...top15.map(a => artistView === 'current' ? a.vancouver_show_count : a.vancouver_show_count_all), 1);
+  const shows = (a: Artist) => artistView === 'current' ? a.vancouver_show_count : a.vancouver_show_count_all;
+  const score = (a: Artist) => artistView === 'current' ? a.match_score : a.match_score_all;
+
+  const maxShows = Math.max(...top15.map(shows), 1);
   const maxSongs = Math.max(...top15.map(a => a.spotify_song_count), 1);
-  const maxScore = Math.max(...top15.map(a => artistView === 'current' ? a.match_score : a.match_score_all), 1);
+  const maxScore = Math.max(...top15.map(score), 1);
 
-  const cx = (a: Artist) => PAD.left + ((artistView === 'current' ? a.vancouver_show_count : a.vancouver_show_count_all) / maxShows) * CW;
-  const cy = (a: Artist) => PAD.top + (1 - a.spotify_song_count / maxSongs) * CH;
-  const cr = (a: Artist) => {
-    const score = artistView === 'current' ? a.match_score : a.match_score_all;
-    return 6 + (score / maxScore) * 14;
-  };
+  const bx = (a: Artist) => PAD.left + (shows(a) / maxShows) * CW;
+  const by = (a: Artist) => PAD.top + (1 - a.spotify_song_count / maxSongs) * CH;
+  const br = (a: Artist) => 7 + (score(a) / maxScore) * 13;
 
-  // X axis ticks
-  const xTicks = Array.from({ length: Math.min(maxShows + 1, 6) }, (_, i) =>
-    Math.round((i / Math.min(maxShows, 5)) * maxShows)
+  const xTicks = Array.from({ length: Math.min(maxShows + 1, 7) }, (_, i) =>
+    Math.round((i / Math.min(maxShows, 6)) * maxShows)
   );
-  // Y axis ticks
   const yTicks = [0, Math.round(maxSongs * 0.25), Math.round(maxSongs * 0.5), Math.round(maxSongs * 0.75), maxSongs];
 
-  const handleMouseEnter = (e: React.MouseEvent, artist: Artist) => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    const rect = svg.getBoundingClientRect();
-    const scaleX = rect.width / W;
-    const scaleY = rect.height / H;
-    setTooltip({ artist, x: cx(artist) * scaleX, y: cy(artist) * scaleY });
+  const handleInteract = (e: React.MouseEvent | React.TouchEvent, artist: Artist) => {
+    const svg  = svgRef.current;
+    const wrap = wrapRef.current;
+    if (!svg || !wrap) return;
+    const svgRect  = svg.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
+    const scaleX = svgRect.width / W;
+    const scaleY = svgRect.height / H;
+    // Position tooltip relative to wrapper div (which is position:relative)
+    const x = bx(artist) * scaleX + (svgRect.left - wrapRect.left);
+    const y = by(artist) * scaleY + (svgRect.top  - wrapRect.top);
+    setTooltip({ artist, x, y });
   };
 
+  const truncate = (name: string, max = 13) =>
+    name.length > max ? name.slice(0, max - 1) + '…' : name;
+
   return (
-    <div className="relative w-full">
-      {/* Axis labels */}
+    <div className="relative w-full" ref={wrapRef}>
+      {/* X axis label */}
       <div className="text-[10px] text-muted-foreground text-center mb-1">YVR Shows →</div>
       <div className="flex gap-0">
-        {/* Y label rotated */}
-        <div className="flex items-center justify-center" style={{ width: 14, minWidth: 14 }}>
+        {/* Y axis label */}
+        <div className="flex items-center justify-center flex-shrink-0" style={{ width: 14 }}>
           <span className="text-[10px] text-muted-foreground whitespace-nowrap"
             style={{ transform: 'rotate(-90deg)', display: 'block', transformOrigin: 'center' }}>
             ← Your Songs
           </span>
         </div>
+
+        {/* SVG chart */}
         <div className="relative flex-1">
-          <svg
-            ref={svgRef}
-            viewBox={`0 0 ${W} ${H}`}
-            className="w-full"
-            style={{ height: 'auto' }}
-          >
-            {/* Grid lines */}
+          <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 'auto' }}>
+            {/* Grid */}
             {yTicks.map(t => {
               const y = PAD.top + (1 - t / maxSongs) * CH;
               return (
-                <g key={t}>
-                  <line x1={PAD.left} y1={y} x2={W - PAD.right} y2={y} stroke="currentColor" strokeOpacity={0.08} strokeWidth={1} />
-                  <text x={PAD.left - 6} y={y + 4} textAnchor="end" fontSize={9} fill="currentColor" fillOpacity={0.4}>{t}</text>
+                <g key={`y${t}`}>
+                  <line x1={PAD.left} y1={y} x2={W - PAD.right} y2={y}
+                    stroke="rgba(255,255,255,0.07)" strokeWidth={1} />
+                  <text x={PAD.left - 6} y={y + 4} textAnchor="end" fontSize={9}
+                    fill="rgba(255,255,255,0.35)">{t}</text>
                 </g>
               );
             })}
             {xTicks.map(t => {
               const x = PAD.left + (t / maxShows) * CW;
               return (
-                <g key={t}>
-                  <line x1={x} y1={PAD.top} x2={x} y2={H - PAD.bottom} stroke="currentColor" strokeOpacity={0.08} strokeWidth={1} />
-                  <text x={x} y={H - PAD.bottom + 14} textAnchor="middle" fontSize={9} fill="currentColor" fillOpacity={0.4}>{t}</text>
+                <g key={`x${t}`}>
+                  <line x1={x} y1={PAD.top} x2={x} y2={H - PAD.bottom}
+                    stroke="rgba(255,255,255,0.07)" strokeWidth={1} />
+                  <text x={x} y={H - PAD.bottom + 14} textAnchor="middle" fontSize={9}
+                    fill="rgba(255,255,255,0.35)">{t}</text>
                 </g>
               );
             })}
 
-            {/* Bubbles */}
-            {top15.map((artist) => {
-              const x = cx(artist); const y = cy(artist); const r = cr(artist);
+            {/* Bubbles — render in reverse so top-ranked sit on top */}
+            {[...top15].reverse().map((artist) => {
+              const x = bx(artist); const y = by(artist); const r = br(artist);
+              const label = truncate(artist.artist_name);
+              // Place label above bubble, but flip below if too close to top
+              const labelY = y - r - 5 < PAD.top + 8 ? y + r + 12 : y - r - 5;
               return (
                 <g key={artist.artist_id}
-                  onMouseEnter={e => handleMouseEnter(e, artist)}
+                  onMouseEnter={e => handleInteract(e, artist)}
                   onMouseLeave={() => setTooltip(null)}
-                  onTouchStart={e => { e.preventDefault(); handleMouseEnter(e as any, artist); }}
+                  onTouchStart={e => { e.preventDefault(); handleInteract(e, artist); }}
                   onTouchEnd={() => setTooltip(null)}
-                  className="cursor-pointer"
+                  style={{ cursor: 'pointer' }}
                 >
-                  <circle cx={x} cy={y} r={r + 6} fill="transparent" /> {/* hit area */}
+                  {/* Expanded hit area */}
+                  <circle cx={x} cy={y} r={r + 8} fill="transparent" />
+                  {/* Glow ring */}
+                  <circle cx={x} cy={y} r={r + 3} fill={BUBBLE_FILL} fillOpacity={0.12} />
+                  {/* Main bubble */}
                   <circle cx={x} cy={y} r={r}
-                    fill="hsl(var(--primary))" fillOpacity={0.25}
-                    stroke="hsl(var(--primary))" strokeWidth={1.5}
-                    className="transition-all duration-150 hover:fill-opacity-40"
+                    fill={BUBBLE_FILL} fillOpacity={0.45}
+                    stroke={BUBBLE_STROKE} strokeWidth={1.5}
                   />
-                  {/* Label for larger bubbles */}
-                  {r >= 13 && (
-                    <text x={x} y={y - r - 4} textAnchor="middle" fontSize={9} fill="currentColor" fillOpacity={0.7}
-                      className="pointer-events-none select-none">
-                      {artist.artist_name.length > 14 ? artist.artist_name.slice(0, 13) + '…' : artist.artist_name}
-                    </text>
-                  )}
+                  {/* Label — always shown, small */}
+                  <text x={x} y={labelY} textAnchor="middle" fontSize={8}
+                    fill={LABEL_COLOR} fillOpacity={0.85}
+                    style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                    {label}
+                  </text>
                 </g>
               );
             })}
           </svg>
 
-          {/* Tooltip */}
-          {tooltip && (
-            <div
-              className="absolute z-10 pointer-events-none bg-card border border-border rounded-lg shadow-lg px-3 py-2 text-xs min-w-[140px]"
-              style={{
-                left: Math.min(tooltip.x + 12, (svgRef.current?.getBoundingClientRect().width ?? 300) - 155),
-                top: Math.max(tooltip.y - 70, 4),
-              }}
-            >
-              <p className="font-semibold text-card-foreground mb-1">{tooltip.artist.artist_name}</p>
-              <div className="space-y-0.5 text-muted-foreground">
-                <p>🎵 {tooltip.artist.spotify_song_count} songs in your library</p>
-                <p>📍 {artistView === 'current' ? tooltip.artist.vancouver_show_count : tooltip.artist.vancouver_show_count_all} Vancouver shows</p>
-                <p className="text-primary font-medium">
-                  {(artistView === 'current' ? tooltip.artist.match_score : tooltip.artist.match_score_all).toFixed(1)}% match
+          {/* Tooltip — positioned relative to wrapper */}
+          {tooltip && (() => {
+            const wrapWidth = wrapRef.current?.getBoundingClientRect().width ?? 400;
+            const tipW = 160;
+            const left = Math.min(Math.max(tooltip.x + 14, 4), wrapWidth - tipW - 4);
+            const top  = Math.max(tooltip.y - 80, 4);
+            return (
+              <div className="absolute z-20 pointer-events-none bg-card border border-border rounded-lg shadow-xl px-3 py-2 text-xs"
+                style={{ left, top, width: tipW }}>
+                <p className="font-semibold text-card-foreground mb-1.5 leading-tight">
+                  {tooltip.artist.artist_name}
                 </p>
+                <div className="space-y-1 text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 24 24" fill="#1DB954">
+                      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                    </svg>
+                    <span>{tooltip.artist.spotify_song_count} songs in library</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px]">📍</span>
+                    <span>{shows(tooltip.artist)} Vancouver shows</span>
+                  </div>
+                  <p className="text-primary font-semibold pt-0.5">
+                    {score(tooltip.artist).toFixed(1)}% match
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       </div>
 
       {/* Legend */}
       <div className="flex items-center justify-center gap-4 mt-2 text-[10px] text-muted-foreground">
         <div className="flex items-center gap-1.5">
-          <svg width="28" height="12" viewBox="0 0 28 12">
-            <circle cx="6" cy="6" r="4" fill="hsl(var(--primary))" fillOpacity={0.25} stroke="hsl(var(--primary))" strokeWidth={1.5}/>
-            <circle cx="20" cy="6" r="6" fill="hsl(var(--primary))" fillOpacity={0.25} stroke="hsl(var(--primary))" strokeWidth={1.5}/>
+          <svg width="30" height="14" viewBox="0 0 30 14">
+            <circle cx="6" cy="7" r="4" fill={BUBBLE_FILL} fillOpacity={0.45} stroke={BUBBLE_STROKE} strokeWidth={1.5}/>
+            <circle cx="22" cy="7" r="6" fill={BUBBLE_FILL} fillOpacity={0.45} stroke={BUBBLE_STROKE} strokeWidth={1.5}/>
           </svg>
           Bubble size = match score
         </div>
         <span className="text-muted-foreground/40">·</span>
-        <span>Hover a bubble for details</span>
+        <span className="hidden sm:inline">Hover</span>
+        <span className="sm:hidden">Tap</span>
+        <span> a bubble for details</span>
       </div>
     </div>
   );
@@ -967,11 +998,11 @@ export default function MatchesPage() {
                       <table className="min-w-full">
                         <thead>
                           <tr className="bg-muted">
-                            <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-10">#</th>
-                            <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Artist</th>
-                            <th className="px-3 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Your Songs</th>
-                            <th className="px-3 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">YVR Shows</th>
-                            <th className="px-3 md:px-4 py-3 pl-4 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Match Score</th>
+                            <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-8">#</th>
+                            <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Artist</th>
+                            <th className="px-2 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Songs</th>
+                            <th className="px-2 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Shows</th>
+                            <th className="px-2 md:px-4 py-3 pl-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Score</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -981,21 +1012,28 @@ export default function MatchesPage() {
                             const shows = artistView === 'current' ? artist.vancouver_show_count : artist.vancouver_show_count_all;
                             return (
                               <tr key={artist.artist_id} className="hover:bg-muted/50 transition-colors">
-                                <td className="px-3 md:px-4 py-3 text-sm font-bold text-primary">{globalRank}</td>
-                                <td className="px-3 md:px-4 py-3">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-card-foreground">{artist.artist_name}</span>
-                                    {artist.spotify_artist_id && <SpotifyIcon artistId={artist.spotify_artist_id} />}
+                                <td className="px-2 md:px-4 py-2.5 text-sm font-bold text-primary">{globalRank}</td>
+                                <td className="px-2 md:px-4 py-2.5 max-w-[120px] md:max-w-none">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs md:text-sm font-medium text-card-foreground truncate">{artist.artist_name}</span>
+                                    {artist.spotify_artist_id && (
+                                      <a href={`https://open.spotify.com/artist/${artist.spotify_artist_id}`} target="_blank" rel="noopener noreferrer"
+                                        onClick={e => e.stopPropagation()} className="flex-shrink-0 hover:opacity-70">
+                                        <svg className="w-3 h-3 md:w-3.5 md:h-3.5" viewBox="0 0 24 24" fill="#1DB954">
+                                          <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                                        </svg>
+                                      </a>
+                                    )}
                                   </div>
                                 </td>
-                                <td className="px-3 md:px-4 py-3 text-sm text-center text-muted-foreground tabular-nums">{artist.spotify_song_count}</td>
-                                <td className="px-3 md:px-4 py-3 text-sm text-center text-muted-foreground tabular-nums">{shows}</td>
-                                <td className="px-3 md:px-4 py-3 pl-4">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-16 md:w-24 bg-muted rounded-full h-1.5 hidden sm:block flex-shrink-0">
+                                <td className="px-2 md:px-4 py-2.5 text-xs md:text-sm text-center text-muted-foreground tabular-nums">{artist.spotify_song_count}</td>
+                                <td className="px-2 md:px-4 py-2.5 text-xs md:text-sm text-center text-muted-foreground tabular-nums">{shows}</td>
+                                <td className="px-2 md:px-4 py-2.5 pl-3">
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-10 md:w-24 bg-muted rounded-full h-1.5 hidden xs:block flex-shrink-0">
                                       <div className="bg-primary h-1.5 rounded-full" style={{ width: `${Math.min(score, 100)}%` }} />
                                     </div>
-                                    <span className="text-sm font-semibold text-primary tabular-nums w-14">
+                                    <span className="text-xs md:text-sm font-semibold text-primary tabular-nums">
                                       {score.toFixed(1)}%
                                     </span>
                                   </div>
