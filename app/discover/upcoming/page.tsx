@@ -82,6 +82,14 @@ function formatDate(dateStr: string) {
   });
 }
 
+function formatDateShort(dateStr: string) {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: '2-digit',
+  });
+}
+
 function UpcomingShowsContent() {
   const router = useRouter();
   const supabase = createClient();
@@ -563,19 +571,19 @@ function ShowTable({
   highlightHeader?: boolean;
 }) {
   const tableContent = (
-    <table className="w-full table-fixed">
-      <colgroup>
-        <col className="w-20" />
-        <col className="w-36" />
-        <col className="w-auto" />
-        <col className="w-24" />
-      </colgroup>
+    <table className="w-full">
       <thead className="bg-muted">
         <tr>
-          <th className="px-4 py-3"></th>
-          <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
-          <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist / Venue</th>
-          <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">Tickets</th>
+          {/* Desktop headers */}
+          <th className="hidden md:table-cell px-4 py-3 w-20"></th>
+          <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase w-36">Date</th>
+          <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist / Venue</th>
+          <th className="hidden md:table-cell px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase w-24">Tickets</th>
+          {/* Mobile headers */}
+          <th className="md:hidden px-2 py-3 w-14"></th>
+          <th className="md:hidden px-1 py-3 text-left text-xs font-medium text-muted-foreground uppercase whitespace-nowrap">Date</th>
+          <th className="md:hidden px-1 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist / Venue</th>
+          <th className="md:hidden px-1 py-3 w-8"></th>
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
@@ -583,27 +591,67 @@ function ShowTable({
           const capBtn = getCapacityButton(show.capacity_category);
           const capTooltip = formatCapacityTooltip(show.capacity_category, show.capacity);
 
+          const heartButton = (
+            <button onClick={() => onHeart(show)} title={show.status === 'added' ? 'Remove from saved' : 'Save show'} className="focus:outline-none">
+              <svg className={`w-5 h-5 transition-colors ${show.status === 'added' ? 'fill-destructive text-destructive' : 'fill-none text-muted-foreground hover:text-destructive'}`} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+              </svg>
+            </button>
+          );
+
+          const skipButton = (
+            <button onClick={() => onSkip(show)} title={show.status === 'skipped' ? 'Unskip show' : 'Skip show'} className="focus:outline-none">
+              <svg className={`w-4 h-4 transition-colors ${show.status === 'skipped' ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'}`} stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" fill="none">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          );
+
+          const spotifyIcon = show.spotify_artist_id ? (
+            <a
+              href={`https://open.spotify.com/artist/${show.spotify_artist_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open in Spotify"
+              className="hover:opacity-70 transition-opacity inline-flex items-center justify-center shrink-0"
+            >
+              <svg
+                className="w-3.5 h-3.5"
+                viewBox="0 0 24 24"
+                fill={show.is_spotify_match ? '#1DB954' : 'currentColor'}
+                style={show.is_spotify_match ? {} : { color: 'var(--muted-foreground)', opacity: 0.4 }}
+              >
+                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+              </svg>
+            </a>
+          ) : null;
+
+          const ticketIcon = show.ticketmaster_url ? (
+            <a
+              href={show.ticketmaster_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Buy tickets on Ticketmaster"
+              className="hover:opacity-70 transition-opacity inline-flex items-center justify-center"
+            >
+              <img src="https://www.ticketmaster.ca/favicon.ico" alt="Ticketmaster" className="w-4 h-4" />
+            </a>
+          ) : <span className="text-muted-foreground text-xs">—</span>;
+
           return (
             <tr
               key={show.show_id}
               className={`hover:bg-muted/30 ${showSpotifyBadge && show.is_spotify_match ? 'bg-primary/5' : ''}`}
             >
-              <td className="px-4 py-4">
+              {/* Desktop cells */}
+              <td className="hidden md:table-cell px-4 py-4">
                 <div className="flex items-center gap-3">
-                  <button onClick={() => onHeart(show)} title={show.status === 'added' ? 'Remove from saved' : 'Save show'} className="focus:outline-none">
-                    <svg className={`w-5 h-5 transition-colors ${show.status === 'added' ? 'fill-destructive text-destructive' : 'fill-none text-muted-foreground hover:text-destructive'}`} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                    </svg>
-                  </button>
-                  <button onClick={() => onSkip(show)} title={show.status === 'skipped' ? 'Unskip show' : 'Skip show'} className="focus:outline-none">
-                    <svg className={`w-4 h-4 transition-colors ${show.status === 'skipped' ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'}`} stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" fill="none">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  {heartButton}
+                  {skipButton}
                 </div>
               </td>
-              <td className="px-4 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
-              <td className="px-4 py-4">
+              <td className="hidden md:table-cell px-4 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
+              <td className="hidden md:table-cell px-4 py-4">
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <span className={`text-sm font-medium truncate ${show.is_spotify_match ? 'text-primary' : 'text-foreground'}`}>
                     {show.artist_name}
@@ -617,7 +665,7 @@ function ShowTable({
                       className="hover:opacity-70 transition-opacity inline-flex items-center justify-center shrink-0"
                     >
                       <svg
-                        className="w-3.5 h-3.5 md:w-4 md:h-4"
+                        className="w-4 h-4"
                         viewBox="0 0 24 24"
                         fill={show.is_spotify_match ? '#1DB954' : 'currentColor'}
                         style={show.is_spotify_match ? {} : { color: 'var(--muted-foreground)', opacity: 0.4 }}
@@ -633,33 +681,49 @@ function ShowTable({
                 <div className="flex items-center gap-1.5">
                   <span className="text-[13px] text-muted-foreground truncate">{show.venue_name}</span>
                   {show.capacity_category && (
-                    <span
-                      title={capTooltip}
-                      className={`shrink-0 text-[10px] font-semibold ${capBtn.textColor}`}
-                    >
+                    <span title={capTooltip} className={`shrink-0 text-[10px] font-semibold ${capBtn.textColor}`}>
                       {capBtn.label}
                     </span>
                   )}
                 </div>
               </td>
-              <td className="px-4 py-4 text-center align-middle">
-                {show.ticketmaster_url ? (
-                  <a
-                    href={show.ticketmaster_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="Buy tickets on Ticketmaster"
-                    className="hover:opacity-70 transition-opacity inline-flex items-center justify-center mx-auto"
-                  >
-                    <img
-                      src="https://www.ticketmaster.ca/favicon.ico"
-                      alt="Ticketmaster"
-                      className="w-4 h-4"
-                    />
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
+              <td className="hidden md:table-cell px-4 py-4 text-center align-middle">
+                {ticketIcon}
+              </td>
+
+              {/* Mobile cells */}
+              <td className="md:hidden px-2 py-3 align-middle w-14">
+                <div className="flex flex-col items-center gap-2">
+                  {heartButton}
+                  {skipButton}
+                </div>
+              </td>
+              <td className="md:hidden px-1 py-3 align-top whitespace-nowrap">
+                <span className="text-[11px] text-foreground">{formatDateShort(show.date)}</span>
+              </td>
+              <td className="md:hidden px-1 py-3 min-w-0">
+                <div className="flex items-center gap-1 mb-0.5">
+                  <span className={`text-[11px] font-medium truncate ${show.is_spotify_match ? 'text-primary' : 'text-foreground'}`}>
+                    {show.artist_name}
+                  </span>
+                  {spotifyIcon}
+                  {showSpotifyBadge && show.is_spotify_match && (
+                    <span className="text-[10px] text-green-500 font-medium shrink-0">● match</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-[10px] text-muted-foreground truncate">{show.venue_name}</span>
+                  {show.capacity_category && (
+                    <span title={capTooltip} className={`shrink-0 text-[9px] font-semibold ${capBtn.textColor}`}>
+                      {capBtn.label}
+                    </span>
+                  )}
+                </div>
+              </td>
+              <td className="md:hidden py-3 px-1 w-8 align-middle">
+                <div className="flex items-center justify-center">
+                  {ticketIcon}
+                </div>
               </td>
             </tr>
           );

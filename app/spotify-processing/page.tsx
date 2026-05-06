@@ -61,11 +61,11 @@ function SpotifyProcessingContent() {
     return (
       <>
         <Navigation />
-        <div className="min-h-screen bg-background py-12 px-4">
+        <div className="min-h-screen bg-background py-6 md:py-12 px-4">
           <div className="max-w-2xl mx-auto">
-            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-8 text-center">
-              <div className="text-6xl mb-4">❌</div>
-              <h2 className="text-2xl font-bold text-destructive mb-2">Processing Failed</h2>
+            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-6 md:p-8 text-center">
+              <div className="text-4xl md:text-6xl mb-4">❌</div>
+              <h2 className="text-xl md:text-2xl font-bold text-destructive mb-2">Processing Failed</h2>
               <p className="text-destructive/80 mb-6">{error}</p>
               <button
                 onClick={() => router.push('/discover')}
@@ -83,21 +83,21 @@ function SpotifyProcessingContent() {
   return (
     <>
       <Navigation />
-      <div className="min-h-screen bg-background flex items-center justify-center px-4">
-        <div className="max-w-2xl w-full">
-          <div className="bg-card rounded-lg shadow-lg p-12">
-            <div className="text-center mb-8">
-              <div className="text-6xl mb-4">🎵</div>
-              <h1 className="text-3xl font-bold text-card-foreground mb-2">
+      <div className="min-h-screen bg-background py-6 md:py-12 px-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-card rounded-lg shadow-lg p-6 md:p-12">
+            <div className="text-center mb-4 md:mb-8">
+              <div className="text-4xl md:text-6xl mb-3 md:mb-4">🎵</div>
+              <h1 className="text-xl md:text-3xl font-bold text-card-foreground mb-2">
                 Processing Your Spotify Library
               </h1>
-              <p className="text-muted-foreground">
+              <p className="text-sm md:text-base text-muted-foreground">
                 This will take a few minutes. Please don't close this page.
               </p>
             </div>
 
             {status && (
-              <div className="space-y-6">
+              <div className="space-y-4 md:space-y-6">
                 <div>
                   <div className="flex justify-between text-sm text-muted-foreground mb-2">
                     <span>
@@ -124,7 +124,7 @@ function SpotifyProcessingContent() {
 
                 <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
                   <div className="flex items-start gap-3">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mt-0.5"></div>
+                    <div className="animate-spin rounded-full h-5 w-5 md:h-6 md:w-6 border-b-2 border-primary mt-0.5 shrink-0"></div>
                     <div className="flex-1">
                       <p className="text-sm text-foreground font-medium">
                         {status.status === 'pending' && 'Starting to fetch your songs...'}
@@ -150,13 +150,13 @@ function SpotifyProcessingContent() {
 
             {!status && (
               <div className="flex flex-col items-center gap-4">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
-                <p className="text-muted-foreground">Connecting to Spotify...</p>
+                <div className="animate-spin rounded-full h-12 w-12 md:h-16 md:w-16 border-b-2 border-primary"></div>
+                <p className="text-sm md:text-base text-muted-foreground">Connecting to Spotify...</p>
               </div>
             )}
           </div>
 
-          <div className="mt-6 text-center text-sm text-muted-foreground">
+          <div className="mt-4 md:mt-6 text-center text-xs md:text-sm text-muted-foreground px-2">
             <p>💡 Tip: The more songs you have, the better we can match your {matchScope === 'upcoming' ? 'upcoming shows' : 'concert history'}!</p>
           </div>
         </div>
