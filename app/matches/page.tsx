@@ -342,187 +342,117 @@ function MobileVenueCard({
 }
 
 // ─── Bubble chart ─────────────────────────────────────────────────────────────
-// Teal hardcoded so SVG doesn't need to inherit CSS vars (avoids black bubble bug)
-const BUBBLE_FILL   = '#0d9488'; // teal-600
-const BUBBLE_STROKE = '#14b8a6'; // teal-500
-const LABEL_COLOR   = '#99f6e4'; // teal-200
+// ─── Horizontal segmented bar chart ──────────────────────────────────────────
+function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView: ArtistView }) {
+  const [hovered, setHovered] = useState<number | null>(null);
 
-function ArtistBubbleChart({ artists, artistView }: { artists: Artist[]; artistView: ArtistView }) {
-  const [tooltip, setTooltip] = useState<{ artist: Artist; x: number; y: number } | null>(null);
-  const svgRef   = useRef<SVGSVGElement>(null);
-  const wrapRef  = useRef<HTMLDivElement>(null);
-
-  const top15 = artists.slice(0, 10);
+  const top15 = artists.slice(0, 15);
   if (top15.length === 0) return <p className="text-muted-foreground text-center py-12">No artists to display</p>;
-
-  // Chart dimensions — extra top padding for labels above bubbles
-  const W = 580; const H = 380;
-  const PAD = { top: 40, right: 24, bottom: 48, left: 52 };
-  const CW = W - PAD.left - PAD.right;
-  const CH = H - PAD.top - PAD.bottom;
 
   const shows = (a: Artist) => artistView === 'current' ? a.vancouver_show_count : a.vancouver_show_count_all;
   const score = (a: Artist) => artistView === 'current' ? a.match_score : a.match_score_all;
 
-  const maxShows = Math.max(...top15.map(shows), 1);
-  const maxSongs = Math.max(...top15.map(a => a.spotify_song_count), 1);
   const maxScore = Math.max(...top15.map(score), 1);
 
-  const bxRaw = (a: Artist) => PAD.left + (shows(a) / maxShows) * CW;
-  const byRaw = (a: Artist) => PAD.top + (1 - a.spotify_song_count / maxSongs) * CH;
-  const br = (a: Artist) => 7 + (score(a) / maxScore) * 13;
-
-  // Seeded jitter: deterministic per artist so it doesn't shift on re-render
-  const jitter = (id: number, axis: 'x' | 'y') => {
-    const seed = id * (axis === 'x' ? 127 : 311);
-    return ((seed % 17) - 8) * 1.4; // ±11px max
-  };
-
-  const bx = (a: Artist) => bxRaw(a) + jitter(a.artist_id, 'x');
-  const by = (a: Artist) => byRaw(a) + jitter(a.artist_id, 'y');
-
-  const xTicks = Array.from({ length: Math.min(maxShows + 1, 7) }, (_, i) =>
-    Math.round((i / Math.min(maxShows, 6)) * maxShows)
-  );
-  const yTicks = [0, Math.round(maxSongs * 0.25), Math.round(maxSongs * 0.5), Math.round(maxSongs * 0.75), maxSongs];
-
-  const handleInteract = (e: React.MouseEvent | React.TouchEvent, artist: Artist) => {
-    const svg  = svgRef.current;
-    const wrap = wrapRef.current;
-    if (!svg || !wrap) return;
-    const svgRect  = svg.getBoundingClientRect();
-    const wrapRect = wrap.getBoundingClientRect();
-    const scaleX = svgRect.width / W;
-    const scaleY = svgRect.height / H;
-    // Position tooltip relative to wrapper div (which is position:relative)
-    const x = bx(artist) * scaleX + (svgRect.left - wrapRect.left);
-    const y = by(artist) * scaleY + (svgRect.top  - wrapRect.top);
-    setTooltip({ artist, x, y });
-  };
-
-  const truncate = (name: string, max = 13) =>
-    name.length > max ? name.slice(0, max - 1) + '…' : name;
+  // The score is a weighted combo: 70% songs, 30% shows — split the bar proportionally
+  const songsPct  = (a: Artist) => Math.min((score(a) / maxScore) * 100 * 0.7, 100);
+  const showsPct  = (a: Artist) => Math.min((score(a) / maxScore) * 100 * 0.3, 100);
+  const totalPct  = (a: Artist) => Math.min((score(a) / maxScore) * 100, 100);
 
   return (
-    <div className="relative w-full" ref={wrapRef}>
-      {/* X axis label */}
-      <div className="text-[10px] text-muted-foreground text-center mb-1">YVR Shows →</div>
-      <div className="flex gap-0">
-        {/* Y axis label */}
-        <div className="flex items-center justify-center flex-shrink-0" style={{ width: 14 }}>
-          <span className="text-[10px] text-muted-foreground whitespace-nowrap"
-            style={{ transform: 'rotate(-90deg)', display: 'block', transformOrigin: 'center' }}>
-            ← Your Songs
-          </span>
-        </div>
+    <div className="w-full space-y-1.5">
+      {/* Column headers */}
+      <div className="flex items-center gap-3 pb-1 border-b border-border">
+        <span className="w-5 flex-shrink-0" />
+        <span className="w-28 md:w-40 flex-shrink-0 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Artist</span>
+        <span className="flex-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Match Score</span>
+        <span className="w-10 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">Score</span>
+      </div>
 
-        {/* SVG chart */}
-        <div className="relative flex-1">
-          <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 'auto' }}>
-            {/* Grid */}
-            {yTicks.map(t => {
-              const y = PAD.top + (1 - t / maxSongs) * CH;
-              return (
-                <g key={`y${t}`}>
-                  <line x1={PAD.left} y1={y} x2={W - PAD.right} y2={y}
-                    stroke="rgba(255,255,255,0.07)" strokeWidth={1} />
-                  <text x={PAD.left - 6} y={y + 4} textAnchor="end" fontSize={9}
-                    fill="rgba(255,255,255,0.35)">{t}</text>
-                </g>
-              );
-            })}
-            {xTicks.map(t => {
-              const x = PAD.left + (t / maxShows) * CW;
-              return (
-                <g key={`x${t}`}>
-                  <line x1={x} y1={PAD.top} x2={x} y2={H - PAD.bottom}
-                    stroke="rgba(255,255,255,0.07)" strokeWidth={1} />
-                  <text x={x} y={H - PAD.bottom + 14} textAnchor="middle" fontSize={9}
-                    fill="rgba(255,255,255,0.35)">{t}</text>
-                </g>
-              );
-            })}
+      {top15.map((artist, i) => {
+        const isHovered = hovered === artist.artist_id;
+        const sp = songsPct(artist);
+        const shp = showsPct(artist);
+        const sc = score(artist);
 
-            {/* Bubbles — render in reverse so top-ranked sit on top */}
-            {[...top15].reverse().map((artist) => {
-              const x = bx(artist); const y = by(artist); const r = br(artist);
-              const label = truncate(artist.artist_name);
-              // Place label above bubble, but flip below if too close to top
-              const labelY = y - r - 5 < PAD.top + 8 ? y + r + 12 : y - r - 5;
-              return (
-                <g key={artist.artist_id}
-                  onMouseEnter={e => handleInteract(e, artist)}
-                  onMouseLeave={() => setTooltip(null)}
-                  onTouchStart={e => { e.preventDefault(); handleInteract(e, artist); }}
-                  onTouchEnd={() => setTooltip(null)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  {/* Expanded hit area */}
-                  <circle cx={x} cy={y} r={r + 8} fill="transparent" />
-                  {/* Glow ring */}
-                  <circle cx={x} cy={y} r={r + 3} fill={BUBBLE_FILL} fillOpacity={0.12} />
-                  {/* Main bubble */}
-                  <circle cx={x} cy={y} r={r}
-                    fill={BUBBLE_FILL} fillOpacity={0.45}
-                    stroke={BUBBLE_STROKE} strokeWidth={1.5}
-                  />
-                  {/* Label — always shown, small */}
-                  <text x={x} y={labelY} textAnchor="middle" fontSize={8}
-                    fill={LABEL_COLOR} fillOpacity={0.85}
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                    {label}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
+        return (
+          <div
+            key={artist.artist_id}
+            className={`flex items-center gap-3 py-1.5 px-2 rounded-lg transition-colors cursor-default ${isHovered ? 'bg-muted/60' : 'hover:bg-muted/30'}`}
+            onMouseEnter={() => setHovered(artist.artist_id)}
+            onMouseLeave={() => setHovered(null)}
+          >
+            {/* Rank */}
+            <span className="w-5 flex-shrink-0 text-xs font-bold text-primary text-right">{i + 1}</span>
 
-          {/* Tooltip — positioned relative to wrapper */}
-          {tooltip && (() => {
-            const wrapWidth = wrapRef.current?.getBoundingClientRect().width ?? 400;
-            const tipW = 160;
-            const left = Math.min(Math.max(tooltip.x + 14, 4), wrapWidth - tipW - 4);
-            const top  = Math.max(tooltip.y - 80, 4);
-            return (
-              <div className="absolute z-20 pointer-events-none bg-card border border-border rounded-lg shadow-xl px-3 py-2 text-xs"
-                style={{ left, top, width: tipW }}>
-                <p className="font-semibold text-card-foreground mb-1.5 leading-tight">
-                  {tooltip.artist.artist_name}
-                </p>
-                <div className="space-y-1 text-muted-foreground">
-                  <div className="flex items-center gap-1.5">
+            {/* Name + Spotify */}
+            <div className="w-28 md:w-40 flex-shrink-0 flex items-center gap-1.5 min-w-0">
+              <span className="text-xs font-medium text-card-foreground truncate">{artist.artist_name}</span>
+              {artist.spotify_artist_id && (
+                <a href={`https://open.spotify.com/artist/${artist.spotify_artist_id}`}
+                  target="_blank" rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="flex-shrink-0 hover:opacity-70 transition-opacity">
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="#1DB954">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                  </svg>
+                </a>
+              )}
+            </div>
+
+            {/* Segmented bar */}
+            <div className="flex-1 relative">
+              <div className="flex h-5 rounded-full overflow-hidden bg-muted/40">
+                {/* Songs segment — teal */}
+                <div
+                  className="h-full transition-all duration-300"
+                  style={{ width: `${sp}%`, backgroundColor: '#0d9488' }}
+                  title={`${artist.spotify_song_count} songs in library`}
+                />
+                {/* Shows segment — lighter teal */}
+                <div
+                  className="h-full transition-all duration-300"
+                  style={{ width: `${shp}%`, backgroundColor: '#5eead4' }}
+                  title={`${shows(artist)} Vancouver shows`}
+                />
+              </div>
+
+              {/* Hover detail tooltip */}
+              {isHovered && (
+                <div className="absolute left-0 -top-10 z-10 bg-card border border-border rounded-lg px-2.5 py-1.5 text-[10px] text-muted-foreground whitespace-nowrap shadow-lg pointer-events-none flex items-center gap-3">
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: '#0d9488' }} />
                     <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 24 24" fill="#1DB954">
                       <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
                     </svg>
-                    <span>{tooltip.artist.spotify_song_count} songs in library</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px]">📍</span>
-                    <span>{shows(tooltip.artist)} Vancouver shows</span>
-                  </div>
-                  <p className="text-primary font-semibold pt-0.5">
-                    {score(tooltip.artist).toFixed(1)}% match
-                  </p>
+                    {artist.spotify_song_count} songs
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: '#5eead4' }} />
+                    📍 {shows(artist)} shows
+                  </span>
                 </div>
-              </div>
-            );
-          })()}
-        </div>
-      </div>
+              )}
+            </div>
+
+            {/* Score % */}
+            <span className="w-10 text-right text-xs font-semibold text-primary tabular-nums flex-shrink-0">
+              {sc.toFixed(0)}%
+            </span>
+          </div>
+        );
+      })}
 
       {/* Legend */}
-      <div className="flex items-center justify-center gap-4 mt-2 text-[10px] text-muted-foreground">
+      <div className="flex items-center gap-4 pt-3 border-t border-border text-[10px] text-muted-foreground">
         <div className="flex items-center gap-1.5">
-          <svg width="30" height="14" viewBox="0 0 30 14">
-            <circle cx="6" cy="7" r="4" fill={BUBBLE_FILL} fillOpacity={0.45} stroke={BUBBLE_STROKE} strokeWidth={1.5}/>
-            <circle cx="22" cy="7" r="6" fill={BUBBLE_FILL} fillOpacity={0.45} stroke={BUBBLE_STROKE} strokeWidth={1.5}/>
-          </svg>
-          Bubble size = match score
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: '#0d9488' }} />
+          <span>Liked songs (70%)</span>
         </div>
-        <span className="text-muted-foreground/40">·</span>
-        <span className="hidden sm:inline">Hover</span>
-        <span className="sm:hidden">Tap</span>
-        <span> a bubble for details</span>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: '#5eead4' }} />
+          <span>Vancouver shows (30%)</span>
+        </div>
       </div>
     </div>
   );
@@ -1000,12 +930,12 @@ export default function MatchesPage() {
               {artistView === 'current'
                 ? `Artists with past Vancouver shows since ${matchData.first_concert_year}`
                 : `All matched artists who've played in Vancouver since ${matchData.first_concert_year}`}
-              {artistDisplay === 'chart' && ' — top 10 plotted by your song count vs. Vancouver shows'}
+              {artistDisplay === 'chart' && ' — top 15 ranked by match score, split by songs vs. shows'}
             </p>
 
             {/* ── Bubble chart view ── */}
             {artistDisplay === 'chart' && (
-              <ArtistBubbleChart artists={allDisplayArtists} artistView={artistView} />
+              <ArtistBarChart artists={allDisplayArtists} artistView={artistView} />
             )}
 
             {/* ── Table view ── */}
