@@ -717,14 +717,19 @@ function UpcomingShowsContent() {
                 </div>
               </div>
 
-              {/* Row 2: venue buttons */}
-              <div className="flex items-center gap-1">
-                {CAPACITY_BUTTONS.map(btn => (
-                  <button key={btn.key} onClick={() => setCapacityFilter(btn.key)} title={btn.tooltip}
-                    className={`px-2.5 py-1 rounded text-xs font-semibold transition border ${
+              {/* Row 2: venue buttons — joined pill matching toggle row structure */}
+              <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold w-full">
+                {CAPACITY_BUTTONS.map((btn, i) => (
+                  <button
+                    key={btn.key}
+                    onClick={() => setCapacityFilter(btn.key)}
+                    title={btn.tooltip}
+                    className={`${btn.key === 'all' ? 'flex-1' : 'w-9 shrink-0'} flex items-center justify-center py-1.5 transition ${
+                      i > 0 ? 'border-l border-border' : ''
+                    } ${
                       capacityFilter === btn.key
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : `bg-card border-border ${btn.textColor} hover:border-foreground/30`
+                        ? 'bg-primary text-primary-foreground'
+                        : `bg-card ${btn.textColor} hover:bg-muted`
                     }`}>
                     {btn.label}
                   </button>
