@@ -24,7 +24,7 @@ type Show = {
   is_spotify_match: boolean;
 };
 
-type SortKey = 'date' | 'artist';
+type SortKey = 'date' | 'artist' | 'venue';
 type SortDir = 'asc' | 'desc';
 type Scope = 'spotify' | 'all';
 type CapacityFilter = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown';
@@ -334,38 +334,42 @@ function SwipeableRow({
 }
 
 // ─── Sortable table headers ───────────────────────────────────────────────────
-function TableHeaders({ sortBy, sortDir, onSort }: {
-  sortBy: SortKey; sortDir: SortDir; onSort: (key: SortKey) => void;
-}) {
+type TableSortProps = { sortBy: SortKey; sortDir: SortDir; onSort: (key: SortKey) => void; };
+
+function TableHeaders({ sortBy, sortDir, onSort }: TableSortProps) {
   const arrow = (key: SortKey) =>
     sortBy === key
-      ? <span className="ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>
-      : <span className="ml-1 text-muted-foreground/30">↕</span>;
+      ? <span className="ml-0.5">{sortDir === 'asc' ? '↑' : '↓'}</span>
+      : <span className="ml-0.5 text-muted-foreground/30">↕</span>;
+
+  const thSort = 'text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:text-foreground transition-colors select-none';
 
   return (
     <thead className="bg-muted/60">
       <tr>
         {/* Desktop */}
         <th className="hidden md:table-cell px-4 py-3 w-16" />
-        <th className="hidden md:table-cell px-4 py-3 w-36 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:text-foreground transition-colors select-none"
-          onClick={() => onSort('date')}>
+        <th className={`hidden md:table-cell px-4 py-3 w-36 text-left ${thSort}`} onClick={() => onSort('date')}>
           Date{arrow('date')}
         </th>
-        <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:text-foreground transition-colors select-none"
-          onClick={() => onSort('artist')}>
-          Artist / Venue{arrow('artist')}
+        {/* Artist / Venue split into two clickable spans */}
+        <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          <span className={`${thSort}`} onClick={() => onSort('artist')}>Artist{arrow('artist')}</span>
+          <span className="mx-1.5 text-muted-foreground/30">/</span>
+          <span className={`${thSort}`} onClick={() => onSort('venue')}>Venue{arrow('venue')}</span>
         </th>
         <th className="hidden md:table-cell px-4 py-3 w-24 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Tickets</th>
+
         {/* Mobile */}
         <th colSpan={3} className="md:hidden p-0">
           <div className="flex items-center w-full py-2.5">
-            <div className="pl-3 shrink-0 w-[100px] text-left text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:text-foreground transition-colors select-none"
-              onClick={() => onSort('date')}>
+            <div className={`pl-3 shrink-0 w-[100px] text-left ${thSort}`} onClick={() => onSort('date')}>
               Date{arrow('date')}
             </div>
-            <div className="flex-1 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:text-foreground transition-colors select-none"
-              onClick={() => onSort('artist')}>
-              Artist / Venue{arrow('artist')}
+            <div className="flex-1 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <span className={thSort} onClick={() => onSort('artist')}>Artist{arrow('artist')}</span>
+              <span className="mx-1 text-muted-foreground/30">/</span>
+              <span className={thSort} onClick={() => onSort('venue')}>Venue{arrow('venue')}</span>
             </div>
             <div className="pr-3 shrink-0 w-[48px] text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Tix</div>
           </div>
@@ -374,9 +378,6 @@ function TableHeaders({ sortBy, sortDir, onSort }: {
     </thead>
   );
 }
-
-// ─── Shared table props type ──────────────────────────────────────────────────
-type TableSortProps = { sortBy: SortKey; sortDir: SortDir; onSort: (key: SortKey) => void; };
 
 // ─── New Shows table ───────────────────────────────────────────────────────────
 function NewShowsTable({
@@ -496,11 +497,12 @@ function UpcomingShowsContent() {
   const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all');
   const [skippedOpen, setSkippedOpen]       = useState(false);
   const [bannerVisible, setBannerVisible]   = useState(false);
+  const [swipeHintVisible, setSwipeHintVisible] = useState(false);
   const [pastNavLoading, setPastNavLoading] = useState(false);
 
   useEffect(() => {
-    const dismissed = localStorage.getItem('upcoming_banner_dismissed');
-    if (!dismissed) setBannerVisible(true);
+    if (!localStorage.getItem('upcoming_banner_dismissed')) setBannerVisible(true);
+    if (!localStorage.getItem('upcoming_swipe_hint_dismissed')) setSwipeHintVisible(true);
   }, []);
 
   useEffect(() => { fetchUpcomingShows(); }, [scope]);
@@ -516,7 +518,6 @@ function UpcomingShowsContent() {
     } finally { setLoading(false); }
   };
 
-  // First click on a new column → asc; subsequent clicks → toggle asc/desc
   const handleSort = (key: SortKey) => {
     if (sortBy === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortBy(key); setSortDir('asc'); }
@@ -562,13 +563,19 @@ function UpcomingShowsContent() {
     finally { setPastNavLoading(false); }
   };
 
+  const dismissSwipeHint = () => {
+    localStorage.setItem('upcoming_swipe_hint_dismissed', 'true');
+    setSwipeHintVisible(false);
+  };
+
   const filterByCapacity = (shows: Show[]) =>
     capacityFilter === 'all' ? shows : shows.filter(s => getCapacityKey(s.capacity_category) === capacityFilter);
 
   const sortShows = (shows: Show[]) => [...shows].sort((a, b) => {
-    const cmp = sortBy === 'date'
-      ? new Date(a.date).getTime() - new Date(b.date).getTime()
-      : a.artist_name.localeCompare(b.artist_name);
+    let cmp = 0;
+    if (sortBy === 'date')   cmp = new Date(a.date).getTime() - new Date(b.date).getTime();
+    if (sortBy === 'artist') cmp = a.artist_name.localeCompare(b.artist_name);
+    if (sortBy === 'venue')  cmp = a.venue_name.localeCompare(b.venue_name);
     return sortDir === 'asc' ? cmp : -cmp;
   });
 
@@ -591,7 +598,7 @@ function UpcomingShowsContent() {
         <div className="max-w-7xl mx-auto">
 
           {/* ── Title ── */}
-          <div className="mb-6">
+          <div className="mb-5">
             <h1 className="text-4xl font-bold text-foreground mb-1">Discover</h1>
             <p className="text-muted-foreground text-sm">
               {scope === 'spotify'
@@ -600,67 +607,90 @@ function UpcomingShowsContent() {
             </p>
           </div>
 
-          {/* ── Filter stack ─────────────────────────────────────────────────
-               Row 1: Upcoming / Past  (large, primary nav)
-               Row 2: My Matches / All Shows
-               Row 3: Venue size buttons
+          {/* ── Filter stack ──────────────────────────────────────────────────
+               Row 1: Upcoming/Past  +  My Matches/All Shows  (same line)
+               Row 2: Venue size  +  stat indicators
           ── */}
-          <div className="flex flex-col gap-3 mb-5">
+          <div className="flex flex-col gap-2.5 mb-5">
 
-            {/* Row 1 */}
-            <div className="flex rounded-xl border border-border overflow-hidden w-fit">
-              <button className="flex items-center gap-2.5 px-6 py-3 text-sm font-semibold bg-primary text-primary-foreground" aria-current="page">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                Upcoming Shows
-              </button>
-              <button onClick={handlePastShowsClick} disabled={pastNavLoading}
-                className="flex items-center gap-2.5 px-6 py-3 text-sm font-semibold bg-card text-muted-foreground hover:text-foreground hover:bg-muted border-l border-border disabled:opacity-50 transition">
-                {pastNavLoading
-                  ? <div className="w-4 h-4 animate-spin rounded-full border-b-2 border-current" />
-                  : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                }
-                Past Shows
-              </button>
+            {/* Row 1: scope toggles */}
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Upcoming / Past — large, primary */}
+              <div className="flex rounded-xl border border-border overflow-hidden">
+                <button className="flex items-center gap-2.5 px-5 py-2.5 text-sm font-semibold bg-primary text-primary-foreground" aria-current="page">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Upcoming Shows
+                </button>
+                <button onClick={handlePastShowsClick} disabled={pastNavLoading}
+                  className="flex items-center gap-2.5 px-5 py-2.5 text-sm font-semibold bg-card text-muted-foreground hover:text-foreground hover:bg-muted border-l border-border disabled:opacity-50 transition">
+                  {pastNavLoading
+                    ? <div className="w-4 h-4 animate-spin rounded-full border-b-2 border-current" />
+                    : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                  }
+                  Past Shows
+                </button>
+              </div>
+
+              {/* Separator — desktop only */}
+              <span className="hidden md:inline text-border select-none text-lg">|</span>
+
+              {/* My Matches / All Shows — smaller, secondary */}
+              <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
+                <button onClick={() => setScope('spotify')}
+                  className={`px-4 py-2 transition ${scope === 'spotify' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                  My Matches
+                </button>
+                <button onClick={() => setScope('all')}
+                  className={`px-4 py-2 transition ${scope === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                  All Shows
+                </button>
+              </div>
             </div>
 
-            {/* Row 2 */}
-            <div className="flex rounded-lg border border-border overflow-hidden w-fit text-sm font-medium">
-              <button onClick={() => setScope('spotify')}
-                className={`px-4 py-2 transition ${scope === 'spotify' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                My Matches
-              </button>
-              <button onClick={() => setScope('all')}
-                className={`px-4 py-2 transition ${scope === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                All Shows
-              </button>
-            </div>
+            {/* Row 2: venue filter + stat indicators */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-muted-foreground">Venue:</span>
+                <div className="flex items-center gap-1">
+                  {CAPACITY_BUTTONS.map(btn => (
+                    <button key={btn.key} onClick={() => setCapacityFilter(btn.key)} title={btn.tooltip}
+                      className={`px-2.5 py-1 rounded text-xs font-semibold transition border ${
+                        capacityFilter === btn.key
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : `bg-card border-border ${btn.textColor} hover:border-foreground/30`
+                      }`}>
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-            {/* Row 3 */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Venue:</span>
-              <div className="flex items-center gap-1">
-                {CAPACITY_BUTTONS.map(btn => (
-                  <button key={btn.key} onClick={() => setCapacityFilter(btn.key)} title={btn.tooltip}
-                    className={`px-2.5 py-1 rounded text-xs font-semibold transition border ${
-                      capacityFilter === btn.key
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : `bg-card border-border ${btn.textColor} hover:border-foreground/30`
-                    }`}>
-                    {btn.label}
-                  </button>
-                ))}
+              <span className="text-border select-none">·</span>
+
+              <div className="flex items-center gap-3 text-sm">
+                <span className="text-muted-foreground">
+                  New <span className="font-semibold text-primary ml-1">{newShows.length}</span>
+                </span>
+                <span className="text-border select-none">·</span>
+                <span className="text-muted-foreground">
+                  Saved <span className="font-semibold text-green-500 ml-1">{savedShows.length}</span>
+                </span>
+                <span className="text-border select-none">·</span>
+                <span className="text-muted-foreground">
+                  Skipped <span className="font-semibold ml-1">{skippedShows.length}</span>
+                </span>
               </div>
             </div>
 
           </div>
 
-          {/* ── Dismissible banner ── */}
+          {/* ── Dismissible info banner ── */}
           {bannerVisible && (
-            <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 mb-5 flex items-start justify-between gap-4">
+            <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 mb-4 flex items-start justify-between gap-4">
               <p className="text-sm text-foreground">
                 💡 Your matches update automatically — come back any time to see new upcoming shows based on your Spotify library.
               </p>
@@ -669,37 +699,28 @@ function UpcomingShowsContent() {
             </div>
           )}
 
-          {/* ── Stat indicators (slim) ── */}
-          <div className="flex items-center gap-3 mb-6 text-sm">
-            <span className="text-muted-foreground">
-              New <span className="font-semibold text-primary ml-1">{newShows.length}</span>
-            </span>
-            <span className="text-border select-none">·</span>
-            <span className="text-muted-foreground">
-              Saved <span className="font-semibold text-green-500 ml-1">{savedShows.length}</span>
-            </span>
-            <span className="text-border select-none">·</span>
-            <span className="text-muted-foreground">
-              Skipped <span className="font-semibold ml-1">{skippedShows.length}</span>
-            </span>
-          </div>
-
-          {/* ── Mobile swipe hint ── */}
-          <div className="md:hidden bg-muted/50 border border-border rounded-lg px-5 py-3.5 mb-6 flex items-center justify-center gap-4">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <svg className="w-4 h-4 text-destructive/80" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              <span className="text-xs font-medium">Swipe left to skip</span>
+          {/* ── Dismissible swipe hint — mobile only ── */}
+          {swipeHintVisible && (
+            <div className="md:hidden bg-muted/50 border border-border rounded-lg px-4 py-3 mb-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <svg className="w-4 h-4 text-destructive/80" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span className="text-xs font-medium">Swipe left to skip</span>
+                </div>
+                <span className="text-muted-foreground/40">·</span>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <span className="text-xs font-medium">Swipe right to save</span>
+                  <svg className="w-4 h-4 fill-primary text-primary" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                  </svg>
+                </div>
+              </div>
+              <button onClick={dismissSwipeHint}
+                className="text-muted-foreground hover:text-foreground transition shrink-0 text-lg leading-none" title="Dismiss">×</button>
             </div>
-            <span className="text-muted-foreground/40 text-sm">·</span>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <span className="text-xs font-medium">Swipe right to save</span>
-              <svg className="w-4 h-4 fill-primary text-primary" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-              </svg>
-            </div>
-          </div>
+          )}
 
           {/* ── Loading ── */}
           {loading && (
