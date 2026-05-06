@@ -658,7 +658,7 @@ function UpcomingShowsContent() {
               <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
                 {CAPACITY_BUTTONS.map((btn, i) => (
                   <button key={btn.key} onClick={() => setCapacityFilter(btn.key)} title={btn.tooltip}
-                    className={`px-3 py-1.5 transition ${i > 0 ? 'border-l border-border' : ''} ${
+                    className={`px-3 py-2 transition ${i > 0 ? 'border-l border-border' : ''} ${
                       capacityFilter === btn.key
                         ? 'bg-primary text-primary-foreground'
                         : `bg-card ${btn.textColor} hover:bg-muted`
@@ -725,14 +725,25 @@ function UpcomingShowsContent() {
                       key={btn.key}
                       onClick={() => setCapacityFilter(btn.key)}
                       title={btn.tooltip}
-                      className={`${btn.key === 'all' ? 'w-20' : 'w-8'} flex items-center justify-center py-1.5 transition ${
+                      className={`${btn.key === 'all' ? 'w-9' : 'w-8'} flex items-center justify-center py-1.5 transition ${
                         i > 0 ? 'border-l border-border' : ''
                       } ${
                         capacityFilter === btn.key
                           ? 'bg-primary text-primary-foreground'
                           : `bg-card ${btn.textColor} hover:bg-muted`
                       }`}>
-                      {btn.label}
+                      {btn.key === 'all'
+                        ? (
+                          /* Grid icon = "all sizes" */
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                            <rect x="1" y="1" width="6" height="6" rx="1"/>
+                            <rect x="9" y="1" width="6" height="6" rx="1"/>
+                            <rect x="1" y="9" width="6" height="6" rx="1"/>
+                            <rect x="9" y="9" width="6" height="6" rx="1"/>
+                          </svg>
+                        )
+                        : btn.label
+                      }
                     </button>
                   ))}
                 </div>
