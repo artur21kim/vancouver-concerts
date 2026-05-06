@@ -27,6 +27,7 @@ type Show = {
 type SortKey = 'date' | 'artist';
 type Scope = 'spotify' | 'all';
 type CapacityFilter = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown';
+type SwipeContext = 'new' | 'saved' | 'skipped';
 
 const CAPACITY_BUTTONS: {
   key: CapacityFilter;
@@ -54,7 +55,7 @@ function getCapacityKey(category: string | null): CapacityFilter {
 
 function getCapacityButton(category: string | null) {
   const key = getCapacityKey(category);
-  return CAPACITY_BUTTONS.find(b => b.key === key) || CAPACITY_BUTTONS[CAPACITY_BUTTONS.length - 1];
+  return CAPACITY_BUTTONS.find(b => b.key === key) ?? CAPACITY_BUTTONS[CAPACITY_BUTTONS.length - 1];
 }
 
 function formatCapacityTooltip(category: string | null, capacity: number | null): string {
@@ -63,8 +64,7 @@ function formatCapacityTooltip(category: string | null, capacity: number | null)
     xlarge: 'X-Large', unknown: 'Unknown capacity', all: '',
   };
   const key = getCapacityKey(category);
-  if (capacity) return `${labels[key]} · ${capacity.toLocaleString()}`;
-  return labels[key];
+  return capacity ? `${labels[key]} · ${capacity.toLocaleString()}` : labels[key];
 }
 
 function formatDate(dateStr: string) {
@@ -74,13 +74,16 @@ function formatDate(dateStr: string) {
 }
 
 // ─── Spotify icon ─────────────────────────────────────────────────────────────
-function SpotifyIcon({ artistId, isMatch, size = 'sm' }: { artistId: string; isMatch: boolean; size?: 'sm' | 'md' }) {
-  const cls = size === 'md' ? 'w-4 h-4' : 'w-3.5 h-3.5';
+function SpotifyIcon({ artistId, isMatch }: { artistId: string; isMatch: boolean }) {
   return (
-    <a href={`https://open.spotify.com/artist/${artistId}`} target="_blank" rel="noopener noreferrer"
-      title="Open in Spotify" onClick={e => e.stopPropagation()}
-      className="hover:opacity-70 transition-opacity inline-flex items-center justify-center shrink-0">
-      <svg className={cls} viewBox="0 0 24 24"
+    <a
+      href={`https://open.spotify.com/artist/${artistId}`}
+      target="_blank" rel="noopener noreferrer"
+      title="Open in Spotify"
+      onClick={e => e.stopPropagation()}
+      className="hover:opacity-70 transition-opacity inline-flex items-center justify-center shrink-0"
+    >
+      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24"
         fill={isMatch ? '#1DB954' : 'currentColor'}
         style={isMatch ? {} : { color: 'var(--muted-foreground)', opacity: 0.4 }}>
         <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
@@ -89,28 +92,101 @@ function SpotifyIcon({ artistId, isMatch, size = 'sm' }: { artistId: string; isM
   );
 }
 
-// ─── Swipeable row ────────────────────────────────────────────────────────────
+// ─── Swipe config per context ─────────────────────────────────────────────────
+// new:     right → save (green),  left → skip (red)
+// saved:   right → amber "already saved" (no-op), left → skip (red)
+// skipped: right → save (green),  left → amber "already skipped" (no-op)
 const SWIPE_THRESHOLD = 72;
 const SWIPE_MAX = 110;
 
+type SwipeAction = 'save' | 'skip' | 'noop-saved' | 'noop-skipped';
+
+function getSwipeActions(context: SwipeContext): { right: SwipeAction; left: SwipeAction } {
+  switch (context) {
+    case 'new':     return { right: 'save',         left: 'skip'          };
+    case 'saved':   return { right: 'noop-saved',   left: 'skip'          };
+    case 'skipped': return { right: 'save',         left: 'noop-skipped'  };
+  }
+}
+
+function getSwipeColors(action: SwipeAction, progress: number) {
+  const alpha = Math.min(progress, 1) * 0.25;
+  switch (action) {
+    case 'save':         return `rgba(34,197,94,${alpha})`;   // green
+    case 'skip':         return `rgba(239,68,68,${alpha})`;   // red
+    case 'noop-saved':   return `rgba(234,179,8,${alpha})`;   // amber
+    case 'noop-skipped': return `rgba(234,179,8,${alpha})`;   // amber
+  }
+}
+
+function getGhostIcon(action: SwipeAction) {
+  switch (action) {
+    case 'save':
+      return (
+        <svg className="w-5 h-5 fill-green-500 text-green-500" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+        </svg>
+      );
+    case 'skip':
+      return (
+        <svg className="w-4 h-4 text-destructive" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      );
+    case 'noop-saved':
+      return (
+        <svg className="w-5 h-5 fill-amber-400 text-amber-400" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+        </svg>
+      );
+    case 'noop-skipped':
+      return (
+        <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      );
+  }
+}
+
+function getNoopLabel(action: SwipeAction) {
+  if (action === 'noop-saved')   return 'Already saved';
+  if (action === 'noop-skipped') return 'Already skipped';
+  return '';
+}
+
+// ─── Swipeable row ────────────────────────────────────────────────────────────
 function SwipeableRow({
   show,
-  onHeart,
+  context,
+  onSave,
   onSkip,
   showSpotifyBadge,
 }: {
   show: Show;
-  onHeart: (show: Show) => void;
+  context: SwipeContext;
+  onSave: (show: Show) => void;
   onSkip: (show: Show) => void;
   showSpotifyBadge: boolean;
 }) {
-  const [offset, setOffset] = useState(0);
+  const [offset, setOffset]       = useState(0);
   const [animating, setAnimating] = useState(false);
-  const touchStartX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
-  const axisLocked = useRef<'h' | 'v' | null>(null);
+  const [noopLabel, setNoopLabel] = useState('');
 
-  const capBtn = getCapacityButton(show.capacity_category);
+  const touchStartX  = useRef<number | null>(null);
+  const touchStartY  = useRef<number | null>(null);
+  const axisLocked   = useRef<'h' | 'v' | null>(null);
+
+  const actions  = getSwipeActions(context);
+  const progress = Math.min(Math.abs(offset) / SWIPE_THRESHOLD, 1);
+
+  // Which action is currently being hinted at
+  const activeAction: SwipeAction | null =
+    offset > 4  ? actions.right :
+    offset < -4 ? actions.left  : null;
+
+  const rowBg = activeAction ? getSwipeColors(activeAction, progress) : undefined;
+
+  const capBtn    = getCapacityButton(show.capacity_category);
   const capTooltip = formatCapacityTooltip(show.capacity_category, show.capacity);
 
   const springBack = () => {
@@ -119,11 +195,20 @@ function SwipeableRow({
     setTimeout(() => setAnimating(false), 280);
   };
 
-  const commit = (direction: 'right' | 'left') => {
+  const commit = (action: SwipeAction) => {
+    if (action === 'noop-saved' || action === 'noop-skipped') {
+      // Flash amber, show label, spring back
+      setNoopLabel(getNoopLabel(action));
+      setTimeout(() => {
+        springBack();
+        setTimeout(() => setNoopLabel(''), 350);
+      }, 600);
+      return;
+    }
     setAnimating(true);
-    setOffset(direction === 'right' ? SWIPE_MAX : -SWIPE_MAX);
+    setOffset(action === 'save' ? SWIPE_MAX : -SWIPE_MAX);
     setTimeout(() => {
-      if (direction === 'right') onHeart(show);
+      if (action === 'save') onSave(show);
       else onSkip(show);
       setOffset(0);
       setAnimating(false);
@@ -133,7 +218,7 @@ function SwipeableRow({
   const onTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
-    axisLocked.current = null;
+    axisLocked.current  = null;
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
@@ -156,18 +241,29 @@ function SwipeableRow({
       touchStartY.current = null;
       return;
     }
-    if (offset >= SWIPE_THRESHOLD) commit('right');
-    else if (offset <= -SWIPE_THRESHOLD) commit('left');
+    const triggered =
+      offset >= SWIPE_THRESHOLD  ? actions.right :
+      offset <= -SWIPE_THRESHOLD ? actions.left  : null;
+
+    if (triggered) commit(triggered);
     else springBack();
+
     touchStartX.current = null;
     touchStartY.current = null;
-    axisLocked.current = null;
+    axisLocked.current  = null;
   };
 
-  const progress = Math.min(Math.abs(offset) / SWIPE_THRESHOLD, 1);
-  const bgSave = `rgba(34,197,94,${progress * 0.22})`;
-  const bgSkip = `rgba(239,68,68,${progress * 0.22})`;
-  const rowBg = offset > 4 ? bgSave : offset < -4 ? bgSkip : undefined;
+  // Desktop heart/X handlers
+  const handleDesktopHeart = () => {
+    if (context === 'new')     onSave(show);
+    if (context === 'skipped') onSave(show);
+    // saved: heart does nothing (already saved)
+  };
+  const handleDesktopSkip = () => {
+    if (context === 'new')   onSkip(show);
+    if (context === 'saved') onSkip(show);
+    // skipped: X does nothing (already skipped)
+  };
 
   const ticketIcon = show.ticketmaster_url
     ? (
@@ -176,7 +272,8 @@ function SwipeableRow({
         className="hover:opacity-70 transition-opacity inline-flex items-center justify-center">
         <img src="https://www.ticketmaster.ca/favicon.ico" alt="Ticketmaster" className="w-4 h-4" />
       </a>
-    ) : <span className="text-muted-foreground text-xs">—</span>;
+    )
+    : <span className="text-muted-foreground text-xs">—</span>;
 
   return (
     <tr
@@ -186,65 +283,79 @@ function SwipeableRow({
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      {/* ── Desktop: 4 cells ── */}
+      {/* ── Desktop: 4 separate cells ── */}
       <td className="hidden md:table-cell px-4 py-4 w-20">
         <div className="flex items-center gap-3">
-          <button onClick={() => onHeart(show)} title={show.status === 'added' ? 'Remove from saved' : 'Save show'} className="focus:outline-none">
-            <svg className={`w-5 h-5 transition-colors ${show.status === 'added' ? 'fill-destructive text-destructive' : 'fill-none text-muted-foreground hover:text-destructive'}`}
-              stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <button onClick={handleDesktopHeart} title="Save show" className="focus:outline-none">
+            <svg
+              className={`w-5 h-5 transition-colors ${
+                context === 'saved'
+                  ? 'fill-destructive text-destructive'
+                  : 'fill-none text-muted-foreground hover:text-destructive'
+              }`}
+              stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
             </svg>
           </button>
-          <button onClick={() => onSkip(show)} title={show.status === 'skipped' ? 'Unskip show' : 'Skip show'} className="focus:outline-none">
-            <svg className={`w-4 h-4 transition-colors ${show.status === 'skipped' ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'}`}
-              stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" fill="none">
+          <button onClick={handleDesktopSkip} title="Skip show" className="focus:outline-none">
+            <svg
+              className={`w-4 h-4 transition-colors ${
+                context === 'skipped'
+                  ? 'text-destructive'
+                  : 'text-muted-foreground hover:text-destructive'
+              }`}
+              stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" fill="none"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
       </td>
-      <td className="hidden md:table-cell px-4 py-4 text-sm text-foreground">{formatDate(show.date)}</td>
+      <td className="hidden md:table-cell px-4 py-4 text-sm text-foreground whitespace-nowrap">
+        {formatDate(show.date)}
+      </td>
       <td className="hidden md:table-cell px-4 py-4">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span className={`text-sm font-medium truncate ${show.is_spotify_match ? 'text-primary' : 'text-foreground'}`}>{show.artist_name}</span>
-          {show.spotify_artist_id && <SpotifyIcon artistId={show.spotify_artist_id} isMatch={show.is_spotify_match} size="md" />}
+          <span className="text-sm font-medium truncate text-primary">
+            {show.artist_name}
+          </span>
+          {show.spotify_artist_id && <SpotifyIcon artistId={show.spotify_artist_id} isMatch={show.is_spotify_match} />}
           {showSpotifyBadge && show.is_spotify_match && <span className="text-xs text-green-500 font-medium shrink-0">● match</span>}
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[13px] text-muted-foreground truncate">{show.venue_name}</span>
-          {show.capacity_category && <span title={capTooltip} className={`shrink-0 text-[10px] font-semibold ${capBtn.textColor}`}>{capBtn.label}</span>}
+          {show.capacity_category && (
+            <span title={capTooltip} className={`shrink-0 text-[10px] font-semibold ${capBtn.textColor}`}>{capBtn.label}</span>
+          )}
         </div>
       </td>
       <td className="hidden md:table-cell px-4 py-4 text-center align-middle">{ticketIcon}</td>
 
-      {/* ── Mobile: single full-width cell that slides ── */}
-      {/*
-        We use ONE td spanning all 3 mobile columns so the content slides as a unit.
-        The swipe background is on the <tr> itself (above), so it's always visible.
-        Ghost icons appear at the edges during swipe.
-      */}
-      <td
-        colSpan={3}
-        className="md:hidden py-0 px-0"
-      >
-        {/* Ghost icons — fixed within the row, revealed by the sliding layer */}
+      {/* ── Mobile: single colSpan=3 cell, content slides as unit ── */}
+      <td colSpan={3} className="md:hidden p-0">
         <div className="relative overflow-hidden">
-          {/* Save ghost — left edge */}
-          <div className="absolute left-2 top-0 bottom-0 flex items-center pointer-events-none"
-            style={{ opacity: offset > 8 ? progress : 0 }}>
-            <svg className="w-5 h-5 fill-green-500 text-green-500" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-            </svg>
-          </div>
-          {/* Skip ghost — right edge */}
-          <div className="absolute right-3 top-0 bottom-0 flex items-center pointer-events-none"
-            style={{ opacity: offset < -8 ? progress : 0 }}>
-            <svg className="w-4 h-4 text-destructive" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </div>
 
-          {/* Sliding content */}
+          {/* Ghost icons — fixed in place, revealed behind the sliding layer */}
+          {activeAction && (
+            <div
+              className={`absolute top-0 bottom-0 flex items-center pointer-events-none ${
+                offset > 0 ? 'left-3' : 'right-3'
+              }`}
+              style={{ opacity: progress }}
+            >
+              {getGhostIcon(activeAction)}
+            </div>
+          )}
+
+          {/* Noop label overlay */}
+          {noopLabel && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+              <span className="text-[11px] font-semibold text-amber-400">{noopLabel}</span>
+            </div>
+          )}
+
+          {/* Sliding content row */}
           <div
             className="flex items-center w-full py-3"
             style={{
@@ -252,26 +363,30 @@ function SwipeableRow({
               transition: animating ? 'transform 0.25s ease' : 'none',
             }}
           >
-            {/* Date */}
-            <div className="pl-2 pr-2 shrink-0 w-[90px]">
-              <span className="text-[10px] text-foreground">{formatDate(show.date)}</span>
+            {/* Date — fixed width matches header */}
+            <div className="pl-3 shrink-0 w-[100px]">
+              <span className="text-xs text-foreground whitespace-nowrap">{formatDate(show.date)}</span>
             </div>
             {/* Artist / Venue — grows */}
             <div className="flex-1 min-w-0 pr-2">
               <div className="flex items-center gap-1 mb-0.5">
-                <span className={`text-[11px] font-medium truncate ${show.is_spotify_match ? 'text-primary' : 'text-foreground'}`}>
+                <span className="text-[11px] font-medium truncate text-primary">
                   {show.artist_name}
                 </span>
-                {show.spotify_artist_id && <SpotifyIcon artistId={show.spotify_artist_id} isMatch={show.is_spotify_match} size="sm" />}
-                {showSpotifyBadge && show.is_spotify_match && <span className="text-[10px] text-green-500 font-medium shrink-0">● match</span>}
+                {show.spotify_artist_id && <SpotifyIcon artistId={show.spotify_artist_id} isMatch={show.is_spotify_match} />}
+                {showSpotifyBadge && show.is_spotify_match && (
+                  <span className="text-[10px] text-green-500 font-medium shrink-0">● match</span>
+                )}
               </div>
               <div className="flex items-center gap-1 mt-0.5">
                 <span className="text-[10px] text-muted-foreground truncate">{show.venue_name}</span>
-                {show.capacity_category && <span title={capTooltip} className={`shrink-0 text-[9px] font-semibold ${capBtn.textColor}`}>{capBtn.label}</span>}
+                {show.capacity_category && (
+                  <span title={capTooltip} className={`shrink-0 text-[9px] font-semibold ${capBtn.textColor}`}>{capBtn.label}</span>
+                )}
               </div>
             </div>
-            {/* Tickets */}
-            <div className="pr-3 shrink-0 w-10 flex items-center justify-center">
+            {/* Tix — fixed width matches header */}
+            <div className="pr-3 shrink-0 w-[48px] flex items-center justify-center">
               {ticketIcon}
             </div>
           </div>
@@ -281,22 +396,24 @@ function SwipeableRow({
   );
 }
 
-// ─── Table headers ────────────────────────────────────────────────────────────
+// ─── Table headers ─────────────────────────────────────────────────────────────
+// Mobile widths must exactly mirror the sliding content layout above:
+//   date: w-[100px] pl-3  |  artist: flex-1  |  tix: w-[48px] pr-3
 function TableHeaders() {
   return (
-    <thead className="bg-muted">
+    <thead className="bg-muted/60">
       <tr>
         {/* Desktop */}
         <th className="hidden md:table-cell px-4 py-3 w-20" />
-        <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase w-36">Date</th>
-        <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Artist / Venue</th>
-        <th className="hidden md:table-cell px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase w-24">Tickets</th>
-        {/* Mobile — single cell spanning all 3 columns, but we show labels in the flex layout */}
-        <th colSpan={3} className="md:hidden px-2 py-3">
-          <div className="flex items-center w-full">
-            <div className="w-[90px] text-left text-xs font-medium text-muted-foreground uppercase">Date</div>
-            <div className="flex-1 text-left text-xs font-medium text-muted-foreground uppercase">Artist / Venue</div>
-            <div className="w-10 text-center text-xs font-medium text-muted-foreground uppercase">Tix</div>
+        <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Date</th>
+        <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Artist / Venue</th>
+        <th className="hidden md:table-cell px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide w-24">Tickets</th>
+        {/* Mobile — single th, internal flex mirrors the td sliding layout */}
+        <th colSpan={3} className="md:hidden p-0">
+          <div className="flex items-center w-full py-2.5">
+            <div className="pl-3 shrink-0 w-[100px] text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Date</div>
+            <div className="flex-1 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Artist / Venue</div>
+            <div className="pr-3 shrink-0 w-[48px] text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Tix</div>
           </div>
         </th>
       </tr>
@@ -304,12 +421,12 @@ function TableHeaders() {
   );
 }
 
-// ─── New Shows table ──────────────────────────────────────────────────────────
+// ─── New Shows table ───────────────────────────────────────────────────────────
 function NewShowsTable({
   title,
   shows,
   allReviewed,
-  onHeart,
+  onSave,
   onSkip,
   onSaveAll,
   onSkipAll,
@@ -321,7 +438,7 @@ function NewShowsTable({
   title: string;
   shows: Show[];
   allReviewed: boolean;
-  onHeart: (show: Show) => void;
+  onSave: (show: Show) => void;
   onSkip: (show: Show) => void;
   onSaveAll: () => void;
   onSkipAll: () => void;
@@ -332,14 +449,9 @@ function NewShowsTable({
 }) {
   return (
     <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
-      {/* Header */}
       <div className={`flex items-center justify-between px-6 py-4 border-b border-border ${highlightHeader ? 'bg-primary/5' : ''}`}>
         <h2 className="font-semibold text-card-foreground flex items-center gap-2">
-          {highlightHeader && (
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="#1DB954">
-              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-            </svg>
-          )}
+          {highlightHeader && <SpotifyHeaderIcon />}
           {title}
           <span className="text-muted-foreground font-normal ml-1">({shows.length})</span>
         </h2>
@@ -350,23 +462,17 @@ function NewShowsTable({
           </div>
         )}
       </div>
-
-      {/* Table */}
       <table className="w-full">
         <TableHeaders />
         <tbody>
           {shows.map(show => (
-            <SwipeableRow key={show.show_id} show={show} onHeart={onHeart} onSkip={onSkip} showSpotifyBadge={showSpotifyBadge} />
+            <SwipeableRow key={show.show_id} show={show} context="new" onSave={onSave} onSkip={onSkip} showSpotifyBadge={showSpotifyBadge} />
           ))}
-
-          {/* "You're all set" — inside table when all reviewed */}
           {allReviewed && (
             <tr>
-              <td colSpan={4} className="px-4 py-4">
+              <td colSpan={4} className="px-4 py-5">
                 <p className="text-foreground font-semibold text-sm mb-1">You're all set!</p>
-                <p className="text-muted-foreground text-xs mb-3">
-                  Saved shows will appear in My Shows. Check back soon for new upcoming shows.
-                </p>
+                <p className="text-muted-foreground text-xs mb-3">Saved shows will appear in My Shows. Check back soon for new upcoming shows.</p>
                 <div className="flex gap-2">
                   <button onClick={onViewMyShows} className="px-4 py-1.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition">View My Shows</button>
                   <button onClick={onBrowse} className="px-4 py-1.5 bg-card border border-border text-foreground text-sm font-semibold rounded-lg hover:bg-muted transition">Browse All Shows</button>
@@ -380,11 +486,12 @@ function NewShowsTable({
   );
 }
 
-// ─── Generic ShowTable (Saved, Skipped, All Other Shows) ──────────────────────
+// ─── Generic show table (Saved, Skipped, All Other Shows) ─────────────────────
 function ShowTable({
   title,
   shows,
-  onHeart,
+  context,
+  onSave,
   onSkip,
   onSaveAll,
   onSkipAll,
@@ -395,7 +502,8 @@ function ShowTable({
 }: {
   title: string;
   shows: Show[];
-  onHeart: (show: Show) => void;
+  context: SwipeContext;
+  onSave: (show: Show) => void;
   onSkip: (show: Show) => void;
   onSaveAll?: () => void;
   onSkipAll?: () => void;
@@ -409,7 +517,7 @@ function ShowTable({
       <TableHeaders />
       <tbody>
         {shows.map(show => (
-          <SwipeableRow key={show.show_id} show={show} onHeart={onHeart} onSkip={onSkip} showSpotifyBadge={showSpotifyBadge} />
+          <SwipeableRow key={show.show_id} show={show} context={context} onSave={onSave} onSkip={onSkip} showSpotifyBadge={showSpotifyBadge} />
         ))}
       </tbody>
     </table>
@@ -421,11 +529,7 @@ function ShowTable({
     <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
       <div className={`flex items-center justify-between px-6 py-4 border-b border-border ${highlightHeader ? 'bg-primary/5' : ''}`}>
         <h2 className="font-semibold text-card-foreground flex items-center gap-2">
-          {highlightHeader && (
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="#1DB954">
-              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-            </svg>
-          )}
+          {highlightHeader && <SpotifyHeaderIcon />}
           {title}
           <span className="text-muted-foreground font-normal ml-1">({shows.length})</span>
         </h2>
@@ -441,18 +545,26 @@ function ShowTable({
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+function SpotifyHeaderIcon() {
+  return (
+    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="#1DB954">
+      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+    </svg>
+  );
+}
+
+// ─── Main page ─────────────────────────────────────────────────────────────────
 function UpcomingShowsContent() {
-  const router = useRouter();
+  const router  = useRouter();
   const supabase = createClient();
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [allShows, setAllShows] = useState<Show[]>([]);
-  const [sortBy, setSortBy] = useState<SortKey>('date');
-  const [scope, setScope] = useState<Scope>('spotify');
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState('');
+  const [allShows, setAllShows]           = useState<Show[]>([]);
+  const [sortBy, setSortBy]               = useState<SortKey>('date');
+  const [scope, setScope]                 = useState<Scope>('spotify');
   const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all');
-  const [skippedOpen, setSkippedOpen] = useState(false);
+  const [skippedOpen, setSkippedOpen]     = useState(false);
   const [bannerVisible, setBannerVisible] = useState(false);
   const [pastNavLoading, setPastNavLoading] = useState(false);
 
@@ -499,12 +611,12 @@ function UpcomingShowsContent() {
     } catch { alert('Failed to update shows. Please try again.'); }
   };
 
-  const handleHeart = useCallback((show: Show) => {
-    updateShowStatus(show.show_id, show.status === 'added' ? 'pending' : 'added');
+  const handleSave = useCallback((show: Show) => {
+    updateShowStatus(show.show_id, 'added');
   }, []);
 
   const handleSkip = useCallback((show: Show) => {
-    updateShowStatus(show.show_id, show.status === 'skipped' ? 'pending' : 'skipped');
+    updateShowStatus(show.show_id, 'skipped');
   }, []);
 
   const handlePastShowsClick = async () => {
@@ -512,8 +624,11 @@ function UpcomingShowsContent() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/'); return; }
-      const { data: profile } = await supabase.from('user_profiles')
-        .select('first_concert_year, completed_past_run').eq('user_id', user.id).single();
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('first_concert_year, completed_past_run')
+        .eq('user_id', user.id)
+        .single();
       if (!profile?.first_concert_year) router.push('/discover/past/setup');
       else if (profile.completed_past_run) router.push('/likely-shows');
       else router.push('/matches');
@@ -566,10 +681,12 @@ function UpcomingShowsContent() {
                 Upcoming Shows
               </button>
               <button onClick={handlePastShowsClick} disabled={pastNavLoading}
-                className="flex items-center gap-2.5 px-6 py-3 text-sm font-semibold bg-card text-muted-foreground hover:text-foreground hover:bg-muted border-l border-border disabled:opacity-50">
+                className="flex items-center gap-2.5 px-6 py-3 text-sm font-semibold bg-card text-muted-foreground hover:text-foreground hover:bg-muted border-l border-border disabled:opacity-50 transition">
                 {pastNavLoading
                   ? <div className="w-4 h-4 animate-spin rounded-full border-b-2 border-current" />
-                  : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                 }
                 Past Shows
               </button>
@@ -599,23 +716,25 @@ function UpcomingShowsContent() {
               <p className="text-sm text-foreground">
                 💡 Your matches update automatically — come back any time to see new upcoming shows based on your Spotify library.
               </p>
-              <button onClick={() => { localStorage.setItem('upcoming_banner_dismissed', 'true'); setBannerVisible(false); }}
-                className="text-muted-foreground hover:text-foreground transition shrink-0 text-lg leading-none" title="Close">×</button>
+              <button
+                onClick={() => { localStorage.setItem('upcoming_banner_dismissed', 'true'); setBannerVisible(false); }}
+                className="text-muted-foreground hover:text-foreground transition shrink-0 text-lg leading-none" title="Close"
+              >×</button>
             </div>
           )}
 
           {/* Swipe hint — always visible on mobile, above tables */}
-          <div className="md:hidden bg-muted/50 border border-border rounded-lg px-4 py-2.5 mb-6 flex items-center justify-center gap-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <svg className="w-3.5 h-3.5 text-destructive/70" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <div className="md:hidden bg-muted/50 border border-border rounded-lg px-5 py-3.5 mb-6 flex items-center justify-center gap-4">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <svg className="w-4 h-4 text-destructive/80" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
-              <span className="text-[11px] font-medium">Swipe left to skip</span>
+              <span className="text-xs font-medium">Swipe left to skip</span>
             </div>
-            <span className="text-muted-foreground/40 text-xs">·</span>
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <span className="text-[11px] font-medium">Swipe right to save</span>
-              <svg className="w-3.5 h-3.5 fill-green-500/70 text-green-500/70" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <span className="text-muted-foreground/40 text-sm">·</span>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span className="text-xs font-medium">Swipe right to save</span>
+              <svg className="w-4 h-4 fill-primary text-primary" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
               </svg>
             </div>
@@ -687,7 +806,7 @@ function UpcomingShowsContent() {
                   title="New Shows"
                   shows={newShows}
                   allReviewed={allReviewed}
-                  onHeart={handleHeart}
+                  onSave={handleSave}
                   onSkip={handleSkip}
                   onSaveAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'added')}
                   onSkipAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'skipped')}
@@ -704,7 +823,7 @@ function UpcomingShowsContent() {
                     title="Your Spotify Matches"
                     shows={newMatchedShows}
                     allReviewed={allReviewed}
-                    onHeart={handleHeart}
+                    onSave={handleSave}
                     onSkip={handleSkip}
                     onSaveAll={() => bulkUpdateStatus(newMatchedShows.map(s => s.show_id), 'added')}
                     onSkipAll={() => bulkUpdateStatus(newMatchedShows.map(s => s.show_id), 'skipped')}
@@ -717,7 +836,8 @@ function UpcomingShowsContent() {
                     <ShowTable
                       title="All Other Shows"
                       shows={newUnmatchedShows}
-                      onHeart={handleHeart}
+                      context="new"
+                      onSave={handleSave}
                       onSkip={handleSkip}
                       onSaveAll={() => bulkUpdateStatus(newUnmatchedShows.map(s => s.show_id), 'added')}
                       onSkipAll={() => bulkUpdateStatus(newUnmatchedShows.map(s => s.show_id), 'skipped')}
@@ -729,19 +849,35 @@ function UpcomingShowsContent() {
               )}
 
               {savedShows.length > 0 && (
-                <ShowTable title="Saved" shows={savedShows} onHeart={handleHeart} onSkip={handleSkip} showSpotifyBadge={scope === 'all'} />
+                <ShowTable
+                  title="Saved"
+                  shows={savedShows}
+                  context="saved"
+                  onSave={handleSave}
+                  onSkip={handleSkip}
+                  showSpotifyBadge={scope === 'all'}
+                />
               )}
 
               {skippedShows.length > 0 && (
                 <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
-                  <button onClick={() => setSkippedOpen(o => !o)} className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition text-left">
+                  <button onClick={() => setSkippedOpen(o => !o)}
+                    className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition text-left">
                     <span className="font-semibold text-card-foreground">
                       Skipped <span className="text-muted-foreground font-normal ml-2">({skippedShows.length})</span>
                     </span>
-                    <span className="text-muted-foreground font-mono text-sm">{skippedOpen ? '▼' : '▶'}</span>
+                    <span className="text-muted-foreground text-sm">{skippedOpen ? '▼' : '▶'}</span>
                   </button>
                   {skippedOpen && (
-                    <ShowTable title="" shows={skippedShows} onHeart={handleHeart} onSkip={handleSkip} hideTitleBar showSpotifyBadge={scope === 'all'} />
+                    <ShowTable
+                      title=""
+                      shows={skippedShows}
+                      context="skipped"
+                      onSave={handleSave}
+                      onSkip={handleSkip}
+                      hideTitleBar
+                      showSpotifyBadge={scope === 'all'}
+                    />
                   )}
                 </div>
               )}
