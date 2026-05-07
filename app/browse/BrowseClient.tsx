@@ -506,12 +506,12 @@ function BrowseContent({
   const thCenter   = 'bg-muted px-0 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider'
 
   const festivalBadgeClass = isDark
-    ? 'inline-flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-medium bg-violet-500/20 text-violet-300 border border-violet-500/30 hover:bg-violet-500/30 transition whitespace-nowrap'
-    : 'inline-flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-medium bg-violet-50 text-violet-600 border border-violet-200 hover:bg-violet-100 transition whitespace-nowrap'
+    ? 'inline-flex items-center gap-0.5 px-1.5 py-px rounded text-[9px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition whitespace-nowrap'
+    : 'inline-flex items-center gap-0.5 px-1.5 py-px rounded text-[9px] font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition whitespace-nowrap'
 
   const festivalBadgeMobileClass = isDark
-    ? 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 hover:bg-violet-500/30 transition flex-shrink-0'
-    : 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-violet-50 text-violet-600 border border-violet-200 hover:bg-violet-100 transition flex-shrink-0'
+    ? 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition flex-shrink-0'
+    : 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition flex-shrink-0'
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -728,19 +728,22 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted px-4 py-3 border-b border-border" style={{ gridTemplateColumns: 'auto 140px 1fr 80px 80px 56px' }}>
+              <div className="hidden md:grid bg-muted px-4 py-3 border-b border-border" style={{ gridTemplateColumns: 'auto 140px 1fr auto 56px' }}>
                 {user && <div className="w-10" />}
                 <button onClick={() => handleSort('date')} className={`${thSortable} text-left`}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
-                <button onClick={() => handleSort('artist')} className={`${thSortable} text-left`}>
-                  Artist / Venue {sortField === 'artist' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
-                  {sortField === 'venue' ? <span className="ml-1 text-[10px]">(venue {sortDir === 'asc' ? '↑' : '↓'})</span> : ''}
-                </button>
+                <div className="flex items-center gap-4">
+                  <button onClick={() => handleSort('artist')} className={`${thSortable} text-left`}>
+                    Artist / Venue {sortField === 'artist' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                  </button>
+                  {sortField === 'venue' && (
+                    <span className={`${thBase} text-left text-[10px]`}>venue {sortDir === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </div>
                 <button onClick={() => handleSort('festival')} className={`${thSortable} text-left`}>
                   Festival {sortField === 'festival' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
-                <div className={`${thBase} text-center`}>Spotify</div>
                 <div className={`${thBase} text-center`}>Setlist</div>
               </div>
 
@@ -788,14 +791,6 @@ function BrowseContent({
                     </button>
                   )
 
-                  const spotifyIcon = show.spotify_artist_id
-                    ? <a href={`https://open.spotify.com/artist/${show.spotify_artist_id}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-70 transition-opacity inline-flex items-center justify-center" title="Open in Spotify">
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="#1DB954">
-                          <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-                        </svg>
-                      </a>
-                    : <span className="text-muted-foreground text-sm">–</span>
-
                   const setlistIcon = show.setlist_url
                     ? <a href={show.setlist_url} target="_blank" rel="noopener noreferrer" className="hover:opacity-70 transition-opacity inline-flex items-center justify-center" title="View on setlist.fm">
                         <img src="https://www.setlist.fm/favicon.ico" alt="setlist.fm" className="w-4 h-4 dark:invert" />
@@ -805,7 +800,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center px-4 py-3 gap-3" style={{ gridTemplateColumns: 'auto 140px 1fr 80px 80px 56px' }}>
+                      <div className="hidden md:grid items-center px-4 py-3 gap-3" style={{ gridTemplateColumns: 'auto 140px 1fr auto 56px' }}>
                         {user && <div className="w-10 flex items-center">{heartButton}</div>}
 
                         {/* Date */}
@@ -824,9 +819,17 @@ function BrowseContent({
                               {show.artist_name}
                             </button>
                             {show.spotify_artist_id && (
-                              <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="#1DB954">
-                                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-                              </svg>
+                              <a
+                                href={`https://open.spotify.com/artist/${show.spotify_artist_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Open in Spotify"
+                                className="flex-shrink-0 hover:opacity-70 transition-opacity"
+                              >
+                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="#1DB954">
+                                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                                </svg>
+                              </a>
                             )}
                           </div>
                           <div className="flex items-center gap-1.5">
@@ -845,23 +848,19 @@ function BrowseContent({
                           </div>
                         </div>
 
-                        {/* Festival */}
-                        <div className="flex items-center">
+                        {/* Festival — immediately after Artist/Venue */}
+                        <div className="flex items-center w-32">
                           {show.festival_name
                             ? <button
                                 onClick={() => handleFestivalChange({ value: show.festival_name!, label: show.festival_name! })}
                                 className={festivalBadgeClass}
                                 title={`Filter by ${show.festival_name}`}
                               >
-                                <span className="font-bold">F</span>
-                                <span className="truncate max-w-[60px]">· {show.festival_name}</span>
+                                <span className="truncate max-w-[110px]">{show.festival_name}</span>
                               </button>
                             : null
                           }
                         </div>
-
-                        {/* Spotify */}
-                        <div className="flex items-center justify-center">{spotifyIcon}</div>
 
                         {/* Setlist */}
                         <div className="flex items-center justify-center">{setlistIcon}</div>
@@ -874,13 +873,22 @@ function BrowseContent({
                           {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                         </div>
                         <div className="min-w-0">
-                          <button
-                            onClick={() => handleArtistChange({ value: show.artist_id, label: show.artist_name })}
-                            className="text-[11px] font-medium text-primary hover:opacity-80 hover:underline text-left w-full truncate block leading-snug"
-                            title={show.artist_name}
-                          >
-                            {show.artist_name}
-                          </button>
+                          <div className="flex items-center gap-1 mb-0.5">
+                            <button
+                              onClick={() => handleArtistChange({ value: show.artist_id, label: show.artist_name })}
+                              className="text-[11px] font-medium text-primary hover:opacity-80 hover:underline text-left truncate leading-snug"
+                              title={show.artist_name}
+                            >
+                              {show.artist_name}
+                            </button>
+                            {show.spotify_artist_id && (
+                              <a href={`https://open.spotify.com/artist/${show.spotify_artist_id}`} target="_blank" rel="noopener noreferrer" title="Open in Spotify" className="flex-shrink-0 hover:opacity-70">
+                                <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="#1DB954">
+                                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                                </svg>
+                              </a>
+                            )}
+                          </div>
                           <div className="flex items-center gap-1 mt-0.5">
                             <button
                               onClick={() => handleVenueChange({ value: show.venue_id, label: show.venue_name })}
@@ -904,7 +912,7 @@ function BrowseContent({
                           </div>
                         </div>
                         <div className="flex items-center justify-center gap-2">
-                          {setlistIcon}{spotifyIcon}
+                          {setlistIcon}
                         </div>
                       </div>
                     </div>

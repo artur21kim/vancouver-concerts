@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-export const revalidate = 3600
+export const revalidate = 0
 
 export async function GET() {
   const supabase = createClient(
@@ -25,7 +25,8 @@ export async function GET() {
     new Set((data || []).map((r: any) => r.festival_name as string))
   ).sort()
 
-  return NextResponse.json({
-    festivals: unique.map(f => ({ value: f, label: f })),
-  })
+  return NextResponse.json(
+    { festivals: unique.map(f => ({ value: f, label: f })) },
+    { headers: { 'Cache-Control': 'no-store' } }
+  )
 }
