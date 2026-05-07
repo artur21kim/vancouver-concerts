@@ -93,6 +93,7 @@ export default function HomeClient({
   venues: Venue[]
 }) {
   const router = useRouter()
+  const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const [selectedDecade, setSelectedDecade] = useState<Decade>('all')
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
@@ -267,20 +268,7 @@ export default function HomeClient({
           boxWidth: 14,
           padding: 12,
           font: { size: 12 },
-          generateLabels: (chart: any) => {
-            const original = chart.data.datasets.map((ds: any, i: number) => ({
-              text: ds.label,
-              fillStyle: ds.backgroundColor,
-              strokeStyle: ds.borderColor,
-              lineWidth: 0,
-              datasetIndex: i,
-              hidden: false,
-            }))
-            // Reorder: Small, Large, Medium, X-Large, Unknown
-            // so mobile wraps as [Small, Large] / [Medium, X-Large, Unknown]
-            const order = ['Small (<500)', 'Large (1.5K–10K)', 'Medium (500–1.5K)', 'X-Large (10K+)', 'Unknown']
-            return order.map((name: string) => original.find((l: any) => l.text === name)).filter(Boolean)
-          },
+          color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.75)',
         },
         onClick: () => {}
       },
@@ -340,7 +328,7 @@ export default function HomeClient({
         }
       }
     }
-  }), [selectedDecade, selectedYear, chartData, router])
+  }), [selectedDecade, selectedYear, chartData, router, resolvedTheme])
 
   const chartNav = useMemo(() => {
     if (selectedMonth !== null && selectedYear) {
