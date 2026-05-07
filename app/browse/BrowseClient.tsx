@@ -512,7 +512,7 @@ function BrowseContent({
   const showFestivalContext = showType === 'festival' || !!festival
   const thBase     = 'text-left text-xs font-medium text-muted-foreground uppercase tracking-wider py-3 px-3'
   const thSortable = `${thBase} cursor-pointer hover:text-foreground transition-colors`
-  const thCenter   = 'text-center text-xs font-medium text-muted-foreground uppercase tracking-wider py-3 px-3'
+  const thCenter   = 'text-center text-xs font-medium text-muted-foreground uppercase tracking-wider py-3 px-4'
 
   const festivalBadgeClass = isDark
     ? 'inline-flex items-center gap-0.5 px-1.5 py-px rounded text-[9px] font-medium bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 hover:bg-fuchsia-500/30 transition whitespace-nowrap'
@@ -629,9 +629,9 @@ function BrowseContent({
               </div>
             </div>
 
-            {/* Row 2: capacity + status pills */}
+            {/* Row 2: capacity + status pills + year jump */}
             <div className="mb-3">
-              <div className="flex items-center gap-x-3 gap-y-3 flex-wrap">
+              <div className="flex items-center gap-x-3 gap-y-2 flex-wrap">
                 <div className="flex rounded-lg border border-border overflow-hidden text-xs md:text-sm font-semibold">
                   {CAPACITY_BUTTONS.map((btn, i) => (
                     <button
@@ -664,40 +664,48 @@ function BrowseContent({
                     </button>
                   ))}
                 </div>
+
+                {/* Year jump — inline beside status pills */}
+                {decade !== 'all' && (
+                  <form onSubmit={handleYearJump} className="flex items-center gap-1.5 ml-auto">
+                    <input
+                      type="number"
+                      min="1900"
+                      max="2099"
+                      placeholder={`Year in ${decade}…`}
+                      value={yearJumpInput}
+                      onChange={e => setYearJumpInput(e.target.value)}
+                      className="w-28 px-2.5 py-1.5 text-xs text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+                    />
+                    <button
+                      type="submit"
+                      className="text-xs px-2.5 py-1.5 rounded-md bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors"
+                    >
+                      Go
+                    </button>
+                    {year && (
+                      <button
+                        type="button"
+                        onClick={() => { setYear(undefined); setMonth(undefined); applyFilter({ year: undefined, month: undefined }) }}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+                      >
+                        Clear year
+                      </button>
+                    )}
+                  </form>
+                )}
               </div>
+
+              {/* Unknown capacity note */}
+              {capacity && capacity !== 'all' && capacity !== 'unknown' && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  ~7,000 shows have unknown venue capacity and are excluded from this filter.
+                </p>
+              )}
             </div>
 
-            {/* Row 3: decade buttons with year jump above, right-aligned to Go button edge */}
+            {/* Row 3: decade buttons */}
             <div className="overflow-x-auto -mx-3 px-3 md:-mx-4 md:px-4">
-              {/* Year jump — above decade row, Go button right-aligned to last decade button */}
-              {decade !== 'all' && (
-                <form onSubmit={handleYearJump} className="flex items-center justify-end gap-1.5 mb-2">
-                  <input
-                    type="number"
-                    min="1900"
-                    max="2099"
-                    placeholder={`Year in ${decade}…`}
-                    value={yearJumpInput}
-                    onChange={e => setYearJumpInput(e.target.value)}
-                    className="w-32 px-2.5 py-1.5 text-xs text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
-                  />
-                  <button
-                    type="submit"
-                    className="text-xs px-2.5 py-1.5 rounded-md bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors whitespace-nowrap"
-                  >
-                    Go
-                  </button>
-                  {year && (
-                    <button
-                      type="button"
-                      onClick={() => { setYear(undefined); setMonth(undefined); applyFilter({ year: undefined, month: undefined }) }}
-                      className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
-                    >
-                      Clear year
-                    </button>
-                  )}
-                </form>
-              )}
               <div className="flex gap-2 min-w-max">
                 {DECADES.map(label => {
                   const decadeParam = decadeToParam(label)
@@ -736,7 +744,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(160px,1fr) minmax(140px,1fr) minmax(100px,160px) 64px` }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px 180px 200px 160px 64px` }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -798,7 +806,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(160px,1fr) minmax(140px,1fr) minmax(100px,160px) 64px` }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px 180px 200px 160px 64px` }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
