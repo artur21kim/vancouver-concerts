@@ -279,7 +279,6 @@ function SwipeableRow({
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-sm font-medium text-primary">{show.artist_name}</span>
           {show.spotify_artist_id && <SpotifyIcon artistId={show.spotify_artist_id} isMatch={show.is_spotify_match} />}
-          {showSpotifyBadge && show.is_spotify_match && <span className="text-xs text-green-500 font-medium shrink-0">● match</span>}
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[13px] text-muted-foreground">{show.venue_name}</span>
@@ -306,16 +305,13 @@ function SwipeableRow({
           ) : (
             <div className="flex items-center w-full py-3"
               style={{ transform: `translateX(${offset}px)`, transition: animating ? 'transform 0.25s ease' : 'none' }}>
-              <div className="pl-3 shrink-0 w-[90px]">
+              <div className="pl-3 shrink-0 w-[85px]">
                 <span className="text-xs text-foreground whitespace-nowrap">{formatDate(show.date)}</span>
               </div>
               <div className="flex-1 min-w-0 px-2">
                 <div className="flex items-center gap-1 mb-0.5">
                   <span className="text-[11px] font-medium truncate text-primary">{show.artist_name}</span>
                   {show.spotify_artist_id && <SpotifyIcon artistId={show.spotify_artist_id} isMatch={show.is_spotify_match} />}
-                  {showSpotifyBadge && show.is_spotify_match && (
-                    <span className="text-[10px] text-green-500 font-medium shrink-0">● match</span>
-                  )}
                 </div>
                 <div className="flex items-center gap-1 mt-0.5">
                   <span className="text-[10px] text-muted-foreground truncate">{show.venue_name}</span>
@@ -324,7 +320,7 @@ function SwipeableRow({
                   )}
                 </div>
               </div>
-              <div className="pr-3 shrink-0 w-[44px] flex items-center justify-center">{ticketIcon}</div>
+              <div className="pr-3 shrink-0 w-[52px] flex items-center justify-center">{ticketIcon}</div>
             </div>
           )}
         </div>
@@ -363,7 +359,7 @@ function TableHeaders({ sortBy, sortDir, onSort }: TableSortProps) {
         {/* Mobile */}
         <th colSpan={3} className="md:hidden p-0">
           <div className="flex items-center w-full py-2.5">
-            <div className={`pl-3 shrink-0 w-[90px] text-left ${thSort}`} onClick={() => onSort('date')}>
+            <div className={`pl-3 shrink-0 w-[85px] text-left ${thSort}`} onClick={() => onSort('date')}>
               Date{arrow('date')}
             </div>
             <div className="flex-1 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide px-2">
@@ -371,7 +367,7 @@ function TableHeaders({ sortBy, sortDir, onSort }: TableSortProps) {
               <span className="mx-1 text-muted-foreground/30">/</span>
               <span className={thSort} onClick={() => onSort('venue')}>Venue{arrow('venue')}</span>
             </div>
-            <div className="pr-3 shrink-0 w-[44px] text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Tix</div>
+            <div className="pr-3 shrink-0 w-[52px] text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Tix</div>
           </div>
         </th>
       </tr>
