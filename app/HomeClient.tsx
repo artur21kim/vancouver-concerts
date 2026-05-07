@@ -62,7 +62,7 @@ const LEGEND_TO_TOOLTIP: Record<string, string> = Object.fromEntries(
 )
 
 const CAPACITY_BUCKETS: CapacityBucket[] = ['small', 'medium', 'large', 'xlarge', 'unknown']
-const CAPACITY_BUTTON_ORDER: (CapacityFilter)[] = ['small', 'medium', 'large', 'xlarge', 'all', 'unknown']
+const CAPACITY_BUTTON_ORDER: (CapacityFilter)[] = ['all', 'small', 'medium', 'large', 'xlarge', 'unknown']
 
 const CAPACITY_DISPLAY_NAMES: Record<CapacityBucket, string> = {
   small: 'Small', medium: 'Medium', large: 'Large', xlarge: 'X-Large', unknown: 'Unknown'
@@ -424,7 +424,7 @@ export default function HomeClient({
                 const isAll = k === 'all'
                 const isActive = capacityFilter === k
                 const unselectedClass = isAll ? 'text-muted-foreground' : CAPACITY_META[k as CapacityBucket].unselectedClass
-                const label = isAll ? 'All' : CAPACITY_META[k as CapacityBucket].label
+                const label = isAll ? 'All Venues' : CAPACITY_META[k as CapacityBucket].label
                 const tooltip = isAll ? 'All venues' : CAPACITY_META[k as CapacityBucket].tooltip
                 return (
                   <button
