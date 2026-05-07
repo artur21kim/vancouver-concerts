@@ -496,12 +496,12 @@ function BrowseContent({
     noOptionsMessage:  (base: any) => ({ ...base, color: isDark ? 'oklch(0.55 0.04 220)' : 'oklch(0.45 0.02 85)' }),
   }
 
-  // Capacity badge config — keys match exact DB values (lowercased for safety)
+  // Capacity badge config — minimal pill style matching Discover page (no border)
   const capBadgeColors: Record<string, string> = {
-    'small (<500)':      isDark ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'  : 'bg-purple-50 text-purple-600 border-purple-200',
-    'medium (500-1.5k)': isDark ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'        : 'bg-blue-50 text-blue-600 border-blue-200',
-    'large (1.5k-10k)':  isDark ? 'bg-orange-500/20 text-orange-300 border-orange-500/30'  : 'bg-orange-50 text-orange-600 border-orange-200',
-    'x-large (10k+)':    isDark ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'        : 'bg-rose-50 text-rose-600 border-rose-200',
+    'small (<500)':      isDark ? 'bg-purple-500/25 text-purple-300'  : 'bg-purple-100 text-purple-700',
+    'medium (500-1.5k)': isDark ? 'bg-blue-500/25 text-blue-300'      : 'bg-blue-100 text-blue-700',
+    'large (1.5k-10k)':  isDark ? 'bg-orange-500/25 text-orange-300'  : 'bg-orange-100 text-orange-700',
+    'x-large (10k+)':    isDark ? 'bg-rose-500/25 text-rose-300'      : 'bg-rose-100 text-rose-700',
   }
   const capLabelMap: Record<string, string> = {
     'small (<500)':      'S',
@@ -734,9 +734,9 @@ function BrowseContent({
 
           {/* Shows Table — Discover-style card layout */}
           {!loading && (
-            <div className="rounded-lg shadow-lg overflow-hidden w-full">
+            <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px 240px 200px 160px 56px` }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(180px,1fr) minmax(160px,1fr) minmax(120px,180px) 56px` }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -798,7 +798,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px 240px 200px 160px 56px` }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(180px,1fr) minmax(160px,1fr) minmax(120px,180px) 56px` }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
@@ -840,7 +840,7 @@ function BrowseContent({
                             {show.venue_name}
                           </button>
                           {capLabel && (
-                            <span className={`inline-flex items-center px-1 py-px rounded text-[9px] font-bold border flex-shrink-0 ${capColor}`}>
+                            <span className={`inline-flex items-center px-1 py-px rounded text-[9px] font-bold flex-shrink-0 ${capColor}`}>
                               {capLabel}
                             </span>
                           )}
@@ -896,7 +896,7 @@ function BrowseContent({
                               {show.venue_name}
                             </button>
                             {capLabel && (
-                              <span className={`inline-flex items-center px-1 py-px rounded text-[8px] font-bold border flex-shrink-0 ${capColor}`}>
+                              <span className={`inline-flex items-center px-1 py-px rounded text-[8px] font-bold flex-shrink-0 ${capColor}`}>
                                 {capLabel}
                               </span>
                             )}
