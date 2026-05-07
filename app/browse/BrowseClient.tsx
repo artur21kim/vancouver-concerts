@@ -496,12 +496,12 @@ function BrowseContent({
     noOptionsMessage:  (base: any) => ({ ...base, color: isDark ? 'oklch(0.55 0.04 220)' : 'oklch(0.45 0.02 85)' }),
   }
 
-  // Capacity badge config — minimal pill style matching Discover page (no border)
-  const capBadgeColors: Record<string, string> = {
-    'small (<500)':      isDark ? 'bg-purple-500/25 text-purple-300'  : 'bg-purple-100 text-purple-700',
-    'medium (500-1.5k)': isDark ? 'bg-blue-500/25 text-blue-300'      : 'bg-blue-100 text-blue-700',
-    'large (1.5k-10k)':  isDark ? 'bg-orange-500/25 text-orange-300'  : 'bg-orange-100 text-orange-700',
-    'x-large (10k+)':    isDark ? 'bg-rose-500/25 text-rose-300'      : 'bg-rose-100 text-rose-700',
+  // Capacity badge config — inline styles to avoid Tailwind purge
+  const capBadgeStyle: Record<string, React.CSSProperties> = {
+    'small (<500)':      isDark ? { background: 'rgba(168,85,247,0.2)', color: '#c4b5fd' } : { background: '#f3e8ff', color: '#7e22ce' },
+    'medium (500-1.5k)': isDark ? { background: 'rgba(59,130,246,0.2)', color: '#93c5fd' } : { background: '#dbeafe', color: '#1d4ed8' },
+    'large (1.5k-10k)':  isDark ? { background: 'rgba(249,115,22,0.2)', color: '#fdba74' } : { background: '#ffedd5', color: '#c2410c' },
+    'x-large (10k+)':    isDark ? { background: 'rgba(244,63,94,0.2)',  color: '#fda4af' } : { background: '#ffe4e6', color: '#be123c' },
   }
   const capLabelMap: Record<string, string> = {
     'small (<500)':      'S',
@@ -736,7 +736,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(180px,1fr) minmax(160px,1fr) minmax(120px,180px) 56px` }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(160px,1fr) minmax(140px,1fr) minmax(100px,160px) 64px` }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -776,7 +776,7 @@ function BrowseContent({
                   const venueTooltip = show.other_names ? `Also known as: ${show.other_names}` : show.venue_name
                   const capKey = show.capacity_category?.toLowerCase() ?? null
                   const capLabel = capKey ? (capLabelMap[capKey] ?? null) : null
-                  const capColor = capKey ? (capBadgeColors[capKey] ?? '') : ''
+                  const capStyle = capKey ? (capBadgeStyle[capKey] ?? null) : null
 
                   const heartButton = (
                     <button onClick={() => toggleShow(show.show_id)} disabled={isLoading} className="focus:outline-none disabled:opacity-50 flex-shrink-0" title={isAdded ? 'Remove from My Shows' : 'Add to My Shows'}>
@@ -798,7 +798,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(180px,1fr) minmax(160px,1fr) minmax(120px,180px) 56px` }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(160px,1fr) minmax(140px,1fr) minmax(100px,160px) 64px` }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
@@ -839,8 +839,8 @@ function BrowseContent({
                           >
                             {show.venue_name}
                           </button>
-                          {capLabel && (
-                            <span className={`inline-flex items-center px-1 py-px rounded text-[9px] font-bold flex-shrink-0 ${capColor}`}>
+                          {capLabel && capStyle && (
+                            <span style={capStyle} className="inline-flex items-center px-1 py-px rounded text-[9px] font-bold flex-shrink-0">
                               {capLabel}
                             </span>
                           )}
@@ -895,8 +895,8 @@ function BrowseContent({
                             >
                               {show.venue_name}
                             </button>
-                            {capLabel && (
-                              <span className={`inline-flex items-center px-1 py-px rounded text-[8px] font-bold flex-shrink-0 ${capColor}`}>
+                            {capLabel && capStyle && (
+                              <span style={capStyle} className="inline-flex items-center px-1 py-px rounded text-[8px] font-bold flex-shrink-0">
                                 {capLabel}
                               </span>
                             )}
