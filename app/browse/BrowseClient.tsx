@@ -510,7 +510,6 @@ function BrowseContent({
                   loadingMessage={() => 'Searching…'}
                   className="text-sm"
                   styles={customSelectStyles}
-                  debounceTimeout={300}
                 />
               </div>
 
