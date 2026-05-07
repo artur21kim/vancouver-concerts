@@ -644,11 +644,11 @@ function UpcomingShowsContent() {
               {/* My Matches / All Shows */}
               <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
                 <button onClick={() => setScope('spotify')}
-                  className={`px-4 py-2 transition ${scope === 'spotify' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                  className={`px-4 py-2.5 transition ${scope === 'spotify' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
                   My Matches
                 </button>
                 <button onClick={() => setScope('all')}
-                  className={`px-4 py-2 transition ${scope === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                  className={`px-4 py-2.5 transition ${scope === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
                   All Shows
                 </button>
               </div>
