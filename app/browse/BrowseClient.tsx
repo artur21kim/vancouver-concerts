@@ -470,7 +470,7 @@ function BrowseContent({
                   setStatusFilter('all'); setYearRange([1900, 2026]); setHasManualYearChange(false)
                   setCurrentPage(1); setPageInput('1')
                 }}
-                className="text-xs border border-border rounded px-2 py-0.5 text-muted-foreground hover:border-destructive hover:text-destructive transition-colors"
+                className="text-xs border border-red-500/40 text-red-400 rounded px-2 py-0.5 hover:bg-red-500/10 hover:border-red-500 transition-colors"
               >
                 Clear All
               </button>
@@ -526,13 +526,13 @@ function BrowseContent({
               )}
               <div className="flex items-center gap-x-3 gap-y-3">
                 {/* Size pill — Discover-style joined pill with dividers */}
-                <div className="flex rounded-lg border border-border overflow-hidden text-sm font-semibold">
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs md:text-sm font-semibold">
                   {CAPACITY_BUTTONS.map((btn, i) => (
                     <button
                       key={btn.key}
                       onClick={() => handleCapacityButton(btn.key, btn.range)}
                       title={btn.tooltip}
-                      className={`px-3 py-2.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                      className={`px-2 py-1.5 md:px-3 md:py-2.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
                         capacityFilter === btn.key
                           ? 'bg-primary text-primary-foreground'
                           : `bg-card ${btn.unselectedClass} hover:bg-muted`
@@ -544,12 +544,12 @@ function BrowseContent({
                 </div>
 
                 {/* Status pill */}
-                <div className="flex rounded-lg border border-border overflow-hidden text-sm font-semibold">
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs md:text-sm font-semibold">
                   {STATUS_BUTTONS.map((btn, i) => (
                     <button
                       key={btn.key}
                       onClick={() => { setStatusFilter(btn.key); setCurrentPage(1); setPageInput('1') }}
-                      className={`px-2.5 py-1.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                      className={`px-2 py-1.5 md:px-2.5 md:py-1.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
                         statusFilter === btn.key
                           ? 'bg-primary text-primary-foreground'
                           : `bg-card ${btn.unselectedClass} hover:bg-muted`
