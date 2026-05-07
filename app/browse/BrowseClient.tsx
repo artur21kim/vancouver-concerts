@@ -187,7 +187,7 @@ function BrowseContent({
   // ── Festival options (loaded once) ────────────────────────────────────────
   const [festivalOptions, setFestivalOptions] = useState<SelectOption[]>([])
   useEffect(() => {
-    fetch('/api/browse/festivals')
+    fetch('/api/browse/festivals', { cache: 'no-store' })
       .then(r => r.json())
       .then(d => setFestivalOptions(d.festivals || []))
       .catch(() => {})
@@ -353,13 +353,28 @@ function BrowseContent({
   }
 
   const handleSort = (field: SortField) => {
-    let newDir: 'asc' | 'desc' = 'asc'
     if (sortField === field) {
-      if (sortDir === 'asc') { newDir = 'desc' }
-      else { setSortField('date'); setSortDir('desc'); fetchData({ ...currentParams(), sort: 'date', dir: 'desc', page: 1 }); return }
+      if (field === 'date') {
+        // Date toggles desc ↔ asc indefinitely
+        const newDir = sortDir === 'desc' ? 'asc' : 'desc'
+        setSortDir(newDir)
+        fetchData({ ...currentParams(), sort: field, dir: newDir, page: 1 })
+      } else {
+        if (sortDir === 'asc') {
+          // Second click: flip to desc
+          setSortDir('desc')
+          fetchData({ ...currentParams(), sort: field, dir: 'desc', page: 1 })
+        } else {
+          // Third click: reset to date desc
+          setSortField('date'); setSortDir('desc')
+          fetchData({ ...currentParams(), sort: 'date', dir: 'desc', page: 1 })
+        }
+      }
+    } else {
+      // New field: start asc
+      setSortField(field); setSortDir('asc')
+      fetchData({ ...currentParams(), sort: field, dir: 'asc', page: 1 })
     }
-    setSortField(field); setSortDir(newDir)
-    fetchData({ ...currentParams(), sort: field, dir: newDir, page: 1 })
   }
 
   const handlePageChange = (p: number) => {
@@ -605,9 +620,9 @@ function BrowseContent({
               </div>
             </div>
 
-            {/* Row 2: capacity + status pills */}
+            {/* Row 2: capacity + status pills + year jump */}
             <div className="mb-5">
-              <div className="flex items-center gap-x-3 gap-y-3">
+              <div className="flex items-center gap-x-3 gap-y-3 flex-wrap">
                 <div className="flex rounded-lg border border-border overflow-hidden text-xs md:text-sm font-semibold">
                   {CAPACITY_BUTTONS.map((btn, i) => (
                     <button
@@ -640,6 +655,36 @@ function BrowseContent({
                     </button>
                   ))}
                 </div>
+
+                {/* Year jump — inline, shown when a specific decade is active */}
+                {decade !== 'all' && (
+                  <form onSubmit={handleYearJump} className="flex items-center gap-1.5 ml-auto">
+                    <input
+                      type="number"
+                      min="1900"
+                      max="2099"
+                      placeholder={`Year in ${decade}…`}
+                      value={yearJumpInput}
+                      onChange={e => setYearJumpInput(e.target.value)}
+                      className="w-32 px-2.5 py-1.5 text-xs text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+                    />
+                    <button
+                      type="submit"
+                      className="text-xs px-2.5 py-1.5 rounded-md bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors"
+                    >
+                      Go
+                    </button>
+                    {year && (
+                      <button
+                        type="button"
+                        onClick={() => { setYear(undefined); setMonth(undefined); applyFilter({ year: undefined, month: undefined }) }}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+                      >
+                        Clear year
+                      </button>
+                    )}
+                  </form>
+                )}
               </div>
             </div>
 
@@ -649,7 +694,7 @@ function BrowseContent({
                 {DECADES.map(label => {
                   const decadeParam = decadeToParam(label)
                   const isActive = decade === decadeParam && !year
-                  const isParent = !!year && decadeContainsYear(decadeParam, parseInt(year || '0'))
+                  const isParent = !!year && decadeParam !== 'all' && decadeContainsYear(decadeParam, parseInt(year || '0'))
                   return (
                     <button
                       key={label}
@@ -670,35 +715,6 @@ function BrowseContent({
               </div>
             </div>
 
-            {/* Year jump input — shown whenever a specific decade (not All Time) is active */}
-            {decade !== 'all' && (
-              <form onSubmit={handleYearJump} className="mt-3 flex items-center gap-2">
-                <input
-                  type="number"
-                  min="1900"
-                  max="2099"
-                  placeholder={`Year in ${decade}…`}
-                  value={yearJumpInput}
-                  onChange={e => setYearJumpInput(e.target.value)}
-                  className="w-36 px-2.5 py-1 text-xs text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
-                />
-                <button
-                  type="submit"
-                  className="text-xs px-2.5 py-1 rounded-md bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors"
-                >
-                  Go
-                </button>
-                {year && (
-                  <button
-                    type="button"
-                    onClick={() => { setYear(undefined); setMonth(undefined); applyFilter({ year: undefined, month: undefined }) }}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Clear year
-                  </button>
-                )}
-              </form>
-            )}
           </div>
 
           {/* Loading overlay */}
@@ -708,148 +724,159 @@ function BrowseContent({
             </div>
           )}
 
-          {/* Shows Table */}
+          {/* Shows Table — Discover-style card layout */}
           {!loading && (
-            <div className="rounded-lg shadow-lg overflow-x-auto">
-              <table className="min-w-full divide-y divide-border table-fixed">
-                <thead className="bg-muted">
-                  <tr>
-                    {user && <th className={`hidden md:table-cell ${thBase} w-12`} />}
-                    <th className={`hidden md:table-cell ${thSortable} w-28 whitespace-nowrap`} onClick={() => handleSort('date')}>
-                      Date {sortField === 'date' && (sortDir === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th className={`hidden md:table-cell ${thSortable} w-64`} onClick={() => handleSort('artist')}>
-                      Artist {sortField === 'artist' && (sortDir === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th className={`hidden md:table-cell ${thSortable} w-56`} onClick={() => handleSort('venue')}>
-                      <span className="flex items-center gap-1.5">
-                        <span>Venue {sortField === 'venue' && (sortDir === 'asc' ? '↑' : '↓')}</span>
-                        {showFestivalContext && (
-                          <button
-                            onClick={e => { e.stopPropagation(); handleSort('festival') }}
-                            className={`text-[10px] font-bold px-1 py-px rounded border ${
-                              sortField === 'festival'
-                                ? isDark ? 'bg-violet-500/30 text-violet-300 border-violet-400/50' : 'bg-violet-100 text-violet-700 border-violet-300'
-                                : isDark ? 'bg-violet-500/10 text-violet-400 border-violet-500/20 hover:bg-violet-500/20' : 'bg-violet-50 text-violet-500 border-violet-200 hover:bg-violet-100'
-                            }`}
-                            title="Sort by festival name"
-                          >
-                            {sortField === 'festival' ? (sortDir === 'asc' ? 'F↑' : 'F↓') : 'F'}
-                          </button>
-                        )}
-                      </span>
-                    </th>
-                    <th className={`hidden md:table-cell ${thCenter} w-14`}>Setlist</th>
-                    <th className={`hidden md:table-cell ${thCenter} w-14`}>Spotify</th>
-                    {user && <th className={`md:hidden ${thBase} w-8 px-1`} />}
-                    <th className={`md:hidden ${thSortable} px-1`} onClick={() => handleSort('date')}>
-                      Date {sortField === 'date' && (sortDir === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th className={`md:hidden ${thBase} px-1`}>
-                      <span className="flex items-center gap-3">
-                        <button onClick={() => handleSort('artist')} className={`hover:text-foreground transition-colors ${sortField === 'artist' ? 'text-foreground' : ''}`}>
-                          Artist {sortField === 'artist' && (sortDir === 'asc' ? '↑' : '↓')}
-                        </button>
-                        <button onClick={() => handleSort('venue')} className={`hover:text-foreground transition-colors ${sortField === 'venue' ? 'text-foreground' : ''}`}>
-                          Venue {sortField === 'venue' && (sortDir === 'asc' ? '↑' : '↓')}
-                        </button>
-                      </span>
-                    </th>
-                    <th className={`md:hidden ${thCenter}`} />
-                  </tr>
-                </thead>
-                <tbody className="bg-card divide-y divide-border">
-                  {shows.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="text-center py-12 text-muted-foreground">
-                        No shows found matching your filters.
-                      </td>
-                    </tr>
-                  )}
-                  {shows.map(show => {
-                    const isAdded   = userShows.has(show.show_id)
-                    const isLoading = loadingShows.has(show.show_id)
-                    const venueTooltip = show.other_names ? `Also known as: ${show.other_names}` : show.venue_name
+            <div className="rounded-lg shadow-lg overflow-hidden">
+              {/* Desktop header */}
+              <div className="hidden md:grid bg-muted px-4 py-3 border-b border-border" style={{ gridTemplateColumns: 'auto 140px 1fr 80px 80px 56px' }}>
+                {user && <div className="w-10" />}
+                <button onClick={() => handleSort('date')} className={`${thSortable} text-left`}>
+                  Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                </button>
+                <button onClick={() => handleSort('artist')} className={`${thSortable} text-left`}>
+                  Artist / Venue {sortField === 'artist' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                  {sortField === 'venue' ? <span className="ml-1 text-[10px]">(venue {sortDir === 'asc' ? '↑' : '↓'})</span> : ''}
+                </button>
+                <button onClick={() => handleSort('festival')} className={`${thSortable} text-left`}>
+                  Festival {sortField === 'festival' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                </button>
+                <div className={`${thBase} text-center`}>Spotify</div>
+                <div className={`${thBase} text-center`}>Setlist</div>
+              </div>
 
-                    const heartButton = (
-                      <button onClick={() => toggleShow(show.show_id)} disabled={isLoading} className="focus:outline-none disabled:opacity-50" title={isAdded ? 'Remove from My Shows' : 'Add to My Shows'}>
-                        {isLoading
-                          ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" />
-                          : <svg className={`w-5 h-5 transition-colors ${isAdded ? 'fill-destructive text-destructive' : 'fill-none text-muted-foreground hover:text-destructive'}`} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                            </svg>
-                        }
-                      </button>
-                    )
+              {/* Mobile header */}
+              <div className="md:hidden grid bg-muted px-2 py-2 border-b border-border" style={{ gridTemplateColumns: 'auto 80px 1fr 44px' }}>
+                {user && <div className="w-7" />}
+                <button onClick={() => handleSort('date')} className={`${thSortable} text-left text-[10px]`}>
+                  Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                </button>
+                <span className={`${thBase} text-[10px]`}>Artist / Venue</span>
+                <span className={`${thBase} text-center text-[10px]`}>Links</span>
+              </div>
 
-                    const setlistIcon = show.setlist_url
-                      ? <a href={show.setlist_url} target="_blank" rel="noopener noreferrer" className="hover:opacity-70 transition-opacity inline-flex items-center justify-center" title="View on setlist.fm">
-                          <img src="https://www.setlist.fm/favicon.ico" alt="setlist.fm" className="w-3.5 h-3.5 md:w-4 md:h-4 dark:invert" />
-                        </a>
-                      : <span className="text-muted-foreground text-xs leading-none">–</span>
+              {shows.length === 0 && (
+                <div className="text-center py-12 text-muted-foreground bg-card">
+                  No shows found matching your filters.
+                </div>
+              )}
 
-                    const spotifyIcon = show.spotify_artist_id
-                      ? <a href={`https://open.spotify.com/artist/${show.spotify_artist_id}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-70 transition-opacity inline-flex items-center justify-center" title="Open in Spotify">
-                          <svg className="w-3.5 h-3.5 md:w-4 md:h-4" viewBox="0 0 24 24" fill="#1DB954">
-                            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+              <div className="bg-card divide-y divide-border">
+                {shows.map(show => {
+                  const isAdded   = userShows.has(show.show_id)
+                  const isLoading = loadingShows.has(show.show_id)
+                  const venueTooltip = show.other_names ? `Also known as: ${show.other_names}` : show.venue_name
+
+                  const capBadgeColors: Record<string, string> = {
+                    Small:   isDark ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'   : 'bg-purple-50 text-purple-600 border-purple-200',
+                    Medium:  isDark ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'         : 'bg-blue-50 text-blue-600 border-blue-200',
+                    Large:   isDark ? 'bg-orange-500/20 text-orange-300 border-orange-500/30'   : 'bg-orange-50 text-orange-600 border-orange-200',
+                    'X-Large': isDark ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'       : 'bg-rose-50 text-rose-600 border-rose-200',
+                  }
+                  const capLabel = show.capacity_category
+                    ? ({'Small':'S','Medium':'M','Large':'L','X-Large':'XL'} as Record<string,string>)[show.capacity_category] ?? null
+                    : null
+                  const capColor = show.capacity_category ? capBadgeColors[show.capacity_category] : ''
+
+                  const heartButton = (
+                    <button onClick={() => toggleShow(show.show_id)} disabled={isLoading} className="focus:outline-none disabled:opacity-50 flex-shrink-0" title={isAdded ? 'Remove from My Shows' : 'Add to My Shows'}>
+                      {isLoading
+                        ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" />
+                        : <svg className={`w-5 h-5 transition-colors ${isAdded ? 'fill-destructive text-destructive' : 'fill-none text-muted-foreground hover:text-destructive'}`} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
                           </svg>
-                        </a>
-                      : <span className="text-muted-foreground text-xs leading-none">–</span>
+                      }
+                    </button>
+                  )
 
-                    return (
-                      <tr key={show.show_id} className="hover:bg-muted/50">
-                        {user && <td className="hidden md:table-cell px-3 py-3">{heartButton}</td>}
-                        <td className="hidden md:table-cell px-3 py-3 whitespace-nowrap text-sm text-foreground">
+                  const spotifyIcon = show.spotify_artist_id
+                    ? <a href={`https://open.spotify.com/artist/${show.spotify_artist_id}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-70 transition-opacity inline-flex items-center justify-center" title="Open in Spotify">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="#1DB954">
+                          <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                        </svg>
+                      </a>
+                    : <span className="text-muted-foreground text-sm">–</span>
+
+                  const setlistIcon = show.setlist_url
+                    ? <a href={show.setlist_url} target="_blank" rel="noopener noreferrer" className="hover:opacity-70 transition-opacity inline-flex items-center justify-center" title="View on setlist.fm">
+                        <img src="https://www.setlist.fm/favicon.ico" alt="setlist.fm" className="w-4 h-4 dark:invert" />
+                      </a>
+                    : <span className="text-muted-foreground text-sm">–</span>
+
+                  return (
+                    <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
+                      {/* Desktop row */}
+                      <div className="hidden md:grid items-center px-4 py-3 gap-3" style={{ gridTemplateColumns: 'auto 140px 1fr 80px 80px 56px' }}>
+                        {user && <div className="w-10 flex items-center">{heartButton}</div>}
+
+                        {/* Date */}
+                        <div className="text-sm text-foreground whitespace-nowrap">
                           {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                        </td>
-                        <td className="hidden md:table-cell px-3 py-3 max-w-[256px]">
-                          <button
-                            onClick={() => handleArtistChange({ value: show.artist_id, label: show.artist_name })}
-                            className="text-sm text-primary hover:opacity-80 hover:underline text-left w-full truncate block"
-                            title={show.artist_name}
-                          >
-                            {show.artist_name}
-                          </button>
-                        </td>
-                        <td className="hidden md:table-cell px-3 py-3 max-w-[224px]">
-                          <div className="flex items-center gap-1">
+                        </div>
+
+                        {/* Artist / Venue */}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <button
+                              onClick={() => handleArtistChange({ value: show.artist_id, label: show.artist_name })}
+                              className="text-sm font-medium text-primary hover:opacity-80 hover:underline text-left truncate"
+                              title={show.artist_name}
+                            >
+                              {show.artist_name}
+                            </button>
+                            {show.spotify_artist_id && (
+                              <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="#1DB954">
+                                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                              </svg>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => handleVenueChange({ value: show.venue_id, label: show.venue_name })}
-                              className="text-sm text-primary hover:opacity-80 hover:underline text-left truncate shrink-0 max-w-[140px]"
+                              className="text-xs text-muted-foreground hover:text-primary hover:underline text-left truncate"
                               title={venueTooltip}
                             >
                               {show.venue_name}
                             </button>
-                            {show.festival_name && (
-                              <button
+                            {capLabel && (
+                              <span className={`inline-flex items-center px-1 py-px rounded text-[9px] font-bold border flex-shrink-0 ${capColor}`}>
+                                {capLabel}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Festival */}
+                        <div className="flex items-center">
+                          {show.festival_name
+                            ? <button
                                 onClick={() => handleFestivalChange({ value: show.festival_name!, label: show.festival_name! })}
-                                className={'ml-1 ' + festivalBadgeClass}
+                                className={festivalBadgeClass}
                                 title={`Filter by ${show.festival_name}`}
                               >
                                 <span className="font-bold">F</span>
-                                <span className="truncate max-w-[100px]">{'· ' + show.festival_name}</span>
+                                <span className="truncate max-w-[60px]">· {show.festival_name}</span>
                               </button>
-                            )}
-                          </div>
-                        </td>
-                        <td className="hidden md:table-cell py-3 w-14 px-0 align-middle">
-                          <div className="flex items-center justify-center">{setlistIcon}</div>
-                        </td>
-                        <td className="hidden md:table-cell py-3 w-14 px-0 align-middle">
-                          <div className="flex items-center justify-center">{spotifyIcon}</div>
-                        </td>
+                            : null
+                          }
+                        </div>
 
-                        {/* Mobile */}
-                        {user && <td className="md:hidden px-1 py-2 align-middle w-7">{heartButton}</td>}
-                        <td className="md:hidden px-1 py-2 align-top whitespace-nowrap">
-                          <span className="text-[11px] text-foreground">
-                            {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                          </span>
-                        </td>
-                        <td className="md:hidden px-1 py-2">
+                        {/* Spotify */}
+                        <div className="flex items-center justify-center">{spotifyIcon}</div>
+
+                        {/* Setlist */}
+                        <div className="flex items-center justify-center">{setlistIcon}</div>
+                      </div>
+
+                      {/* Mobile row */}
+                      <div className="md:hidden grid items-center px-2 py-2.5 gap-1.5" style={{ gridTemplateColumns: 'auto 80px 1fr 44px' }}>
+                        {user && <div className="w-7 flex items-center">{heartButton}</div>}
+                        <div className="text-[11px] text-foreground whitespace-nowrap">
+                          {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                        </div>
+                        <div className="min-w-0">
                           <button
                             onClick={() => handleArtistChange({ value: show.artist_id, label: show.artist_name })}
-                            className="text-[11px] text-primary hover:opacity-80 hover:underline text-left w-full truncate block leading-snug"
+                            className="text-[11px] font-medium text-primary hover:opacity-80 hover:underline text-left w-full truncate block leading-snug"
                             title={show.artist_name}
                           >
                             {show.artist_name}
@@ -862,6 +889,11 @@ function BrowseContent({
                             >
                               {show.venue_name}
                             </button>
+                            {capLabel && (
+                              <span className={`inline-flex items-center px-1 py-px rounded text-[8px] font-bold border flex-shrink-0 ${capColor}`}>
+                                {capLabel}
+                              </span>
+                            )}
                             {show.festival_name && (
                               <button
                                 onClick={() => handleFestivalChange({ value: show.festival_name!, label: show.festival_name! })}
@@ -870,15 +902,15 @@ function BrowseContent({
                               >F</button>
                             )}
                           </div>
-                        </td>
-                        <td className="md:hidden py-2 px-1 w-10 align-middle">
-                          <div className="flex items-center justify-center gap-2">{setlistIcon}{spotifyIcon}</div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                        </div>
+                        <div className="flex items-center justify-center gap-2">
+                          {setlistIcon}{spotifyIcon}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
 
