@@ -656,7 +656,7 @@ function UpcomingShowsContent() {
               <span className="text-border select-none text-lg">|</span>
 
               {/* Venue size buttons — joined pill */}
-              <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
+              <div className="flex rounded-lg border border-border overflow-hidden text-sm font-semibold">
                 {CAPACITY_BUTTONS.map((btn, i) => (
                   <button key={btn.key} onClick={() => setCapacityFilter(btn.key)} title={btn.tooltip}
                     className={`px-3 py-2.5 transition ${i > 0 ? 'border-l border-border' : ''} ${
@@ -738,8 +738,8 @@ function UpcomingShowsContent() {
                     </button>
                   ))}
                 </div>
-                {/* Stats — flex-1 to column-align under My Matches/All Shows toggle */}
-                <div className="flex-1 flex items-center justify-around text-xs text-muted-foreground/70">
+                {/* Stats — fixed width fits 3-digit counts without squeezing venue pill */}
+                <div className="shrink-0 w-[168px] flex items-center justify-around text-xs text-muted-foreground/70">
                   <span>New <span className="font-semibold text-primary/80">{newShows.length}</span></span>
                   <span className="text-border">·</span>
                   <span>Saved <span className="font-semibold text-green-500/80">{savedShows.length}</span></span>
