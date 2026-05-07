@@ -502,12 +502,12 @@ function BrowseContent({
   const thCenter   = 'text-center text-xs font-medium text-muted-foreground uppercase tracking-wider py-3 px-3'
 
   const festivalBadgeClass = isDark
-    ? 'inline-flex items-center gap-0.5 px-1.5 py-px rounded text-[9px] font-medium bg-pink-500/20 text-pink-300 border border-pink-500/30 hover:bg-pink-500/30 transition whitespace-nowrap'
-    : 'inline-flex items-center gap-0.5 px-1.5 py-px rounded text-[9px] font-medium bg-pink-50 text-pink-600 border border-pink-200 hover:bg-pink-100 transition whitespace-nowrap'
+    ? 'inline-flex items-center gap-0.5 px-1.5 py-px rounded text-[9px] font-medium bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 hover:bg-fuchsia-500/30 transition whitespace-nowrap'
+    : 'inline-flex items-center gap-0.5 px-1.5 py-px rounded text-[9px] font-medium bg-fuchsia-100 text-fuchsia-700 border border-fuchsia-300 hover:bg-fuchsia-200 transition whitespace-nowrap'
 
   const festivalBadgeMobileClass = isDark
-    ? 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30 hover:bg-pink-500/30 transition flex-shrink-0'
-    : 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-pink-50 text-pink-600 border border-pink-200 hover:bg-pink-100 transition flex-shrink-0'
+    ? 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 hover:bg-fuchsia-500/30 transition flex-shrink-0'
+    : 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-fuchsia-100 text-fuchsia-700 border border-fuchsia-300 hover:bg-fuchsia-200 transition flex-shrink-0'
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -656,57 +656,60 @@ function BrowseContent({
 
             {/* Row 3: decade buttons + year jump aligned to right edge */}
             <div className="overflow-x-auto -mx-3 px-3 md:-mx-4 md:px-4">
-              {/* Year jump sits above decade row, right-aligned */}
-              {decade !== 'all' && (
-                <form onSubmit={handleYearJump} className="flex items-center justify-end gap-1.5 mb-2">
-                  <input
-                    type="number"
-                    min="1900"
-                    max="2099"
-                    placeholder={`Year in ${decade}…`}
-                    value={yearJumpInput}
-                    onChange={e => setYearJumpInput(e.target.value)}
-                    className="w-32 px-2.5 py-1.5 text-xs text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
-                  />
-                  <button
-                    type="submit"
-                    className="text-xs px-2.5 py-1.5 rounded-md bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors"
-                  >
-                    Go
-                  </button>
-                  {year && (
+              <div className="flex items-center justify-between gap-3 min-w-max">
+                {/* Decade buttons */}
+                <div className="flex gap-2">
+                  {DECADES.map(label => {
+                    const decadeParam = decadeToParam(label)
+                    const isActive = decade === decadeParam && !year
+                    const isParent = !!year && decadeParam !== 'all' && decadeContainsYear(decadeParam, parseInt(year || '0'))
+                    return (
+                      <button
+                        key={label}
+                        onClick={() => handleDecadeClick(label)}
+                        className={`px-3 md:px-4 py-2 rounded-md text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
+                          isActive
+                            ? 'bg-primary text-primary-foreground'
+                            : isParent
+                            ? 'bg-primary/20 text-primary border border-primary/40'
+                            : 'bg-muted text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {label}
+                        {isParent && <span className="ml-1 text-[10px] opacity-75">› {year}</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+                {/* Year jump — same row, right of decade buttons */}
+                {decade !== 'all' && (
+                  <form onSubmit={handleYearJump} className="flex items-center gap-1.5 flex-shrink-0">
+                    <input
+                      type="number"
+                      min="1900"
+                      max="2099"
+                      placeholder={`Year in ${decade}…`}
+                      value={yearJumpInput}
+                      onChange={e => setYearJumpInput(e.target.value)}
+                      className="w-32 px-2.5 py-1.5 text-xs text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+                    />
                     <button
-                      type="button"
-                      onClick={() => { setYear(undefined); setMonth(undefined); applyFilter({ year: undefined, month: undefined }) }}
-                      className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+                      type="submit"
+                      className="text-xs px-2.5 py-1.5 rounded-md bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors whitespace-nowrap"
                     >
-                      Clear year
+                      Go
                     </button>
-                  )}
-                </form>
-              )}
-              <div className="flex gap-2 min-w-max">
-                {DECADES.map(label => {
-                  const decadeParam = decadeToParam(label)
-                  const isActive = decade === decadeParam && !year
-                  const isParent = !!year && decadeParam !== 'all' && decadeContainsYear(decadeParam, parseInt(year || '0'))
-                  return (
-                    <button
-                      key={label}
-                      onClick={() => handleDecadeClick(label)}
-                      className={`px-3 md:px-4 py-2 rounded-md text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
-                        isActive
-                          ? 'bg-primary text-primary-foreground'
-                          : isParent
-                          ? 'bg-primary/20 text-primary border border-primary/40'
-                          : 'bg-muted text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {label}
-                      {isParent && <span className="ml-1 text-[10px] opacity-75">› {year}</span>}
-                    </button>
-                  )
-                })}
+                    {year && (
+                      <button
+                        type="button"
+                        onClick={() => { setYear(undefined); setMonth(undefined); applyFilter({ year: undefined, month: undefined }) }}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+                      >
+                        Clear year
+                      </button>
+                    )}
+                  </form>
+                )}
               </div>
             </div>
 
@@ -723,7 +726,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: 'auto 120px 1fr 1fr 150px 56px' }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: 'auto 120px 240px 200px 160px 56px' }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -793,7 +796,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: 'auto 120px 1fr 1fr 150px 56px' }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: 'auto 120px 240px 200px 160px 56px' }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
