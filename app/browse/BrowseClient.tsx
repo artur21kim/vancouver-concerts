@@ -496,6 +496,14 @@ function BrowseContent({
     noOptionsMessage:  (base: any) => ({ ...base, color: isDark ? 'oklch(0.55 0.04 220)' : 'oklch(0.45 0.02 85)' }),
   }
 
+  // Capacity badge config — defined outside render loop
+  const capBadgeColors: Record<string, string> = {
+    Small:     isDark ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'  : 'bg-purple-50 text-purple-600 border-purple-200',
+    Medium:    isDark ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'        : 'bg-blue-50 text-blue-600 border-blue-200',
+    Large:     isDark ? 'bg-orange-500/20 text-orange-300 border-orange-500/30'  : 'bg-orange-50 text-orange-600 border-orange-200',
+    'X-Large': isDark ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'        : 'bg-rose-50 text-rose-600 border-rose-200',
+  }
+  const capLabelMap: Record<string, string> = { Small: 'S', Medium: 'M', Large: 'L', 'X-Large': 'XL' }
   const showFestivalContext = showType === 'festival' || !!festival
   const thBase     = 'text-left text-xs font-medium text-muted-foreground uppercase tracking-wider py-3 px-3'
   const thSortable = `${thBase} cursor-pointer hover:text-foreground transition-colors`
@@ -724,7 +732,7 @@ function BrowseContent({
 
           {/* Shows Table — Discover-style card layout */}
           {!loading && (
-            <div className="rounded-lg shadow-lg overflow-hidden">
+            <div className="rounded-lg shadow-lg overflow-hidden w-full">
               {/* Desktop header */}
               <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: 'auto 120px 240px 200px 160px 56px' }}>
                 {user && <div className="w-12" />}
@@ -764,17 +772,8 @@ function BrowseContent({
                   const isAdded   = userShows.has(show.show_id)
                   const isLoading = loadingShows.has(show.show_id)
                   const venueTooltip = show.other_names ? `Also known as: ${show.other_names}` : show.venue_name
-
-                  const capBadgeColors: Record<string, string> = {
-                    Small:   isDark ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'   : 'bg-purple-50 text-purple-600 border-purple-200',
-                    Medium:  isDark ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'         : 'bg-blue-50 text-blue-600 border-blue-200',
-                    Large:   isDark ? 'bg-orange-500/20 text-orange-300 border-orange-500/30'   : 'bg-orange-50 text-orange-600 border-orange-200',
-                    'X-Large': isDark ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'       : 'bg-rose-50 text-rose-600 border-rose-200',
-                  }
-                  const capLabel = show.capacity_category
-                    ? ({'Small':'S','Medium':'M','Large':'L','X-Large':'XL'} as Record<string,string>)[show.capacity_category] ?? null
-                    : null
-                  const capColor = show.capacity_category ? capBadgeColors[show.capacity_category] : ''
+                  const capLabel = show.capacity_category ? (capLabelMap[show.capacity_category] ?? null) : null
+                  const capColor = show.capacity_category ? (capBadgeColors[show.capacity_category] ?? '') : ''
 
                   const heartButton = (
                     <button onClick={() => toggleShow(show.show_id)} disabled={isLoading} className="focus:outline-none disabled:opacity-50 flex-shrink-0" title={isAdded ? 'Remove from My Shows' : 'Add to My Shows'}>
