@@ -91,7 +91,7 @@ function getDecadeRange(decade: string): { from: number; to: number } | null {
 }
 
 async function fetchShowsServer(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   p: {
     decade: string; year?: string; month?: string
     artistId?: string; venueId?: string; showType?: string
