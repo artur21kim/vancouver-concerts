@@ -649,12 +649,12 @@ function BrowseContent({
                   ))}
                 </div>
 
-                <div className="flex flex-1 md:flex-none rounded-lg border border-border overflow-hidden text-xs md:text-sm font-semibold">
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs md:text-sm font-semibold">
                   {STATUS_BUTTONS.map((btn, i) => (
                     <button
                       key={btn.key}
                       onClick={() => handleStatusClick(btn.key)}
-                      className={`flex-1 md:flex-none px-2 py-1.5 md:px-2.5 md:py-1.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                      className={`px-2 py-1.5 md:px-2.5 md:py-1.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
                         status === btn.key
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-card text-muted-foreground hover:bg-muted'
@@ -696,10 +696,16 @@ function BrowseContent({
                 )}
               </div>
 
-              {/* Unknown capacity note */}
+              {/* Unknown capacity note — shown when filtering by a specific size */}
               {capacity && capacity !== 'all' && capacity !== 'unknown' && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  ~7,000 shows have unknown venue capacity and are excluded from this filter.
+                  Venues with unknown capacity are excluded.{' '}
+                  <button
+                    onClick={() => handleCapacityClick('unknown')}
+                    className="underline hover:text-foreground transition-colors"
+                  >
+                    View 5,755 shows with unknown capacity
+                  </button>
                 </p>
               )}
             </div>
