@@ -402,8 +402,7 @@ function NewShowsTable({
           </div>
         )}
       </div>
-      <table className="w-full">
-        {shows.length > 0 && <TableHeaders sortBy={sortBy} sortDir={sortDir} onSort={onSort} />}
+      <table className="w-full table-fixed">}
         <tbody>
           {shows.map(show => (
             <SwipeableRow key={show.show_id} show={show} context="new" onSave={onSave} onSkip={onSkip} showSpotifyBadge={showSpotifyBadge} />
@@ -439,7 +438,7 @@ function ShowTable({
   showSpotifyBadge?: boolean; highlightHeader?: boolean;
 } & TableSortProps) {
   const tableContent = (
-    <table className="w-full">
+    <table className="w-full table-fixed">
       <TableHeaders sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
       <tbody>
         {shows.map(show => (
@@ -714,9 +713,8 @@ function UpcomingShowsContent() {
                 </div>
               </div>
 
-              {/* Row 2: venue pill (same width as Upcoming/Past) + stats (aligned under My Matches) */}
+              {/* Row 2: venue pill (same width as Upcoming/Past) + stats (same width as My Matches) */}
               <div className="flex items-center gap-2">
-                {/* Venue pill — flex-1 = same width as Upcoming/Past toggle */}
                 <div className="flex flex-1 rounded-lg border border-border overflow-hidden text-xs font-semibold">
                   {CAPACITY_BUTTONS.map((btn, i) => (
                     <button
@@ -734,8 +732,7 @@ function UpcomingShowsContent() {
                     </button>
                   ))}
                 </div>
-                {/* Stats — fixed width fits 3-digit counts without squeezing venue pill */}
-                <div className="shrink-0 w-[168px] flex items-center justify-around text-xs text-muted-foreground/70">
+                <div className="flex-1 flex items-center justify-around text-xs text-muted-foreground/70">
                   <span>New <span className="font-semibold text-primary/80">{newShows.length}</span></span>
                   <span className="text-border">·</span>
                   <span>Saved <span className="font-semibold text-green-500/80">{savedShows.length}</span></span>
