@@ -291,8 +291,8 @@ function SwipeableRow({
       <td className="hidden md:table-cell px-4 py-4 w-24 text-center align-middle">{ticketIcon}</td>
 
       {/* Mobile */}
-      <td colSpan={3} className="md:hidden p-0">
-        <div className="relative overflow-hidden">
+      <td colSpan={3} className="md:hidden p-0 overflow-hidden">
+        <div className="relative">
           {activeAction && !noopLabel && (
             <div className={`absolute top-0 bottom-0 flex items-center pointer-events-none ${offset > 0 ? 'left-3' : 'right-3'}`}
               style={{ opacity: progress }}>
@@ -306,10 +306,10 @@ function SwipeableRow({
           ) : (
             <div className="flex items-center w-full py-3"
               style={{ transform: `translateX(${offset}px)`, transition: animating ? 'transform 0.25s ease' : 'none' }}>
-              <div className="pl-3 shrink-0 w-[100px]">
+              <div className="pl-3 shrink-0 w-[90px]">
                 <span className="text-xs text-foreground whitespace-nowrap">{formatDate(show.date)}</span>
               </div>
-              <div className="flex-1 min-w-0 pr-2">
+              <div className="flex-1 min-w-0 px-2">
                 <div className="flex items-center gap-1 mb-0.5">
                   <span className="text-[11px] font-medium truncate text-primary">{show.artist_name}</span>
                   {show.spotify_artist_id && <SpotifyIcon artistId={show.spotify_artist_id} isMatch={show.is_spotify_match} />}
@@ -324,7 +324,7 @@ function SwipeableRow({
                   )}
                 </div>
               </div>
-              <div className="pr-3 shrink-0 w-[48px] flex items-center justify-center">{ticketIcon}</div>
+              <div className="pr-3 shrink-0 w-[44px] flex items-center justify-center">{ticketIcon}</div>
             </div>
           )}
         </div>
@@ -363,15 +363,15 @@ function TableHeaders({ sortBy, sortDir, onSort }: TableSortProps) {
         {/* Mobile */}
         <th colSpan={3} className="md:hidden p-0">
           <div className="flex items-center w-full py-2.5">
-            <div className={`pl-3 shrink-0 w-[100px] text-left ${thSort}`} onClick={() => onSort('date')}>
+            <div className={`pl-3 shrink-0 w-[90px] text-left ${thSort}`} onClick={() => onSort('date')}>
               Date{arrow('date')}
             </div>
-            <div className="flex-1 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <div className="flex-1 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide px-2">
               <span className={thSort} onClick={() => onSort('artist')}>Artist{arrow('artist')}</span>
               <span className="mx-1 text-muted-foreground/30">/</span>
               <span className={thSort} onClick={() => onSort('venue')}>Venue{arrow('venue')}</span>
             </div>
-            <div className="pr-3 shrink-0 w-[48px] text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Tix</div>
+            <div className="pr-3 shrink-0 w-[44px] text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Tix</div>
           </div>
         </th>
       </tr>
@@ -457,17 +457,20 @@ function ShowTable({
 
   return (
     <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
-      <div className={`flex items-center justify-between px-6 py-4 border-b border-border ${highlightHeader ? 'bg-primary/5' : ''}`}>
-        <h2 className="font-semibold text-card-foreground flex items-center gap-2">
+      <div className={`flex items-center gap-3 px-4 py-3 border-b border-border ${highlightHeader ? 'bg-primary/5' : ''}`}>
+        <h2 className="font-semibold text-card-foreground flex items-center gap-2 min-w-0">
           {highlightHeader && <SpotifyHeaderIcon />}
-          {title}
-          <span className="text-muted-foreground font-normal ml-1">({shows.length})</span>
+          <span className="truncate">{title}</span>
+          <span className="text-muted-foreground font-normal shrink-0">({shows.length})</span>
         </h2>
         {showBulk && onSaveAll && onSkipAll && shows.length > 1 && (
-          <div className="flex gap-2">
-            <button onClick={onSaveAll} className="px-3 py-1.5 text-sm font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition">Save All</button>
-            <button onClick={onSkipAll} className="px-3 py-1.5 text-sm font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition">Skip All</button>
+          <div className="flex items-center gap-3 ml-auto shrink-0">
+            <button onClick={onSaveAll} className="text-xs text-muted-foreground hover:text-foreground transition">Save all</button>
+            <span className="text-border">·</span>
+            <button onClick={onSkipAll} className="text-xs text-muted-foreground hover:text-foreground transition">Skip all</button>
           </div>
+        )}
+      </div>
         )}
       </div>
       {tableContent}
@@ -717,16 +720,16 @@ function UpcomingShowsContent() {
                 </div>
               </div>
 
-              {/* Row 2: venue pill (matches toggle row width) + stats inline */}
+              {/* Row 2: venue pill (same width as Upcoming/Past) + stats (aligned under My Matches) */}
               <div className="flex items-center gap-2">
-                {/* Venue pill — flex-1 to match Upcoming/Past width */}
+                {/* Venue pill — flex-1 = same width as Upcoming/Past toggle */}
                 <div className="flex flex-1 rounded-lg border border-border overflow-hidden text-xs font-semibold">
                   {CAPACITY_BUTTONS.map((btn, i) => (
                     <button
                       key={btn.key}
                       onClick={() => setCapacityFilter(btn.key)}
                       title={btn.tooltip}
-                      className={`${btn.key === 'all' ? 'flex-1' : 'flex-1'} flex items-center justify-center py-1.5 transition ${
+                      className={`flex-1 flex items-center justify-center py-1.5 transition ${
                         i > 0 ? 'border-l border-border' : ''
                       } ${
                         capacityFilter === btn.key
@@ -737,12 +740,12 @@ function UpcomingShowsContent() {
                     </button>
                   ))}
                 </div>
-                {/* Stats — right of venue pill, tighter spacing */}
-                <div className="flex items-center gap-1 text-xs text-muted-foreground/70 shrink-0">
+                {/* Stats — flex-1 to column-align under My Matches/All Shows toggle */}
+                <div className="flex-1 flex items-center justify-around text-xs text-muted-foreground/70">
                   <span>New <span className="font-semibold text-primary/80">{newShows.length}</span></span>
-                  <span className="text-border px-0.5">·</span>
+                  <span className="text-border">·</span>
                   <span>Saved <span className="font-semibold text-green-500/80">{savedShows.length}</span></span>
-                  <span className="text-border px-0.5">·</span>
+                  <span className="text-border">·</span>
                   <span>Skipped <span className="font-semibold">{skippedShows.length}</span></span>
                 </div>
               </div>
