@@ -496,14 +496,19 @@ function BrowseContent({
     noOptionsMessage:  (base: any) => ({ ...base, color: isDark ? 'oklch(0.55 0.04 220)' : 'oklch(0.45 0.02 85)' }),
   }
 
-  // Capacity badge config — defined outside render loop
+  // Capacity badge config — keys match exact DB values (lowercased for safety)
   const capBadgeColors: Record<string, string> = {
-    Small:     isDark ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'  : 'bg-purple-50 text-purple-600 border-purple-200',
-    Medium:    isDark ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'        : 'bg-blue-50 text-blue-600 border-blue-200',
-    Large:     isDark ? 'bg-orange-500/20 text-orange-300 border-orange-500/30'  : 'bg-orange-50 text-orange-600 border-orange-200',
-    'X-Large': isDark ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'        : 'bg-rose-50 text-rose-600 border-rose-200',
+    'small (<500)':      isDark ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'  : 'bg-purple-50 text-purple-600 border-purple-200',
+    'medium (500-1.5k)': isDark ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'        : 'bg-blue-50 text-blue-600 border-blue-200',
+    'large (1.5k-10k)':  isDark ? 'bg-orange-500/20 text-orange-300 border-orange-500/30'  : 'bg-orange-50 text-orange-600 border-orange-200',
+    'x-large (10k+)':    isDark ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'        : 'bg-rose-50 text-rose-600 border-rose-200',
   }
-  const capLabelMap: Record<string, string> = { Small: 'S', Medium: 'M', Large: 'L', 'X-Large': 'XL' }
+  const capLabelMap: Record<string, string> = {
+    'small (<500)':      'S',
+    'medium (500-1.5k)': 'M',
+    'large (1.5k-10k)':  'L',
+    'x-large (10k+)':    'XL',
+  }
   const showFestivalContext = showType === 'festival' || !!festival
   const thBase     = 'text-left text-xs font-medium text-muted-foreground uppercase tracking-wider py-3 px-3'
   const thSortable = `${thBase} cursor-pointer hover:text-foreground transition-colors`
@@ -662,62 +667,59 @@ function BrowseContent({
               </div>
             </div>
 
-            {/* Row 3: decade buttons + year jump aligned to right edge */}
+            {/* Row 3: decade buttons with year jump above, right-aligned to Go button edge */}
             <div className="overflow-x-auto -mx-3 px-3 md:-mx-4 md:px-4">
-              <div className="flex items-center justify-between gap-3 min-w-max">
-                {/* Decade buttons */}
-                <div className="flex gap-2">
-                  {DECADES.map(label => {
-                    const decadeParam = decadeToParam(label)
-                    const isActive = decade === decadeParam && !year
-                    const isParent = !!year && decadeParam !== 'all' && decadeContainsYear(decadeParam, parseInt(year || '0'))
-                    return (
-                      <button
-                        key={label}
-                        onClick={() => handleDecadeClick(label)}
-                        className={`px-3 md:px-4 py-2 rounded-md text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
-                          isActive
-                            ? 'bg-primary text-primary-foreground'
-                            : isParent
-                            ? 'bg-primary/20 text-primary border border-primary/40'
-                            : 'bg-muted text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        {label}
-                        {isParent && <span className="ml-1 text-[10px] opacity-75">› {year}</span>}
-                      </button>
-                    )
-                  })}
-                </div>
-                {/* Year jump — same row, right of decade buttons */}
-                {decade !== 'all' && (
-                  <form onSubmit={handleYearJump} className="flex items-center gap-1.5 flex-shrink-0">
-                    <input
-                      type="number"
-                      min="1900"
-                      max="2099"
-                      placeholder={`Year in ${decade}…`}
-                      value={yearJumpInput}
-                      onChange={e => setYearJumpInput(e.target.value)}
-                      className="w-32 px-2.5 py-1.5 text-xs text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
-                    />
+              {/* Year jump — above decade row, Go button right-aligned to last decade button */}
+              {decade !== 'all' && (
+                <form onSubmit={handleYearJump} className="flex items-center justify-end gap-1.5 mb-2">
+                  <input
+                    type="number"
+                    min="1900"
+                    max="2099"
+                    placeholder={`Year in ${decade}…`}
+                    value={yearJumpInput}
+                    onChange={e => setYearJumpInput(e.target.value)}
+                    className="w-32 px-2.5 py-1.5 text-xs text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+                  />
+                  <button
+                    type="submit"
+                    className="text-xs px-2.5 py-1.5 rounded-md bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors whitespace-nowrap"
+                  >
+                    Go
+                  </button>
+                  {year && (
                     <button
-                      type="submit"
-                      className="text-xs px-2.5 py-1.5 rounded-md bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors whitespace-nowrap"
+                      type="button"
+                      onClick={() => { setYear(undefined); setMonth(undefined); applyFilter({ year: undefined, month: undefined }) }}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
                     >
-                      Go
+                      Clear year
                     </button>
-                    {year && (
-                      <button
-                        type="button"
-                        onClick={() => { setYear(undefined); setMonth(undefined); applyFilter({ year: undefined, month: undefined }) }}
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
-                      >
-                        Clear year
-                      </button>
-                    )}
-                  </form>
-                )}
+                  )}
+                </form>
+              )}
+              <div className="flex gap-2 min-w-max">
+                {DECADES.map(label => {
+                  const decadeParam = decadeToParam(label)
+                  const isActive = decade === decadeParam && !year
+                  const isParent = !!year && decadeParam !== 'all' && decadeContainsYear(decadeParam, parseInt(year || '0'))
+                  return (
+                    <button
+                      key={label}
+                      onClick={() => handleDecadeClick(label)}
+                      className={`px-3 md:px-4 py-2 rounded-md text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
+                        isActive
+                          ? 'bg-primary text-primary-foreground'
+                          : isParent
+                          ? 'bg-primary/20 text-primary border border-primary/40'
+                          : 'bg-muted text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {label}
+                      {isParent && <span className="ml-1 text-[10px] opacity-75">› {year}</span>}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -734,7 +736,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden w-full">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: 'auto 120px 240px 200px 160px 56px' }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px 240px 200px 160px 56px` }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -772,8 +774,9 @@ function BrowseContent({
                   const isAdded   = userShows.has(show.show_id)
                   const isLoading = loadingShows.has(show.show_id)
                   const venueTooltip = show.other_names ? `Also known as: ${show.other_names}` : show.venue_name
-                  const capLabel = show.capacity_category ? (capLabelMap[show.capacity_category] ?? null) : null
-                  const capColor = show.capacity_category ? (capBadgeColors[show.capacity_category] ?? '') : ''
+                  const capKey = show.capacity_category?.toLowerCase() ?? null
+                  const capLabel = capKey ? (capLabelMap[capKey] ?? null) : null
+                  const capColor = capKey ? (capBadgeColors[capKey] ?? '') : ''
 
                   const heartButton = (
                     <button onClick={() => toggleShow(show.show_id)} disabled={isLoading} className="focus:outline-none disabled:opacity-50 flex-shrink-0" title={isAdded ? 'Remove from My Shows' : 'Add to My Shows'}>
@@ -795,7 +798,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: 'auto 120px 240px 200px 160px 56px' }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px 240px 200px 160px 56px` }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
