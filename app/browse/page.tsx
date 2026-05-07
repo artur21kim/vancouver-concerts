@@ -48,7 +48,7 @@ export default async function BrowsePage({ searchParams }: PageProps) {
   }
 
   // Parallel: shows, stats, venues, and artist name lookup (if needed)
-  const [showsRes, statsRes, venuesRes, artistRes] = await Promise.all([
+  const [showsRes, statsRes, venuesRes, artistRes, festivalsRes] = await Promise.all([
     supabase.rpc('get_shows_paged', {
       ...rpcBase,
       p_sort:     sort,
@@ -70,6 +70,16 @@ export default async function BrowsePage({ searchParams }: PageProps) {
           .single()
           .then(r => r.data)
       : Promise.resolve(null),
+    supabase
+      .from('fact_shows')
+      .select('festival_name')
+      .not('festival_name', 'is', null)
+      .neq('festival_name', '')
+      .order('festival_name')
+      .then(r => {
+        const unique = Array.from(new Set((r.data || []).map((x: any) => x.festival_name as string))).sort()
+        return unique.map(f => ({ value: f, label: f }))
+      }),
   ])
 
   const rows       = showsRes.data || []
@@ -115,6 +125,7 @@ export default async function BrowsePage({ searchParams }: PageProps) {
         page: parseInt(page), sort, dir,
       }}
       initialArtistName={artistRes?.artist_name ?? null}
+      initialFestivals={festivalsRes as any}
     />
   )
 }

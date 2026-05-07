@@ -106,6 +106,7 @@ function BrowseContent({
   venues,
   initialParams,
   initialArtistName,
+  initialFestivals,
 }: {
   initialShows: Show[]
   initialTotal: number
@@ -119,6 +120,7 @@ function BrowseContent({
     page: number; sort: string; dir: string
   }
   initialArtistName: string | null
+  initialFestivals: SelectOption[]
 }) {
   const router   = useRouter()
   const pathname = usePathname()
@@ -184,14 +186,8 @@ function BrowseContent({
     ? venueOptions.find(o => o.value === parseInt(venueId)) ?? null
     : null
 
-  // ── Festival options (loaded once) ────────────────────────────────────────
-  const [festivalOptions, setFestivalOptions] = useState<SelectOption[]>([])
-  useEffect(() => {
-    fetch('/api/browse/festivals', { cache: 'no-store' })
-      .then(r => r.json())
-      .then(d => setFestivalOptions(d.festivals || []))
-      .catch(() => {})
-  }, [])
+  // ── Festival options (loaded server-side, no client fetch needed) ────────
+  const [festivalOptions] = useState<SelectOption[]>(initialFestivals)
 
   // ── Artist async search ───────────────────────────────────────────────────
   const loadArtistOptions = useCallback(
@@ -501,17 +497,17 @@ function BrowseContent({
   }
 
   const showFestivalContext = showType === 'festival' || !!festival
-  const thBase     = 'bg-muted px-1 md:px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider'
-  const thSortable = `${thBase} cursor-pointer hover:bg-muted/80`
-  const thCenter   = 'bg-muted px-0 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider'
+  const thBase     = 'text-left text-xs font-medium text-muted-foreground uppercase tracking-wider py-3 px-3'
+  const thSortable = `${thBase} cursor-pointer hover:text-foreground transition-colors`
+  const thCenter   = 'text-center text-xs font-medium text-muted-foreground uppercase tracking-wider py-3 px-3'
 
   const festivalBadgeClass = isDark
-    ? 'inline-flex items-center gap-0.5 px-1.5 py-px rounded text-[9px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition whitespace-nowrap'
-    : 'inline-flex items-center gap-0.5 px-1.5 py-px rounded text-[9px] font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition whitespace-nowrap'
+    ? 'inline-flex items-center gap-0.5 px-1.5 py-px rounded text-[9px] font-medium bg-pink-500/20 text-pink-300 border border-pink-500/30 hover:bg-pink-500/30 transition whitespace-nowrap'
+    : 'inline-flex items-center gap-0.5 px-1.5 py-px rounded text-[9px] font-medium bg-pink-50 text-pink-600 border border-pink-200 hover:bg-pink-100 transition whitespace-nowrap'
 
   const festivalBadgeMobileClass = isDark
-    ? 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition flex-shrink-0'
-    : 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition flex-shrink-0'
+    ? 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30 hover:bg-pink-500/30 transition flex-shrink-0'
+    : 'inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-pink-50 text-pink-600 border border-pink-200 hover:bg-pink-100 transition flex-shrink-0'
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -727,21 +723,21 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted px-4 py-3 border-b border-border" style={{ gridTemplateColumns: 'auto 130px 1fr 1fr 140px 56px' }}>
-                {user && <div className="w-10" />}
-                <button onClick={() => handleSort('date')} className={`${thSortable} text-left`}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: 'auto 120px 1fr 1fr 150px 56px' }}>
+                {user && <div className="w-12" />}
+                <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
-                <button onClick={() => handleSort('artist')} className={`${thSortable} text-left`}>
+                <button onClick={() => handleSort('artist')} className={thSortable}>
                   Artist {sortField === 'artist' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
-                <button onClick={() => handleSort('venue')} className={`${thSortable} text-left`}>
+                <button onClick={() => handleSort('venue')} className={thSortable}>
                   Venue {sortField === 'venue' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
-                <button onClick={() => handleSort('festival')} className={`${thSortable} text-left`}>
+                <button onClick={() => handleSort('festival')} className={thSortable}>
                   Festival {sortField === 'festival' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
-                <div className={`${thBase} text-center`}>Setlist</div>
+                <div className={thCenter}>Setlist</div>
               </div>
 
               {/* Mobile header */}
@@ -797,16 +793,16 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center px-4 py-3 gap-3" style={{ gridTemplateColumns: 'auto 130px 1fr 1fr 140px 56px' }}>
-                        {user && <div className="w-10 flex items-center">{heartButton}</div>}
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: 'auto 120px 1fr 1fr 150px 56px' }}>
+                        {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
-                        <div className="text-sm text-foreground whitespace-nowrap">
+                        <div className="text-sm text-foreground whitespace-nowrap px-3 py-3">
                           {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                         </div>
 
                         {/* Artist */}
-                        <div className="min-w-0 flex items-center gap-1.5">
+                        <div className="min-w-0 flex items-center gap-1.5 px-3 py-3">
                           <button
                             onClick={() => handleArtistChange({ value: show.artist_id, label: show.artist_name })}
                             className="text-sm font-medium text-primary hover:opacity-80 hover:underline text-left truncate"
@@ -830,7 +826,7 @@ function BrowseContent({
                         </div>
 
                         {/* Venue */}
-                        <div className="min-w-0 flex items-center gap-1.5">
+                        <div className="min-w-0 flex items-center gap-1.5 px-3 py-3">
                           <button
                             onClick={() => handleVenueChange({ value: show.venue_id, label: show.venue_name })}
                             className="text-sm text-muted-foreground hover:text-primary hover:underline text-left truncate"
@@ -846,7 +842,7 @@ function BrowseContent({
                         </div>
 
                         {/* Festival */}
-                        <div className="flex items-center">
+                        <div className="flex items-center px-3 py-3">
                           {show.festival_name
                             ? <button
                                 onClick={() => handleFestivalChange({ value: show.festival_name!, label: show.festival_name! })}
@@ -860,7 +856,7 @@ function BrowseContent({
                         </div>
 
                         {/* Setlist */}
-                        <div className="flex items-center justify-center">{setlistIcon}</div>
+                        <div className="flex items-center justify-center px-3 py-3">{setlistIcon}</div>
                       </div>
 
                       {/* Mobile row */}
