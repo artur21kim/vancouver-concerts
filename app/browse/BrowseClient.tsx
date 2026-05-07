@@ -620,8 +620,8 @@ function BrowseContent({
               </div>
             </div>
 
-            {/* Row 2: capacity + status pills + year jump */}
-            <div className="mb-5">
+            {/* Row 2: capacity + status pills */}
+            <div className="mb-3">
               <div className="flex items-center gap-x-3 gap-y-3 flex-wrap">
                 <div className="flex rounded-lg border border-border overflow-hidden text-xs md:text-sm font-semibold">
                   {CAPACITY_BUTTONS.map((btn, i) => (
@@ -655,41 +655,40 @@ function BrowseContent({
                     </button>
                   ))}
                 </div>
-
-                {/* Year jump — inline, shown when a specific decade is active */}
-                {decade !== 'all' && (
-                  <form onSubmit={handleYearJump} className="flex items-center gap-1.5 ml-auto">
-                    <input
-                      type="number"
-                      min="1900"
-                      max="2099"
-                      placeholder={`Year in ${decade}…`}
-                      value={yearJumpInput}
-                      onChange={e => setYearJumpInput(e.target.value)}
-                      className="w-32 px-2.5 py-1.5 text-xs text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
-                    />
-                    <button
-                      type="submit"
-                      className="text-xs px-2.5 py-1.5 rounded-md bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors"
-                    >
-                      Go
-                    </button>
-                    {year && (
-                      <button
-                        type="button"
-                        onClick={() => { setYear(undefined); setMonth(undefined); applyFilter({ year: undefined, month: undefined }) }}
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
-                      >
-                        Clear year
-                      </button>
-                    )}
-                  </form>
-                )}
               </div>
             </div>
 
-            {/* Row 3: decade buttons + year jump */}
+            {/* Row 3: decade buttons + year jump aligned to right edge */}
             <div className="overflow-x-auto -mx-3 px-3 md:-mx-4 md:px-4">
+              {/* Year jump sits above decade row, right-aligned */}
+              {decade !== 'all' && (
+                <form onSubmit={handleYearJump} className="flex items-center justify-end gap-1.5 mb-2">
+                  <input
+                    type="number"
+                    min="1900"
+                    max="2099"
+                    placeholder={`Year in ${decade}…`}
+                    value={yearJumpInput}
+                    onChange={e => setYearJumpInput(e.target.value)}
+                    className="w-32 px-2.5 py-1.5 text-xs text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+                  />
+                  <button
+                    type="submit"
+                    className="text-xs px-2.5 py-1.5 rounded-md bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors"
+                  >
+                    Go
+                  </button>
+                  {year && (
+                    <button
+                      type="button"
+                      onClick={() => { setYear(undefined); setMonth(undefined); applyFilter({ year: undefined, month: undefined }) }}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+                    >
+                      Clear year
+                    </button>
+                  )}
+                </form>
+              )}
               <div className="flex gap-2 min-w-max">
                 {DECADES.map(label => {
                   const decadeParam = decadeToParam(label)
@@ -728,19 +727,17 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted px-4 py-3 border-b border-border" style={{ gridTemplateColumns: 'auto 140px 1fr auto 56px' }}>
+              <div className="hidden md:grid bg-muted px-4 py-3 border-b border-border" style={{ gridTemplateColumns: 'auto 130px 1fr 1fr 140px 56px' }}>
                 {user && <div className="w-10" />}
                 <button onClick={() => handleSort('date')} className={`${thSortable} text-left`}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
-                <div className="flex items-center gap-4">
-                  <button onClick={() => handleSort('artist')} className={`${thSortable} text-left`}>
-                    Artist / Venue {sortField === 'artist' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
-                  </button>
-                  {sortField === 'venue' && (
-                    <span className={`${thBase} text-left text-[10px]`}>venue {sortDir === 'asc' ? '↑' : '↓'}</span>
-                  )}
-                </div>
+                <button onClick={() => handleSort('artist')} className={`${thSortable} text-left`}>
+                  Artist {sortField === 'artist' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                </button>
+                <button onClick={() => handleSort('venue')} className={`${thSortable} text-left`}>
+                  Venue {sortField === 'venue' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                </button>
                 <button onClick={() => handleSort('festival')} className={`${thSortable} text-left`}>
                   Festival {sortField === 'festival' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
@@ -800,7 +797,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center px-4 py-3 gap-3" style={{ gridTemplateColumns: 'auto 140px 1fr auto 56px' }}>
+                      <div className="hidden md:grid items-center px-4 py-3 gap-3" style={{ gridTemplateColumns: 'auto 130px 1fr 1fr 140px 56px' }}>
                         {user && <div className="w-10 flex items-center">{heartButton}</div>}
 
                         {/* Date */}
@@ -808,55 +805,55 @@ function BrowseContent({
                           {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                         </div>
 
-                        {/* Artist / Venue */}
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <button
-                              onClick={() => handleArtistChange({ value: show.artist_id, label: show.artist_name })}
-                              className="text-sm font-medium text-primary hover:opacity-80 hover:underline text-left truncate"
-                              title={show.artist_name}
+                        {/* Artist */}
+                        <div className="min-w-0 flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleArtistChange({ value: show.artist_id, label: show.artist_name })}
+                            className="text-sm font-medium text-primary hover:opacity-80 hover:underline text-left truncate"
+                            title={show.artist_name}
+                          >
+                            {show.artist_name}
+                          </button>
+                          {show.spotify_artist_id && (
+                            <a
+                              href={`https://open.spotify.com/artist/${show.spotify_artist_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Open in Spotify"
+                              className="flex-shrink-0 hover:opacity-70 transition-opacity"
                             >
-                              {show.artist_name}
-                            </button>
-                            {show.spotify_artist_id && (
-                              <a
-                                href={`https://open.spotify.com/artist/${show.spotify_artist_id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title="Open in Spotify"
-                                className="flex-shrink-0 hover:opacity-70 transition-opacity"
-                              >
-                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="#1DB954">
-                                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-                                </svg>
-                              </a>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => handleVenueChange({ value: show.venue_id, label: show.venue_name })}
-                              className="text-xs text-muted-foreground hover:text-primary hover:underline text-left truncate"
-                              title={venueTooltip}
-                            >
-                              {show.venue_name}
-                            </button>
-                            {capLabel && (
-                              <span className={`inline-flex items-center px-1 py-px rounded text-[9px] font-bold border flex-shrink-0 ${capColor}`}>
-                                {capLabel}
-                              </span>
-                            )}
-                          </div>
+                              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="#1DB954">
+                                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                              </svg>
+                            </a>
+                          )}
                         </div>
 
-                        {/* Festival — immediately after Artist/Venue */}
-                        <div className="flex items-center w-32">
+                        {/* Venue */}
+                        <div className="min-w-0 flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleVenueChange({ value: show.venue_id, label: show.venue_name })}
+                            className="text-sm text-muted-foreground hover:text-primary hover:underline text-left truncate"
+                            title={venueTooltip}
+                          >
+                            {show.venue_name}
+                          </button>
+                          {capLabel && (
+                            <span className={`inline-flex items-center px-1 py-px rounded text-[9px] font-bold border flex-shrink-0 ${capColor}`}>
+                              {capLabel}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Festival */}
+                        <div className="flex items-center">
                           {show.festival_name
                             ? <button
                                 onClick={() => handleFestivalChange({ value: show.festival_name!, label: show.festival_name! })}
                                 className={festivalBadgeClass}
                                 title={`Filter by ${show.festival_name}`}
                               >
-                                <span className="truncate max-w-[110px]">{show.festival_name}</span>
+                                <span className="truncate max-w-[120px]">{show.festival_name}</span>
                               </button>
                             : null
                           }
