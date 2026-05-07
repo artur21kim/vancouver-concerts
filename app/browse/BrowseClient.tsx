@@ -85,6 +85,18 @@ function decadeContainsYear(decade: string, year: number): boolean {
   return year >= start && year <= start + 9
 }
 
+function buildCapacityLabel(cap: string): string {
+  const map: Record<string, string> = {
+    small: 'Small Venues', medium: 'Medium Venues',
+    large: 'Large Venues', xlarge: 'XL Venues', unknown: 'Unknown Capacity',
+  }
+  return map[cap] ?? cap
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 function BrowseContent({
   initialShows,
@@ -93,6 +105,7 @@ function BrowseContent({
   initialTotalPages,
   venues,
   initialParams,
+  initialArtistName,
 }: {
   initialShows: Show[]
   initialTotal: number
@@ -105,6 +118,7 @@ function BrowseContent({
     festival?: string; capacity?: string; status?: string
     page: number; sort: string; dir: string
   }
+  initialArtistName: string | null
 }) {
   const router   = useRouter()
   const pathname = usePathname()
@@ -129,7 +143,11 @@ function BrowseContent({
   const [month,     setMonth]     = useState<string | undefined>(initialParams.month)
   const [artistId,  setArtistId]  = useState<string | undefined>(initialParams.artistId)
   const [artistOption, setArtistOption] = useState<SelectOption | null>(
-    initialParams.artistId ? { value: parseInt(initialParams.artistId), label: '...' } : null
+    initialParams.artistId && initialArtistName
+      ? { value: parseInt(initialParams.artistId), label: initialArtistName }
+      : initialParams.artistId
+      ? { value: parseInt(initialParams.artistId), label: '...' }
+      : null
   )
   const [venueId,   setVenueId]   = useState<string | undefined>(initialParams.venueId)
   const [showType,  setShowType]  = useState(initialParams.showType || '')
@@ -140,6 +158,7 @@ function BrowseContent({
   const [pageInput, setPageInput] = useState(String(initialParams.page))
   const [sortField, setSortField] = useState<SortField>((initialParams.sort as SortField) || 'date')
   const [sortDir,   setSortDir]   = useState<'asc' | 'desc'>((initialParams.dir as 'asc' | 'desc') || 'desc')
+  const [yearJumpInput, setYearJumpInput] = useState('')
 
   // ── User shows (heart buttons) ────────────────────────────────────────────
   const [userShows,    setUserShows]    = useState<Set<number>>(new Set())
@@ -272,6 +291,22 @@ function BrowseContent({
     applyFilter({ year: String(y), month: undefined })
   }
 
+  const handleYearJump = (e: React.FormEvent) => {
+    e.preventDefault()
+    const y = parseInt(yearJumpInput)
+    if (isNaN(y) || y < 1900 || y > 2099) return
+    // If decade is set and year is outside it, switch decade automatically
+    const decadeStart = decade !== 'all' ? parseInt(decade.replace('s', '')) : null
+    const targetDecade = `${Math.floor(y / 10) * 10}s`
+    const newDecade = (decadeStart !== null && (y < decadeStart || y > decadeStart + 9))
+      ? targetDecade
+      : decade
+    setDecade(newDecade)
+    setYear(String(y)); setMonth(undefined)
+    setYearJumpInput('')
+    applyFilter({ decade: newDecade, year: String(y), month: undefined })
+  }
+
   const handleArtistChange = (option: SelectOption | null) => {
     setArtistOption(option)
     const id = option ? String(option.value) : undefined
@@ -363,19 +398,47 @@ function BrowseContent({
   const activeDecadeLabel = paramToDecadeLabel(decade)
 
   const pageTitle = (() => {
-    const parts: string[] = []
-    if (artistOption && artistId) parts.push(artistOption.label)
-    if (venueId) {
-      const v = venues.find(v => v.venue_id === parseInt(venueId))
-      if (v) parts.push(v.venue_name)
+    const artistName = artistOption && artistId ? artistOption.label : null
+    const venueName  = venueId ? (venues.find(v => v.venue_id === parseInt(venueId))?.venue_name ?? null) : null
+
+    // Entity filters: artist and/or venue take top priority
+    if (artistName && venueName) return `Browse: ${artistName} @ ${venueName}`
+    if (artistName) {
+      // Append capacity/status context if set alongside artist
+      const extras: string[] = []
+      if (capacity && capacity !== 'all') extras.push(buildCapacityLabel(capacity))
+      if (status   && status   !== 'all') extras.push(`(${capitalize(status)})`)
+      return extras.length > 0 ? `Browse: ${artistName} · ${extras.join(' ')}` : `Browse: ${artistName}`
     }
-    if (month && year) parts.push(`${MONTH_NAMES_FULL[parseInt(month) - 1]} ${year}`)
-    else if (year)     parts.push(year)
-    else if (decade !== 'all') parts.push(activeDecadeLabel)
-    if (festival)  parts.push(festival.label)
+    if (venueName) return `Browse: ${venueName}`
+
+    // No entity filter — build from scope filters
+    const parts: string[] = []
+
+    // Capacity + status
+    const capLabel = capacity && capacity !== 'all' ? buildCapacityLabel(capacity) : null
+    const stLabel  = status   && status   !== 'all' ? `(${capitalize(status)})`   : null
+    if (capLabel || stLabel) {
+      parts.push([capLabel, stLabel].filter(Boolean).join(' '))
+    }
+
+    // Date scope
+    if (month && year) {
+      parts.push(`${MONTH_NAMES_FULL[parseInt(month) - 1]} ${year}`)
+    } else if (year) {
+      parts.push(`${activeDecadeLabel} › ${year}`)
+    } else if (decade !== 'all') {
+      parts.push(activeDecadeLabel)
+    } else {
+      parts.push('All Time')
+    }
+
+    // Show type / festival
+    if (festival)               parts.push(festival.label)
     if (showType === 'comedy')  parts.push('Comedy')
     if (showType === 'festival') parts.push('Festivals')
-    return parts.length > 0 ? `Browse: ${parts.join(' · ')}` : 'Browse Shows'
+
+    return `Browse: ${parts.join(' · ')}`
   })()
 
   const dateRangeDisplay = (() => {
@@ -580,7 +643,7 @@ function BrowseContent({
               </div>
             </div>
 
-            {/* Row 3: decade buttons */}
+            {/* Row 3: decade buttons + year jump */}
             <div className="overflow-x-auto -mx-3 px-3 md:-mx-4 md:px-4">
               <div className="flex gap-2 min-w-max">
                 {DECADES.map(label => {
@@ -606,6 +669,36 @@ function BrowseContent({
                 })}
               </div>
             </div>
+
+            {/* Year jump input — shown whenever a specific decade (not All Time) is active */}
+            {decade !== 'all' && (
+              <form onSubmit={handleYearJump} className="mt-3 flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1900"
+                  max="2099"
+                  placeholder={`Year in ${decade}…`}
+                  value={yearJumpInput}
+                  onChange={e => setYearJumpInput(e.target.value)}
+                  className="w-36 px-2.5 py-1 text-xs text-foreground bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+                />
+                <button
+                  type="submit"
+                  className="text-xs px-2.5 py-1 rounded-md bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors"
+                >
+                  Go
+                </button>
+                {year && (
+                  <button
+                    type="button"
+                    onClick={() => { setYear(undefined); setMonth(undefined); applyFilter({ year: undefined, month: undefined }) }}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Clear year
+                  </button>
+                )}
+              </form>
+            )}
           </div>
 
           {/* Loading overlay */}
