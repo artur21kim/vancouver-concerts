@@ -471,8 +471,6 @@ function ShowTable({
           </div>
         )}
       </div>
-        )}
-      </div>
       {tableContent}
     </div>
   );
