@@ -263,7 +263,25 @@ export default function HomeClient({
       legend: {
         display: true,
         position: 'bottom' as const,
-        labels: { boxWidth: 14, padding: 12, font: { size: 12 } },
+        labels: {
+          boxWidth: 14,
+          padding: 12,
+          font: { size: 12 },
+          generateLabels: (chart: any) => {
+            const original = chart.data.datasets.map((ds: any, i: number) => ({
+              text: ds.label,
+              fillStyle: ds.backgroundColor,
+              strokeStyle: ds.borderColor,
+              lineWidth: 0,
+              datasetIndex: i,
+              hidden: false,
+            }))
+            // Reorder: Small, Large, Medium, X-Large, Unknown
+            // so mobile wraps as [Small, Large] / [Medium, X-Large, Unknown]
+            const order = ['Small (<500)', 'Large (1.5K–10K)', 'Medium (500–1.5K)', 'X-Large (10K+)', 'Unknown']
+            return order.map((name: string) => original.find((l: any) => l.text === name)).filter(Boolean)
+          },
+        },
         onClick: () => {}
       },
       title: { display: false },
@@ -452,7 +470,7 @@ export default function HomeClient({
               }}
               className="w-28 px-2 py-1 text-xs border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option value="">All years</option>
+              <option value="">All Years</option>
               {Array.from({ length: 127 }, (_, i) => 1900 + i).map(year => (
                 <option key={year} value={year}>{year}</option>
               ))}
