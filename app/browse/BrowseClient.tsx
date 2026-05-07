@@ -516,19 +516,15 @@ function BrowseContent({
 
             {/* Venue Filters */}
             <div className="mb-5">
-              <div className="flex items-center gap-2 mb-3">
-                <label className="text-sm font-medium text-foreground">Venue Filters</label>
-                {unknownCapacityCount > 0 && capacityFilter !== 'unknown' && capacityFilter !== 'all' && (
-                  <span className="text-xs text-muted-foreground">
-                    ·{' '}
-                    <button onClick={() => handleCapacityButton('unknown', [0, 65000])}
-                      className="text-primary hover:opacity-80 font-medium underline underline-offset-2">
-                      {unknownCapacityCount.toLocaleString()} shows with unknown capacity hidden
-                    </button>
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+              {unknownCapacityCount > 0 && capacityFilter !== 'unknown' && capacityFilter !== 'all' && (
+                <div className="mb-3 text-xs text-muted-foreground">
+                  <button onClick={() => handleCapacityButton('unknown', [0, 65000])}
+                    className="text-primary hover:opacity-80 font-medium underline underline-offset-2">
+                    {unknownCapacityCount.toLocaleString()} shows with unknown capacity hidden
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center gap-x-3 gap-y-3">
                 {/* Size pill — Discover-style joined pill with dividers */}
                 <div className="flex rounded-lg border border-border overflow-hidden text-sm font-semibold">
                   {CAPACITY_BUTTONS.map((btn, i) => (
