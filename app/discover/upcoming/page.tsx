@@ -402,7 +402,8 @@ function NewShowsTable({
           </div>
         )}
       </div>
-      <table className="w-full table-fixed">}
+      <table className="w-full table-fixed">
+        {shows.length > 0 && <TableHeaders sortBy={sortBy} sortDir={sortDir} onSort={onSort} />}
         <tbody>
           {shows.map(show => (
             <SwipeableRow key={show.show_id} show={show} context="new" onSave={onSave} onSkip={onSkip} showSpotifyBadge={showSpotifyBadge} />
