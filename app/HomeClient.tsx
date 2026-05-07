@@ -275,7 +275,6 @@ export default function HomeClient({
             if (!items.length) return ''
             const label = items[0].label
             if (label === PRE1960_LABEL) return `${PRE1960_LABEL} (1900–1959)`
-            // Expand short month name to full name + year in year drilldown
             if (selectedYear) {
               const monthIndex = MONTH_NAMES.indexOf(label)
               if (monthIndex !== -1) return `${MONTH_NAMES_FULL[monthIndex]} ${selectedYear}`
@@ -354,7 +353,7 @@ export default function HomeClient({
     if (selectedMonth !== null && selectedYear) parts.push(`${MONTH_NAMES[selectedMonth]} ${selectedYear}`)
     else if (selectedYear) parts.push(selectedYear.toString())
     else if (selectedDecade !== 'all') parts.push(selectedDecade)
-    if (capacityFilter !== 'all') parts.push(`${CAPACITY_DISPLAY_NAMES[capacityFilter]} Venues`)
+    if (capacityFilter !== 'all') parts.push(`${CAPACITY_DISPLAY_NAMES[capacityFilter as CapacityBucket]} Venues`)
     return parts.length > 0 ? parts.join(' · ') : null
   }, [selectedDecade, selectedYear, selectedMonth, capacityFilter])
 
@@ -417,11 +416,11 @@ export default function HomeClient({
         {/* Filters card */}
         <div className="bg-card rounded-lg shadow-lg p-3 md:p-4 mb-3 md:mb-4 space-y-3">
 
-          {/* Row 1: Venue buttons + Year dropdown + Clear All */}
+          {/* Row 1: Venue size pill + Year dropdown + Clear All */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Venue:</span>
-            <div className="flex rounded-lg border border-border overflow-hidden text-xs font-medium">
-              {CAPACITY_BUTTON_ORDER.map(k => {
+            {/* Venue size pill — Discover-style joined pill with dividers */}
+            <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
+              {CAPACITY_BUTTON_ORDER.map((k, i) => {
                 const isAll = k === 'all'
                 const isActive = capacityFilter === k
                 const unselectedClass = isAll ? 'text-muted-foreground' : CAPACITY_META[k as CapacityBucket].unselectedClass
@@ -432,7 +431,7 @@ export default function HomeClient({
                     key={k}
                     onClick={() => setCapacityFilter(k)}
                     title={tooltip}
-                    className={`px-2 py-1.5 transition-colors ${
+                    className={`px-2 py-1.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
                       isActive
                         ? 'bg-primary text-primary-foreground'
                         : `bg-card ${unselectedClass} hover:bg-muted`
@@ -444,9 +443,6 @@ export default function HomeClient({
               })}
             </div>
 
-            <span className="text-border select-none hidden md:inline">|</span>
-
-            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap hidden md:inline">Year:</span>
             <select
               value={selectedYear || ''}
               onChange={(e) => {

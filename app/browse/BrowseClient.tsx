@@ -479,7 +479,6 @@ function BrowseContent({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Show Type</label>
-                {/* Native select — bg-card to match react-select, teal border when active */}
                 <select
                   value={selectedShowType || ''}
                   onChange={(e) => { setSelectedShowType(e.target.value || null); setCurrentPage(1); setPageInput('1') }}
@@ -529,28 +528,40 @@ function BrowseContent({
                   </span>
                 )}
               </div>
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Size</span>
-                  <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
-                    {CAPACITY_BUTTONS.map(btn => (
-                      <button key={btn.key} onClick={() => handleCapacityButton(btn.key, btn.range)} title={btn.tooltip}
-                        className={`px-2.5 py-1.5 transition-colors ${capacityFilter === btn.key ? 'bg-primary text-primary-foreground' : `bg-card ${btn.unselectedClass} hover:bg-muted`}`}>
-                        {btn.label}
-                      </button>
-                    ))}
-                  </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+                {/* Size pill — Discover-style joined pill with dividers */}
+                <div className="flex rounded-lg border border-border overflow-hidden text-sm font-semibold">
+                  {CAPACITY_BUTTONS.map((btn, i) => (
+                    <button
+                      key={btn.key}
+                      onClick={() => handleCapacityButton(btn.key, btn.range)}
+                      title={btn.tooltip}
+                      className={`px-3 py-2.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                        capacityFilter === btn.key
+                          ? 'bg-primary text-primary-foreground'
+                          : `bg-card ${btn.unselectedClass} hover:bg-muted`
+                      }`}
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Status</span>
-                  <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
-                    {STATUS_BUTTONS.map(btn => (
-                      <button key={btn.key} onClick={() => { setStatusFilter(btn.key); setCurrentPage(1); setPageInput('1') }}
-                        className={`px-2.5 py-1.5 transition-colors ${statusFilter === btn.key ? 'bg-primary text-primary-foreground' : `bg-card ${btn.unselectedClass} hover:bg-muted`}`}>
-                        {btn.label}
-                      </button>
-                    ))}
-                  </div>
+
+                {/* Status pill */}
+                <div className="flex rounded-lg border border-border overflow-hidden text-sm font-semibold">
+                  {STATUS_BUTTONS.map((btn, i) => (
+                    <button
+                      key={btn.key}
+                      onClick={() => { setStatusFilter(btn.key); setCurrentPage(1); setPageInput('1') }}
+                      className={`px-2.5 py-1.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                        statusFilter === btn.key
+                          ? 'bg-primary text-primary-foreground'
+                          : `bg-card ${btn.unselectedClass} hover:bg-muted`
+                      }`}
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className="mt-3 max-w-sm">
