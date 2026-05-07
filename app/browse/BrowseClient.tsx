@@ -476,13 +476,13 @@ function BrowseContent({
               </button>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Show Type</label>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 md:gap-4 mb-6">
+              <div className="flex items-center gap-2 md:block">
+                <label className="text-sm font-medium text-foreground whitespace-nowrap md:block md:mb-2">Show Type</label>
                 <select
                   value={selectedShowType || ''}
                   onChange={(e) => { setSelectedShowType(e.target.value || null); setCurrentPage(1); setPageInput('1') }}
-                  className={`w-full px-3 py-2 text-sm text-foreground bg-card rounded-md focus:outline-none focus:ring-2 focus:ring-ring transition-colors ${
+                  className={`flex-1 md:w-full px-3 py-1.5 md:py-2 text-sm text-foreground bg-card rounded-md focus:outline-none focus:ring-2 focus:ring-ring transition-colors ${
                     selectedShowType
                       ? 'border-[1.5px] border-primary'
                       : 'border border-border'
@@ -494,23 +494,29 @@ function BrowseContent({
                   <option value="festival">Festival</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Artist</label>
-                <Select instanceId="artist-select" options={artistOptions} value={selectedArtist}
-                  onChange={(o) => { setSelectedArtist(o); setCurrentPage(1); setPageInput('1') }}
-                  isClearable placeholder="All artists..." className="text-sm" styles={customSelectStyles} />
+              <div className="flex items-center gap-2 md:block">
+                <label className="text-sm font-medium text-foreground whitespace-nowrap md:block md:mb-2">Artist</label>
+                <div className="flex-1">
+                  <Select instanceId="artist-select" options={artistOptions} value={selectedArtist}
+                    onChange={(o) => { setSelectedArtist(o); setCurrentPage(1); setPageInput('1') }}
+                    isClearable placeholder="All artists..." className="text-sm" styles={customSelectStyles} />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Venue</label>
-                <Select instanceId="venue-select" options={venueOptions} value={selectedVenue}
-                  onChange={(o) => { setSelectedVenue(o); setCurrentPage(1); setPageInput('1') }}
-                  isClearable placeholder="All venues..." className="text-sm" styles={customSelectStyles} />
+              <div className="flex items-center gap-2 md:block">
+                <label className="text-sm font-medium text-foreground whitespace-nowrap md:block md:mb-2">Venue</label>
+                <div className="flex-1">
+                  <Select instanceId="venue-select" options={venueOptions} value={selectedVenue}
+                    onChange={(o) => { setSelectedVenue(o); setCurrentPage(1); setPageInput('1') }}
+                    isClearable placeholder="All venues..." className="text-sm" styles={customSelectStyles} />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Festival</label>
-                <Select instanceId="festival-select" options={festivalOptions} value={selectedFestival}
-                  onChange={(o) => { setSelectedFestival(o); setCurrentPage(1); setPageInput('1') }}
-                  isClearable placeholder="All festivals..." className="text-sm" styles={customSelectStyles} />
+              <div className="flex items-center gap-2 md:block">
+                <label className="text-sm font-medium text-foreground whitespace-nowrap md:block md:mb-2">Festival</label>
+                <div className="flex-1">
+                  <Select instanceId="festival-select" options={festivalOptions} value={selectedFestival}
+                    onChange={(o) => { setSelectedFestival(o); setCurrentPage(1); setPageInput('1') }}
+                    isClearable placeholder="All festivals..." className="text-sm" styles={customSelectStyles} />
+                </div>
               </div>
             </div>
 
@@ -532,7 +538,7 @@ function BrowseContent({
                       key={btn.key}
                       onClick={() => handleCapacityButton(btn.key, btn.range)}
                       title={btn.tooltip}
-                      className={`px-2 py-1.5 md:px-3 md:py-2.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                      className={`px-2 py-1.5 md:px-2.5 md:py-1.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
                         capacityFilter === btn.key
                           ? 'bg-primary text-primary-foreground'
                           : `bg-card ${btn.unselectedClass} hover:bg-muted`
@@ -543,13 +549,13 @@ function BrowseContent({
                   ))}
                 </div>
 
-                {/* Status pill */}
-                <div className="flex rounded-lg border border-border overflow-hidden text-xs md:text-sm font-semibold">
+                {/* Status pill — flex-1 on mobile to fill remaining row width */}
+                <div className="flex flex-1 md:flex-none rounded-lg border border-border overflow-hidden text-xs md:text-sm font-semibold">
                   {STATUS_BUTTONS.map((btn, i) => (
                     <button
                       key={btn.key}
                       onClick={() => { setStatusFilter(btn.key); setCurrentPage(1); setPageInput('1') }}
-                      className={`px-2 py-1.5 md:px-2.5 md:py-1.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                      className={`flex-1 md:flex-none px-2 py-1.5 md:px-2.5 md:py-1.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
                         statusFilter === btn.key
                           ? 'bg-primary text-primary-foreground'
                           : `bg-card ${btn.unselectedClass} hover:bg-muted`
