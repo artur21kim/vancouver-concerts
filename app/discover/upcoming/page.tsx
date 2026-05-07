@@ -154,13 +154,13 @@ function getNoopLabel(action: SwipeAction) {
 
 // ─── Swipeable row ────────────────────────────────────────────────────────────
 function SwipeableRow({
-  show, context, onSave, onSkip, showSpotifyBadge,
+  show, context, onSave, onSkip, highlightRow = false,
 }: {
   show: Show;
   context: SwipeContext;
   onSave: (show: Show) => void;
   onSkip: (show: Show) => void;
-  showSpotifyBadge: boolean;
+  highlightRow?: boolean;
 }) {
   const [offset, setOffset]       = useState(0);
   const [animating, setAnimating] = useState(false);
@@ -251,7 +251,7 @@ function SwipeableRow({
 
   return (
     <tr
-      className={`relative overflow-hidden select-none border-b border-border last:border-0 ${showSpotifyBadge && show.is_spotify_match ? 'bg-primary/5' : ''}`}
+      className={`relative overflow-hidden select-none border-b border-border last:border-0 ${highlightRow ? 'bg-primary/5' : ''}`}
       style={{ backgroundColor: rowBg }}
       onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
     >
@@ -378,13 +378,13 @@ function TableHeaders({ sortBy, sortDir, onSort }: TableSortProps) {
 // ─── New Shows table ───────────────────────────────────────────────────────────
 function NewShowsTable({
   title, shows, allReviewed, onSave, onSkip, onSaveAll, onSkipAll,
-  showSpotifyBadge, highlightHeader = false, onViewMyShows, onBrowse,
+  highlightHeader = false, onViewMyShows, onBrowse,
   sortBy, sortDir, onSort,
 }: {
   title: string; shows: Show[]; allReviewed: boolean;
   onSave: (show: Show) => void; onSkip: (show: Show) => void;
   onSaveAll: () => void; onSkipAll: () => void;
-  showSpotifyBadge: boolean; highlightHeader?: boolean;
+  highlightHeader?: boolean;
   onViewMyShows: () => void; onBrowse: () => void;
 } & TableSortProps) {
   return (
@@ -406,7 +406,8 @@ function NewShowsTable({
         {shows.length > 0 && <TableHeaders sortBy={sortBy} sortDir={sortDir} onSort={onSort} />}
         <tbody>
           {shows.map(show => (
-            <SwipeableRow key={show.show_id} show={show} context="new" onSave={onSave} onSkip={onSkip} showSpotifyBadge={showSpotifyBadge} />
+            <SwipeableRow key={show.show_id} show={show} context="new" onSave={onSave} onSkip={onSkip}
+              highlightRow={highlightHeader && show.is_spotify_match} />
           ))}
           {allReviewed && (
             <tr>
@@ -429,21 +430,22 @@ function NewShowsTable({
 // ─── Generic show table ────────────────────────────────────────────────────────
 function ShowTable({
   title, shows, context, onSave, onSkip, onSaveAll, onSkipAll,
-  showBulk = false, hideTitleBar = false, showSpotifyBadge = false,
+  showBulk = false, hideTitleBar = false, highlightMatches = false,
   highlightHeader = false, sortBy, sortDir, onSort,
 }: {
   title: string; shows: Show[]; context: SwipeContext;
   onSave: (show: Show) => void; onSkip: (show: Show) => void;
   onSaveAll?: () => void; onSkipAll?: () => void;
   showBulk?: boolean; hideTitleBar?: boolean;
-  showSpotifyBadge?: boolean; highlightHeader?: boolean;
+  highlightMatches?: boolean; highlightHeader?: boolean;
 } & TableSortProps) {
   const tableContent = (
     <table className="w-full table-fixed">
       <TableHeaders sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
       <tbody>
         {shows.map(show => (
-          <SwipeableRow key={show.show_id} show={show} context={context} onSave={onSave} onSkip={onSkip} showSpotifyBadge={showSpotifyBadge} />
+          <SwipeableRow key={show.show_id} show={show} context={context} onSave={onSave} onSkip={onSkip}
+            highlightRow={highlightMatches && show.is_spotify_match} />
         ))}
       </tbody>
     </table>
@@ -821,7 +823,6 @@ function UpcomingShowsContent() {
                   onSave={handleSave} onSkip={handleSkip}
                   onSaveAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'added')}
                   onSkipAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'skipped')}
-                  showSpotifyBadge={false}
                   onViewMyShows={() => router.push('/my-shows')}
                   onBrowse={() => router.push('/browse')}
                   {...tableProps}
@@ -835,7 +836,7 @@ function UpcomingShowsContent() {
                     onSave={handleSave} onSkip={handleSkip}
                     onSaveAll={() => bulkUpdateStatus(newMatchedShows.map(s => s.show_id), 'added')}
                     onSkipAll={() => bulkUpdateStatus(newMatchedShows.map(s => s.show_id), 'skipped')}
-                    showSpotifyBadge={false} highlightHeader
+                    highlightHeader
                     onViewMyShows={() => router.push('/my-shows')}
                     onBrowse={() => router.push('/browse')}
                     {...tableProps}
@@ -846,7 +847,7 @@ function UpcomingShowsContent() {
                       onSave={handleSave} onSkip={handleSkip}
                       onSaveAll={() => bulkUpdateStatus(newUnmatchedShows.map(s => s.show_id), 'added')}
                       onSkipAll={() => bulkUpdateStatus(newUnmatchedShows.map(s => s.show_id), 'skipped')}
-                      showBulk showSpotifyBadge={false}
+                      showBulk
                       {...tableProps}
                     />
                   )}
@@ -857,7 +858,7 @@ function UpcomingShowsContent() {
                 <ShowTable
                   title="Saved" shows={savedShows} context="saved"
                   onSave={handleSave} onSkip={handleSkip}
-                  showSpotifyBadge={scope === 'all'}
+                  highlightMatches={scope === 'all'}
                   {...tableProps}
                 />
               )}
@@ -875,7 +876,7 @@ function UpcomingShowsContent() {
                     <ShowTable
                       title="" shows={skippedShows} context="skipped"
                       onSave={handleSave} onSkip={handleSkip}
-                      hideTitleBar showSpotifyBadge={scope === 'all'}
+                      hideTitleBar highlightMatches={scope === 'all'}
                       {...tableProps}
                     />
                   )}
