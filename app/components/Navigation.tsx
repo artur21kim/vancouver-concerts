@@ -9,7 +9,6 @@ const DISCOVER_PATHS = [
   '/discover',
   '/discover/upcoming',
   '/matches',
-  '/venue-selection',
   '/likely-shows',
   '/review-summary',
 ]
@@ -19,21 +18,14 @@ const PAST_FLOW_BREADCRUMBS: Record<string, { label: string; path: string }[]> =
     { label: 'Discover', path: '/discover' },
     { label: 'Matches', path: '/matches' },
   ],
-  '/venue-selection': [
-    { label: 'Discover', path: '/discover' },
-    { label: 'Matches', path: '/matches' },
-    { label: 'Venue Selection', path: '/venue-selection' },
-  ],
   '/likely-shows': [
     { label: 'Discover', path: '/discover' },
     { label: 'Matches', path: '/matches' },
-    { label: 'Venue Selection', path: '/venue-selection' },
     { label: 'Likely Shows', path: '/likely-shows' },
   ],
   '/review-summary': [
     { label: 'Discover', path: '/discover' },
     { label: 'Matches', path: '/matches' },
-    { label: 'Venue Selection', path: '/venue-selection' },
     { label: 'Likely Shows', path: '/likely-shows' },
     { label: 'Summary', path: '/review-summary' },
   ],
