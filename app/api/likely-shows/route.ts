@@ -58,7 +58,16 @@ export async function GET(request: Request) {
       return acc;
     }, {});
 
-    const uniqueSpotifyArtistIds = Object.keys(artistSongCounts);
+    // Filter to artists with >= 2 liked songs to reduce noise
+    const uniqueSpotifyArtistIds = Object.keys(artistSongCounts)
+      .filter(id => artistSongCounts[id] >= 2);
+
+    if (uniqueSpotifyArtistIds.length === 0) {
+      return NextResponse.json({
+        success: true,
+        data: { shows: [], total_shows: 0, message: 'Not enough Spotify data to generate matches. Try liking more songs.' }
+      });
+    }
 
     // Match Spotify artists to Vancouver artists
     const { data: matchedArtists, error: artistsError } = await supabase

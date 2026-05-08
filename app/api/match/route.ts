@@ -76,7 +76,15 @@ export async function GET(request: Request) {
       return acc;
     }, {});
 
-    const uniqueSpotifyArtistIds = Object.keys(artistSongCounts);
+    // Filter to artists with >= 2 liked songs to reduce noise
+    const uniqueSpotifyArtistIds = Object.keys(artistSongCounts)
+      .filter(id => artistSongCounts[id].count >= 2);
+
+    if (uniqueSpotifyArtistIds.length === 0) {
+      return NextResponse.json({ 
+        error: 'Not enough Spotify data to generate matches. Try liking more songs.' 
+      }, { status: 400 });
+    }
 
     const { data: matchedArtists, error: artistsError } = await supabase
       .from('dim_artist')
