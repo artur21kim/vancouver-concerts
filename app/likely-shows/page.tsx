@@ -186,6 +186,7 @@ export default function LikelyShowsPage() {
         spotify_artist_id: show.spotify_artist_id,
         show_count: 1,
         match_score: show.match_score,
+        // FIX: use spotify_song_count from the show data (set correctly by the API route)
         spotify_song_count: show.spotify_song_count,
         vancouver_show_count: show.vancouver_show_count,
         shows: [show]
@@ -463,13 +464,13 @@ export default function LikelyShowsPage() {
                                 >
                                   <SpotifyIcon className="w-3 h-3 text-[#1DB954]" />
                                   <span className="group-hover/spotify:text-[#1DB954]">
-                                    {group.spotify_song_count} {group.spotify_song_count === 1 ? 'song' : 'songs'}
+                                    {group.spotify_song_count} {group.spotify_song_count === 1 ? 'liked song' : 'liked songs'}
                                   </span>
                                 </a>
                               ) : (
                                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                   <SpotifyIcon className="w-3 h-3 text-[#1DB954]" />
-                                  {group.spotify_song_count} {group.spotify_song_count === 1 ? 'song' : 'songs'}
+                                  {group.spotify_song_count} {group.spotify_song_count === 1 ? 'liked song' : 'liked songs'}
                                 </span>
                               )}
                             </div>
@@ -529,33 +530,44 @@ export default function LikelyShowsPage() {
                           {/* Column headers */}
                           <div className={`grid px-5 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/40 ${
                             sortBy === 'year'
-                              ? 'grid-cols-[48px_120px_1fr_1fr_80px]'
-                              : 'grid-cols-[48px_120px_1fr_80px]'
+                              ? 'grid-cols-[48px_120px_1fr_1fr]'
+                              : 'grid-cols-[48px_120px_1fr]'
                           }`}>
                             <span>Actions</span>
                             <span>Date</span>
                             {sortBy === 'year' && <span>Artist</span>}
                             <span>Venue</span>
-                            <span>Status</span>
                           </div>
 
                           {group.shows.map(show => {
                             const isAdded   = show.status === 'added';
                             const isSkipped = show.status === 'skipped';
+
+                            // FIX: always reserve left border space to prevent jagged alignment
+                            // pending = transparent border, added = green, skipped = red
+                            const borderClass = isAdded
+                              ? 'border-l-green-500'
+                              : isSkipped
+                              ? 'border-l-destructive'
+                              : 'border-l-transparent';
+
+                            // Matches-page tints (no Status column)
+                            const bgClass = isAdded
+                              ? 'bg-green-500/5'
+                              : isSkipped
+                              ? 'bg-destructive/5'
+                              : 'hover:bg-muted/20';
+
                             return (
                               <div
                                 key={show.show_id}
-                                className={`grid px-5 py-3 items-center border-t border-border/40 transition-colors ${
+                                className={`grid px-5 py-3 items-center border-t border-border/40 border-l-2 transition-colors ${
                                   sortBy === 'year'
-                                    ? 'grid-cols-[48px_120px_1fr_1fr_80px]'
-                                    : 'grid-cols-[48px_120px_1fr_80px]'
-                                } ${
-                                  isAdded   ? 'bg-green-500/5 border-l-2 border-l-green-500' :
-                                  isSkipped ? 'bg-red-500/5 border-l-2 border-l-red-500' :
-                                              'hover:bg-muted/20'
-                                }`}
+                                    ? 'grid-cols-[48px_120px_1fr_1fr]'
+                                    : 'grid-cols-[48px_120px_1fr]'
+                                } ${borderClass} ${bgClass}`}
                               >
-                                {/* Heart + X — first column, matches Upcoming Shows */}
+                                {/* Heart + X — always same width, no layout shift */}
                                 <div className="flex items-center gap-2">
                                   <button onClick={() => handleAddShow(show.show_id)} title="Add to My Shows"
                                     className="focus:outline-none">
@@ -595,13 +607,6 @@ export default function LikelyShowsPage() {
                                   <span className="text-sm text-muted-foreground truncate">{show.venue_name}</span>
                                   <CapacityBadge category={show.capacity_category} />
                                 </div>
-
-                                {/* Status — row colour does the heavy lifting, text is secondary */}
-                                <span className="text-xs">
-                                  {isAdded   && <span className="text-green-500 font-medium">Added ✓</span>}
-                                  {isSkipped && <span className="text-destructive font-medium">Skipped ✗</span>}
-                                  {!isAdded && !isSkipped && <span className="text-muted-foreground/60">Pending</span>}
-                                </span>
                               </div>
                             );
                           })}
