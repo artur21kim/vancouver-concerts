@@ -643,48 +643,45 @@ function BrowseContent({
               </div>
             </div>
 
-            {/* Row 2: capacity + status pills, with year jump right-aligned beside status */}
+            {/* Row 2: capacity + status pills + year jump inline */}
             <div className="mb-3">
-              <div className="flex items-center justify-between gap-3">
-                {/* Left: capacity + status pills */}
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex rounded-lg border border-border overflow-hidden text-xs md:text-sm font-semibold">
-                    {CAPACITY_BUTTONS.map((btn, i) => (
-                      <button
-                        key={btn.key}
-                        onClick={() => handleCapacityClick(btn.key)}
-                        title={btn.tooltip}
-                        className={`px-2 py-1.5 md:px-2.5 md:py-1.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
-                          capacity === btn.key
-                            ? 'bg-primary text-primary-foreground'
-                            : `bg-card ${btn.unselectedClass} hover:bg-muted`
-                        }`}
-                      >
-                        {btn.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex rounded-lg border border-border overflow-hidden text-xs md:text-sm font-semibold">
-                    {STATUS_BUTTONS.map((btn, i) => (
-                      <button
-                        key={btn.key}
-                        onClick={() => handleStatusClick(btn.key)}
-                        className={`px-2 py-1.5 md:px-2.5 md:py-1.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
-                          status === btn.key
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-card text-muted-foreground hover:bg-muted'
-                        }`}
-                      >
-                        {btn.label}
-                      </button>
-                    ))}
-                  </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs md:text-sm font-semibold">
+                  {CAPACITY_BUTTONS.map((btn, i) => (
+                    <button
+                      key={btn.key}
+                      onClick={() => handleCapacityClick(btn.key)}
+                      title={btn.tooltip}
+                      className={`px-2 py-1.5 md:px-2.5 md:py-1.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                        capacity === btn.key
+                          ? 'bg-primary text-primary-foreground'
+                          : `bg-card ${btn.unselectedClass} hover:bg-muted`
+                      }`}
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
                 </div>
 
-                {/* Right: year jump — only when a specific decade is active */}
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs md:text-sm font-semibold">
+                  {STATUS_BUTTONS.map((btn, i) => (
+                    <button
+                      key={btn.key}
+                      onClick={() => handleStatusClick(btn.key)}
+                      className={`px-2 py-1.5 md:px-2.5 md:py-1.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                        status === btn.key
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-card text-muted-foreground hover:bg-muted'
+                        }`}
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Year jump — sits immediately after status pill, same row */}
                 {decade !== 'all' && (
-                  <form onSubmit={handleYearJump} className="flex items-center gap-1.5 flex-shrink-0">
+                  <form onSubmit={handleYearJump} className="flex items-center gap-1.5">
                     <input
                       type="number"
                       min="1900"
@@ -766,7 +763,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px 160px 190px 140px 64px 64px` }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(0,1fr) minmax(0,1fr) 140px 64px 64px` }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -829,7 +826,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px 160px 190px 140px 64px 64px` }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(0,1fr) minmax(0,1fr) 140px 64px 64px` }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
