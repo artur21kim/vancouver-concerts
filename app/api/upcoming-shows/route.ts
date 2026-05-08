@@ -22,17 +22,35 @@ export async function GET(request: Request) {
       timeZone: 'America/Vancouver',
     });
 
-    // Always fetch user's Spotify artists for highlighting purposes
-    const { data: userSongs, error: songsError } = await supabase
-      .from('user_spotify_songs')
-      .select('spotify_artist_id')
-      .eq('user_id', user.id);
+    // FIX: Fetch ALL user songs in batches to avoid Supabase 1000-row default limit
+    const PAGE_SIZE = 1000;
+    let allUserSongs: any[] = [];
+    let page = 0;
+    let hasMore = true;
 
-    if (songsError) {
-      return NextResponse.json({ error: 'Failed to fetch Spotify data' }, { status: 500 });
+    while (hasMore) {
+      const { data: batch, error: songsError } = await supabase
+        .from('user_spotify_songs')
+        .select('spotify_artist_id')
+        .eq('user_id', user.id)
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+      if (songsError) {
+        return NextResponse.json({ error: 'Failed to fetch Spotify data' }, { status: 500 });
+      }
+
+      if (!batch || batch.length === 0) {
+        hasMore = false;
+      } else {
+        allUserSongs = allUserSongs.concat(batch);
+        hasMore = batch.length === PAGE_SIZE;
+        page++;
+      }
     }
 
-    const artistSongCounts = (userSongs || []).reduce((acc: any, song: any) => {
+    console.log(`📊 Fetched ${allUserSongs.length} user song rows across ${page} pages`);
+
+    const artistSongCounts = allUserSongs.reduce((acc: any, song: any) => {
       const artistId = song.spotify_artist_id;
       if (!acc[artistId]) acc[artistId] = 0;
       acc[artistId]++;

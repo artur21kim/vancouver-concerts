@@ -431,11 +431,11 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
       <div className="flex items-center gap-4 pt-3 border-t border-border text-[10px] text-muted-foreground">
         <div className="flex items-center gap-1.5">
           <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: '#0d9488' }} />
-          <span>Liked songs (70%)</span>
+          <span>Liked songs</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: '#5eead4' }} />
-          <span>Vancouver shows (30%)</span>
+          <span>Vancouver shows</span>
         </div>
       </div>
     </div>
