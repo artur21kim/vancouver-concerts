@@ -784,11 +784,11 @@ function BrowseContent({
               {/* Mobile header */}
               <div className="md:hidden grid bg-muted px-2 py-2 border-b border-border" style={{ gridTemplateColumns: `${user ? '28px ' : ''}80px 1fr 56px` }}>
                 {user && <div className="w-7" />}
-                <button onClick={() => handleSort('date')} className={`${thSortable} text-left text-[10px]`}>
+                <button onClick={() => handleSort('date')} className="text-left text-[10px] font-medium text-muted-foreground uppercase tracking-wider py-2 cursor-pointer hover:text-foreground transition-colors">
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
-                <span className={`${thBase} text-[10px]`}>Artist / Venue</span>
-                <span className={`${thBase} text-left text-[10px] whitespace-nowrap`}>Tix/Set</span>
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider py-2">Artist / Venue</span>
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider py-2 whitespace-nowrap">Tix/Set</span>
               </div>
 
               {shows.length === 0 && (
