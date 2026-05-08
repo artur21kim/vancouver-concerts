@@ -25,7 +25,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Failed to fetch venues' }, { status: 500 });
     }
 
-    // Build a set of venues the user explicitly said 'no' to — these are the only ones we exclude
     const noVenueIds = new Set(
       (userVenues || [])
         .filter(v => v.status === 'no')
@@ -34,49 +33,28 @@ export async function GET(request: Request) {
 
     console.log(`🚫 Excluding ${noVenueIds.size} venues user said 'no' to`);
 
-    // FIX: Fetch ALL user songs in batches to avoid Supabase 1000-row default limit
-    const PAGE_SIZE = 1000;
-    let allUserSongs: any[] = [];
-    let page = 0;
-    let hasMore = true;
+    // FIX: Aggregate song counts DB-side to avoid both the 1000-row fetch limit
+    // and the .in() URL length limit from passing thousands of artist IDs.
+    const { data: songCountRows, error: songsError } = await supabase
+      .rpc('get_user_spotify_artist_counts', { p_user_id: user.id });
 
-    while (hasMore) {
-      const { data: batch, error: songsError } = await supabase
-        .from('user_spotify_songs')
-        .select('spotify_artist_id')
-        .eq('user_id', user.id)
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (songsError) {
-        return NextResponse.json({ error: 'Failed to fetch Spotify data' }, { status: 500 });
-      }
-
-      if (!batch || batch.length === 0) {
-        hasMore = false;
-      } else {
-        allUserSongs = allUserSongs.concat(batch);
-        hasMore = batch.length === PAGE_SIZE;
-        page++;
-      }
+    if (songsError) {
+      console.error('Song count RPC error:', songsError);
+      return NextResponse.json({ error: 'Failed to fetch Spotify data' }, { status: 500 });
     }
 
-    const userSongs = allUserSongs;
-
-    console.log(`📊 Fetched ${userSongs.length} user song rows across ${page} pages`);
-
-    if (!userSongs || userSongs.length === 0) {
+    if (!songCountRows || songCountRows.length === 0) {
       return NextResponse.json({
         success: true,
         data: { shows: [], total_shows: 0, message: 'No Spotify data found. Please connect your Spotify account.' }
       });
     }
 
-    const artistSongCounts = userSongs.reduce((acc: any, song: any) => {
-      const artistId = song.spotify_artist_id;
-      if (!acc[artistId]) acc[artistId] = 0;
-      acc[artistId]++;
-      return acc;
-    }, {});
+    // Build artistSongCounts map: { spotify_artist_id -> count }
+    const artistSongCounts: Record<string, number> = {};
+    for (const row of songCountRows) {
+      artistSongCounts[row.spotify_artist_id] = row.song_count;
+    }
 
     // Filter to artists with >= 2 liked songs to reduce noise
     const uniqueSpotifyArtistIds = Object.keys(artistSongCounts)
@@ -118,7 +96,6 @@ export async function GET(request: Request) {
     const firstConcertYear = profile?.first_concert_year || 2000;
 
     // Fetch ALL shows for matched artists from first_concert_year onwards
-    // No venue filter here — we'll filter out 'no' venues in code
     const { data: shows, error: showsError } = await supabase
       .from('fact_shows')
       .select(`
@@ -151,9 +128,7 @@ export async function GET(request: Request) {
       });
     }
 
-    // Fetch show IDs to exclude:
-    // 1. Already in user_shows with status = 'attended' (added from any source)
-    // 2. Already in user_show_reviews with status = 'skipped' (explicitly skipped)
+    // Fetch show IDs to exclude
     const [attendedResult, skippedResult] = await Promise.all([
       supabase
         .from('user_shows')

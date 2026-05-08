@@ -54,52 +54,32 @@ export async function GET(request: Request) {
       (userVenues || []).filter(v => v.status === 'no').map(v => v.venue_id)
     );
 
-    // FIX: Fetch ALL user songs in batches to avoid Supabase 1000-row default limit
-    const PAGE_SIZE = 1000;
-    let allUserSongs: any[] = [];
-    let page = 0;
-    let hasMore = true;
+    // FIX: Aggregate song counts DB-side to avoid both the 1000-row fetch limit
+    // and the .in() URL length limit from passing thousands of artist IDs.
+    // This returns one row per spotify_artist_id with its count.
+    const { data: songCountRows, error: songsError } = await supabase
+      .rpc('get_user_spotify_artist_counts', { p_user_id: user.id });
 
-    while (hasMore) {
-      const { data: batch, error: songsError } = await supabase
-        .from('user_spotify_songs')
-        .select('spotify_artist_id, artist_name')
-        .eq('user_id', user.id)
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (songsError) {
-        return NextResponse.json({ error: 'Failed to fetch user songs' }, { status: 500 });
-      }
-
-      if (!batch || batch.length === 0) {
-        hasMore = false;
-      } else {
-        allUserSongs = allUserSongs.concat(batch);
-        hasMore = batch.length === PAGE_SIZE;
-        page++;
-      }
+    if (songsError) {
+      console.error('Song count RPC error:', songsError);
+      return NextResponse.json({ error: 'Failed to fetch user songs' }, { status: 500 });
     }
 
-    const userSongs = allUserSongs;
-
-    console.log(`📊 Fetched ${userSongs.length} user song rows across ${page} pages`);
-
-    if (!userSongs || userSongs.length === 0) {
+    if (!songCountRows || songCountRows.length === 0) {
       return NextResponse.json({ 
         error: 'No Spotify data found. Please connect your Spotify account.' 
       }, { status: 400 });
     }
 
-    const artistSongCounts = userSongs.reduce((acc: any, song: any) => {
-      const artistId = song.spotify_artist_id;
-      if (!acc[artistId]) acc[artistId] = { count: 0, name: song.artist_name };
-      acc[artistId].count++;
-      return acc;
-    }, {});
+    // Build artistSongCounts map: { spotify_artist_id -> count }
+    const artistSongCounts: Record<string, number> = {};
+    for (const row of songCountRows) {
+      artistSongCounts[row.spotify_artist_id] = row.song_count;
+    }
 
     // Filter to artists with >= 2 liked songs to reduce noise
     const uniqueSpotifyArtistIds = Object.keys(artistSongCounts)
-      .filter(id => artistSongCounts[id].count >= 2);
+      .filter(id => artistSongCounts[id] >= 2);
 
     if (uniqueSpotifyArtistIds.length === 0) {
       return NextResponse.json({ 
@@ -107,6 +87,8 @@ export async function GET(request: Request) {
       }, { status: 400 });
     }
 
+    // Match via JOIN in DB — no large .in() needed
+    // dim_artist only has ~12k rows so this is fast
     const { data: matchedArtists, error: artistsError } = await supabase
       .from('dim_artist')
       .select('artist_id, artist_name, spotify_artist_id')
@@ -178,12 +160,12 @@ export async function GET(request: Request) {
       }, { status: 404 });
     }
 
-    const maxSpotifyCount = Math.max(...artistsWithShows.map(a => artistSongCounts[a.spotify_artist_id]?.count || 0));
+    const maxSpotifyCount = Math.max(...artistsWithShows.map(a => artistSongCounts[a.spotify_artist_id] || 0));
     const maxVancouverCountFiltered = Math.max(...artistsWithShows.map(a => artistShowCountsFiltered[a.artist_id] || 0), 1);
     const maxVancouverCountAll = Math.max(...artistsWithShows.map(a => artistShowCountsAll[a.artist_id] || 0), 1);
 
     const scoredArtists = artistsWithShows.map(artist => {
-      const spotifyCount = artistSongCounts[artist.spotify_artist_id]?.count || 0;
+      const spotifyCount = artistSongCounts[artist.spotify_artist_id] || 0;
       const vancouverCountFiltered = artistShowCountsFiltered[artist.artist_id] || 0;
       const vancouverCountAll = artistShowCountsAll[artist.artist_id] || 0;
 
@@ -191,7 +173,6 @@ export async function GET(request: Request) {
       const vancouverScoreFiltered = (vancouverCountFiltered / maxVancouverCountFiltered) * 100;
       const vancouverScoreAll = (vancouverCountAll / maxVancouverCountAll) * 100;
 
-      // Weighted score: 70% Spotify affinity, 30% Vancouver presence
       const weightedScoreFiltered = (0.7 * spotifyScore) + (0.3 * vancouverScoreFiltered);
       const weightedScoreAll = (0.7 * spotifyScore) + (0.3 * vancouverScoreAll);
 
@@ -202,7 +183,6 @@ export async function GET(request: Request) {
         spotify_song_count: spotifyCount,
         vancouver_show_count: vancouverCountFiltered,
         vancouver_show_count_all: vancouverCountAll,
-        // Normalized 0–100
         match_score: Math.round(weightedScoreFiltered * 10) / 10,
         match_score_all: Math.round(weightedScoreAll * 10) / 10,
       };
@@ -237,7 +217,6 @@ export async function GET(request: Request) {
       if (artist) venueScores[venueId].raw_score += artist.match_score;
     });
 
-    // Normalize venue scores to 0–100
     const rawScores = Object.values(venueScores).map((v: any) => v.raw_score);
     const maxRawScore = Math.max(...rawScores, 1);
 
@@ -249,7 +228,6 @@ export async function GET(request: Request) {
         capacity_category: venue.capacity_category,
         total_shows: venue.total_shows,
         unique_artists: venue.unique_artists.size,
-        // Normalized 0–100
         match_score: Math.round((venue.raw_score / maxRawScore) * 1000) / 10,
         user_status: userVenueStatusMap[venue.venue_id] || null,
       }))
@@ -274,7 +252,6 @@ export async function GET(request: Request) {
         total_venues_matched: Object.keys(venueScores).length,
         top_artists: currentRunArtists.slice(0, 15),
         all_artists: allArtists,
-        // Return ALL ranked venues — frontend handles pagination
         all_venues: allRankedVenues,
         duration_seconds: parseFloat(duration),
       }
