@@ -782,13 +782,13 @@ function BrowseContent({
               </div>
 
               {/* Mobile header */}
-              <div className="md:hidden grid bg-muted px-2 py-2 border-b border-border" style={{ gridTemplateColumns: 'auto 80px 1fr 56px' }}>
+              <div className="md:hidden grid bg-muted px-2 py-2 border-b border-border" style={{ gridTemplateColumns: `${user ? '28px ' : ''}80px 1fr 56px` }}>
                 {user && <div className="w-7" />}
                 <button onClick={() => handleSort('date')} className={`${thSortable} text-left text-[10px]`}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
                 <span className={`${thBase} text-[10px]`}>Artist / Venue</span>
-                <span className={`${thBase} text-center text-[10px] whitespace-nowrap`}>Tix/Set</span>
+                <span className={`${thBase} text-left text-[10px] whitespace-nowrap`}>Tix/Set</span>
               </div>
 
               {shows.length === 0 && (
@@ -903,7 +903,7 @@ function BrowseContent({
                       </div>
 
                       {/* Mobile row */}
-                      <div className="md:hidden grid items-center px-2 py-2.5 gap-1.5" style={{ gridTemplateColumns: 'auto 80px 1fr 56px' }}>
+                      <div className="md:hidden grid items-center px-2 py-2.5 gap-1.5" style={{ gridTemplateColumns: `${user ? '28px ' : ''}80px 1fr 56px` }}>
                         {user && <div className="w-7 flex items-center">{heartButton}</div>}
                         <div className="text-[11px] text-foreground whitespace-nowrap">
                           {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
@@ -947,7 +947,7 @@ function BrowseContent({
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex items-center justify-start gap-2">
                           {show.ticketmaster_url && (
                             <a href={show.ticketmaster_url} target="_blank" rel="noopener noreferrer" title="Buy tickets on Ticketmaster" className="hover:opacity-70 transition-opacity inline-flex items-center">
                               <img src="https://www.ticketmaster.ca/favicon.ico" alt="Ticketmaster" className="w-3.5 h-3.5" />
