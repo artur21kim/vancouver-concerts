@@ -891,10 +891,10 @@ function BrowseContent({
                         {/* Tickets */}
                         <div className="flex items-center justify-center px-4 py-3">
                           {show.ticketmaster_url
-                            ? <a href={show.ticketmaster_url} target="_blank" rel="noopener noreferrer" title="Buy tickets on Ticketmaster" className="hover:opacity-70 transition-opacity inline-flex items-center justify-center -ml-1">
+                            ? <a href={show.ticketmaster_url} target="_blank" rel="noopener noreferrer" title="Buy tickets on Ticketmaster" className="hover:opacity-70 transition-opacity inline-flex items-center justify-center ml-1">
                                 <img src="https://www.ticketmaster.ca/favicon.ico" alt="Ticketmaster" className="w-4 h-4" />
                               </a>
-                            : <span className="text-muted-foreground text-sm -ml-1">–</span>
+                            : <span className="text-muted-foreground text-sm ml-1">–</span>
                           }
                         </div>
 
