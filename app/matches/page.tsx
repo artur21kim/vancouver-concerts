@@ -98,18 +98,6 @@ function ScoreBar({ score, compact = false }: { score: number; compact?: boolean
   );
 }
 
-function SpotifyIcon({ artistId }: { artistId: string }) {
-  return (
-    <a href={`https://open.spotify.com/artist/${artistId}`} target="_blank" rel="noopener noreferrer"
-      title="Open in Spotify" onClick={e => e.stopPropagation()}
-      className="hover:opacity-70 transition-opacity inline-flex items-center justify-center flex-shrink-0">
-      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="#1DB954">
-        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-      </svg>
-    </a>
-  );
-}
-
 // ─── Swipeable venue card (mobile Unreviewed tab) ─────────────────────────────
 function SwipeableVenueCard({
   venue, rank, onYes, onNo, onMaybe,
@@ -179,7 +167,6 @@ function SwipeableVenueCard({
       style={{ backgroundColor: bgColor }}
       onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
     >
-      {/* Ghost icons */}
       {swipeDir === 'right' && (
         <div className="absolute left-3 top-0 bottom-0 flex items-center pointer-events-none" style={{ opacity: progress }}>
           <svg className="w-5 h-5 fill-green-500 text-green-500" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -195,7 +182,6 @@ function SwipeableVenueCard({
         </div>
       )}
 
-      {/* Sliding content */}
       <div
         className="p-3 bg-card"
         style={{ transform: `translateX(${offset}px)`, transition: animating ? 'transform 0.25s ease' : 'none' }}
@@ -216,12 +202,8 @@ function SwipeableVenueCard({
           </div>
         </div>
 
-        {/* Maybe button + swipe hint */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={onMaybe}
-            className="flex-1 py-1.5 rounded-lg text-xs font-medium border bg-card border-border text-muted-foreground"
-          >
+          <button onClick={onMaybe} className="flex-1 py-1.5 rounded-lg text-xs font-medium border bg-card border-border text-muted-foreground">
             ? Maybe
           </button>
           <div className="flex items-center gap-3 text-[10px] text-muted-foreground/60 pr-1">
@@ -244,15 +226,12 @@ function DesktopVenueRow({
 }) {
   return (
     <div className={`hidden md:flex md:items-center md:gap-4 border rounded-lg px-4 py-3 transition-colors ${
-      currentStatus === 'yes'       ? 'border-green-500/40 bg-green-500/5'
-      : currentStatus === 'no'     ? 'border-destructive/30 bg-destructive/5'
+      currentStatus === 'yes'        ? 'border-green-500/40 bg-green-500/5'
+      : currentStatus === 'no'      ? 'border-destructive/30 bg-destructive/5'
       : currentStatus === 'not_sure' ? 'border-border bg-muted/20'
       : 'border-border hover:bg-muted/20'
     }`}>
-      {/* Rank */}
       <span className="text-xl font-bold text-primary flex-shrink-0 w-9 text-center">#{rank}</span>
-
-      {/* Name + meta */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <h3 className="font-semibold text-card-foreground">{venue.venue_name}</h3>
@@ -262,8 +241,6 @@ function DesktopVenueRow({
           {venue.total_shows} shows · {venue.unique_artists} artists
         </p>
       </div>
-
-      {/* Buttons — between name and score */}
       <div className="flex gap-1.5 flex-shrink-0">
         {(['yes', 'not_sure', 'no'] as VenueStatus[]).map(s => (
           <button
@@ -281,8 +258,6 @@ function DesktopVenueRow({
           </button>
         ))}
       </div>
-
-      {/* Score — right edge, fixed width */}
       <div className="flex-shrink-0 w-36">
         <ScoreBar score={venue.match_score} />
       </div>
@@ -290,7 +265,7 @@ function DesktopVenueRow({
   );
 }
 
-// ─── Mobile All-Venues card (tap buttons, no swipe) ───────────────────────────
+// ─── Mobile All-Venues card ───────────────────────────────────────────────────
 function MobileVenueCard({
   venue, rank, currentStatus, onStatus,
 }: {
@@ -341,8 +316,7 @@ function MobileVenueCard({
   );
 }
 
-// ─── Bubble chart ─────────────────────────────────────────────────────────────
-// ─── Horizontal segmented bar chart ──────────────────────────────────────────
+// ─── Artist bar chart ─────────────────────────────────────────────────────────
 function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView: ArtistView }) {
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -354,10 +328,8 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
 
   const maxScore = Math.max(...top15.map(score), 1);
 
-  // The score is a weighted combo: 70% songs, 30% shows — split the bar proportionally
-  const songsPct  = (a: Artist) => Math.min((score(a) / maxScore) * 100 * 0.7, 100);
-  const showsPct  = (a: Artist) => Math.min((score(a) / maxScore) * 100 * 0.3, 100);
-  const totalPct  = (a: Artist) => Math.min((score(a) / maxScore) * 100, 100);
+  const songsPct = (a: Artist) => Math.min((score(a) / maxScore) * 100 * 0.7, 100);
+  const showsPct = (a: Artist) => Math.min((score(a) / maxScore) * 100 * 0.3, 100);
 
   return (
     <div className="w-full space-y-1.5">
@@ -371,9 +343,9 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
 
       {top15.map((artist, i) => {
         const isHovered = hovered === artist.artist_id;
-        const sp = songsPct(artist);
+        const sp  = songsPct(artist);
         const shp = showsPct(artist);
-        const sc = score(artist);
+        const sc  = score(artist);
 
         return (
           <div
@@ -389,10 +361,12 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
             <div className="w-28 md:w-40 flex-shrink-0 flex items-center gap-1.5 min-w-0">
               <span className="text-xs font-medium text-card-foreground truncate">{artist.artist_name}</span>
               {artist.spotify_artist_id && (
-                <a href={`https://open.spotify.com/artist/${artist.spotify_artist_id}`}
+                <a
+                  href={`https://open.spotify.com/artist/${artist.spotify_artist_id}`}
                   target="_blank" rel="noopener noreferrer"
                   onClick={e => e.stopPropagation()}
-                  className="flex-shrink-0 hover:opacity-70 transition-opacity">
+                  className="flex-shrink-0 hover:opacity-70 transition-opacity"
+                >
                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="#1DB954">
                     <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
                   </svg>
@@ -400,24 +374,34 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
               )}
             </div>
 
-            {/* Segmented bar */}
+            {/* Segmented bar — fixed: borderRadius per segment, no overflow-hidden clipping */}
             <div className="flex-1 relative">
-              <div className="flex h-5 rounded-full overflow-hidden bg-muted/40">
-                {/* Songs segment — teal */}
+              <div className="flex h-5 bg-muted/40" style={{ borderRadius: '9999px' }}>
+                {/* Songs segment — left-rounded always; right-rounded only when no shows segment */}
                 <div
                   className="h-full transition-all duration-300"
-                  style={{ width: `${sp}%`, backgroundColor: '#0d9488' }}
+                  style={{
+                    width: `${sp}%`,
+                    backgroundColor: '#0d9488',
+                    borderRadius: shp > 0 ? '9999px 0 0 9999px' : '9999px',
+                  }}
                   title={`${artist.spotify_song_count} songs in library`}
                 />
-                {/* Shows segment — lighter teal */}
-                <div
-                  className="h-full transition-all duration-300"
-                  style={{ width: `${shp}%`, backgroundColor: '#5eead4' }}
-                  title={`${shows(artist)} Vancouver shows`}
-                />
+                {/* Shows segment — only rendered when non-zero; always right-rounded */}
+                {shp > 0 && (
+                  <div
+                    className="h-full transition-all duration-300"
+                    style={{
+                      width: `${shp}%`,
+                      backgroundColor: '#5eead4',
+                      borderRadius: '0 9999px 9999px 0',
+                    }}
+                    title={`${shows(artist)} Vancouver shows`}
+                  />
+                )}
               </div>
 
-              {/* Hover detail tooltip */}
+              {/* Hover tooltip */}
               {isHovered && (
                 <div className="absolute left-0 -top-10 z-10 bg-card border border-border rounded-lg px-2.5 py-1.5 text-[10px] text-muted-foreground whitespace-nowrap shadow-lg pointer-events-none flex items-center gap-3">
                   <span className="flex items-center gap-1">
@@ -435,9 +419,9 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
               )}
             </div>
 
-            {/* Score % */}
+            {/* Score */}
             <span className="w-10 text-right text-xs font-semibold text-primary tabular-nums flex-shrink-0">
-              {sc.toFixed(0)}%
+              {sc.toFixed(1)}%
             </span>
           </div>
         );
@@ -461,9 +445,9 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function MatchesPage() {
   const router = useRouter();
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState('');
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState('');
   const [matchData, setMatchData] = useState<MatchData | null>(null);
 
   // Venue state
@@ -520,14 +504,13 @@ export default function MatchesPage() {
     } finally { setSaving(false); }
   };
 
-  // ── Derived ──────────────────────────────────────────────────────────────────
+  // ── Derived ───────────────────────────────────────────────────────────────────
   const yesCount      = Array.from(venueStatuses.values()).filter(s => s === 'yes').length;
   const noCount       = Array.from(venueStatuses.values()).filter(s => s === 'no').length;
   const reviewedCount = venueStatuses.size;
   const totalVenues   = matchData?.all_venues.length ?? 0;
   const hasConfirmedSome = venueStatuses.size > 0;
 
-  // Desktop: all venues filtered by capacity
   const desktopVenues = matchData && Array.isArray(matchData.all_venues)
     ? matchData.all_venues.filter(v =>
         capacityFilter === 'all' || capacityFilterKey(v.capacity_category) === capacityFilter
@@ -537,11 +520,9 @@ export default function MatchesPage() {
   const safePage        = Math.min(venuePage, totalVenuePages);
   const pagedVenues     = desktopVenues.slice((safePage - 1) * VENUES_PER_PAGE, safePage * VENUES_PER_PAGE);
 
-  // Mobile: unreviewed = no status set yet
   const unreviewedVenues = matchData?.all_venues.filter(v => !venueStatuses.has(v.venue_id)) ?? [];
   const top10Cleared     = unreviewedVenues.filter((_, i) => i < 10).length === 0;
 
-  // Mobile All tab: paginated with capacity filter
   const mobileAllVenues = matchData && Array.isArray(matchData.all_venues)
     ? matchData.all_venues.filter(v =>
         capacityFilter === 'all' || capacityFilterKey(v.capacity_category) === capacityFilter
@@ -554,7 +535,6 @@ export default function MatchesPage() {
     safeMobileAllPage * VENUES_PER_PAGE,
   );
 
-  // Artists
   const allDisplayArtists = matchData
     ? (artistView === 'current' ? matchData.top_artists : matchData.all_artists)
     : [];
@@ -563,8 +543,6 @@ export default function MatchesPage() {
   const pagedArtists     = allDisplayArtists.slice(
     (safeArtistPage - 1) * ARTISTS_PER_PAGE, safeArtistPage * ARTISTS_PER_PAGE,
   );
-
-  const dateRangeValue = matchData ? `${matchData.first_concert_year} – ${new Date().getFullYear()}` : '—';
 
   const setCapacityAndReset = (f: CapacityFilter) => { setCapacityFilter(f); setVenuePage(1); };
 
@@ -616,7 +594,6 @@ export default function MatchesPage() {
 
           {/* Stat cards */}
           <div className="grid grid-cols-2 gap-2 md:gap-4 mb-6 md:mb-8">
-            {/* Spotify Artists card */}
             <div className="bg-card rounded-lg shadow p-3 md:p-4 border border-border">
               <div className="flex items-center gap-1.5 mb-0.5 md:mb-1">
                 <p className="text-[10px] md:text-sm text-muted-foreground leading-tight">Matched Artists</p>
@@ -638,7 +615,6 @@ export default function MatchesPage() {
                 )}
               </p>
             </div>
-            {/* Venues reviewed card */}
             <div className="bg-card rounded-lg shadow p-3 md:p-4 border border-border">
               <p className="text-[10px] md:text-sm text-muted-foreground mb-0.5 md:mb-1 leading-tight">Venues Reviewed</p>
               <p className="text-base md:text-2xl font-bold text-card-foreground">
@@ -651,7 +627,6 @@ export default function MatchesPage() {
           {/* ── Venues section ── */}
           <div className="bg-card rounded-lg shadow-lg p-4 md:p-6 mb-6 md:mb-8">
 
-            {/* ── Header row (desktop + mobile share this) ── */}
             <div className="flex flex-col gap-2 mb-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -660,7 +635,7 @@ export default function MatchesPage() {
                     Which of these venues have you attended? Each hosted shows by artists in your Spotify library.
                   </p>
                 </div>
-                {/* Desktop size filter — hidden on mobile (moved below) */}
+                {/* Desktop capacity filter */}
                 <div className="hidden md:flex items-center gap-2 flex-shrink-0">
                   <span className="text-xs text-muted-foreground">Size:</span>
                   <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
@@ -674,9 +649,8 @@ export default function MatchesPage() {
                 </div>
               </div>
 
-              {/* ── Mobile controls row: size filter + Unreviewed/All toggle ── */}
+              {/* Mobile: capacity + tab toggle */}
               <div className="flex items-center justify-between gap-2 md:hidden">
-                {/* Size filter */}
                 <div className="flex rounded-lg border border-border overflow-hidden text-xs font-medium">
                   {CAPACITY_BUTTONS.map(btn => (
                     <button key={btn.key} onClick={() => setCapacityAndReset(btn.key)} title={btn.tooltip}
@@ -685,8 +659,6 @@ export default function MatchesPage() {
                     </button>
                   ))}
                 </div>
-
-                {/* Unreviewed / All toggle */}
                 <div className="flex rounded-lg border border-border overflow-hidden text-xs font-medium">
                   <button
                     onClick={() => { setMobileTab('unreviewed'); setVenuePage(1); }}
@@ -704,27 +676,26 @@ export default function MatchesPage() {
               </div>
             </div>
 
-            {/* Review status pills — desktop only */}
+            {/* Review status pills — desktop */}
             <div className="hidden md:flex items-center gap-2 flex-wrap mb-4">
               <span className="text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">{reviewedCount}</span> of {totalVenues} reviewed
+                <span className="font-medium text-primary">{reviewedCount}</span> of {totalVenues} reviewed
               </span>
               <span className="text-border select-none">·</span>
-              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-green-500/10 text-green-600 border-green-500/30`}>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-green-500/10 text-green-600 border-green-500/30">
                 ✓ {yesCount} attended
               </span>
-              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-destructive/10 text-destructive border-destructive/30`}>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-destructive/10 text-destructive border-destructive/30">
                 ✗ {noCount} never been
               </span>
             </div>
 
-            {/* ── DESKTOP venue list ── */}
+            {/* ── Desktop venue list ── */}
             <div className="hidden md:block space-y-2">
-              {/* Column header */}
               <div className="flex items-center gap-4 px-4 pb-1">
                 <span className="w-9 flex-shrink-0" />
                 <span className="flex-1" />
-                <span className="flex-shrink-0 w-[148px]" />{/* button group width */}
+                <span className="flex-shrink-0 w-[148px]" />
                 <span className="flex-shrink-0 w-36 text-xs font-medium text-muted-foreground uppercase tracking-wider">Match Score</span>
               </div>
               {desktopVenues.length === 0 ? (
@@ -761,9 +732,8 @@ export default function MatchesPage() {
               </button>
             </div>
 
-            {/* ── MOBILE: Unreviewed tab ── */}
+            {/* ── Mobile: Unreviewed tab ── */}
             <div className={`md:hidden ${mobileTab !== 'unreviewed' ? 'hidden' : ''}`}>
-              {/* Progress */}
               <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
                 <span><span className="font-medium text-foreground">{reviewedCount}</span> of {totalVenues} reviewed</span>
                 <span className="text-border">·</span>
@@ -772,7 +742,6 @@ export default function MatchesPage() {
               </div>
 
               {unreviewedVenues.length === 0 ? (
-                /* All reviewed */
                 <div className="text-center py-8">
                   <p className="text-foreground font-semibold mb-1">All venues reviewed!</p>
                   <p className="text-xs text-muted-foreground mb-4">
@@ -781,7 +750,6 @@ export default function MatchesPage() {
                 </div>
               ) : (
                 <>
-                  {/* Swipe hint */}
                   <div className="flex items-center justify-center gap-4 bg-muted/50 border border-border rounded-lg px-4 py-2 mb-3">
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <svg className="w-3.5 h-3.5 text-destructive/80" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -797,10 +765,8 @@ export default function MatchesPage() {
                       </svg>
                     </div>
                   </div>
-
-                  {/* Swipeable cards */}
                   <div className="space-y-2">
-                    {unreviewedVenues.map((venue, i) => (
+                    {unreviewedVenues.map(venue => (
                       <SwipeableVenueCard
                         key={venue.venue_id}
                         venue={venue}
@@ -811,8 +777,6 @@ export default function MatchesPage() {
                       />
                     ))}
                   </div>
-
-                  {/* After top 10 cleared */}
                   {top10Cleared && unreviewedVenues.length > 0 && (
                     <div className="mt-4 p-3 bg-primary/10 border border-primary/20 rounded-lg text-center">
                       <p className="text-xs text-foreground font-medium mb-1">Top 10 reviewed ✓</p>
@@ -823,7 +787,7 @@ export default function MatchesPage() {
               )}
             </div>
 
-            {/* ── MOBILE: All Venues tab ── */}
+            {/* ── Mobile: All Venues tab ── */}
             <div className={`md:hidden ${mobileTab !== 'all' ? 'hidden' : ''}`}>
               <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
                 <span><span className="font-medium text-foreground">{reviewedCount}</span> of {totalVenues} reviewed</span>
@@ -831,7 +795,6 @@ export default function MatchesPage() {
                 <span className="text-green-600">✓ {yesCount}</span>
                 <span className="text-destructive">✗ {noCount}</span>
               </div>
-
               {mobileAllVenues.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">No venues match this filter</p>
               ) : (
@@ -850,8 +813,6 @@ export default function MatchesPage() {
                   })}
                 </div>
               )}
-
-              {/* Mobile All pagination */}
               {totalMobileAllPages > 1 && (
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
                   <button onClick={() => setVenuePage(p => Math.max(1, p - 1))} disabled={safeMobileAllPage === 1}
@@ -869,16 +830,16 @@ export default function MatchesPage() {
               )}
             </div>
 
-            {/* Save & Continue — shared */}
+            {/* Save & Continue */}
             <div className="mt-4 pt-4 border-t border-border">
               {error && (
                 <div className="mb-3 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2">{error}</div>
               )}
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <p className="text-xs md:text-sm text-muted-foreground">
-                  {hasConfirmedSome
-                    ? `${reviewedCount} venue${reviewedCount !== 1 ? 's' : ''} reviewed — you can continue or keep reviewing.`
-                    : 'Review at least one venue to continue to Likely Shows.'}
+                  {hasConfirmedSome ? (
+                    <><span className="text-primary font-medium">{reviewedCount} venue{reviewedCount !== 1 ? 's' : ''} reviewed</span> — you can continue or keep reviewing.</>
+                  ) : 'Review at least one venue to continue to Likely Shows.'}
                 </p>
                 <button
                   onClick={handleSaveAndContinue}
@@ -898,11 +859,9 @@ export default function MatchesPage() {
 
           {/* ── Artists section ── */}
           <div className="bg-card rounded-lg shadow-lg p-4 md:p-6">
-            {/* Header row */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-2">
               <h2 className="text-xl md:text-2xl font-bold text-card-foreground">Top Matched Artists</h2>
               <div className="flex gap-2 flex-wrap">
-                {/* Chart / Table toggle */}
                 <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
                   <button onClick={() => setArtistDisplay('chart')}
                     className={`px-3 py-1.5 transition-colors ${artistDisplay === 'chart' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
@@ -913,7 +872,6 @@ export default function MatchesPage() {
                     Table
                   </button>
                 </div>
-                {/* Current Run / All Artists toggle */}
                 <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
                   <button onClick={() => { setArtistView('current'); setArtistPage(1); }}
                     className={`px-3 py-1.5 transition-colors ${artistView === 'current' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
@@ -933,12 +891,10 @@ export default function MatchesPage() {
               {artistDisplay === 'chart' && ' — top 15 ranked by match score, split by songs vs. shows'}
             </p>
 
-            {/* ── Bubble chart view ── */}
             {artistDisplay === 'chart' && (
               <ArtistBarChart artists={allDisplayArtists} artistView={artistView} />
             )}
 
-            {/* ── Table view ── */}
             {artistDisplay === 'table' && (
               <>
                 {pagedArtists.length === 0 ? (
@@ -959,7 +915,7 @@ export default function MatchesPage() {
                         <tbody className="divide-y divide-border">
                           {pagedArtists.map((artist, index) => {
                             const globalRank = (safeArtistPage - 1) * ARTISTS_PER_PAGE + index + 1;
-                            const score = artistView === 'current' ? artist.match_score : artist.match_score_all;
+                            const sc    = artistView === 'current' ? artist.match_score : artist.match_score_all;
                             const shows = artistView === 'current' ? artist.vancouver_show_count : artist.vancouver_show_count_all;
                             return (
                               <tr key={artist.artist_id} className="hover:bg-muted/50 transition-colors">
@@ -982,10 +938,10 @@ export default function MatchesPage() {
                                 <td className="px-2 md:px-4 py-2.5 pl-3">
                                   <div className="flex items-center gap-1.5">
                                     <div className="w-10 md:w-24 bg-muted rounded-full h-1.5 hidden xs:block flex-shrink-0">
-                                      <div className="bg-primary h-1.5 rounded-full" style={{ width: `${Math.min(score, 100)}%` }} />
+                                      <div className="bg-primary h-1.5 rounded-full" style={{ width: `${Math.min(sc, 100)}%` }} />
                                     </div>
                                     <span className="text-xs md:text-sm font-semibold text-primary tabular-nums">
-                                      {score.toFixed(1)}%
+                                      {sc.toFixed(1)}%
                                     </span>
                                   </div>
                                 </td>
@@ -1021,14 +977,5 @@ export default function MatchesPage() {
         </div>
       </main>
     </>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-card rounded-lg shadow p-3 md:p-4 border border-border">
-      <p className="text-[10px] md:text-sm text-muted-foreground mb-0.5 md:mb-1 leading-tight">{label}</p>
-      <p className="text-base md:text-2xl font-bold text-card-foreground">{value}</p>
-    </div>
   );
 }
