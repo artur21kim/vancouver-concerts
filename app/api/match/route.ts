@@ -54,57 +54,32 @@ export async function GET(request: Request) {
       (userVenues || []).filter(v => v.status === 'no').map(v => v.venue_id)
     );
 
-    // FIX: Aggregate song counts DB-side to avoid both the 1000-row fetch limit
-    // and the .in() URL length limit from passing thousands of artist IDs.
-    // This returns one row per spotify_artist_id with its count.
-    const { data: songCountRows, error: songsError } = await supabase
-      .rpc('get_user_spotify_artist_counts', { p_user_id: user.id });
+    // Single DB-side join: returns only artists in dim_artist that match
+    // user's Spotify songs with >= 2 liked songs. Avoids both the 1000-row
+    // fetch limit and the .in() URL length limit.
+    const { data: matchedArtists, error: matchError } = await supabase
+      .rpc('get_user_matched_artists', { p_user_id: user.id, p_min_song_count: 2 });
 
-    if (songsError) {
-      console.error('Song count RPC error:', songsError);
-      return NextResponse.json({ error: 'Failed to fetch user songs' }, { status: 500 });
-    }
-
-    if (!songCountRows || songCountRows.length === 0) {
-      return NextResponse.json({ 
-        error: 'No Spotify data found. Please connect your Spotify account.' 
-      }, { status: 400 });
-    }
-
-    // Build artistSongCounts map: { spotify_artist_id -> count }
-    const artistSongCounts: Record<string, number> = {};
-    for (const row of songCountRows) {
-      artistSongCounts[row.spotify_artist_id] = Number(row.song_count);
-    }
-
-    // Keep all artists with at least 1 liked song
-    const uniqueSpotifyArtistIds = Object.keys(artistSongCounts)
-      .filter(id => (artistSongCounts[id] ?? 0) >= 2);
-
-    if (uniqueSpotifyArtistIds.length === 0) {
-      return NextResponse.json({ 
-        error: 'Not enough Spotify data to generate matches. Try liking more songs.' 
-      }, { status: 400 });
-    }
-
-    // Match via JOIN in DB — no large .in() needed
-    // dim_artist only has ~12k rows so this is fast
-    const { data: matchedArtists, error: artistsError } = await supabase
-      .from('dim_artist')
-      .select('artist_id, artist_name, spotify_artist_id')
-      .in('spotify_artist_id', uniqueSpotifyArtistIds);
-
-    if (artistsError) {
+    if (matchError) {
+      console.error('Matched artists RPC error:', matchError);
       return NextResponse.json({ error: 'Failed to match artists' }, { status: 500 });
     }
 
     if (!matchedArtists || matchedArtists.length === 0) {
       return NextResponse.json({ 
-        error: 'No artists matched. None of your Spotify artists have played in Vancouver.' 
-      }, { status: 404 });
+        error: 'No Spotify data found or no artists matched Vancouver shows.' 
+      }, { status: 400 });
     }
 
-    const matchedArtistIds = matchedArtists.map(a => a.artist_id);
+    // Build song count lookup from RPC results
+    const artistSongCounts: Record<string, number> = {};
+    for (const row of matchedArtists) {
+      artistSongCounts[row.spotify_artist_id] = Number(row.song_count);
+    }
+
+    const matchedArtistIds = matchedArtists.map((a: any) => a.artist_id);
+
+    console.log(`📊 ${matchedArtists.length} artists matched with >= 2 liked songs`);
 
     // Fetch shows within the user's concert history window, up to yesterday
     const { data: shows, error: showsError } = await supabase
@@ -151,7 +126,7 @@ export async function GET(request: Request) {
 
     // Only include artists who actually have shows in the valid date range
     const artistsWithShows = matchedArtists.filter(
-      a => (artistShowCountsAll[a.artist_id] || 0) > 0
+      (a: any) => (artistShowCountsAll[a.artist_id] || 0) > 0
     );
 
     if (artistsWithShows.length === 0) {
@@ -160,11 +135,11 @@ export async function GET(request: Request) {
       }, { status: 404 });
     }
 
-    const maxSpotifyCount = Math.max(...artistsWithShows.map(a => artistSongCounts[a.spotify_artist_id] || 0));
-    const maxVancouverCountFiltered = Math.max(...artistsWithShows.map(a => artistShowCountsFiltered[a.artist_id] || 0), 1);
-    const maxVancouverCountAll = Math.max(...artistsWithShows.map(a => artistShowCountsAll[a.artist_id] || 0), 1);
+    const maxSpotifyCount = Math.max(...artistsWithShows.map((a: any) => artistSongCounts[a.spotify_artist_id] || 0));
+    const maxVancouverCountFiltered = Math.max(...artistsWithShows.map((a: any) => artistShowCountsFiltered[a.artist_id] || 0), 1);
+    const maxVancouverCountAll = Math.max(...artistsWithShows.map((a: any) => artistShowCountsAll[a.artist_id] || 0), 1);
 
-    const scoredArtists = artistsWithShows.map(artist => {
+    const scoredArtists = artistsWithShows.map((artist: any) => {
       const spotifyCount = artistSongCounts[artist.spotify_artist_id] || 0;
       const vancouverCountFiltered = artistShowCountsFiltered[artist.artist_id] || 0;
       const vancouverCountAll = artistShowCountsAll[artist.artist_id] || 0;
@@ -198,7 +173,7 @@ export async function GET(request: Request) {
       if (noVenueIds.has(show.venue_id)) return;
       const venue = Array.isArray(show.dim_venue) ? show.dim_venue[0] : show.dim_venue;
       const venueId = venue.venue_id;
-      const artist = scoredArtists.find(a => a.artist_id === show.artist_id);
+      const artist = scoredArtists.find((a: any) => a.artist_id === show.artist_id);
 
       if (!venueScores[venueId]) {
         venueScores[venueId] = {
@@ -247,7 +222,7 @@ export async function GET(request: Request) {
         first_concert_year: firstConcertYear,
         upper_bound_date: yesterdayVancouver,
         matched_artists_count: artistsWithShows.length,
-        total_spotify_artists: uniqueSpotifyArtistIds.length,
+        total_spotify_artists: matchedArtists.length,
         total_shows_count: shows.length,
         total_venues_matched: Object.keys(venueScores).length,
         top_artists: currentRunArtists.slice(0, 15),

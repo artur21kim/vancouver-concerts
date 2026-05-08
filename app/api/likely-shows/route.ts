@@ -14,7 +14,6 @@ export async function GET(request: Request) {
     console.log(`🎯 Fetching likely shows for user: ${user.id}`);
     const startTime = Date.now();
 
-    // Get all user venue statuses
     const { data: userVenues, error: venuesError } = await supabase
       .from('user_venues')
       .select('venue_id, status')
@@ -33,58 +32,33 @@ export async function GET(request: Request) {
 
     console.log(`🚫 Excluding ${noVenueIds.size} venues user said 'no' to`);
 
-    // FIX: Aggregate song counts DB-side to avoid both the 1000-row fetch limit
-    // and the .in() URL length limit from passing thousands of artist IDs.
-    const { data: songCountRows, error: songsError } = await supabase
-      .rpc('get_user_spotify_artist_counts', { p_user_id: user.id });
+    // Single DB-side join: returns only artists in dim_artist that match
+    // user's Spotify songs with >= 2 liked songs. Avoids both the 1000-row
+    // fetch limit and the .in() URL length limit.
+    const { data: matchedArtists, error: matchError } = await supabase
+      .rpc('get_user_matched_artists', { p_user_id: user.id, p_min_song_count: 2 });
 
-    if (songsError) {
-      console.error('Song count RPC error:', songsError);
-      return NextResponse.json({ error: 'Failed to fetch Spotify data' }, { status: 500 });
-    }
-
-    if (!songCountRows || songCountRows.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: { shows: [], total_shows: 0, message: 'No Spotify data found. Please connect your Spotify account.' }
-      });
-    }
-
-    // Build artistSongCounts map: { spotify_artist_id -> count }
-    const artistSongCounts: Record<string, number> = {};
-    for (const row of songCountRows) {
-      artistSongCounts[row.spotify_artist_id] = Number(row.song_count);
-    }
-
-    // Keep all artists with at least 1 liked song
-    const uniqueSpotifyArtistIds = Object.keys(artistSongCounts)
-      .filter(id => (artistSongCounts[id] ?? 0) >= 2);
-
-    if (uniqueSpotifyArtistIds.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: { shows: [], total_shows: 0, message: 'Not enough Spotify data to generate matches. Try liking more songs.' }
-      });
-    }
-
-    // Match Spotify artists to Vancouver artists
-    const { data: matchedArtists, error: artistsError } = await supabase
-      .from('dim_artist')
-      .select('artist_id, artist_name, spotify_artist_id')
-      .in('spotify_artist_id', uniqueSpotifyArtistIds);
-
-    if (artistsError) {
+    if (matchError) {
+      console.error('Matched artists RPC error:', matchError);
       return NextResponse.json({ error: 'Failed to match artists' }, { status: 500 });
     }
 
     if (!matchedArtists || matchedArtists.length === 0) {
       return NextResponse.json({
         success: true,
-        data: { shows: [], total_shows: 0, message: 'No matching artists found.' }
+        data: { shows: [], total_shows: 0, message: 'No Spotify data found or no artists matched Vancouver shows.' }
       });
     }
 
-    const matchedArtistIds = matchedArtists.map(a => a.artist_id);
+    // Build song count lookup from RPC results
+    const artistSongCounts: Record<string, number> = {};
+    for (const row of matchedArtists) {
+      artistSongCounts[row.spotify_artist_id] = Number(row.song_count);
+    }
+
+    const matchedArtistIds = matchedArtists.map((a: any) => a.artist_id);
+
+    console.log(`📊 ${matchedArtists.length} artists matched with >= 2 liked songs`);
 
     // Get user's first concert year
     const { data: profile } = await supabase
@@ -201,7 +175,6 @@ export async function GET(request: Request) {
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log(`✅ LIKELY SHOWS COMPLETE — ${showsWithScores.length} pending shows (${excludedShowIds.size} excluded) in ${duration}s`);
 
-    // Save likely_shows_total to user_profiles
     await supabase
       .from('user_profiles')
       .update({ likely_shows_total: showsWithScores.length })
