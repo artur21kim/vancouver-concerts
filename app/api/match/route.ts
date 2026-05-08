@@ -74,12 +74,12 @@ export async function GET(request: Request) {
     // Build artistSongCounts map: { spotify_artist_id -> count }
     const artistSongCounts: Record<string, number> = {};
     for (const row of songCountRows) {
-      artistSongCounts[row.spotify_artist_id] = row.song_count;
+      artistSongCounts[row.spotify_artist_id] = Number(row.song_count);
     }
 
-    // Filter to artists with >= 2 liked songs to reduce noise
+    // Keep all artists with at least 1 liked song
     const uniqueSpotifyArtistIds = Object.keys(artistSongCounts)
-      .filter(id => artistSongCounts[id] >= 2);
+      .filter(id => (artistSongCounts[id] ?? 0) >= 1);
 
     if (uniqueSpotifyArtistIds.length === 0) {
       return NextResponse.json({ 
