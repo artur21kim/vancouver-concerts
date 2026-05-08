@@ -645,7 +645,7 @@ function BrowseContent({
 
             {/* Row 2: capacity + status pills + year jump */}
             <div className="mb-3">
-              <div className="flex items-center gap-x-3 gap-y-2 flex-wrap">
+              <div className="flex items-center gap-x-3 gap-y-2 flex-wrap w-full">
                 <div className="flex rounded-lg border border-border overflow-hidden text-xs md:text-sm font-semibold">
                   {CAPACITY_BUTTONS.map((btn, i) => (
                     <button
@@ -763,7 +763,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px 180px 200px 160px 56px 56px` }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(0,1fr) minmax(0,1fr) 160px 56px 56px` }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -826,7 +826,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px 180px 200px 160px 56px 56px` }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(0,1fr) minmax(0,1fr) 160px 56px 56px` }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
