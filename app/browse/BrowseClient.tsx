@@ -788,7 +788,7 @@ function BrowseContent({
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
                 <span className={`${thBase} text-[10px]`}>Artist / Venue</span>
-                <span className={`${thBase} text-center text-[10px]`}>Links</span>
+                <span className={`${thBase} text-center text-[10px]`}>Tix / Set</span>
               </div>
 
               {shows.length === 0 && (
@@ -948,6 +948,11 @@ function BrowseContent({
                           </div>
                         </div>
                         <div className="flex items-center justify-center gap-2">
+                          {show.ticketmaster_url && (
+                            <a href={show.ticketmaster_url} target="_blank" rel="noopener noreferrer" title="Buy tickets on Ticketmaster" className="hover:opacity-70 transition-opacity inline-flex items-center">
+                              <img src="https://www.ticketmaster.ca/favicon.ico" alt="Ticketmaster" className="w-3.5 h-3.5" />
+                            </a>
+                          )}
                           {setlistIcon}
                         </div>
                       </div>
