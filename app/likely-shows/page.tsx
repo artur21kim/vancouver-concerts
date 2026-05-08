@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Navigation from '../components/Navigation';
 
@@ -24,6 +24,89 @@ type GroupedShows = {
   match_score: number;
   shows: Show[];
 };
+
+function DualRangeSlider({
+  min, max, value, onChange
+}: {
+  min: number; max: number;
+  value: [number, number];
+  onChange: (v: [number, number]) => void;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef<'left' | 'right' | null>(null);
+
+  const pct = (v: number) => ((v - min) / (max - min)) * 100;
+
+  const valueFromPct = useCallback((clientX: number) => {
+    const rect = trackRef.current!.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return Math.round(ratio * (max - min) + min);
+  }, [min, max]);
+
+  const onPointerDown = (handle: 'left' | 'right') => (e: React.PointerEvent) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragging.current = handle;
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragging.current || !trackRef.current) return;
+    const v = valueFromPct(e.clientX);
+    if (dragging.current === 'left') {
+      onChange([Math.min(v, value[1]), value[1]]);
+    } else {
+      onChange([value[0], Math.max(v, value[0])]);
+    }
+  };
+
+  const onPointerUp = () => { dragging.current = null; };
+
+  // Also allow clicking the track itself to move nearest handle
+  const onTrackClick = (e: React.MouseEvent) => {
+    if (!trackRef.current) return;
+    const v = valueFromPct(e.clientX);
+    const distLeft = Math.abs(v - value[0]);
+    const distRight = Math.abs(v - value[1]);
+    if (distLeft <= distRight) {
+      onChange([Math.min(v, value[1]), value[1]]);
+    } else {
+      onChange([value[0], Math.max(v, value[0])]);
+    }
+  };
+
+  return (
+    <div
+      className="relative h-8 flex items-center select-none"
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerUp}
+    >
+      {/* Track */}
+      <div
+        ref={trackRef}
+        className="absolute w-full h-2 bg-muted rounded-full cursor-pointer"
+        onClick={onTrackClick}
+      >
+        {/* Filled range */}
+        <div
+          className="absolute h-2 bg-primary rounded-full pointer-events-none"
+          style={{ left: `${pct(value[0])}%`, right: `${100 - pct(value[1])}%` }}
+        />
+      </div>
+      {/* Left handle */}
+      <div
+        className="absolute w-5 h-5 rounded-full bg-primary border-2 border-primary-foreground shadow cursor-grab active:cursor-grabbing touch-none"
+        style={{ left: `calc(${pct(value[0])}% - 10px)`, zIndex: 20 }}
+        onPointerDown={onPointerDown('left')}
+      />
+      {/* Right handle */}
+      <div
+        className="absolute w-5 h-5 rounded-full bg-primary border-2 border-primary-foreground shadow cursor-grab active:cursor-grabbing touch-none"
+        style={{ left: `calc(${pct(value[1])}% - 10px)`, zIndex: 20 }}
+        onPointerDown={onPointerDown('right')}
+      />
+    </div>
+  );
+}
 
 export default function LikelyShowsPage() {
   const router = useRouter();
@@ -302,48 +385,12 @@ export default function LikelyShowsPage() {
                 <label className="block text-sm font-medium text-muted-foreground mb-2">
                   Year Range: {yearRange[0]} - {yearRange[1]}
                 </label>
-                <div className="relative pt-1">
-                  <input
-                    type="range" min="2008" max={currentYear} value={yearRange[0]}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value);
-                      setYearRange([Math.min(val, yearRange[1]), yearRange[1]]);
-                    }}
-                    className="absolute w-full h-2 bg-transparent appearance-none cursor-pointer slider-primary"
-                    style={{ zIndex: yearRange[0] >= yearRange[1] - 1 ? 30 : 20 }}
-                  />
-                  <input
-                    type="range" min="2008" max={currentYear} value={yearRange[1]}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value);
-                      setYearRange([yearRange[0], Math.max(val, yearRange[0])]);
-                    }}
-                    className="absolute w-full h-2 bg-transparent appearance-none cursor-pointer slider-primary"
-                    style={{ zIndex: yearRange[0] >= yearRange[1] - 1 ? 20 : 30 }}
-                  />
-                  <div className="relative h-2 bg-muted rounded-lg">
-                    <div
-                      className="absolute h-2 bg-primary rounded-lg"
-                      style={{
-                        left: `${((yearRange[0] - 2008) / (currentYear - 2008)) * 100}%`,
-                        right: `${100 - ((yearRange[1] - 2008) / (currentYear - 2008)) * 100}%`
-                      }}
-                    />
-                  </div>
-                </div>
-                <style jsx>{`
-                  .slider-primary::-webkit-slider-thumb {
-                    -webkit-appearance: none; appearance: none;
-                    width: 20px; height: 20px; border-radius: 50%;
-                    background: oklch(0.65 0.2 240); cursor: pointer;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                  }
-                  .slider-primary::-moz-range-thumb {
-                    width: 20px; height: 20px; border-radius: 50%;
-                    background: oklch(0.65 0.2 240); cursor: pointer;
-                    border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                  }
-                `}</style>
+                <DualRangeSlider
+                  min={2008}
+                  max={currentYear}
+                  value={yearRange}
+                  onChange={setYearRange}
+                />
               </div>
 
               <div>
