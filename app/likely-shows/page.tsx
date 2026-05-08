@@ -9,8 +9,10 @@ type Show = {
   date: string;
   artist_id: number;
   artist_name: string;
+  spotify_artist_id: string | null;
   venue_id: number;
   venue_name: string;
+  capacity_category: string | null;
   status: 'pending' | 'added' | 'skipped';
   match_score: number;
   spotify_song_count: number;
@@ -20,8 +22,11 @@ type Show = {
 type GroupedShows = {
   artist_id: number;
   artist_name: string;
+  spotify_artist_id: string | null;
   show_count: number;
   match_score: number;
+  spotify_song_count: number;
+  vancouver_show_count: number;
   shows: Show[];
 };
 
@@ -32,6 +37,36 @@ function getVancouverYesterday(): string {
     timeZone: 'America/Vancouver',
     year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(now);
+}
+
+// ── Capacity badge — matches Browse / Upcoming Shows ──────────────────────────
+function CapacityBadge({ category }: { category: string | null }) {
+  if (!category) return null;
+  const styles: Record<string, string> = {
+    'Small':   'bg-purple-500/20 text-purple-400',
+    'Medium':  'bg-blue-500/20 text-blue-400',
+    'Large':   'bg-orange-500/20 text-orange-400',
+    'X-Large': 'bg-red-500/20 text-red-400',
+  };
+  const labels: Record<string, string> = {
+    'Small': 'S', 'Medium': 'M', 'Large': 'L', 'X-Large': 'XL',
+  };
+  const style = styles[category] ?? 'bg-muted text-muted-foreground';
+  const label = labels[category] ?? '?';
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${style}`}>
+      {label}
+    </span>
+  );
+}
+
+// ── Spotify icon SVG ──────────────────────────────────────────────────────────
+function SpotifyIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+    </svg>
+  );
 }
 
 // ── Dual range slider ─────────────────────────────────────────────────────────
@@ -118,7 +153,6 @@ export default function LikelyShowsPage() {
   };
 
   const applyFiltersAndSort = () => {
-    // Filter: year range + no future shows
     const filtered = allShows.filter(show => {
       const year = parseInt(show.date.split('-')[0]);
       return year >= yearRange[0] && year <= yearRange[1] && show.date <= yesterdayVancouver;
@@ -129,7 +163,12 @@ export default function LikelyShowsPage() {
         const year = parseInt(show.date.split('-')[0]);
         const existing = acc.find(g => g.artist_id === year);
         if (existing) { existing.shows.push(show); existing.show_count++; }
-        else acc.push({ artist_id: year, artist_name: year.toString(), show_count: 1, match_score: 0, shows: [show] });
+        else acc.push({
+          artist_id: year, artist_name: year.toString(),
+          spotify_artist_id: null, show_count: 1,
+          match_score: 0, spotify_song_count: 0, vancouver_show_count: 0,
+          shows: [show]
+        });
         return acc;
       }, [] as GroupedShows[]);
       yearGroups.sort((a, b) => b.artist_id - a.artist_id);
@@ -141,7 +180,16 @@ export default function LikelyShowsPage() {
     const grouped = filtered.reduce((acc, show) => {
       const existing = acc.find(g => g.artist_id === show.artist_id);
       if (existing) { existing.shows.push(show); existing.show_count++; }
-      else acc.push({ artist_id: show.artist_id, artist_name: show.artist_name, show_count: 1, match_score: show.match_score, shows: [show] });
+      else acc.push({
+        artist_id: show.artist_id,
+        artist_name: show.artist_name,
+        spotify_artist_id: show.spotify_artist_id,
+        show_count: 1,
+        match_score: show.match_score,
+        spotify_song_count: show.spotify_song_count,
+        vancouver_show_count: show.vancouver_show_count,
+        shows: [show]
+      });
       return acc;
     }, [] as GroupedShows[]);
 
@@ -248,15 +296,14 @@ export default function LikelyShowsPage() {
   };
 
   // ── Derived stats ─────────────────────────────────────────────────────────
-  const totalShows        = allShows.length;
-  const addedCount        = allShows.filter(s => s.status === 'added').length;
-  const skippedCount      = allShows.filter(s => s.status === 'skipped').length;
-  const pendingCount      = allShows.filter(s => s.status === 'pending').length;
+  const totalShows         = allShows.length;
+  const addedCount         = allShows.filter(s => s.status === 'added').length;
+  const skippedCount       = allShows.filter(s => s.status === 'skipped').length;
+  const pendingCount       = allShows.filter(s => s.status === 'pending').length;
   const reviewedShowsCount = addedCount + skippedCount;
-  const totalArtists      = new Set(allShows.map(s => s.artist_id)).size;
+  const totalArtists       = new Set(allShows.map(s => s.artist_id)).size;
   const reviewedArtistsCount = new Set(allShows.filter(s => s.status !== 'pending').map(s => s.artist_id)).size;
 
-  // ── Loading / error ───────────────────────────────────────────────────────
   if (loading) return (
     <>
       <Navigation />
@@ -363,11 +410,14 @@ export default function LikelyShowsPage() {
                   const allReviewed = gPending === 0;
                   const uniqueArtistCount = sortBy === 'year'
                     ? new Set(group.shows.map(s => s.artist_id)).size : null;
+                  const spotifyUrl = group.spotify_artist_id
+                    ? `https://open.spotify.com/artist/${group.spotify_artist_id}`
+                    : null;
 
                   return (
                     <div key={group.artist_id}>
 
-                      {/* ── Group header — entire row toggles expand ── */}
+                      {/* ── Group header — full row is clickable ── */}
                       <div
                         className="flex items-center gap-3 px-5 py-4 cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => toggleGroup(group.artist_id)}
@@ -377,7 +427,7 @@ export default function LikelyShowsPage() {
                           {isExpanded ? '▼' : '▶'}
                         </span>
 
-                        {/* Name + meta */}
+                        {/* Name + match score breakdown */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-foreground">{group.artist_name}</span>
@@ -387,16 +437,41 @@ export default function LikelyShowsPage() {
                                 : `(${group.show_count} shows)`}
                             </span>
                           </div>
-                          {/* Match score bar */}
+
+                          {/* Match score bar + breakdown */}
                           {sortBy !== 'year' && group.match_score > 0 && (
                             <div className="flex items-center gap-2 mt-1">
-                              <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden flex-shrink-0">
                                 <div className="h-full bg-primary rounded-full"
                                   style={{ width: `${Math.min(group.match_score, 100)}%` }} />
                               </div>
                               <span className="text-xs text-muted-foreground tabular-nums">
                                 {group.match_score.toFixed(1)}%
                               </span>
+                              <span className="text-muted-foreground/40 text-xs">·</span>
+                              <span className="text-xs text-muted-foreground">
+                                {group.show_count} {group.show_count === 1 ? 'show' : 'shows'}
+                              </span>
+                              <span className="text-muted-foreground/40 text-xs">&</span>
+                              {spotifyUrl ? (
+                                <a
+                                  href={spotifyUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={e => e.stopPropagation()}
+                                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-[#1DB954] transition-colors group/spotify"
+                                >
+                                  <SpotifyIcon className="w-3 h-3 text-[#1DB954]" />
+                                  <span className="group-hover/spotify:text-[#1DB954]">
+                                    {group.spotify_song_count} {group.spotify_song_count === 1 ? 'song' : 'songs'}
+                                  </span>
+                                </a>
+                              ) : (
+                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <SpotifyIcon className="w-3 h-3 text-[#1DB954]" />
+                                  {group.spotify_song_count} {group.spotify_song_count === 1 ? 'song' : 'songs'}
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -406,34 +481,34 @@ export default function LikelyShowsPage() {
                           <span className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${
                             allAdded   ? 'bg-green-500/15 text-green-500' :
                             allSkipped ? 'bg-destructive/15 text-destructive' :
-                                         'bg-muted text-muted-foreground'
+                                         'bg-primary/15 text-primary'
                           }`}>
                             {allAdded ? '✓ All added' : allSkipped ? '✗ All skipped' : `${gAdded + gSkipped} reviewed`}
                           </span>
                         )}
 
-                        {/* Action buttons — stop propagation so they don't toggle row */}
+                        {/* Action buttons */}
                         <div className="flex gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
                           {gPending > 0 && (
                             (gAdded > 0 || gSkipped > 0) ? (
                               <>
                                 <button onClick={() => handleRestAction(group.artist_id, 'add')}
-                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 transition">
+                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-700/80 text-white hover:bg-green-700 transition">
                                   Add Rest
                                 </button>
                                 <button onClick={() => handleRestAction(group.artist_id, 'skip')}
-                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-destructive text-white hover:bg-destructive/90 transition">
+                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-700/80 text-white hover:bg-red-700 transition">
                                   Skip Rest
                                 </button>
                               </>
                             ) : (
                               <>
                                 <button onClick={() => handleBulkAction(group.artist_id, 'add')}
-                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 transition">
+                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-700/80 text-white hover:bg-green-700 transition">
                                   Add All
                                 </button>
                                 <button onClick={() => handleBulkAction(group.artist_id, 'skip')}
-                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-destructive text-white hover:bg-destructive/90 transition">
+                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-700/80 text-white hover:bg-red-700 transition">
                                   Skip All
                                 </button>
                               </>
@@ -454,63 +529,82 @@ export default function LikelyShowsPage() {
                           {/* Column headers */}
                           <div className={`grid px-5 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/40 ${
                             sortBy === 'year'
-                              ? 'grid-cols-[120px_1fr_1fr_90px_64px]'
-                              : 'grid-cols-[120px_1fr_90px_64px]'
+                              ? 'grid-cols-[48px_120px_1fr_1fr_80px]'
+                              : 'grid-cols-[48px_120px_1fr_80px]'
                           }`}>
+                            <span>Actions</span>
                             <span>Date</span>
                             {sortBy === 'year' && <span>Artist</span>}
                             <span>Venue</span>
                             <span>Status</span>
-                            <span className="text-center">Actions</span>
                           </div>
 
-                          {group.shows.map(show => (
-                            <div
-                              key={show.show_id}
-                              className={`grid px-5 py-3 items-center border-t border-border/40 hover:bg-muted/20 transition-colors ${
-                                sortBy === 'year'
-                                  ? 'grid-cols-[120px_1fr_1fr_90px_64px]'
-                                  : 'grid-cols-[120px_1fr_90px_64px]'
-                              }`}
-                            >
-                              <span className="text-sm text-foreground whitespace-nowrap">
-                                {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', {
-                                  year: 'numeric', month: 'short', day: 'numeric'
-                                })}
-                              </span>
-                              {sortBy === 'year' && (
-                                <span className="text-sm text-foreground truncate pr-3">{show.artist_name}</span>
-                              )}
-                              <span className="text-sm text-muted-foreground truncate pr-3">{show.venue_name}</span>
-                              <span className="text-xs">
-                                {show.status === 'pending' && <span className="text-muted-foreground">Pending</span>}
-                                {show.status === 'added'   && <span className="text-green-500 font-medium">Added ✓</span>}
-                                {show.status === 'skipped' && <span className="text-destructive font-medium">Skipped ✗</span>}
-                              </span>
-                              {/* Heart + X icons matching Upcoming Shows style */}
-                              <div className="flex items-center justify-center gap-2.5">
-                                <button onClick={() => handleAddShow(show.show_id)} title="Add to My Shows"
-                                  className="focus:outline-none">
-                                  <svg className={`w-5 h-5 transition-colors ${show.status === 'added'
-                                    ? 'fill-destructive text-destructive'
-                                    : 'fill-none text-muted-foreground hover:text-destructive'}`}
-                                    stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round"
-                                      d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                                  </svg>
-                                </button>
-                                <button onClick={() => handleSkipShow(show.show_id)} title="Skip this show"
-                                  className="focus:outline-none">
-                                  <svg className={`w-4 h-4 transition-colors ${show.status === 'skipped'
-                                    ? 'text-destructive'
-                                    : 'text-muted-foreground hover:text-destructive'}`}
-                                    stroke="currentColor" strokeWidth="2.5" fill="none" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
+                          {group.shows.map(show => {
+                            const isAdded   = show.status === 'added';
+                            const isSkipped = show.status === 'skipped';
+                            return (
+                              <div
+                                key={show.show_id}
+                                className={`grid px-5 py-3 items-center border-t border-border/40 transition-colors ${
+                                  sortBy === 'year'
+                                    ? 'grid-cols-[48px_120px_1fr_1fr_80px]'
+                                    : 'grid-cols-[48px_120px_1fr_80px]'
+                                } ${
+                                  isAdded   ? 'bg-green-500/5 border-l-2 border-l-green-500' :
+                                  isSkipped ? 'bg-red-500/5 border-l-2 border-l-red-500' :
+                                              'hover:bg-muted/20'
+                                }`}
+                              >
+                                {/* Heart + X — first column, matches Upcoming Shows */}
+                                <div className="flex items-center gap-2">
+                                  <button onClick={() => handleAddShow(show.show_id)} title="Add to My Shows"
+                                    className="focus:outline-none">
+                                    <svg className={`w-5 h-5 transition-colors ${isAdded
+                                      ? 'fill-destructive text-destructive'
+                                      : 'fill-none text-muted-foreground hover:text-destructive'}`}
+                                      stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round"
+                                        d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                                    </svg>
+                                  </button>
+                                  <button onClick={() => handleSkipShow(show.show_id)} title="Skip this show"
+                                    className="focus:outline-none">
+                                    <svg className={`w-4 h-4 transition-colors ${isSkipped
+                                      ? 'text-destructive'
+                                      : 'text-muted-foreground hover:text-destructive'}`}
+                                      stroke="currentColor" strokeWidth="2.5" fill="none" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+
+                                {/* Date */}
+                                <span className="text-sm text-foreground whitespace-nowrap">
+                                  {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', {
+                                    year: 'numeric', month: 'short', day: 'numeric'
+                                  })}
+                                </span>
+
+                                {/* Artist (year-sort only) */}
+                                {sortBy === 'year' && (
+                                  <span className="text-sm text-foreground truncate pr-3">{show.artist_name}</span>
+                                )}
+
+                                {/* Venue + capacity badge */}
+                                <div className="flex items-center gap-1.5 min-w-0 pr-3">
+                                  <span className="text-sm text-muted-foreground truncate">{show.venue_name}</span>
+                                  <CapacityBadge category={show.capacity_category} />
+                                </div>
+
+                                {/* Status — row colour does the heavy lifting, text is secondary */}
+                                <span className="text-xs">
+                                  {isAdded   && <span className="text-green-500 font-medium">Added ✓</span>}
+                                  {isSkipped && <span className="text-destructive font-medium">Skipped ✗</span>}
+                                  {!isAdded && !isSkipped && <span className="text-muted-foreground/60">Pending</span>}
+                                </span>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
 

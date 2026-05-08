@@ -108,11 +108,13 @@ export async function GET(request: Request) {
         venue_id,
         dim_artist!inner (
           artist_id,
-          artist_name
+          artist_name,
+          spotify_artist_id
         ),
         dim_venue!inner (
           venue_id,
-          venue_name
+          venue_name,
+          capacity_category
         )
       `)
       .in('artist_id', matchedArtistIds)
@@ -165,6 +167,7 @@ export async function GET(request: Request) {
           artist_name: artist.artist_name,
           venue_id: venue.venue_id,
           venue_name: venue.venue_name,
+          capacity_category: venue.capacity_category ?? null,
           spotify_artist_id: artist.spotify_artist_id,
           status: 'pending' as const
         };
