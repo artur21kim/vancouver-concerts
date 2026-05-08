@@ -393,7 +393,7 @@ function NewShowsTable({
         <h2 className="font-semibold text-card-foreground flex items-center gap-2">
           {highlightHeader && <SpotifyHeaderIcon />}
           {title}
-          <span className="text-muted-foreground font-normal ml-1">({shows.length})</span>
+          <span className="font-normal ml-1 text-primary/80">({shows.length})</span>
         </h2>
         {shows.length > 1 && (
           <div className="flex gap-2">
@@ -453,13 +453,20 @@ function ShowTable({
 
   if (hideTitleBar) return tableContent;
 
+  // Determine count color based on context
+  const countColorClass = context === 'saved'
+    ? 'text-green-500/80'
+    : context === 'new'
+    ? 'text-primary/80'
+    : 'text-muted-foreground';
+
   return (
     <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
       <div className={`flex items-center gap-3 px-4 py-3 border-b border-border ${highlightHeader ? 'bg-primary/5' : ''}`}>
         <h2 className="font-semibold text-card-foreground flex items-center gap-2 min-w-0">
           {highlightHeader && <SpotifyHeaderIcon />}
           <span className="truncate">{title}</span>
-          <span className="text-muted-foreground font-normal shrink-0">({shows.length})</span>
+          <span className={`font-normal shrink-0 ${countColorClass}`}>({shows.length})</span>
         </h2>
         {showBulk && onSaveAll && onSkipAll && shows.length > 1 && (
           <div className="flex items-center gap-3 ml-auto shrink-0">
@@ -606,12 +613,7 @@ function UpcomingShowsContent() {
             </p>
           </div>
 
-          {/* ── Filter bar ────────────────────────────────────────────────────
-               Desktop: single row, stats right-aligned
-               Mobile:  Row 1 — both toggles side by side (shortened labels)
-                        Row 2 — venue buttons
-                        Row 3 — stats
-          ── */}
+          {/* ── Filter bar ── */}
           <div className="mb-5">
 
             {/* Desktop: single flex row with ml-auto pushing stats right */}
@@ -716,7 +718,7 @@ function UpcomingShowsContent() {
                 </div>
               </div>
 
-              {/* Row 2: venue pill (same width as Upcoming/Past) + stats (same width as My Matches) */}
+              {/* Row 2: venue pill + stats */}
               <div className="flex items-center gap-2">
                 <div className="flex flex-1 rounded-lg border border-border overflow-hidden text-xs font-semibold">
                   {CAPACITY_BUTTONS.map((btn, i) => (
