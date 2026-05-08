@@ -889,7 +889,7 @@ function BrowseContent({
                         </div>
 
                         {/* Tickets */}
-                        <div className="flex items-center justify-center px-3 py-3">
+                        <div className="flex items-center justify-center px-4 py-3">
                           {show.ticketmaster_url
                             ? <a href={show.ticketmaster_url} target="_blank" rel="noopener noreferrer" title="Buy tickets on Ticketmaster" className="hover:opacity-70 transition-opacity inline-flex items-center justify-center">
                                 <img src="https://www.ticketmaster.ca/favicon.ico" alt="Ticketmaster" className="w-4 h-4" />
@@ -899,7 +899,7 @@ function BrowseContent({
                         </div>
 
                         {/* Setlist */}
-                        <div className="flex items-center justify-center px-3 py-3">{setlistIcon}</div>
+                        <div className="flex items-center justify-center px-4 py-3">{setlistIcon}</div>
                       </div>
 
                       {/* Mobile row */}
