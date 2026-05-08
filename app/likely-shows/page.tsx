@@ -27,13 +27,15 @@ type GroupedShows = {
 
 export default function LikelyShowsPage() {
   const router = useRouter();
+  const currentYear = new Date().getFullYear();
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [allShows, setAllShows] = useState<Show[]>([]);
   const [filteredShows, setFilteredShows] = useState<Show[]>([]);
   const [groupedShows, setGroupedShows] = useState<GroupedShows[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
-  const [yearRange, setYearRange] = useState<[number, number]>([2008, 2025]);
+  const [yearRange, setYearRange] = useState<[number, number]>([2008, currentYear]);
   const [selectedArtists, setSelectedArtists] = useState<number[]>([]);
   const [selectedVenues, setSelectedVenues] = useState<number[]>([]);
   const [sortBy, setSortBy] = useState<'relevance' | 'artist' | 'count' | 'year'>('relevance');
@@ -288,7 +290,7 @@ export default function LikelyShowsPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-card-foreground">Filters & Sort</h2>
               <button
-                onClick={() => { setYearRange([2008, 2025]); setSelectedArtists([]); setSelectedVenues([]); }}
+                onClick={() => { setYearRange([2008, currentYear]); setSelectedArtists([]); setSelectedVenues([]); }}
                 className="text-sm text-primary hover:text-primary/80 font-medium"
               >
                 Clear All
@@ -307,7 +309,7 @@ export default function LikelyShowsPage() {
                     className="absolute w-full h-2 bg-transparent appearance-none cursor-pointer slider-primary z-20"
                   />
                   <input
-                    type="range" min={yearRange[0]} max="2025" value={yearRange[1]}
+                    type="range" min={yearRange[0]} max={currentYear} value={yearRange[1]}
                     onChange={(e) => setYearRange([yearRange[0], parseInt(e.target.value)])}
                     className="absolute w-full h-2 bg-transparent appearance-none cursor-pointer slider-primary z-20"
                   />
@@ -315,8 +317,8 @@ export default function LikelyShowsPage() {
                     <div
                       className="absolute h-2 bg-primary rounded-lg"
                       style={{
-                        left: `${((yearRange[0] - 2008) / (2025 - 2008)) * 100}%`,
-                        right: `${100 - ((yearRange[1] - 2008) / (2025 - 2008)) * 100}%`
+                        left: `${((yearRange[0] - 2008) / (currentYear - 2008)) * 100}%`,
+                        right: `${100 - ((yearRange[1] - 2008) / (currentYear - 2008)) * 100}%`
                       }}
                     />
                   </div>
