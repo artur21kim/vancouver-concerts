@@ -58,7 +58,7 @@ export async function GET(request: Request) {
 
     // Keep all artists with at least 1 liked song
     const uniqueSpotifyArtistIds = Object.keys(artistSongCounts)
-      .filter(id => (artistSongCounts[id] ?? 0) >= 1);
+      .filter(id => (artistSongCounts[id] ?? 0) >= 2);
 
     if (uniqueSpotifyArtistIds.length === 0) {
       return NextResponse.json({
