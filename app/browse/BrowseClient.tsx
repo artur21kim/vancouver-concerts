@@ -526,7 +526,7 @@ function BrowseContent({
   const showFestivalContext = showType === 'festival' || !!festival
   const thBase     = 'text-left text-xs font-medium text-muted-foreground uppercase tracking-wider py-3 px-3'
   const thSortable = `${thBase} cursor-pointer hover:text-foreground transition-colors`
-  const thCenter   = 'text-center text-xs font-medium text-muted-foreground uppercase tracking-wider py-3 px-3 min-w-[64px]'
+  const thCenter   = 'text-center text-xs font-medium text-muted-foreground uppercase tracking-wider py-3 px-4'
 
   const festivalBadgeClass = isDark
     ? 'inline-flex items-center gap-0.5 px-1.5 py-px rounded text-[9px] font-medium bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 hover:bg-fuchsia-500/30 transition whitespace-nowrap'
@@ -763,7 +763,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(0,1fr) minmax(0,1fr) 120px 56px 68px` }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(0,1fr) minmax(0,1fr) 130px 72px 76px` }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -826,7 +826,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(0,1fr) minmax(0,1fr) 120px 56px 68px` }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(0,1fr) minmax(0,1fr) 130px 72px 76px` }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
