@@ -26,6 +26,7 @@ type Show = {
   capacity_category: string | null
   venue_status: string | null
   other_names: string | null
+  ticketmaster_url: string | null
 }
 
 type Venue = {
@@ -161,6 +162,7 @@ function BrowseContent({
   const [sortField, setSortField] = useState<SortField>((initialParams.sort as SortField) || 'date')
   const [sortDir,   setSortDir]   = useState<'asc' | 'desc'>((initialParams.dir as 'asc' | 'desc') || 'desc')
   const [yearJumpInput, setYearJumpInput] = useState('')
+  const [unknownCapacityCount, setUnknownCapacityCount] = useState<number | null>(null)
 
   // ── User shows (heart buttons) ────────────────────────────────────────────
   const [userShows,    setUserShows]    = useState<Set<number>>(new Set())
@@ -256,6 +258,18 @@ function BrowseContent({
       setStats(data.stats || { total_shows: 0, unique_artists: 0, unique_venues: 0, first_show: null, last_show: null })
       setPage(params.page)
       setPageInput(String(params.page))
+
+      // Fetch unknown capacity count for the same filters (excluding capacity filter itself)
+      if (params.capacity && params.capacity !== 'all' && params.capacity !== 'unknown') {
+        const uqs = new URLSearchParams(qs)
+        uqs.set('capacity', 'unknown')
+        uqs.delete('page')
+        const uRes = await fetch(`/api/browse/shows?${uqs.toString()}`)
+        const uData = await uRes.json()
+        setUnknownCapacityCount(uData.stats?.total_shows ?? null)
+      } else {
+        setUnknownCapacityCount(null)
+      }
     } catch (e) {
       console.error('Browse fetch error:', e)
     } finally {
@@ -698,13 +712,12 @@ function BrowseContent({
 
               {/* Unknown capacity note — shown when filtering by a specific size */}
               {capacity && capacity !== 'all' && capacity !== 'unknown' && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Venues with unknown capacity are excluded.{' '}
+                <p className="mt-2 text-xs">
                   <button
                     onClick={() => handleCapacityClick('unknown')}
-                    className="underline hover:text-foreground transition-colors"
+                    className="text-primary hover:underline transition-colors"
                   >
-                    View 5,755 shows with unknown capacity
+                    View {unknownCapacityCount != null ? unknownCapacityCount.toLocaleString() : '…'} shows with unknown capacity
                   </button>
                 </p>
               )}
@@ -750,7 +763,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px 180px 200px 160px 64px` }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px 180px 200px 160px 56px 56px` }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -764,6 +777,7 @@ function BrowseContent({
                 <button onClick={() => handleSort('festival')} className={thSortable}>
                   Festival {sortField === 'festival' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
+                <div className={thCenter}>Tickets</div>
                 <div className={thCenter}>Setlist</div>
               </div>
 
@@ -812,7 +826,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px 180px 200px 160px 64px` }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px 180px 200px 160px 56px 56px` }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
@@ -871,6 +885,16 @@ function BrowseContent({
                                 <span className="truncate max-w-[120px]">{show.festival_name}</span>
                               </button>
                             : null
+                          }
+                        </div>
+
+                        {/* Tickets */}
+                        <div className="flex items-center justify-center px-3 py-3">
+                          {show.ticketmaster_url
+                            ? <a href={show.ticketmaster_url} target="_blank" rel="noopener noreferrer" title="Buy tickets on Ticketmaster" className="hover:opacity-70 transition-opacity inline-flex items-center justify-center">
+                                <img src="https://www.ticketmaster.ca/favicon.ico" alt="Ticketmaster" className="w-4 h-4" />
+                              </a>
+                            : <span className="text-muted-foreground text-sm">–</span>
                           }
                         </div>
 

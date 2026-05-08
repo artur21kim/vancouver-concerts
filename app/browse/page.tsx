@@ -102,7 +102,7 @@ export default async function BrowsePage({ searchParams }: PageProps) {
     capacity_category: row.capacity_category   ?? null,
     venue_status:      row.venue_status        ?? null,
     other_names:       row.other_names         ?? null,
-  }))
+    ticketmaster_url:  row.ticketmaster_url     ?? null,
 
   const stats = {
     total_shows:    statsRow ? Number(statsRow.total_shows)    : 0,
