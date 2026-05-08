@@ -304,14 +304,22 @@ export default function LikelyShowsPage() {
                 </label>
                 <div className="relative pt-1">
                   <input
-                    type="range" min="2008" max={yearRange[1]} value={yearRange[0]}
-                    onChange={(e) => setYearRange([parseInt(e.target.value), yearRange[1]])}
-                    className="absolute w-full h-2 bg-transparent appearance-none cursor-pointer slider-primary z-20"
+                    type="range" min="2008" max={currentYear} value={yearRange[0]}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setYearRange([Math.min(val, yearRange[1]), yearRange[1]]);
+                    }}
+                    className="absolute w-full h-2 bg-transparent appearance-none cursor-pointer slider-primary"
+                    style={{ zIndex: yearRange[0] >= yearRange[1] - 1 ? 30 : 20 }}
                   />
                   <input
-                    type="range" min={yearRange[0]} max={currentYear} value={yearRange[1]}
-                    onChange={(e) => setYearRange([yearRange[0], parseInt(e.target.value)])}
-                    className="absolute w-full h-2 bg-transparent appearance-none cursor-pointer slider-primary z-20"
+                    type="range" min="2008" max={currentYear} value={yearRange[1]}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setYearRange([yearRange[0], Math.max(val, yearRange[0])]);
+                    }}
+                    className="absolute w-full h-2 bg-transparent appearance-none cursor-pointer slider-primary"
+                    style={{ zIndex: yearRange[0] >= yearRange[1] - 1 ? 20 : 30 }}
                   />
                   <div className="relative h-2 bg-muted rounded-lg">
                     <div
