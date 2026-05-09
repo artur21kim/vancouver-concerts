@@ -410,7 +410,7 @@ export default function LikelyShowsPage() {
             {/* Reset */}
             <button
               onClick={() => setYearRange([2008, currentYear])}
-              className="text-xs text-muted-foreground hover:text-foreground transition flex-shrink-0"
+              className="text-xs border border-red-500/40 text-red-400 rounded px-2 py-1 hover:bg-red-500/10 hover:border-red-500 transition flex-shrink-0"
             >
               Reset
             </button>
@@ -444,7 +444,7 @@ export default function LikelyShowsPage() {
 
                       {/* ── Group header ── */}
                       <div
-                        className="group/row flex items-center gap-2 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                        className="group/row flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => toggleGroup(group.artist_id)}
                       >
                         {/* Chevron */}
@@ -452,9 +452,9 @@ export default function LikelyShowsPage() {
                           {isExpanded ? '▼' : '▶'}
                         </span>
 
-                        {/* Rank number — larger, bold, teal */}
+                        {/* Rank number — larger, bold, teal, centered */}
                         {rank !== null && (
-                          <span className="text-base font-bold text-primary w-10 flex-shrink-0 text-right tabular-nums leading-none">
+                          <span className="text-base font-bold text-primary w-10 flex-shrink-0 text-center tabular-nums leading-none">
                             #{rank}
                           </span>
                         )}
