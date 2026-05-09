@@ -34,7 +34,7 @@ type MatchData = {
   total_spotify_artists: number;
   total_shows_count: number;
   total_venues_matched: number;
-  top_artists: Artist[];
+  current_run_artists: Artist[];
   all_artists: Artist[];
   all_venues: Venue[];
   duration_seconds: number;
@@ -46,7 +46,7 @@ type VenueStatus    = 'yes' | 'no' | 'not_sure';
 type MobileTab      = 'unreviewed' | 'all';
 
 const VENUES_PER_PAGE  = 10;
-const ARTISTS_PER_PAGE = 15;
+const ARTISTS_DEFAULT  = 10; // shown by default before expanding
 const SWIPE_THRESHOLD  = 72;
 const SWIPE_MAX        = 110;
 
@@ -316,19 +316,25 @@ function MobileVenueCard({
 }
 
 // ─── Artist bar chart ─────────────────────────────────────────────────────────
-function ArtistBarChart({ artists, artistView, startRank = 0 }: { artists: Artist[]; artistView: ArtistView; startRank?: number }) {
+function ArtistBarChart({ artists, artistView, expanded }: {
+  artists: Artist[];
+  artistView: ArtistView;
+  expanded: boolean;
+}) {
   const [hovered, setHovered] = useState<number | null>(null);
 
-  const top15 = artists.slice(0, 15);
-  if (top15.length === 0) return <p className="text-muted-foreground text-center py-12">No artists to display</p>;
+  // Always scale relative to the global #1 (full list, not just visible slice)
+  const globalMax = Math.max(...artists.map(a => artistView === 'current' ? a.match_score : a.match_score_all), 1);
+
+  const displayArtists = expanded ? artists : artists.slice(0, ARTISTS_DEFAULT);
+
+  if (displayArtists.length === 0) return <p className="text-muted-foreground text-center py-12">No artists to display</p>;
 
   const shows = (a: Artist) => artistView === 'current' ? a.vancouver_show_count : a.vancouver_show_count_all;
   const score = (a: Artist) => artistView === 'current' ? a.match_score : a.match_score_all;
 
-  const maxScore = Math.max(...top15.map(score), 1);
-
-  const songsPct = (a: Artist) => Math.min((score(a) / maxScore) * 100 * 0.7, 100);
-  const showsPct = (a: Artist) => Math.min((score(a) / maxScore) * 100 * 0.3, 100);
+  const songsPct  = (a: Artist) => Math.min((score(a) / globalMax) * 100 * 0.7, 100);
+  const showsPct  = (a: Artist) => Math.min((score(a) / globalMax) * 100 * 0.3, 100);
 
   return (
     <div className="w-full space-y-1.5">
@@ -340,7 +346,7 @@ function ArtistBarChart({ artists, artistView, startRank = 0 }: { artists: Artis
         <span className="w-16 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">Score</span>
       </div>
 
-      {top15.map((artist, i) => {
+      {displayArtists.map((artist, i) => {
         const isHovered = hovered === artist.artist_id;
         const sp  = songsPct(artist);
         const shp = showsPct(artist);
@@ -354,7 +360,7 @@ function ArtistBarChart({ artists, artistView, startRank = 0 }: { artists: Artis
             onMouseLeave={() => setHovered(null)}
           >
             {/* Rank */}
-            <span className="w-5 flex-shrink-0 text-xs font-bold text-primary text-right">{startRank + i + 1}</span>
+            <span className="w-5 flex-shrink-0 text-xs font-bold text-primary text-right">{i + 1}</span>
 
             {/* Name + Spotify */}
             <div className="w-40 md:w-56 flex-shrink-0 flex items-center gap-1.5 min-w-0">
@@ -367,7 +373,7 @@ function ArtistBarChart({ artists, artistView, startRank = 0 }: { artists: Artis
                   className="flex-shrink-0 hover:opacity-70 transition-opacity"
                 >
                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="#1DB954">
-                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
                   </svg>
                 </a>
               )}
@@ -439,6 +445,52 @@ function ArtistBarChart({ artists, artistView, startRank = 0 }: { artists: Artis
   );
 }
 
+// ─── Venue pagination controls ────────────────────────────────────────────────
+function VenuePaginationControls({
+  currentPage,
+  totalPages,
+  totalVenues,
+  onPrev,
+  onNext,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalVenues: number;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between mb-3">
+      <button
+        onClick={onPrev}
+        disabled={currentPage === 1}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${
+          currentPage === 1
+            ? 'border-border text-muted-foreground/40 cursor-not-allowed'
+            : 'border-primary text-primary hover:bg-primary hover:text-primary-foreground'
+        }`}
+      >
+        ← Previous
+      </button>
+      <span className="text-xs text-muted-foreground">
+        Page <span className="font-semibold text-foreground">{currentPage}</span> of <span className="font-semibold text-foreground">{totalPages}</span>
+        <span className="text-muted-foreground/60 ml-1.5">· {totalVenues} venues</span>
+      </span>
+      <button
+        onClick={onNext}
+        disabled={currentPage === totalPages}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${
+          currentPage === totalPages
+            ? 'border-border text-muted-foreground/40 cursor-not-allowed'
+            : 'border-primary text-primary hover:bg-primary hover:text-primary-foreground'
+        }`}
+      >
+        Next →
+      </button>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function MatchesPage() {
   const router = useRouter();
@@ -454,8 +506,8 @@ export default function MatchesPage() {
   const [venuePage, setVenuePage]           = useState(1);
 
   // Artist state
-  const [artistView, setArtistView] = useState<ArtistView>('current');
-  const [artistPage, setArtistPage] = useState(1);
+  const [artistView, setArtistView]       = useState<ArtistView>('current');
+  const [artistExpanded, setArtistExpanded] = useState(false);
 
   useEffect(() => { fetchMatches(); }, []);
 
@@ -464,7 +516,13 @@ export default function MatchesPage() {
       const res = await fetch('/api/match');
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed'); }
       const result = await res.json();
-      const data = { ...result.data, all_venues: result.data.all_venues ?? result.data.top_venues ?? [] };
+      // Support both old shape (top_artists) and new shape (current_run_artists)
+      const data: MatchData = {
+        ...result.data,
+        current_run_artists: result.data.current_run_artists ?? result.data.top_artists ?? [],
+        all_artists:         result.data.all_artists ?? [],
+        all_venues:          result.data.all_venues ?? result.data.top_venues ?? [],
+      };
       setMatchData(data);
       const init = new Map<number, VenueStatus>();
       data.all_venues.forEach((v: Venue) => { if (v.user_status) init.set(v.venue_id, v.user_status as VenueStatus); });
@@ -531,17 +589,18 @@ export default function MatchesPage() {
     safeMobileAllPage * VENUES_PER_PAGE,
   );
 
-  // Chart paginates through all matched artists (current run or all-time)
-  const allDisplayArtists = matchData
-    ? (artistView === 'current' ? matchData.top_artists : matchData.all_artists)
-    : [];
-  const totalArtistPages = Math.max(1, Math.ceil(allDisplayArtists.length / ARTISTS_PER_PAGE));
-  const safeArtistPage   = Math.min(artistPage, totalArtistPages);
-  const chartArtists     = allDisplayArtists.slice(
-    (safeArtistPage - 1) * ARTISTS_PER_PAGE, safeArtistPage * ARTISTS_PER_PAGE,
-  );
+  // Artist lists for each tab
+  const currentRunArtists = matchData?.current_run_artists ?? [];
+  const allArtists        = matchData?.all_artists ?? [];
+  const activeArtistList  = artistView === 'current' ? currentRunArtists : allArtists;
 
   const setCapacityAndReset = (f: CapacityFilter) => { setCapacityFilter(f); setVenuePage(1); };
+
+  // Reset expand state when switching tabs
+  const handleArtistViewChange = (view: ArtistView) => {
+    setArtistView(view);
+    setArtistExpanded(false);
+  };
 
   // ── Loading / error ───────────────────────────────────────────────────────────
   if (loading) return (
@@ -688,45 +747,42 @@ export default function MatchesPage() {
             </div>
 
             {/* ── Desktop venue list ── */}
-            <div className="hidden md:block space-y-2">
-              <div className="flex items-center gap-4 px-4 pb-1">
-                <span className="w-9 flex-shrink-0" />
-                <span className="flex-1" />
-                <span className="flex-shrink-0 w-[148px]" />
-                <span className="flex-shrink-0 w-36 text-xs font-medium text-muted-foreground uppercase tracking-wider">Match Score</span>
-              </div>
-              {desktopVenues.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">No venues match this filter</p>
-              ) : (
-                pagedVenues.map(venue => {
-                  const globalRank = desktopVenues.indexOf(venue) + 1;
-                  return (
-                    <DesktopVenueRow
-                      key={venue.venue_id}
-                      venue={venue}
-                      rank={globalRank}
-                      currentStatus={venueStatuses.get(venue.venue_id) ?? null}
-                      onStatus={s => handleVenueStatus(venue.venue_id, s)}
-                    />
-                  );
-                })
+            <div className="hidden md:block">
+              {/* Pagination at top */}
+              {totalVenuePages > 1 && (
+                <VenuePaginationControls
+                  currentPage={safePage}
+                  totalPages={totalVenuePages}
+                  totalVenues={desktopVenues.length}
+                  onPrev={() => setVenuePage(p => Math.max(1, p - 1))}
+                  onNext={() => setVenuePage(p => Math.min(totalVenuePages, p + 1))}
+                />
               )}
-            </div>
 
-            {/* Desktop pagination */}
-            <div className="hidden md:flex items-center justify-between mt-4 pt-4 border-t border-border">
-              <button onClick={() => setVenuePage(p => Math.max(1, p - 1))} disabled={safePage === 1}
-                className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">
-                ← Previous
-              </button>
-              <span className="text-xs md:text-sm text-muted-foreground">
-                Page {safePage} of {totalVenuePages}
-                <span className="text-muted-foreground/60 ml-1">· {desktopVenues.length} venues</span>
-              </span>
-              <button onClick={() => setVenuePage(p => Math.min(totalVenuePages, p + 1))} disabled={safePage === totalVenuePages}
-                className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">
-                Next →
-              </button>
+              <div className="space-y-2">
+                <div className="flex items-center gap-4 px-4 pb-1">
+                  <span className="w-9 flex-shrink-0" />
+                  <span className="flex-1" />
+                  <span className="flex-shrink-0 w-[148px]" />
+                  <span className="flex-shrink-0 w-36 text-xs font-medium text-muted-foreground uppercase tracking-wider">Match Score</span>
+                </div>
+                {desktopVenues.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">No venues match this filter</p>
+                ) : (
+                  pagedVenues.map(venue => {
+                    const globalRank = desktopVenues.indexOf(venue) + 1;
+                    return (
+                      <DesktopVenueRow
+                        key={venue.venue_id}
+                        venue={venue}
+                        rank={globalRank}
+                        currentStatus={venueStatuses.get(venue.venue_id) ?? null}
+                        onStatus={s => handleVenueStatus(venue.venue_id, s)}
+                      />
+                    );
+                  })
+                )}
+              </div>
             </div>
 
             {/* ── Mobile: Unreviewed tab ── */}
@@ -856,40 +912,43 @@ export default function MatchesPage() {
 
           {/* ── Artists section ── */}
           <div className="bg-card rounded-lg shadow-lg p-4 md:p-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-2">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-1">
               <h2 className="text-xl md:text-2xl font-bold text-card-foreground">Top Matched Artists</h2>
               <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
-                <button onClick={() => { setArtistView('current'); setArtistPage(1); }}
+                <button onClick={() => handleArtistViewChange('current')}
                   className={`px-3 py-1.5 transition-colors ${artistView === 'current' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
                   Current Run
                 </button>
-                <button onClick={() => { setArtistView('all'); setArtistPage(1); }}
+                <button onClick={() => handleArtistViewChange('all')}
                   className={`px-3 py-1.5 transition-colors ${artistView === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
                   All Artists
                 </button>
               </div>
             </div>
+
             <p className="text-xs md:text-sm text-muted-foreground mb-4">
               {artistView === 'current'
-                ? `Artists with past Vancouver shows since ${matchData.first_concert_year} — top 15 per page`
-                : `All ${allDisplayArtists.length} matched artists ranked by match score — top 15 per page`}
+                ? `Artists with past Vancouver shows since ${matchData.first_concert_year} — top ${Math.min(ARTISTS_DEFAULT, currentRunArtists.length)} shown`
+                : `All ${allArtists.length} matched artists ranked by match score — top ${Math.min(ARTISTS_DEFAULT, allArtists.length)} shown`}
+              {activeArtistList.length > ARTISTS_DEFAULT && !artistExpanded && ` of ${activeArtistList.length}`}
             </p>
 
-            <ArtistBarChart artists={chartArtists} artistView={artistView} startRank={(safeArtistPage - 1) * ARTISTS_PER_PAGE} />
+            <ArtistBarChart
+              artists={activeArtistList}
+              artistView={artistView}
+              expanded={artistExpanded}
+            />
 
-            {totalArtistPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-                <button onClick={() => setArtistPage(p => Math.max(1, p - 1))} disabled={safeArtistPage === 1}
-                  className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">
-                  ← Previous
-                </button>
-                <span className="text-xs md:text-sm text-muted-foreground">
-                  Page {safeArtistPage} of {totalArtistPages}
-                  <span className="text-muted-foreground/60 ml-1">· {allDisplayArtists.length} artists</span>
-                </span>
-                <button onClick={() => setArtistPage(p => Math.min(totalArtistPages, p + 1))} disabled={safeArtistPage === totalArtistPages}
-                  className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">
-                  Next →
+            {/* Expand / collapse */}
+            {activeArtistList.length > ARTISTS_DEFAULT && (
+              <div className="mt-4 pt-3 border-t border-border flex justify-center">
+                <button
+                  onClick={() => setArtistExpanded(prev => !prev)}
+                  className="flex items-center gap-2 px-5 py-2 rounded-lg border border-primary text-primary text-sm font-semibold hover:bg-primary hover:text-primary-foreground transition-colors"
+                >
+                  {artistExpanded
+                    ? <>Show top {ARTISTS_DEFAULT} only ↑</>
+                    : <>View all {activeArtistList.length} artists ↓</>}
                 </button>
               </div>
             )}

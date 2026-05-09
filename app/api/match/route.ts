@@ -236,7 +236,8 @@ export async function GET(request: Request) {
         total_spotify_artists: matchedArtists.length,
         total_shows_count: shows.length,
         total_venues_matched: Object.keys(venueScores).length,
-        top_artists: currentRunArtists.slice(0, 15),
+        // Send full lists — client handles display/expand logic
+        current_run_artists: currentRunArtists,
         all_artists: allArtists,
         all_venues: allRankedVenues,
         duration_seconds: parseFloat(duration),
