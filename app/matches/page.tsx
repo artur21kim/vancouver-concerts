@@ -47,7 +47,7 @@ type VenueStatus    = 'yes' | 'no' | 'not_sure';
 type MobileTab      = 'unreviewed' | 'all';
 
 const VENUES_PER_PAGE  = 10;
-const ARTISTS_PER_PAGE = 10;
+const ARTISTS_PER_PAGE = 15;
 const SWIPE_THRESHOLD  = 72;
 const SWIPE_MAX        = 110;
 
@@ -374,10 +374,9 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
               )}
             </div>
 
-            {/* Segmented bar — fixed: borderRadius per segment, no overflow-hidden clipping */}
+            {/* Segmented bar */}
             <div className="flex-1 relative">
               <div className="flex h-5 bg-muted/40" style={{ borderRadius: '9999px' }}>
-                {/* Songs segment — left-rounded always; right-rounded only when no shows segment */}
                 <div
                   className="h-full transition-all duration-300"
                   style={{
@@ -387,7 +386,6 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
                   }}
                   title={`${artist.spotify_song_count} songs in library`}
                 />
-                {/* Shows segment — only rendered when non-zero; always right-rounded */}
                 {shp > 0 && (
                   <div
                     className="h-full transition-all duration-300"
@@ -535,9 +533,13 @@ export default function MatchesPage() {
     safeMobileAllPage * VENUES_PER_PAGE,
   );
 
-  const allDisplayArtists = matchData
-    ? (artistView === 'current' ? matchData.top_artists : matchData.all_artists)
+  // Chart uses top 15 (current run) or top 15 from all_artists
+  const chartArtists = matchData
+    ? (artistView === 'current' ? matchData.top_artists : matchData.all_artists.slice(0, 15))
     : [];
+
+  // Table always shows the full all_artists list, paginated
+  const allDisplayArtists = matchData ? matchData.all_artists : [];
   const totalArtistPages = Math.max(1, Math.ceil(allDisplayArtists.length / ARTISTS_PER_PAGE));
   const safeArtistPage   = Math.min(artistPage, totalArtistPages);
   const pagedArtists     = allDisplayArtists.slice(
@@ -867,38 +869,39 @@ export default function MatchesPage() {
                     className={`px-3 py-1.5 transition-colors ${artistDisplay === 'chart' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
                     Chart
                   </button>
-                  <button onClick={() => setArtistDisplay('table')}
+                  <button onClick={() => { setArtistDisplay('table'); setArtistPage(1); }}
                     className={`px-3 py-1.5 transition-colors ${artistDisplay === 'table' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
                     Table
                   </button>
                 </div>
-                <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
-                  <button onClick={() => { setArtistView('current'); setArtistPage(1); }}
-                    className={`px-3 py-1.5 transition-colors ${artistView === 'current' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                    Current Run
-                  </button>
-                  <button onClick={() => { setArtistView('all'); setArtistPage(1); }}
-                    className={`px-3 py-1.5 transition-colors ${artistView === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                    All Artists
-                  </button>
-                </div>
+                {artistDisplay === 'chart' && (
+                  <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
+                    <button onClick={() => { setArtistView('current'); }}
+                      className={`px-3 py-1.5 transition-colors ${artistView === 'current' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                      Current Run
+                    </button>
+                    <button onClick={() => { setArtistView('all'); }}
+                      className={`px-3 py-1.5 transition-colors ${artistView === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                      All Artists
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
             <p className="text-xs md:text-sm text-muted-foreground mb-4">
-              {artistView === 'current'
-                ? `Artists with past Vancouver shows since ${matchData.first_concert_year}`
-                : `All matched artists who've played in Vancouver since ${matchData.first_concert_year}`}
-              {artistDisplay === 'chart' && ' — top 15 ranked by match score, split by songs vs. shows'}
+              {artistDisplay === 'chart'
+                ? `Top 15 artists ranked by match score — split by liked songs vs. Vancouver shows`
+                : `All ${allDisplayArtists.length} matched artists, ranked by match score`}
             </p>
 
             {artistDisplay === 'chart' && (
-              <ArtistBarChart artists={allDisplayArtists} artistView={artistView} />
+              <ArtistBarChart artists={chartArtists} artistView={artistView} />
             )}
 
             {artistDisplay === 'table' && (
               <>
                 {pagedArtists.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8">No artists to show — switch to "All Artists"</p>
+                  <p className="text-muted-foreground text-center py-8">No artists to show</p>
                 ) : (
                   <>
                     <div className="overflow-x-auto -mx-4 md:mx-0">
@@ -915,8 +918,6 @@ export default function MatchesPage() {
                         <tbody className="divide-y divide-border">
                           {pagedArtists.map((artist, index) => {
                             const globalRank = (safeArtistPage - 1) * ARTISTS_PER_PAGE + index + 1;
-                            const sc    = artistView === 'current' ? artist.match_score : artist.match_score_all;
-                            const shows = artistView === 'current' ? artist.vancouver_show_count : artist.vancouver_show_count_all;
                             return (
                               <tr key={artist.artist_id} className="hover:bg-muted/50 transition-colors">
                                 <td className="px-2 md:px-4 py-2.5 text-sm font-bold text-primary">{globalRank}</td>
@@ -934,14 +935,14 @@ export default function MatchesPage() {
                                   </div>
                                 </td>
                                 <td className="px-2 md:px-4 py-2.5 text-xs md:text-sm text-center text-muted-foreground tabular-nums">{artist.spotify_song_count}</td>
-                                <td className="px-2 md:px-4 py-2.5 text-xs md:text-sm text-center text-muted-foreground tabular-nums">{shows}</td>
+                                <td className="px-2 md:px-4 py-2.5 text-xs md:text-sm text-center text-muted-foreground tabular-nums">{artist.vancouver_show_count_all}</td>
                                 <td className="px-2 md:px-4 py-2.5 pl-3">
                                   <div className="flex items-center gap-1.5">
                                     <div className="w-10 md:w-24 bg-muted rounded-full h-1.5 hidden xs:block flex-shrink-0">
-                                      <div className="bg-primary h-1.5 rounded-full" style={{ width: `${Math.min(sc, 100)}%` }} />
+                                      <div className="bg-primary h-1.5 rounded-full" style={{ width: `${Math.min(artist.match_score_all, 100)}%` }} />
                                     </div>
                                     <span className="text-xs md:text-sm font-semibold text-primary tabular-nums">
-                                      {sc.toFixed(1)}%
+                                      {artist.match_score_all.toFixed(1)}%
                                     </span>
                                   </div>
                                 </td>

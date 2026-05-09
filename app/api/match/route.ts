@@ -167,6 +167,16 @@ export async function GET(request: Request) {
     const currentRunArtists = [...scoredArtists].sort((a, b) => b.match_score - a.match_score);
     const allArtists = [...scoredArtists].sort((a, b) => b.match_score_all - a.match_score_all);
 
+    // Normalize scores so #1 artist = 100%, preserving ranking order
+    const maxCurrentScore = currentRunArtists[0]?.match_score || 1;
+    const maxAllScore = allArtists[0]?.match_score_all || 1;
+    currentRunArtists.forEach(a => {
+      a.match_score = Math.round((a.match_score / maxCurrentScore) * 1000) / 10;
+    });
+    allArtists.forEach(a => {
+      a.match_score_all = Math.round((a.match_score_all / maxAllScore) * 1000) / 10;
+    });
+
     // Build venue scores
     const venueScores: any = {};
 
