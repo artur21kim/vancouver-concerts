@@ -42,7 +42,6 @@ type MatchData = {
 
 type CapacityFilter  = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown';
 type ArtistView     = 'current' | 'all';
-type ArtistDisplay  = 'chart' | 'table';
 type VenueStatus    = 'yes' | 'no' | 'not_sure';
 type MobileTab      = 'unreviewed' | 'all';
 
@@ -317,7 +316,7 @@ function MobileVenueCard({
 }
 
 // ─── Artist bar chart ─────────────────────────────────────────────────────────
-function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView: ArtistView }) {
+function ArtistBarChart({ artists, artistView, startRank = 0 }: { artists: Artist[]; artistView: ArtistView; startRank?: number }) {
   const [hovered, setHovered] = useState<number | null>(null);
 
   const top15 = artists.slice(0, 15);
@@ -334,7 +333,7 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
   return (
     <div className="w-full space-y-1.5">
       {/* Column headers */}
-      <div className="flex items-center gap-3 pb-1 border-b border-border">
+      <div className="flex items-center gap-3 pb-1 px-2 border-b border-border">
         <span className="w-5 flex-shrink-0" />
         <span className="w-40 md:w-56 flex-shrink-0 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Artist</span>
         <span className="flex-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Match Score</span>
@@ -355,7 +354,7 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
             onMouseLeave={() => setHovered(null)}
           >
             {/* Rank */}
-            <span className="w-5 flex-shrink-0 text-xs font-bold text-primary text-right">{i + 1}</span>
+            <span className="w-5 flex-shrink-0 text-xs font-bold text-primary text-right">{startRank + i + 1}</span>
 
             {/* Name + Spotify */}
             <div className="w-40 md:w-56 flex-shrink-0 flex items-center gap-1.5 min-w-0">
@@ -455,9 +454,8 @@ export default function MatchesPage() {
   const [venuePage, setVenuePage]           = useState(1);
 
   // Artist state
-  const [artistView, setArtistView]       = useState<ArtistView>('current');
-  const [artistDisplay, setArtistDisplay] = useState<ArtistDisplay>('chart');
-  const [artistPage, setArtistPage]       = useState(1);
+  const [artistView, setArtistView] = useState<ArtistView>('current');
+  const [artistPage, setArtistPage] = useState(1);
 
   useEffect(() => { fetchMatches(); }, []);
 
@@ -533,16 +531,13 @@ export default function MatchesPage() {
     safeMobileAllPage * VENUES_PER_PAGE,
   );
 
-  // Chart uses top 15 (current run) or top 15 from all_artists
-  const chartArtists = matchData
-    ? (artistView === 'current' ? matchData.top_artists : matchData.all_artists.slice(0, 15))
+  // Chart paginates through all matched artists (current run or all-time)
+  const allDisplayArtists = matchData
+    ? (artistView === 'current' ? matchData.top_artists : matchData.all_artists)
     : [];
-
-  // Table always shows the full all_artists list, paginated
-  const allDisplayArtists = matchData ? matchData.all_artists : [];
   const totalArtistPages = Math.max(1, Math.ceil(allDisplayArtists.length / ARTISTS_PER_PAGE));
   const safeArtistPage   = Math.min(artistPage, totalArtistPages);
-  const pagedArtists     = allDisplayArtists.slice(
+  const chartArtists     = allDisplayArtists.slice(
     (safeArtistPage - 1) * ARTISTS_PER_PAGE, safeArtistPage * ARTISTS_PER_PAGE,
   );
 
@@ -863,115 +858,40 @@ export default function MatchesPage() {
           <div className="bg-card rounded-lg shadow-lg p-4 md:p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-2">
               <h2 className="text-xl md:text-2xl font-bold text-card-foreground">Top Matched Artists</h2>
-              <div className="flex gap-2 flex-wrap">
-                <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
-                  <button onClick={() => setArtistDisplay('chart')}
-                    className={`px-3 py-1.5 transition-colors ${artistDisplay === 'chart' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                    Chart
-                  </button>
-                  <button onClick={() => { setArtistDisplay('table'); setArtistPage(1); }}
-                    className={`px-3 py-1.5 transition-colors ${artistDisplay === 'table' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                    Table
-                  </button>
-                </div>
-                {artistDisplay === 'chart' && (
-                  <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
-                    <button onClick={() => { setArtistView('current'); }}
-                      className={`px-3 py-1.5 transition-colors ${artistView === 'current' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                      Current Run
-                    </button>
-                    <button onClick={() => { setArtistView('all'); }}
-                      className={`px-3 py-1.5 transition-colors ${artistView === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                      All Artists
-                    </button>
-                  </div>
-                )}
+              <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
+                <button onClick={() => { setArtistView('current'); setArtistPage(1); }}
+                  className={`px-3 py-1.5 transition-colors ${artistView === 'current' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                  Current Run
+                </button>
+                <button onClick={() => { setArtistView('all'); setArtistPage(1); }}
+                  className={`px-3 py-1.5 transition-colors ${artistView === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                  All Artists
+                </button>
               </div>
             </div>
             <p className="text-xs md:text-sm text-muted-foreground mb-4">
-              {artistDisplay === 'chart'
-                ? `Top 15 artists ranked by match score — split by liked songs vs. Vancouver shows`
-                : `All ${allDisplayArtists.length} matched artists, ranked by match score`}
+              {artistView === 'current'
+                ? `Artists with past Vancouver shows since ${matchData.first_concert_year} — top 15 per page`
+                : `All ${allDisplayArtists.length} matched artists ranked by match score — top 15 per page`}
             </p>
 
-            {artistDisplay === 'chart' && (
-              <ArtistBarChart artists={chartArtists} artistView={artistView} />
-            )}
+            <ArtistBarChart artists={chartArtists} artistView={artistView} startRank={(safeArtistPage - 1) * ARTISTS_PER_PAGE} />
 
-            {artistDisplay === 'table' && (
-              <>
-                {pagedArtists.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8">No artists to show</p>
-                ) : (
-                  <>
-                    <div className="overflow-x-auto -mx-4 md:mx-0">
-                      <table className="min-w-full">
-                        <thead>
-                          <tr className="bg-muted">
-                            <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-8">#</th>
-                            <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Artist</th>
-                            <th className="px-2 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap w-28">Songs</th>
-                            <th className="px-2 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap w-28">Shows</th>
-                            <th className="px-2 md:px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Score</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                          {pagedArtists.map((artist, index) => {
-                            const globalRank = (safeArtistPage - 1) * ARTISTS_PER_PAGE + index + 1;
-                            return (
-                              <tr key={artist.artist_id} className="hover:bg-muted/50 transition-colors">
-                                <td className="px-2 md:px-4 py-2.5 text-sm font-bold text-primary">{globalRank}</td>
-                                <td className="px-2 md:px-4 py-2.5">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-xs md:text-sm font-medium text-card-foreground truncate">{artist.artist_name}</span>
-                                    {artist.spotify_artist_id && (
-                                      <a href={`https://open.spotify.com/artist/${artist.spotify_artist_id}`} target="_blank" rel="noopener noreferrer"
-                                        onClick={e => e.stopPropagation()} className="flex-shrink-0 hover:opacity-70">
-                                        <svg className="w-3 h-3 md:w-3.5 md:h-3.5" viewBox="0 0 24 24" fill="#1DB954">
-                                          <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-                                        </svg>
-                                      </a>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="px-2 md:px-4 py-2.5 text-xs md:text-sm text-center text-muted-foreground tabular-nums">{artist.spotify_song_count}</td>
-                                <td className="px-2 md:px-4 py-2.5 text-xs md:text-sm text-center text-muted-foreground tabular-nums">{artist.vancouver_show_count_all}</td>
-                                <td className="px-2 md:px-4 py-2.5">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <div className="w-24 bg-muted rounded-full h-1.5 hidden md:block flex-shrink-0">
-                                      <div className="bg-primary h-1.5 rounded-full" style={{ width: `${Math.min(artist.match_score_all, 100)}%` }} />
-                                    </div>
-                                    <span className="text-xs md:text-sm font-semibold text-primary tabular-nums w-14 text-right">
-                                      {artist.match_score_all.toFixed(1)}%
-                                    </span>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {totalArtistPages > 1 && (
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-                        <button onClick={() => setArtistPage(p => Math.max(1, p - 1))} disabled={safeArtistPage === 1}
-                          className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">
-                          ← Previous
-                        </button>
-                        <span className="text-xs md:text-sm text-muted-foreground">
-                          Page {safeArtistPage} of {totalArtistPages}
-                          <span className="text-muted-foreground/60 ml-1">· {allDisplayArtists.length} artists</span>
-                        </span>
-                        <button onClick={() => setArtistPage(p => Math.min(totalArtistPages, p + 1))} disabled={safeArtistPage === totalArtistPages}
-                          className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">
-                          Next →
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </>
+            {totalArtistPages > 1 && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+                <button onClick={() => setArtistPage(p => Math.max(1, p - 1))} disabled={safeArtistPage === 1}
+                  className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">
+                  ← Previous
+                </button>
+                <span className="text-xs md:text-sm text-muted-foreground">
+                  Page {safeArtistPage} of {totalArtistPages}
+                  <span className="text-muted-foreground/60 ml-1">· {allDisplayArtists.length} artists</span>
+                </span>
+                <button onClick={() => setArtistPage(p => Math.min(totalArtistPages, p + 1))} disabled={safeArtistPage === totalArtistPages}
+                  className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">
+                  Next →
+                </button>
+              </div>
             )}
           </div>
 
