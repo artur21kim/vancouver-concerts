@@ -186,7 +186,6 @@ export default function LikelyShowsPage() {
         spotify_artist_id: show.spotify_artist_id,
         show_count: 1,
         match_score: show.match_score,
-        // FIX: use spotify_song_count from the show data (set correctly by the API route)
         spotify_song_count: show.spotify_song_count,
         vancouver_show_count: show.vancouver_show_count,
         shows: [show]
@@ -334,13 +333,13 @@ export default function LikelyShowsPage() {
   return (
     <>
       <Navigation />
-      <main className="min-h-screen bg-background py-8 px-4">
+      <main className="min-h-screen bg-background py-6 px-4">
         <div className="max-w-7xl mx-auto">
 
           {/* ── Header ── */}
-          <div className="mb-6 flex items-start justify-between sticky top-16 bg-background py-4 z-10">
+          <div className="mb-4 flex items-start justify-between sticky top-16 bg-background py-3 z-10">
             <div>
-              <h1 className="text-4xl font-bold text-foreground mb-1">Likely Shows You Attended</h1>
+              <h1 className="text-4xl font-bold text-foreground mb-0.5">Likely Shows You Attended</h1>
               <p className="text-muted-foreground text-sm">Based on confirmed venues and your Spotify library</p>
             </div>
             <button
@@ -352,7 +351,7 @@ export default function LikelyShowsPage() {
           </div>
 
           {/* ── Stats ── */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
             <StatCard label="Shows Reviewed"   value={`${reviewedShowsCount} / ${totalShows}`} />
             <StatCard label="Artists Reviewed" value={`${reviewedArtistsCount} / ${totalArtists}`} />
             <StatCard label="Added"            value={addedCount.toLocaleString()} color="green" />
@@ -360,9 +359,9 @@ export default function LikelyShowsPage() {
           </div>
 
           {/* ── Filters ── */}
-          <div className="bg-card rounded-lg shadow p-5 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-card-foreground">Filters & Sort</h2>
+          <div className="bg-card rounded-lg shadow p-4 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-card-foreground">Filters & Sort</h2>
               <button
                 onClick={() => setYearRange([2008, currentYear])}
                 className="text-sm text-primary hover:text-primary/80 font-medium"
@@ -370,19 +369,19 @@ export default function LikelyShowsPage() {
                 Clear All
               </button>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2">
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                   Year Range: {yearRange[0]} – {yearRange[1]}
                 </label>
                 <DualRangeSlider min={2008} max={currentYear} value={yearRange} onChange={setYearRange} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2">Sort By</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Sort By</label>
                 <select
                   value={sortBy}
                   onChange={e => setSortBy(e.target.value as typeof sortBy)}
-                  className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary bg-background text-foreground text-sm"
+                  className="w-full px-3 py-1.5 border border-input rounded-lg focus:ring-2 focus:ring-primary bg-background text-foreground text-sm"
                 >
                   <option value="relevance">Match Score (Recommended)</option>
                   <option value="count">Show Count (Most to Least)</option>
@@ -401,7 +400,7 @@ export default function LikelyShowsPage() {
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {groupedShows.map(group => {
+                {groupedShows.map((group, groupIndex) => {
                   const isExpanded  = expandedGroups.has(group.artist_id);
                   const gAdded      = group.shows.filter(s => s.status === 'added').length;
                   const gSkipped    = group.shows.filter(s => s.status === 'skipped').length;
@@ -415,64 +414,79 @@ export default function LikelyShowsPage() {
                     ? `https://open.spotify.com/artist/${group.spotify_artist_id}`
                     : null;
 
+                  // Rank only meaningful for sorted views (not year-grouped)
+                  const rank = sortBy !== 'year' ? groupIndex + 1 : null;
+
                   return (
                     <div key={group.artist_id}>
 
-                      {/* ── Group header — full row is clickable ── */}
+                      {/* ── Group header ── */}
                       <div
-                        className="flex items-center gap-3 px-5 py-4 cursor-pointer hover:bg-muted/50 transition-colors"
+                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => toggleGroup(group.artist_id)}
                       >
                         {/* Chevron */}
-                        <span className="text-muted-foreground text-[10px] w-3 flex-shrink-0 mt-0.5">
+                        <span className="text-muted-foreground text-[10px] w-3 flex-shrink-0">
                           {isExpanded ? '▼' : '▶'}
                         </span>
 
-                        {/* Name + match score breakdown */}
+                        {/* Rank number */}
+                        {rank !== null && (
+                          <span className="text-xs font-bold text-primary/60 w-7 flex-shrink-0 text-right tabular-nums">
+                            #{rank}
+                          </span>
+                        )}
+
+                        {/* Name + inline metadata + match score bar */}
                         <div className="flex-1 min-w-0">
+                          {/* Row 1: artist name + show count + liked songs (inline) */}
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-foreground">{group.artist_name}</span>
-                            <span className="text-muted-foreground text-sm">
-                              {sortBy === 'year'
-                                ? `(${group.show_count} shows · ${uniqueArtistCount} artists)`
-                                : `(${group.show_count} shows)`}
-                            </span>
+                            {sortBy === 'year' ? (
+                              <span className="text-muted-foreground text-sm">
+                                ({group.show_count} shows · {uniqueArtistCount} artists)
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">
+                                {group.show_count} {group.show_count === 1 ? 'show' : 'shows'}
+                                {group.spotify_song_count > 0 && (
+                                  <>
+                                    <span className="mx-1 text-muted-foreground/40">&</span>
+                                    {spotifyUrl ? (
+                                      <a
+                                        href={spotifyUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={e => e.stopPropagation()}
+                                        className="inline-flex items-center gap-1 hover:text-[#1DB954] transition-colors group/spotify"
+                                      >
+                                        <SpotifyIcon className="w-3 h-3 text-[#1DB954] inline" />
+                                        <span className="group-hover/spotify:text-[#1DB954]">
+                                          {group.spotify_song_count} liked {group.spotify_song_count === 1 ? 'song' : 'songs'}
+                                        </span>
+                                      </a>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1">
+                                        <SpotifyIcon className="w-3 h-3 text-[#1DB954] inline" />
+                                        {group.spotify_song_count} liked {group.spotify_song_count === 1 ? 'song' : 'songs'}
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                              </span>
+                            )}
                           </div>
 
-                          {/* Match score bar + breakdown */}
+                          {/* Row 2: match score bar (only for non-year sort) */}
                           {sortBy !== 'year' && group.match_score > 0 && (
                             <div className="flex items-center gap-2 mt-1">
-                              <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden flex-shrink-0">
+                              <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden flex-shrink-0">
                                 <div className="h-full bg-primary rounded-full"
                                   style={{ width: `${Math.min(group.match_score, 100)}%` }} />
                               </div>
                               <span className="text-xs text-muted-foreground tabular-nums">
                                 {group.match_score.toFixed(1)}%
                               </span>
-                              <span className="text-muted-foreground/40 text-xs">·</span>
-                              <span className="text-xs text-muted-foreground">
-                                {group.show_count} {group.show_count === 1 ? 'show' : 'shows'}
-                              </span>
-                              <span className="text-muted-foreground/40 text-xs">&</span>
-                              {spotifyUrl ? (
-                                <a
-                                  href={spotifyUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={e => e.stopPropagation()}
-                                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-[#1DB954] transition-colors group/spotify"
-                                >
-                                  <SpotifyIcon className="w-3 h-3 text-[#1DB954]" />
-                                  <span className="group-hover/spotify:text-[#1DB954]">
-                                    {group.spotify_song_count} {group.spotify_song_count === 1 ? 'liked song' : 'liked songs'}
-                                  </span>
-                                </a>
-                              ) : (
-                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                  <SpotifyIcon className="w-3 h-3 text-[#1DB954]" />
-                                  {group.spotify_song_count} {group.spotify_song_count === 1 ? 'liked song' : 'liked songs'}
-                                </span>
-                              )}
                             </div>
                           )}
                         </div>
@@ -543,15 +557,12 @@ export default function LikelyShowsPage() {
                             const isAdded   = show.status === 'added';
                             const isSkipped = show.status === 'skipped';
 
-                            // FIX: always reserve left border space to prevent jagged alignment
-                            // pending = transparent border, added = green, skipped = red
                             const borderClass = isAdded
                               ? 'border-l-green-500'
                               : isSkipped
                               ? 'border-l-destructive'
                               : 'border-l-transparent';
 
-                            // Matches-page tints (no Status column)
                             const bgClass = isAdded
                               ? 'bg-green-500/5'
                               : isSkipped
@@ -567,7 +578,7 @@ export default function LikelyShowsPage() {
                                     : 'grid-cols-[48px_120px_1fr]'
                                 } ${borderClass} ${bgClass}`}
                               >
-                                {/* Heart + X — always same width, no layout shift */}
+                                {/* Heart + X */}
                                 <div className="flex items-center gap-2">
                                   <button onClick={() => handleAddShow(show.show_id)} title="Add to My Shows"
                                     className="focus:outline-none">
@@ -621,8 +632,8 @@ export default function LikelyShowsPage() {
           </div>
 
           {/* ── Bottom CTA ── */}
-          <div className="mt-8 bg-card rounded-lg shadow p-6 text-center">
-            <p className="text-muted-foreground mb-4">
+          <div className="mt-6 bg-card rounded-lg shadow p-5 text-center">
+            <p className="text-muted-foreground mb-3">
               {pendingCount === 0
                 ? 'All shows reviewed! View your results.'
                 : `${pendingCount} shows still pending review. Your progress is saved automatically.`}
@@ -646,8 +657,8 @@ function StatCard({ label, value, color = 'blue' }: {
 }) {
   const colors = { blue: 'text-primary', green: 'text-green-500', red: 'text-destructive', gray: 'text-muted-foreground' };
   return (
-    <div className="bg-card rounded-lg shadow p-4 border border-border/40">
-      <p className="text-xs md:text-sm text-muted-foreground mb-1">{label}</p>
+    <div className="bg-card rounded-lg shadow p-3 border border-border/40">
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
       <p className={`text-xl md:text-2xl font-bold ${colors[color]}`}>{value}</p>
     </div>
   );
