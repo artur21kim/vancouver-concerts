@@ -30,6 +30,8 @@ type GroupedShows = {
   shows: Show[];
 };
 
+type CapacityKey = 'small' | 'medium' | 'large' | 'xlarge' | 'unknown';
+
 function getVancouverYesterday(): string {
   const now = new Date();
   now.setDate(now.getDate() - 1);
@@ -39,22 +41,31 @@ function getVancouverYesterday(): string {
   }).format(now);
 }
 
-// ── Capacity badge — matches Browse / Upcoming Shows ──────────────────────────
+// ── Capacity helpers — matches Upcoming Shows exactly ─────────────────────────
+function getCapacityKey(category: string | null): CapacityKey {
+  if (!category) return 'unknown';
+  const c = category.toLowerCase();
+  if (c.includes('x-large') || c.includes('xlarge')) return 'xlarge';
+  if (c.includes('large'))  return 'large';
+  if (c.includes('medium')) return 'medium';
+  if (c.includes('small'))  return 'small';
+  return 'unknown';
+}
+
+const CAPACITY_META: Record<CapacityKey, { label: string; textColor: string }> = {
+  small:   { label: 'S',  textColor: 'text-purple-400 dark:text-purple-300' },
+  medium:  { label: 'M',  textColor: 'text-[#3A8FBD]' },
+  large:   { label: 'L',  textColor: 'text-orange-600 dark:text-orange-400' },
+  xlarge:  { label: 'XL', textColor: 'text-rose-600 dark:text-rose-400' },
+  unknown: { label: '?',  textColor: 'text-gray-400 dark:text-gray-500' },
+};
+
 function CapacityBadge({ category }: { category: string | null }) {
-  if (!category) return null;
-  const styles: Record<string, string> = {
-    'Small':   'bg-purple-500/20 text-purple-400',
-    'Medium':  'bg-blue-500/20 text-blue-400',
-    'Large':   'bg-orange-500/20 text-orange-400',
-    'X-Large': 'bg-red-500/20 text-red-400',
-  };
-  const labels: Record<string, string> = {
-    'Small': 'S', 'Medium': 'M', 'Large': 'L', 'X-Large': 'XL',
-  };
-  const style = styles[category] ?? 'bg-muted text-muted-foreground';
-  const label = labels[category] ?? '?';
+  const key = getCapacityKey(category);
+  if (key === 'unknown') return null;
+  const { label, textColor } = CAPACITY_META[key];
   return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${style}`}>
+    <span className={`text-[10px] font-bold flex-shrink-0 ${textColor}`}>
       {label}
     </span>
   );
@@ -104,16 +115,16 @@ function DualRangeSlider({ min, max, value, onChange }: {
   };
 
   return (
-    <div className="relative h-8 flex items-center select-none"
+    <div className="relative h-6 flex items-center select-none"
       onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp}>
-      <div ref={trackRef} className="absolute w-full h-2 bg-muted rounded-full cursor-pointer" onClick={onTrackClick}>
-        <div className="absolute h-2 bg-primary rounded-full pointer-events-none"
+      <div ref={trackRef} className="absolute w-full h-1.5 bg-muted rounded-full cursor-pointer" onClick={onTrackClick}>
+        <div className="absolute h-1.5 bg-primary rounded-full pointer-events-none"
           style={{ left: `${pct(value[0])}%`, right: `${100 - pct(value[1])}%` }} />
       </div>
-      <div className="absolute w-5 h-5 rounded-full bg-primary border-2 border-background shadow-md cursor-grab active:cursor-grabbing touch-none z-20"
-        style={{ left: `calc(${pct(value[0])}% - 10px)` }} onPointerDown={onPointerDown('left')} />
-      <div className="absolute w-5 h-5 rounded-full bg-primary border-2 border-background shadow-md cursor-grab active:cursor-grabbing touch-none z-20"
-        style={{ left: `calc(${pct(value[1])}% - 10px)` }} onPointerDown={onPointerDown('right')} />
+      <div className="absolute w-4 h-4 rounded-full bg-primary border-2 border-background shadow-md cursor-grab active:cursor-grabbing touch-none z-20"
+        style={{ left: `calc(${pct(value[0])}% - 8px)` }} onPointerDown={onPointerDown('left')} />
+      <div className="absolute w-4 h-4 rounded-full bg-primary border-2 border-background shadow-md cursor-grab active:cursor-grabbing touch-none z-20"
+        style={{ left: `calc(${pct(value[1])}% - 8px)` }} onPointerDown={onPointerDown('right')} />
     </div>
   );
 }
@@ -296,12 +307,12 @@ export default function LikelyShowsPage() {
   };
 
   // ── Derived stats ─────────────────────────────────────────────────────────
-  const totalShows         = allShows.length;
-  const addedCount         = allShows.filter(s => s.status === 'added').length;
-  const skippedCount       = allShows.filter(s => s.status === 'skipped').length;
-  const pendingCount       = allShows.filter(s => s.status === 'pending').length;
-  const reviewedShowsCount = addedCount + skippedCount;
-  const totalArtists       = new Set(allShows.map(s => s.artist_id)).size;
+  const totalShows           = allShows.length;
+  const addedCount           = allShows.filter(s => s.status === 'added').length;
+  const skippedCount         = allShows.filter(s => s.status === 'skipped').length;
+  const pendingCount         = allShows.filter(s => s.status === 'pending').length;
+  const reviewedShowsCount   = addedCount + skippedCount;
+  const totalArtists         = new Set(allShows.map(s => s.artist_id)).size;
   const reviewedArtistsCount = new Set(allShows.filter(s => s.status !== 'pending').map(s => s.artist_id)).size;
 
   if (loading) return (
@@ -344,52 +355,65 @@ export default function LikelyShowsPage() {
             </div>
             <button
               onClick={() => router.push('/review-summary')}
-              className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition whitespace-nowrap ml-4 flex-shrink-0"
+              className="px-5 py-2.5 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition whitespace-nowrap ml-4 flex-shrink-0 text-sm"
             >
               Done Reviewing →
             </button>
           </div>
 
-          {/* ── Stats ── */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-            <StatCard label="Shows Reviewed"   value={`${reviewedShowsCount} / ${totalShows}`} />
-            <StatCard label="Artists Reviewed" value={`${reviewedArtistsCount} / ${totalArtists}`} />
-            <StatCard label="Added"            value={addedCount.toLocaleString()} color="green" />
-            <StatCard label="Skipped"          value={skippedCount.toLocaleString()} color="red" />
+          {/* ── Stats — compact inline row matching Upcoming Shows style ── */}
+          <div className="flex items-center gap-3 mb-3 text-sm text-muted-foreground/70">
+            <span>
+              Shows{' '}
+              <span className="font-semibold text-foreground">{reviewedShowsCount}</span>
+              <span className="text-muted-foreground/50"> / {totalShows}</span>
+            </span>
+            <span className="text-border select-none">·</span>
+            <span>
+              Artists{' '}
+              <span className="font-semibold text-foreground">{reviewedArtistsCount}</span>
+              <span className="text-muted-foreground/50"> / {totalArtists}</span>
+            </span>
+            <span className="text-border select-none">·</span>
+            <span>Added <span className="font-semibold text-green-500/80 ml-0.5">{addedCount}</span></span>
+            <span className="text-border select-none">·</span>
+            <span>Skipped <span className="font-semibold text-destructive/80 ml-0.5">{skippedCount}</span></span>
           </div>
 
-          {/* ── Filters ── */}
-          <div className="bg-card rounded-lg shadow p-4 mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-card-foreground">Filters & Sort</h2>
-              <button
-                onClick={() => setYearRange([2008, currentYear])}
-                className="text-sm text-primary hover:text-primary/80 font-medium"
-              >
-                Clear All
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                  Year Range: {yearRange[0]} – {yearRange[1]}
-                </label>
+          {/* ── Filters — compact single row ── */}
+          <div className="flex items-center gap-3 mb-4">
+            {/* Year range label + slider */}
+            <div className="flex items-center gap-2.5 flex-1">
+              <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0 tabular-nums">
+                {yearRange[0]} – {yearRange[1]}
+              </span>
+              <div className="flex-1">
                 <DualRangeSlider min={2008} max={currentYear} value={yearRange} onChange={setYearRange} />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Sort By</label>
-                <select
-                  value={sortBy}
-                  onChange={e => setSortBy(e.target.value as typeof sortBy)}
-                  className="w-full px-3 py-1.5 border border-input rounded-lg focus:ring-2 focus:ring-primary bg-background text-foreground text-sm"
-                >
-                  <option value="relevance">Match Score (Recommended)</option>
-                  <option value="count">Show Count (Most to Least)</option>
-                  <option value="artist">Artist Name (A–Z)</option>
-                  <option value="year">Year (Newest First)</option>
-                </select>
-              </div>
             </div>
+
+            {/* Divider */}
+            <span className="text-border select-none text-lg">|</span>
+
+            {/* Sort dropdown */}
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as typeof sortBy)}
+              className="px-2.5 py-1.5 border border-border rounded-lg bg-background text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-ring flex-shrink-0"
+            >
+              <option value="relevance">Match Score</option>
+              <option value="count">Show Count</option>
+              <option value="artist">Artist Name</option>
+              <option value="year">By Year</option>
+            </select>
+
+            {/* Reset */}
+            <button
+              onClick={() => setYearRange([2008, currentYear])}
+              className="text-xs text-muted-foreground hover:text-foreground transition flex-shrink-0"
+            >
+              Reset
+            </button>
           </div>
 
           {/* ── Groups ── */}
@@ -413,8 +437,6 @@ export default function LikelyShowsPage() {
                   const spotifyUrl = group.spotify_artist_id
                     ? `https://open.spotify.com/artist/${group.spotify_artist_id}`
                     : null;
-
-                  // Rank only meaningful for sorted views (not year-grouped)
                   const rank = sortBy !== 'year' ? groupIndex + 1 : null;
 
                   return (
@@ -422,7 +444,7 @@ export default function LikelyShowsPage() {
 
                       {/* ── Group header ── */}
                       <div
-                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                        className="group/row flex items-center gap-2 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => toggleGroup(group.artist_id)}
                       >
                         {/* Chevron */}
@@ -430,16 +452,16 @@ export default function LikelyShowsPage() {
                           {isExpanded ? '▼' : '▶'}
                         </span>
 
-                        {/* Rank number */}
+                        {/* Rank number — larger, bold, teal */}
                         {rank !== null && (
-                          <span className="text-xs font-bold text-primary/60 w-7 flex-shrink-0 text-right tabular-nums">
+                          <span className="text-base font-bold text-primary w-10 flex-shrink-0 text-right tabular-nums leading-none">
                             #{rank}
                           </span>
                         )}
 
                         {/* Name + inline metadata + match score bar */}
                         <div className="flex-1 min-w-0">
-                          {/* Row 1: artist name + show count + liked songs (inline) */}
+                          {/* Row 1: artist name + show count + liked songs inline */}
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-foreground">{group.artist_name}</span>
                             {sortBy === 'year' ? (
@@ -448,10 +470,12 @@ export default function LikelyShowsPage() {
                               </span>
                             ) : (
                               <span className="text-muted-foreground text-sm">
-                                {group.show_count} {group.show_count === 1 ? 'show' : 'shows'}
+                                <span className="group-hover/row:text-primary transition-colors">
+                                  {group.show_count} {group.show_count === 1 ? 'show' : 'shows'}
+                                </span>
                                 {group.spotify_song_count > 0 && (
                                   <>
-                                    <span className="mx-1 text-muted-foreground/40">&</span>
+                                    <span className="mx-1.5 text-muted-foreground/40">&</span>
                                     {spotifyUrl ? (
                                       <a
                                         href={spotifyUrl}
@@ -477,7 +501,7 @@ export default function LikelyShowsPage() {
                             )}
                           </div>
 
-                          {/* Row 2: match score bar (only for non-year sort) */}
+                          {/* Row 2: match score bar */}
                           {sortBy !== 'year' && group.match_score > 0 && (
                             <div className="flex items-center gap-2 mt-1">
                               <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden flex-shrink-0">
@@ -649,17 +673,5 @@ export default function LikelyShowsPage() {
         </div>
       </main>
     </>
-  );
-}
-
-function StatCard({ label, value, color = 'blue' }: {
-  label: string; value: string; color?: 'blue' | 'green' | 'red' | 'gray'
-}) {
-  const colors = { blue: 'text-primary', green: 'text-green-500', red: 'text-destructive', gray: 'text-muted-foreground' };
-  return (
-    <div className="bg-card rounded-lg shadow p-3 border border-border/40">
-      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-      <p className={`text-xl md:text-2xl font-bold ${colors[color]}`}>{value}</p>
-    </div>
   );
 }
