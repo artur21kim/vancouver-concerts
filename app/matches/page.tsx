@@ -336,7 +336,7 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
       {/* Column headers */}
       <div className="flex items-center gap-3 pb-1 border-b border-border">
         <span className="w-5 flex-shrink-0" />
-        <span className="w-28 md:w-40 flex-shrink-0 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Artist</span>
+        <span className="w-40 md:w-56 flex-shrink-0 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Artist</span>
         <span className="flex-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Match Score</span>
         <span className="w-16 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">Score</span>
       </div>
@@ -358,7 +358,7 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
             <span className="w-5 flex-shrink-0 text-xs font-bold text-primary text-right">{i + 1}</span>
 
             {/* Name + Spotify */}
-            <div className="w-28 md:w-40 flex-shrink-0 flex items-center gap-1.5 min-w-0">
+            <div className="w-40 md:w-56 flex-shrink-0 flex items-center gap-1.5 min-w-0">
               <span className="text-xs font-medium text-card-foreground truncate">{artist.artist_name}</span>
               {artist.spotify_artist_id && (
                 <a
@@ -909,10 +909,10 @@ export default function MatchesPage() {
                         <thead>
                           <tr className="bg-muted">
                             <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-8">#</th>
-                            <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-full">Artist</th>
+                            <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Artist</th>
                             <th className="px-2 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap w-28">Songs</th>
                             <th className="px-2 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap w-28">Shows</th>
-                            <th className="px-2 md:px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap w-28">Score</th>
+                            <th className="px-2 md:px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Score</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -936,10 +936,15 @@ export default function MatchesPage() {
                                 </td>
                                 <td className="px-2 md:px-4 py-2.5 text-xs md:text-sm text-center text-muted-foreground tabular-nums">{artist.spotify_song_count}</td>
                                 <td className="px-2 md:px-4 py-2.5 text-xs md:text-sm text-center text-muted-foreground tabular-nums">{artist.vancouver_show_count_all}</td>
-                                <td className="px-2 md:px-4 py-2.5 text-right">
-                                  <span className="text-xs md:text-sm font-semibold text-primary tabular-nums">
-                                    {artist.match_score_all.toFixed(1)}%
-                                  </span>
+                                <td className="px-2 md:px-4 py-2.5">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <div className="w-24 bg-muted rounded-full h-1.5 hidden md:block flex-shrink-0">
+                                      <div className="bg-primary h-1.5 rounded-full" style={{ width: `${Math.min(artist.match_score_all, 100)}%` }} />
+                                    </div>
+                                    <span className="text-xs md:text-sm font-semibold text-primary tabular-nums w-14 text-right">
+                                      {artist.match_score_all.toFixed(1)}%
+                                    </span>
+                                  </div>
                                 </td>
                               </tr>
                             );
