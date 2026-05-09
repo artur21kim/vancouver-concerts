@@ -98,7 +98,8 @@ export async function GET(request: Request) {
       `)
       .in('artist_id', matchedArtistIds)
       .gte('date', `${firstConcertYear}-01-01`)
-      .lte('date', yesterdayVancouver);
+      .lte('date', yesterdayVancouver)
+      .limit(5000);
 
     if (showsError) {
       return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
@@ -148,8 +149,8 @@ export async function GET(request: Request) {
       const vancouverScoreFiltered = (vancouverCountFiltered / maxVancouverCountFiltered) * 100;
       const vancouverScoreAll = (vancouverCountAll / maxVancouverCountAll) * 100;
 
-      const weightedScoreFiltered = (0.7 * spotifyScore) + (0.3 * vancouverScoreFiltered);
-      const weightedScoreAll = (0.7 * spotifyScore) + (0.3 * vancouverScoreAll);
+      const weightedScoreFiltered = (0.8 * spotifyScore) + (0.2 * vancouverScoreFiltered);
+      const weightedScoreAll = (0.8 * spotifyScore) + (0.2 * vancouverScoreAll);
 
       return {
         artist_id: artist.artist_id,

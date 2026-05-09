@@ -159,7 +159,7 @@ export async function GET(request: Request) {
       const spotifyScore = (spotifyCount / maxSpotifyCount) * 100;
       const vancouverScore = (vancouverCount / maxVancouverCount) * 100;
       acc[artist.artist_id] = {
-        match_score: (0.7 * spotifyScore) + (0.3 * vancouverScore),
+        match_score: (0.8 * spotifyScore) + (0.2 * vancouverScore),
         spotify_song_count: spotifyCount,
         vancouver_show_count: vancouverCount
       };
