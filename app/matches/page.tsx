@@ -748,17 +748,6 @@ export default function MatchesPage() {
 
             {/* ── Desktop venue list ── */}
             <div className="hidden md:block">
-              {/* Pagination at top */}
-              {totalVenuePages > 1 && (
-                <VenuePaginationControls
-                  currentPage={safePage}
-                  totalPages={totalVenuePages}
-                  totalVenues={desktopVenues.length}
-                  onPrev={() => setVenuePage(p => Math.max(1, p - 1))}
-                  onNext={() => setVenuePage(p => Math.min(totalVenuePages, p + 1))}
-                />
-              )}
-
               <div className="space-y-2">
                 <div className="flex items-center gap-4 px-4 pb-1">
                   <span className="w-9 flex-shrink-0" />
@@ -783,6 +772,19 @@ export default function MatchesPage() {
                   })
                 )}
               </div>
+
+              {/* Pagination at bottom */}
+              {totalVenuePages > 1 && (
+                <div className="mt-4">
+                  <VenuePaginationControls
+                    currentPage={safePage}
+                    totalPages={totalVenuePages}
+                    totalVenues={desktopVenues.length}
+                    onPrev={() => setVenuePage(p => Math.max(1, p - 1))}
+                    onNext={() => setVenuePage(p => Math.min(totalVenuePages, p + 1))}
+                  />
+                </div>
+              )}
             </div>
 
             {/* ── Mobile: Unreviewed tab ── */}
