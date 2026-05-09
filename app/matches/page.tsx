@@ -338,7 +338,7 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
         <span className="w-5 flex-shrink-0" />
         <span className="w-28 md:w-40 flex-shrink-0 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Artist</span>
         <span className="flex-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Match Score</span>
-        <span className="w-10 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">Score</span>
+        <span className="w-10 text-left text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">Score</span>
       </div>
 
       {top15.map((artist, i) => {
@@ -418,7 +418,7 @@ function ArtistBarChart({ artists, artistView }: { artists: Artist[]; artistView
             </div>
 
             {/* Score */}
-            <span className="w-10 text-right text-xs font-semibold text-primary tabular-nums flex-shrink-0">
+            <span className="w-10 text-left text-xs font-semibold text-primary tabular-nums flex-shrink-0">
               {sc.toFixed(1)}%
             </span>
           </div>
@@ -632,7 +632,7 @@ export default function MatchesPage() {
             <div className="flex flex-col gap-2 mb-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-xl md:text-2xl font-bold text-card-foreground">Top Venues</h2>
+                  <h2 className="text-xl md:text-2xl font-bold text-card-foreground">Top Matched Venues</h2>
                   <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
                     Which of these venues have you attended? Each hosted shows by artists in your Spotify library.
                   </p>
@@ -912,7 +912,7 @@ export default function MatchesPage() {
                             <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Artist</th>
                             <th className="px-2 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Songs</th>
                             <th className="px-2 md:px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Shows</th>
-                            <th className="px-2 md:px-4 py-3 pl-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Score</th>
+                            <th className="px-2 md:px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Score</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -936,15 +936,10 @@ export default function MatchesPage() {
                                 </td>
                                 <td className="px-2 md:px-4 py-2.5 text-xs md:text-sm text-center text-muted-foreground tabular-nums">{artist.spotify_song_count}</td>
                                 <td className="px-2 md:px-4 py-2.5 text-xs md:text-sm text-center text-muted-foreground tabular-nums">{artist.vancouver_show_count_all}</td>
-                                <td className="px-2 md:px-4 py-2.5 pl-3">
-                                  <div className="flex items-center gap-1.5">
-                                    <div className="w-10 md:w-24 bg-muted rounded-full h-1.5 hidden xs:block flex-shrink-0">
-                                      <div className="bg-primary h-1.5 rounded-full" style={{ width: `${Math.min(artist.match_score_all, 100)}%` }} />
-                                    </div>
-                                    <span className="text-xs md:text-sm font-semibold text-primary tabular-nums">
-                                      {artist.match_score_all.toFixed(1)}%
-                                    </span>
-                                  </div>
+                                <td className="px-2 md:px-4 py-2.5 text-right">
+                                  <span className="text-xs md:text-sm font-semibold text-primary tabular-nums">
+                                    {artist.match_score_all.toFixed(1)}%
+                                  </span>
                                 </td>
                               </tr>
                             );
