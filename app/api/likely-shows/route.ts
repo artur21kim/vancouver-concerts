@@ -89,7 +89,8 @@ export async function GET(request: Request) {
         )
       `)
       .in('artist_id', matchedArtistIds)
-      .gte('date', `${firstConcertYear}-01-01`);
+      .gte('date', `${firstConcertYear}-01-01`)
+      .limit(5000);
 
     if (showsError) {
       return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
