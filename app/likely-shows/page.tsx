@@ -41,7 +41,7 @@ function getVancouverYesterday(): string {
   }).format(now);
 }
 
-// ── Capacity helpers — matches Upcoming Shows exactly ─────────────────────────
+// ── Capacity helpers ──────────────────────────────────────────────────────────
 function getCapacityKey(category: string | null): CapacityKey {
   if (!category) return 'unknown';
   const c = category.toLowerCase();
@@ -125,6 +125,170 @@ function DualRangeSlider({ min, max, value, onChange }: {
         style={{ left: `calc(${pct(value[0])}% - 8px)` }} onPointerDown={onPointerDown('left')} />
       <div className="absolute w-4 h-4 rounded-full bg-primary border-2 border-background shadow-md cursor-grab active:cursor-grabbing touch-none z-20"
         style={{ left: `calc(${pct(value[1])}% - 8px)` }} onPointerDown={onPointerDown('right')} />
+    </div>
+  );
+}
+
+// ── Swipe constants ───────────────────────────────────────────────────────────
+const SWIPE_THRESHOLD = 72;
+const SWIPE_MAX = 110;
+
+// ── SwipeableShowRow — individual child show row with swipe on mobile ─────────
+function SwipeableShowRow({
+  show,
+  onAdd,
+  onSkip,
+  children,
+}: {
+  show: Show;
+  onAdd: () => void;
+  onSkip: () => void;
+  children: React.ReactNode;
+}) {
+  const [dragX, setDragX] = useState(0);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const axisLocked = useRef<'h' | 'v' | null>(null);
+  const isDragging = useRef(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startX.current = e.touches[0].clientX;
+    startY.current = e.touches[0].clientY;
+    axisLocked.current = null;
+    isDragging.current = true;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging.current) return;
+    const dx = e.touches[0].clientX - startX.current;
+    const dy = e.touches[0].clientY - startY.current;
+
+    if (!axisLocked.current) {
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+        axisLocked.current = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+      }
+    }
+
+    if (axisLocked.current === 'h') {
+      e.preventDefault();
+      setDragX(Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, dx)));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    isDragging.current = false;
+    if (axisLocked.current === 'h') {
+      if (dragX >= SWIPE_THRESHOLD) onAdd();
+      else if (dragX <= -SWIPE_THRESHOLD) onSkip();
+    }
+    setDragX(0);
+    axisLocked.current = null;
+  };
+
+  const isAdded   = show.status === 'added';
+  const isSkipped = show.status === 'skipped';
+  const swipeProgress = Math.abs(dragX) / SWIPE_THRESHOLD;
+
+  const borderClass = isAdded ? 'border-l-green-500' : isSkipped ? 'border-l-destructive' : 'border-l-transparent';
+  const bgClass     = isAdded ? 'bg-green-500/5'     : isSkipped ? 'bg-destructive/5'      : 'hover:bg-muted/20';
+
+  return (
+    <div
+      className={`relative overflow-hidden border-t border-border/40 border-l-2 transition-colors ${borderClass} ${bgClass}`}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Swipe hint overlays (mobile only) */}
+      {dragX > 10 && (
+        <div className="absolute inset-0 bg-green-500 pointer-events-none md:hidden"
+          style={{ opacity: Math.min(swipeProgress * 0.18, 0.18) }} />
+      )}
+      {dragX < -10 && (
+        <div className="absolute inset-0 bg-destructive pointer-events-none md:hidden"
+          style={{ opacity: Math.min(swipeProgress * 0.18, 0.18) }} />
+      )}
+
+      <div style={{ transform: `translateX(${dragX}px)`, transition: dragX === 0 ? 'transform 0.2s ease' : 'none' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── SwipeableGroupHeader — artist group header with swipe on mobile ───────────
+function SwipeableGroupHeader({
+  canSwipe,
+  onSwipeAdd,
+  onSwipeSkip,
+  children,
+}: {
+  canSwipe: boolean;
+  onSwipeAdd: () => void;
+  onSwipeSkip: () => void;
+  children: React.ReactNode;
+}) {
+  const [dragX, setDragX] = useState(0);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const axisLocked = useRef<'h' | 'v' | null>(null);
+  const isDragging = useRef(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!canSwipe) return;
+    startX.current = e.touches[0].clientX;
+    startY.current = e.touches[0].clientY;
+    axisLocked.current = null;
+    isDragging.current = true;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging.current || !canSwipe) return;
+    const dx = e.touches[0].clientX - startX.current;
+    const dy = e.touches[0].clientY - startY.current;
+
+    if (!axisLocked.current) {
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+        axisLocked.current = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+      }
+    }
+
+    if (axisLocked.current === 'h') {
+      e.preventDefault();
+      setDragX(Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, dx)));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    isDragging.current = false;
+    if (canSwipe && axisLocked.current === 'h') {
+      if (dragX >= SWIPE_THRESHOLD) onSwipeAdd();
+      else if (dragX <= -SWIPE_THRESHOLD) onSwipeSkip();
+    }
+    setDragX(0);
+    axisLocked.current = null;
+  };
+
+  const swipeProgress = Math.abs(dragX) / SWIPE_THRESHOLD;
+
+  return (
+    <div
+      className="relative overflow-hidden"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {canSwipe && dragX > 10 && (
+        <div className="absolute inset-0 bg-green-500 pointer-events-none md:hidden"
+          style={{ opacity: Math.min(swipeProgress * 0.15, 0.15) }} />
+      )}
+      {canSwipe && dragX < -10 && (
+        <div className="absolute inset-0 bg-destructive pointer-events-none md:hidden"
+          style={{ opacity: Math.min(swipeProgress * 0.15, 0.15) }} />
+      )}
+      <div style={{ transform: `translateX(${dragX}px)`, transition: dragX === 0 ? 'transform 0.2s ease' : 'none' }}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -314,6 +478,7 @@ export default function LikelyShowsPage() {
   const reviewedShowsCount   = addedCount + skippedCount;
   const totalArtists         = new Set(allShows.map(s => s.artist_id)).size;
   const reviewedArtistsCount = new Set(allShows.filter(s => s.status !== 'pending').map(s => s.artist_id)).size;
+  const uniqueArtistCount    = new Set(groupedShows.map(g => g.artist_id)).size;
 
   if (loading) return (
     <>
@@ -348,41 +513,42 @@ export default function LikelyShowsPage() {
         <div className="max-w-7xl mx-auto">
 
           {/* ── Header ── */}
-          <div className="mb-4 flex items-start justify-between sticky top-16 bg-background py-3 z-10">
-            <div>
-              <h1 className="text-4xl font-bold text-foreground mb-0.5">Likely Shows You Attended</h1>
-              <p className="text-muted-foreground text-sm">Based on confirmed venues and your Spotify library</p>
+          <div className="mb-4 sticky top-16 bg-background py-3 z-10">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-0.5">Likely Shows You Attended</h1>
+                <p className="text-muted-foreground text-sm">Based on confirmed venues and your Spotify library</p>
+              </div>
+              {/* "Done →" on mobile, "Done Reviewing →" on desktop */}
+              <button
+                onClick={() => router.push('/review-summary')}
+                className="flex-shrink-0 px-3 md:px-5 py-2 md:py-2.5 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition text-xs md:text-sm whitespace-nowrap"
+              >
+                <span className="md:hidden">Done →</span>
+                <span className="hidden md:inline">Done Reviewing →</span>
+              </button>
             </div>
-            <button
-              onClick={() => router.push('/review-summary')}
-              className="px-5 py-2.5 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition whitespace-nowrap ml-4 flex-shrink-0 text-sm"
-            >
-              Done Reviewing →
-            </button>
           </div>
 
-          {/* ── Stats — compact inline row matching Upcoming Shows style ── */}
-          <div className="flex items-center gap-3 mb-3 text-sm text-muted-foreground/70">
+          {/* ── Stats — 2×2 grid on mobile, inline row on desktop ── */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 md:flex md:items-center md:gap-3 mb-3 text-sm text-muted-foreground/70">
             <span>
               Shows{' '}
               <span className="font-semibold text-foreground">{reviewedShowsCount}</span>
               <span className="text-muted-foreground/50"> / {totalShows}</span>
             </span>
-            <span className="text-border select-none">·</span>
             <span>
               Artists{' '}
               <span className="font-semibold text-foreground">{reviewedArtistsCount}</span>
               <span className="text-muted-foreground/50"> / {totalArtists}</span>
             </span>
-            <span className="text-border select-none">·</span>
             <span>Added <span className="font-semibold text-green-500/80 ml-0.5">{addedCount}</span></span>
-            <span className="text-border select-none">·</span>
             <span>Skipped <span className="font-semibold text-destructive/80 ml-0.5">{skippedCount}</span></span>
           </div>
 
-          {/* ── Filters — compact single row ── */}
-          <div className="flex items-center gap-3 mb-4">
-            {/* Year range label + slider */}
+          {/* ── Filters — stacked on mobile, single row on desktop ── */}
+          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 mb-4">
+            {/* Year slider */}
             <div className="flex items-center gap-2.5 flex-1">
               <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0 tabular-nums">
                 {yearRange[0]} – {yearRange[1]}
@@ -392,181 +558,210 @@ export default function LikelyShowsPage() {
               </div>
             </div>
 
-            {/* Divider */}
-            <span className="text-border select-none text-lg">|</span>
-
-            {/* Sort dropdown */}
-            <select
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value as typeof sortBy)}
-              className="px-2.5 py-1.5 border border-border rounded-lg bg-background text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-ring flex-shrink-0"
-            >
-              <option value="relevance">Match Score</option>
-              <option value="count">Show Count</option>
-              <option value="artist">Artist Name</option>
-              <option value="year">By Year</option>
-            </select>
-
-            {/* Reset */}
-            <button
-              onClick={() => setYearRange([2008, currentYear])}
-              className="text-xs border border-red-500/40 text-red-400 rounded px-2 py-1 hover:bg-red-500/10 hover:border-red-500 transition flex-shrink-0"
-            >
-              Reset
-            </button>
+            {/* Sort + Reset */}
+            <div className="flex items-center gap-2 md:gap-3">
+              <span className="hidden md:inline text-border select-none text-lg">|</span>
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value as typeof sortBy)}
+                className="flex-1 md:flex-none px-2.5 py-1.5 border border-border rounded-lg bg-background text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="relevance">Match Score</option>
+                <option value="count">Show Count</option>
+                <option value="artist">Artist Name</option>
+                <option value="year">By Year</option>
+              </select>
+              <button
+                onClick={() => setYearRange([2008, currentYear])}
+                className="text-xs border border-red-500/40 text-red-400 rounded px-2 py-1 hover:bg-red-500/10 hover:border-red-500 transition flex-shrink-0"
+              >
+                Reset
+              </button>
+            </div>
           </div>
 
           {/* ── Groups ── */}
           <div className="bg-card rounded-lg shadow overflow-hidden">
             {groupedShows.length === 0 ? (
-              <div className="p-12 text-center">
-                <p className="text-muted-foreground text-lg">No shows found matching your filters</p>
+              <div className="p-8 text-center text-muted-foreground">
+                No shows match your current filters.
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {groupedShows.map((group, groupIndex) => {
-                  const isExpanded  = expandedGroups.has(group.artist_id);
-                  const gAdded      = group.shows.filter(s => s.status === 'added').length;
-                  const gSkipped    = group.shows.filter(s => s.status === 'skipped').length;
-                  const gPending    = group.shows.filter(s => s.status === 'pending').length;
-                  const allAdded    = gAdded === group.show_count;
-                  const allSkipped  = gSkipped === group.show_count;
+                {groupedShows.map((group, index) => {
+                  const isExpanded = expandedGroups.has(group.artist_id);
+                  const gAdded   = group.shows.filter(s => s.status === 'added').length;
+                  const gSkipped = group.shows.filter(s => s.status === 'skipped').length;
+                  const gPending = group.shows.filter(s => s.status === 'pending').length;
                   const allReviewed = gPending === 0;
-                  const uniqueArtistCount = sortBy === 'year'
-                    ? new Set(group.shows.map(s => s.artist_id)).size : null;
+                  const allAdded    = allReviewed && gAdded === group.show_count;
+                  const allSkipped  = allReviewed && gSkipped === group.show_count;
+                  const rank = sortBy !== 'year' ? index + 1 : null;
+
+                  // Header swipe: only when nothing reviewed yet (all pending)
+                  const headerCanSwipe = gPending === group.show_count;
+
                   const spotifyUrl = group.spotify_artist_id
                     ? `https://open.spotify.com/artist/${group.spotify_artist_id}`
                     : null;
-                  const rank = sortBy !== 'year' ? groupIndex + 1 : null;
 
                   return (
                     <div key={group.artist_id}>
 
                       {/* ── Group header ── */}
-                      <div
-                        className="group/row flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => toggleGroup(group.artist_id)}
+                      <SwipeableGroupHeader
+                        canSwipe={headerCanSwipe}
+                        onSwipeAdd={() => handleBulkAction(group.artist_id, 'add')}
+                        onSwipeSkip={() => handleBulkAction(group.artist_id, 'skip')}
                       >
-                        {/* Chevron */}
-                        <span className="text-muted-foreground text-[10px] w-3 flex-shrink-0">
-                          {isExpanded ? '▼' : '▶'}
-                        </span>
-
-                        {/* Rank number — larger, bold, teal, centered */}
-                        {rank !== null && (
-                          <span className="text-base font-bold text-primary w-10 flex-shrink-0 text-center tabular-nums leading-none">
-                            #{rank}
+                        <div
+                          className="group/row flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => toggleGroup(group.artist_id)}
+                        >
+                          {/* Chevron */}
+                          <span className="text-muted-foreground text-[10px] w-3 flex-shrink-0">
+                            {isExpanded ? '▼' : '▶'}
                           </span>
-                        )}
 
-                        {/* Name + inline metadata + match score bar */}
-                        <div className="flex-1 min-w-0">
-                          {/* Row 1: artist name + show count + liked songs inline */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-foreground">{group.artist_name}</span>
-                            {sortBy === 'year' ? (
-                              <span className="text-muted-foreground text-sm">
-                                ({group.show_count} shows · {uniqueArtistCount} artists)
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">
-                                <span className="group-hover/row:text-primary transition-colors">
-                                  {group.show_count} {group.show_count === 1 ? 'show' : 'shows'}
+                          {/* Rank */}
+                          {rank !== null && (
+                            <span className="text-base font-bold text-primary w-10 flex-shrink-0 text-center tabular-nums leading-none">
+                              #{rank}
+                            </span>
+                          )}
+
+                          {/* Name + metadata + match bar */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              <span className="font-semibold text-foreground">{group.artist_name}</span>
+                              {sortBy === 'year' ? (
+                                <span className="text-muted-foreground text-sm">
+                                  ({group.show_count} shows · {uniqueArtistCount} artists)
                                 </span>
-                                {group.spotify_song_count > 0 && (
-                                  <>
-                                    <span className="mx-1.5 text-muted-foreground/40">&</span>
-                                    {spotifyUrl ? (
-                                      <a
-                                        href={spotifyUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        onClick={e => e.stopPropagation()}
-                                        className="inline-flex items-center gap-1 hover:text-[#1DB954] transition-colors group/spotify"
-                                      >
-                                        <SpotifyIcon className="w-3 h-3 text-[#1DB954] inline" />
-                                        <span className="group-hover/spotify:text-[#1DB954]">
+                              ) : (
+                                <span className="text-muted-foreground text-sm">
+                                  <span className="group-hover/row:text-primary transition-colors">
+                                    {group.show_count} {group.show_count === 1 ? 'show' : 'shows'}
+                                  </span>
+                                  {group.spotify_song_count > 0 && (
+                                    <>
+                                      <span className="mx-1.5 text-muted-foreground/40">&</span>
+                                      {spotifyUrl ? (
+                                        <a
+                                          href={spotifyUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={e => e.stopPropagation()}
+                                          className="inline-flex items-center gap-1 hover:text-[#1DB954] transition-colors group/spotify"
+                                        >
+                                          <SpotifyIcon className="w-3 h-3 text-[#1DB954] inline" />
+                                          <span className="group-hover/spotify:text-[#1DB954]">
+                                            {group.spotify_song_count} liked {group.spotify_song_count === 1 ? 'song' : 'songs'}
+                                          </span>
+                                        </a>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1">
+                                          <SpotifyIcon className="w-3 h-3 text-[#1DB954] inline" />
                                           {group.spotify_song_count} liked {group.spotify_song_count === 1 ? 'song' : 'songs'}
                                         </span>
-                                      </a>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1">
-                                        <SpotifyIcon className="w-3 h-3 text-[#1DB954] inline" />
-                                        {group.spotify_song_count} liked {group.spotify_song_count === 1 ? 'song' : 'songs'}
-                                      </span>
-                                    )}
-                                  </>
-                                )}
-                              </span>
+                                      )}
+                                    </>
+                                  )}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Match score bar */}
+                            {sortBy !== 'year' && group.match_score > 0 && (
+                              <div className="flex items-center gap-2 mt-1">
+                                <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden flex-shrink-0">
+                                  <div className="h-full bg-primary rounded-full"
+                                    style={{ width: `${Math.min(group.match_score, 100)}%` }} />
+                                </div>
+                                <span className="text-xs text-muted-foreground tabular-nums">
+                                  {group.match_score.toFixed(1)}%
+                                </span>
+                              </div>
                             )}
                           </div>
 
-                          {/* Row 2: match score bar */}
-                          {sortBy !== 'year' && group.match_score > 0 && (
-                            <div className="flex items-center gap-2 mt-1">
-                              <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden flex-shrink-0">
-                                <div className="h-full bg-primary rounded-full"
-                                  style={{ width: `${Math.min(group.match_score, 100)}%` }} />
-                              </div>
-                              <span className="text-xs text-muted-foreground tabular-nums">
-                                {group.match_score.toFixed(1)}%
-                              </span>
-                            </div>
+                          {/* Review status badge */}
+                          {allReviewed && (
+                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${
+                              allAdded   ? 'bg-green-500/15 text-green-500' :
+                              allSkipped ? 'bg-destructive/15 text-destructive' :
+                                           'bg-primary/15 text-primary'
+                            }`}>
+                              {allAdded ? '✓ All added' : allSkipped ? '✗ All skipped' : `${gAdded + gSkipped} reviewed`}
+                            </span>
                           )}
-                        </div>
 
-                        {/* Review status badge */}
-                        {allReviewed && (
-                          <span className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${
-                            allAdded   ? 'bg-green-500/15 text-green-500' :
-                            allSkipped ? 'bg-destructive/15 text-destructive' :
-                                         'bg-primary/15 text-primary'
-                          }`}>
-                            {allAdded ? '✓ All added' : allSkipped ? '✗ All skipped' : `${gAdded + gSkipped} reviewed`}
-                          </span>
-                        )}
+                          {/* Desktop bulk/clear buttons */}
+                          <div className="hidden md:flex gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                            {gPending > 0 && (
+                              (gAdded > 0 || gSkipped > 0) ? (
+                                <>
+                                  <button onClick={() => handleRestAction(group.artist_id, 'add')}
+                                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-700/80 text-white hover:bg-green-700 transition">
+                                    Add Rest
+                                  </button>
+                                  <button onClick={() => handleRestAction(group.artist_id, 'skip')}
+                                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-700/80 text-white hover:bg-red-700 transition">
+                                    Skip Rest
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button onClick={() => handleBulkAction(group.artist_id, 'add')}
+                                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-700/80 text-white hover:bg-green-700 transition">
+                                    Add All
+                                  </button>
+                                  <button onClick={() => handleBulkAction(group.artist_id, 'skip')}
+                                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-700/80 text-white hover:bg-red-700 transition">
+                                    Skip All
+                                  </button>
+                                </>
+                              )
+                            )}
+                            {allReviewed && (
+                              <button onClick={() => handleClearAll(group.artist_id)}
+                                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition">
+                                Clear
+                              </button>
+                            )}
+                          </div>
 
-                        {/* Action buttons */}
-                        <div className="flex gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                          {gPending > 0 && (
-                            (gAdded > 0 || gSkipped > 0) ? (
+                          {/* Mobile bulk/clear buttons — only shown when swipe is disabled (partial review or all done) */}
+                          <div className="flex md:hidden gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                            {gPending > 0 && (gAdded > 0 || gSkipped > 0) && (
                               <>
                                 <button onClick={() => handleRestAction(group.artist_id, 'add')}
-                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-700/80 text-white hover:bg-green-700 transition">
-                                  Add Rest
+                                  className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-green-700/80 text-white hover:bg-green-700 transition">
+                                  +Rest
                                 </button>
                                 <button onClick={() => handleRestAction(group.artist_id, 'skip')}
-                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-700/80 text-white hover:bg-red-700 transition">
-                                  Skip Rest
+                                  className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-red-700/80 text-white hover:bg-red-700 transition">
+                                  −Rest
                                 </button>
                               </>
-                            ) : (
-                              <>
-                                <button onClick={() => handleBulkAction(group.artist_id, 'add')}
-                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-700/80 text-white hover:bg-green-700 transition">
-                                  Add All
-                                </button>
-                                <button onClick={() => handleBulkAction(group.artist_id, 'skip')}
-                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-700/80 text-white hover:bg-red-700 transition">
-                                  Skip All
-                                </button>
-                              </>
-                            )
-                          )}
-                          {allReviewed && (
-                            <button onClick={() => handleClearAll(group.artist_id)}
-                              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition">
-                              Clear
-                            </button>
-                          )}
+                            )}
+                            {allReviewed && (
+                              <button onClick={() => handleClearAll(group.artist_id)}
+                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition">
+                                Clear
+                              </button>
+                            )}
+                          </div>
+
                         </div>
-                      </div>
+                      </SwipeableGroupHeader>
 
                       {/* ── Expanded show rows ── */}
                       {isExpanded && (
                         <div className="border-t border-border bg-background/50">
-                          {/* Column headers */}
-                          <div className={`grid px-5 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/40 ${
+
+                          {/* Desktop column headers */}
+                          <div className={`hidden md:grid px-5 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/40 ${
                             sortBy === 'year'
                               ? 'grid-cols-[48px_120px_1fr_1fr]'
                               : 'grid-cols-[48px_120px_1fr]'
@@ -577,72 +772,90 @@ export default function LikelyShowsPage() {
                             <span>Venue</span>
                           </div>
 
+                          {/* Mobile column headers */}
+                          <div className="md:hidden flex items-center justify-between px-4 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/40">
+                            <span>{sortBy === 'year' ? 'Date · Artist · Venue' : 'Date · Venue'}</span>
+                            <span className="normal-case font-normal text-muted-foreground/40">swipe ↔</span>
+                          </div>
+
                           {group.shows.map(show => {
                             const isAdded   = show.status === 'added';
                             const isSkipped = show.status === 'skipped';
 
-                            const borderClass = isAdded
-                              ? 'border-l-green-500'
-                              : isSkipped
-                              ? 'border-l-destructive'
-                              : 'border-l-transparent';
-
-                            const bgClass = isAdded
-                              ? 'bg-green-500/5'
-                              : isSkipped
-                              ? 'bg-destructive/5'
-                              : 'hover:bg-muted/20';
-
                             return (
-                              <div
+                              <SwipeableShowRow
                                 key={show.show_id}
-                                className={`grid px-5 py-3 items-center border-t border-border/40 border-l-2 transition-colors ${
+                                show={show}
+                                onAdd={() => handleAddShow(show.show_id)}
+                                onSkip={() => handleSkipShow(show.show_id)}
+                              >
+                                {/* Desktop row */}
+                                <div className={`hidden md:grid px-5 py-3 items-center ${
                                   sortBy === 'year'
                                     ? 'grid-cols-[48px_120px_1fr_1fr]'
                                     : 'grid-cols-[48px_120px_1fr]'
-                                } ${borderClass} ${bgClass}`}
-                              >
-                                {/* Heart + X */}
-                                <div className="flex items-center gap-2">
-                                  <button onClick={() => handleAddShow(show.show_id)} title="Add to My Shows"
-                                    className="focus:outline-none">
-                                    <svg className={`w-5 h-5 transition-colors ${isAdded
-                                      ? 'fill-destructive text-destructive'
-                                      : 'fill-none text-muted-foreground hover:text-destructive'}`}
-                                      stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round"
-                                        d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                                    </svg>
-                                  </button>
-                                  <button onClick={() => handleSkipShow(show.show_id)} title="Skip this show"
-                                    className="focus:outline-none">
-                                    <svg className={`w-4 h-4 transition-colors ${isSkipped
-                                      ? 'text-destructive'
-                                      : 'text-muted-foreground hover:text-destructive'}`}
-                                      stroke="currentColor" strokeWidth="2.5" fill="none" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                  </button>
+                                }`}>
+                                  <div className="flex items-center gap-2">
+                                    <button onClick={() => handleAddShow(show.show_id)} title="Add to My Shows"
+                                      className="focus:outline-none">
+                                      <svg className={`w-5 h-5 transition-colors ${isAdded
+                                        ? 'fill-primary text-primary'
+                                        : 'fill-none text-muted-foreground hover:text-primary'}`}
+                                        stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round"
+                                          d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                                      </svg>
+                                    </button>
+                                    <button onClick={() => handleSkipShow(show.show_id)} title="Skip this show"
+                                      className="focus:outline-none">
+                                      <svg className={`w-4 h-4 transition-colors ${isSkipped
+                                        ? 'text-destructive'
+                                        : 'text-muted-foreground hover:text-destructive'}`}
+                                        stroke="currentColor" strokeWidth="2.5" fill="none" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                  <span className="text-sm text-foreground whitespace-nowrap">
+                                    {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', {
+                                      year: 'numeric', month: 'short', day: 'numeric'
+                                    })}
+                                  </span>
+                                  {sortBy === 'year' && (
+                                    <span className="text-sm text-foreground truncate pr-3">{show.artist_name}</span>
+                                  )}
+                                  <div className="flex items-center gap-1.5 min-w-0 pr-3">
+                                    <span className="text-sm text-muted-foreground truncate">{show.venue_name}</span>
+                                    <CapacityBadge category={show.capacity_category} />
+                                  </div>
                                 </div>
 
-                                {/* Date */}
-                                <span className="text-sm text-foreground whitespace-nowrap">
-                                  {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', {
-                                    year: 'numeric', month: 'short', day: 'numeric'
-                                  })}
-                                </span>
-
-                                {/* Artist (year-sort only) */}
-                                {sortBy === 'year' && (
-                                  <span className="text-sm text-foreground truncate pr-3">{show.artist_name}</span>
-                                )}
-
-                                {/* Venue + capacity badge */}
-                                <div className="flex items-center gap-1.5 min-w-0 pr-3">
-                                  <span className="text-sm text-muted-foreground truncate">{show.venue_name}</span>
-                                  <CapacityBadge category={show.capacity_category} />
+                                {/* Mobile row — compact single line, no action icons */}
+                                <div className="md:hidden px-4 py-2.5">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    {/* Status dot */}
+                                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                      isAdded ? 'bg-green-500' : isSkipped ? 'bg-destructive' : 'bg-muted-foreground/30'
+                                    }`} />
+                                    <span className="text-xs text-muted-foreground/70 flex-shrink-0 tabular-nums">
+                                      {(() => {
+                                        const [y, m, d] = show.date.split('-');
+                                        return new Date(+y, +m - 1, +d).toLocaleDateString('en-US', {
+                                          year: 'numeric', month: 'short', day: 'numeric'
+                                        });
+                                      })()}
+                                    </span>
+                                    {sortBy === 'year' && (
+                                      <span className="text-xs text-foreground truncate">{show.artist_name}</span>
+                                    )}
+                                    <span className="text-xs text-muted-foreground truncate ml-auto">
+                                      {show.venue_name}
+                                    </span>
+                                    <CapacityBadge category={show.capacity_category} />
+                                  </div>
                                 </div>
-                              </div>
+
+                              </SwipeableShowRow>
                             );
                           })}
                         </div>
