@@ -621,7 +621,6 @@ export default function LikelyShowsPage() {
               )}
             </div>
           </div>
-          </div>
 
           {/* ── Tip banner — inside sticky block ── */}
           {showTipBanner && (
