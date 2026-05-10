@@ -656,13 +656,13 @@ export default function LikelyShowsPage() {
                                         >
                                           <SpotifyIcon className="w-3 h-3 text-[#1DB954] inline" />
                                           <span className="group-hover/spotify:text-[#1DB954]">
-                                            {group.spotify_song_count} liked {group.spotify_song_count === 1 ? 'song' : 'songs'}
+                                            {group.spotify_song_count} {group.spotify_song_count === 1 ? 'song' : 'songs'}
                                           </span>
                                         </a>
                                       ) : (
                                         <span className="inline-flex items-center gap-1">
                                           <SpotifyIcon className="w-3 h-3 text-[#1DB954] inline" />
-                                          {group.spotify_song_count} liked {group.spotify_song_count === 1 ? 'song' : 'songs'}
+                                          {group.spotify_song_count} {group.spotify_song_count === 1 ? 'song' : 'songs'}
                                         </span>
                                       )}
                                     </>
