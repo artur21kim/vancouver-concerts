@@ -534,7 +534,7 @@ export default function LikelyShowsPage() {
         <div className="max-w-7xl mx-auto">
 
           {/* ── Header ── */}
-          <div className="mb-4 sticky top-16 bg-background py-3 z-10">
+          <div className="mb-4 sticky top-16 bg-background py-3 z-30">
 
             {/* Desktop: title + Done button side by side */}
             <div className="hidden md:flex items-start justify-between gap-3">
@@ -554,12 +554,12 @@ export default function LikelyShowsPage() {
             <div className="md:hidden">
               <h1 className="text-2xl font-bold text-foreground mb-0.5">Likely Shows You Attended</h1>
               <p className="text-muted-foreground text-sm mb-2">Based on confirmed venues and your Spotify library</p>
-              <div className="flex justify-end">
+              <div className="flex justify-start">
                 <button
                   onClick={() => router.push('/review-summary')}
                   className="px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition text-sm"
                 >
-                  Done Reviewing →
+                  Done Reviewing
                 </button>
               </div>
             </div>
@@ -685,17 +685,17 @@ export default function LikelyShowsPage() {
                           className="group/row flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
                           onClick={() => toggleGroup(group.artist_id)}
                         >
-                          {/* Chevron */}
-                          <span className="text-muted-foreground text-[10px] w-3 flex-shrink-0">
-                            {isExpanded ? '▼' : '▶'}
-                          </span>
-
-                          {/* Rank */}
-                          {rank !== null && (
-                            <span className="text-base font-bold text-primary w-10 flex-shrink-0 text-center tabular-nums leading-none">
-                              #{rank}
+                          {/* Rank + chevron merged into one column */}
+                          <div className="flex items-center gap-1 w-10 flex-shrink-0 justify-center">
+                            {rank !== null && (
+                              <span className="text-base font-bold text-primary tabular-nums leading-none">
+                                #{rank}
+                              </span>
+                            )}
+                            <span className="text-muted-foreground text-[10px] leading-none">
+                              {isExpanded ? '▲' : '▼'}
                             </span>
-                          )}
+                          </div>
 
                           {/* Name + metadata + match bar */}
                           <div className="flex-1 min-w-0">
