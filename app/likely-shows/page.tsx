@@ -133,7 +133,7 @@ function DualRangeSlider({ min, max, value, onChange }: {
 const SWIPE_THRESHOLD = 72;
 const SWIPE_MAX = 110;
 
-// ── SwipeableShowRow — individual child show row with swipe on mobile ─────────
+// ── SwipeableShowRow ──────────────────────────────────────────────────────────
 function SwipeableShowRow({
   show,
   onAdd,
@@ -162,13 +162,10 @@ function SwipeableShowRow({
     if (!isDragging.current) return;
     const dx = e.touches[0].clientX - startX.current;
     const dy = e.touches[0].clientY - startY.current;
-
     if (!axisLocked.current) {
-      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6)
         axisLocked.current = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
-      }
     }
-
     if (axisLocked.current === 'h') {
       e.preventDefault();
       setDragX(Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, dx)));
@@ -188,7 +185,6 @@ function SwipeableShowRow({
   const isAdded   = show.status === 'added';
   const isSkipped = show.status === 'skipped';
   const swipeProgress = Math.abs(dragX) / SWIPE_THRESHOLD;
-
   const borderClass = isAdded ? 'border-l-green-500' : isSkipped ? 'border-l-destructive' : 'border-l-transparent';
   const bgClass     = isAdded ? 'bg-green-500/5'     : isSkipped ? 'bg-destructive/5'      : 'hover:bg-muted/20';
 
@@ -199,7 +195,6 @@ function SwipeableShowRow({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Swipe hint overlays (mobile only) */}
       {dragX > 10 && (
         <div className="absolute inset-0 bg-green-500 pointer-events-none md:hidden"
           style={{ opacity: Math.min(swipeProgress * 0.18, 0.18) }} />
@@ -208,7 +203,6 @@ function SwipeableShowRow({
         <div className="absolute inset-0 bg-destructive pointer-events-none md:hidden"
           style={{ opacity: Math.min(swipeProgress * 0.18, 0.18) }} />
       )}
-
       <div style={{ transform: `translateX(${dragX}px)`, transition: dragX === 0 ? 'transform 0.2s ease' : 'none' }}>
         {children}
       </div>
@@ -216,7 +210,7 @@ function SwipeableShowRow({
   );
 }
 
-// ── SwipeableGroupHeader — artist group header with swipe on mobile ───────────
+// ── SwipeableGroupHeader ──────────────────────────────────────────────────────
 function SwipeableGroupHeader({
   canSwipe,
   onSwipeAdd,
@@ -246,13 +240,10 @@ function SwipeableGroupHeader({
     if (!isDragging.current || !canSwipe) return;
     const dx = e.touches[0].clientX - startX.current;
     const dy = e.touches[0].clientY - startY.current;
-
     if (!axisLocked.current) {
-      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6)
         axisLocked.current = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
-      }
     }
-
     if (axisLocked.current === 'h') {
       e.preventDefault();
       setDragX(Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, dx)));
@@ -305,7 +296,7 @@ export default function LikelyShowsPage() {
   const [groupedShows, setGroupedShows] = useState<GroupedShows[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
   const [yearRange, setYearRange] = useState<[number, number]>([2008, currentYear]);
-  const [sortBy, setSortBy] = useState<'relevance' | 'artist' | 'count' | 'year'>('relevance');
+  const [sortBy, setSortBy] = useState<'relevance' | 'artist' | 'count' | 'year' | 'reviewed'>('relevance');
 
   useEffect(() => { fetchLikelyShows(); }, []);
   useEffect(() => { applyFiltersAndSort(); }, [allShows, yearRange, sortBy]);
@@ -328,13 +319,39 @@ export default function LikelyShowsPage() {
   };
 
   const applyFiltersAndSort = () => {
-    const filtered = allShows.filter(show => {
+    const withinRange = allShows.filter(show => {
       const year = parseInt(show.date.split('-')[0]);
       return year >= yearRange[0] && year <= yearRange[1] && show.date <= yesterdayVancouver;
     });
 
+    if (sortBy === 'reviewed') {
+      // Show only groups where at least one show has been reviewed
+      const grouped = withinRange.reduce((acc, show) => {
+        const existing = acc.find(g => g.artist_id === show.artist_id);
+        if (existing) { existing.shows.push(show); existing.show_count++; }
+        else acc.push({
+          artist_id: show.artist_id,
+          artist_name: show.artist_name,
+          spotify_artist_id: show.spotify_artist_id,
+          show_count: 1,
+          match_score: show.match_score,
+          spotify_song_count: show.spotify_song_count,
+          vancouver_show_count: show.vancouver_show_count,
+          shows: [show],
+        });
+        return acc;
+      }, [] as GroupedShows[]);
+
+      const reviewedGroups = grouped.filter(g => g.shows.some(s => s.status !== 'pending'));
+      reviewedGroups.sort((a, b) => a.artist_name.localeCompare(b.artist_name));
+      reviewedGroups.forEach(g => g.shows.sort((a, b) => b.date.localeCompare(a.date)));
+      setGroupedShows(reviewedGroups);
+      return;
+    }
+
     if (sortBy === 'year') {
-      const yearGroups = filtered.reduce((acc, show) => {
+      // Year view: all shows regardless of status (user can review within year groups)
+      const yearGroups = withinRange.reduce((acc, show) => {
         const year = parseInt(show.date.split('-')[0]);
         const existing = acc.find(g => g.artist_id === year);
         if (existing) { existing.shows.push(show); existing.show_count++; }
@@ -342,7 +359,7 @@ export default function LikelyShowsPage() {
           artist_id: year, artist_name: year.toString(),
           spotify_artist_id: null, show_count: 1,
           match_score: 0, spotify_song_count: 0, vancouver_show_count: 0,
-          shows: [show]
+          shows: [show],
         });
         return acc;
       }, [] as GroupedShows[]);
@@ -352,7 +369,9 @@ export default function LikelyShowsPage() {
       return;
     }
 
-    const grouped = filtered.reduce((acc, show) => {
+    // All other views: show only groups with at least one pending show
+    const pendingShows = withinRange.filter(s => s.status === 'pending');
+    const grouped = pendingShows.reduce((acc, show) => {
       const existing = acc.find(g => g.artist_id === show.artist_id);
       if (existing) { existing.shows.push(show); existing.show_count++; }
       else acc.push({
@@ -363,7 +382,7 @@ export default function LikelyShowsPage() {
         match_score: show.match_score,
         spotify_song_count: show.spotify_song_count,
         vancouver_show_count: show.vancouver_show_count,
-        shows: [show]
+        shows: [show],
       });
       return acc;
     }, [] as GroupedShows[]);
@@ -480,6 +499,8 @@ export default function LikelyShowsPage() {
   const reviewedArtistsCount = new Set(allShows.filter(s => s.status !== 'pending').map(s => s.artist_id)).size;
   const uniqueArtistCount    = new Set(groupedShows.map(g => g.artist_id)).size;
 
+  const showTipBanner = sortBy !== 'reviewed' && sortBy !== 'year' && reviewedShowsCount > 0;
+
   if (loading) return (
     <>
       <Navigation />
@@ -514,20 +535,35 @@ export default function LikelyShowsPage() {
 
           {/* ── Header ── */}
           <div className="mb-4 sticky top-16 bg-background py-3 z-10">
-            <div className="flex items-start justify-between gap-3">
+
+            {/* Desktop: title + Done button side by side */}
+            <div className="hidden md:flex items-start justify-between gap-3">
               <div>
-                <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-0.5">Likely Shows You Attended</h1>
+                <h1 className="text-4xl font-bold text-foreground mb-0.5">Likely Shows You Attended</h1>
                 <p className="text-muted-foreground text-sm">Based on confirmed venues and your Spotify library</p>
               </div>
-              {/* "Done →" on mobile, "Done Reviewing →" on desktop */}
               <button
                 onClick={() => router.push('/review-summary')}
-                className="flex-shrink-0 px-3 md:px-5 py-2 md:py-2.5 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition text-xs md:text-sm whitespace-nowrap"
+                className="flex-shrink-0 px-5 py-2.5 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition text-sm whitespace-nowrap"
               >
-                <span className="md:hidden">Done →</span>
-                <span className="hidden md:inline">Done Reviewing →</span>
+                Done Reviewing →
               </button>
             </div>
+
+            {/* Mobile: title full-width, Done button on its own row below */}
+            <div className="md:hidden">
+              <h1 className="text-2xl font-bold text-foreground mb-0.5">Likely Shows You Attended</h1>
+              <p className="text-muted-foreground text-sm mb-2">Based on confirmed venues and your Spotify library</p>
+              <div className="flex justify-end">
+                <button
+                  onClick={() => router.push('/review-summary')}
+                  className="px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition text-sm"
+                >
+                  Done Reviewing →
+                </button>
+              </div>
+            </div>
+
           </div>
 
           {/* ── Stats — 2×2 grid on mobile, inline row on desktop ── */}
@@ -547,20 +583,22 @@ export default function LikelyShowsPage() {
           </div>
 
           {/* ── Filters — stacked on mobile, single row on desktop ── */}
-          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 mb-4">
-            {/* Year slider */}
-            <div className="flex items-center gap-2.5 flex-1">
-              <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0 tabular-nums">
-                {yearRange[0]} – {yearRange[1]}
-              </span>
-              <div className="flex-1">
-                <DualRangeSlider min={2008} max={currentYear} value={yearRange} onChange={setYearRange} />
+          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 mb-3">
+            {/* Year slider — hidden in Reviewed view */}
+            {sortBy !== 'reviewed' && (
+              <div className="flex items-center gap-2.5 flex-1">
+                <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0 tabular-nums">
+                  {yearRange[0]} – {yearRange[1]}
+                </span>
+                <div className="flex-1">
+                  <DualRangeSlider min={2008} max={currentYear} value={yearRange} onChange={setYearRange} />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Sort + Reset */}
             <div className="flex items-center gap-2 md:gap-3">
-              <span className="hidden md:inline text-border select-none text-lg">|</span>
+              {sortBy !== 'reviewed' && <span className="hidden md:inline text-border select-none text-lg">|</span>}
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value as typeof sortBy)}
@@ -570,36 +608,65 @@ export default function LikelyShowsPage() {
                 <option value="count">Show Count</option>
                 <option value="artist">Artist Name</option>
                 <option value="year">By Year</option>
+                <option value="reviewed">Reviewed</option>
               </select>
-              <button
-                onClick={() => setYearRange([2008, currentYear])}
-                className="text-xs border border-red-500/40 text-red-400 rounded px-2 py-1 hover:bg-red-500/10 hover:border-red-500 transition flex-shrink-0"
-              >
-                Reset
-              </button>
+              {sortBy !== 'reviewed' && (
+                <button
+                  onClick={() => setYearRange([2008, currentYear])}
+                  className="text-xs border border-red-500/40 text-red-400 rounded px-2 py-1 hover:bg-red-500/10 hover:border-red-500 transition flex-shrink-0"
+                >
+                  Reset
+                </button>
+              )}
             </div>
           </div>
+
+          {/* ── Tip banner — shown in non-reviewed views once any artist is reviewed ── */}
+          {showTipBanner && (
+            <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-muted/40 border border-border/50">
+              <span className="text-muted-foreground/60 text-xs flex-shrink-0">💡</span>
+              <p className="text-xs text-muted-foreground/70">
+                Artists move to{' '}
+                <button
+                  onClick={() => setSortBy('reviewed')}
+                  className="text-primary underline underline-offset-2 hover:text-primary/80 transition"
+                >
+                  Reviewed
+                </button>
+                {' '}once all shows are checked. Nothing is permanent.
+              </p>
+            </div>
+          )}
 
           {/* ── Groups ── */}
           <div className="bg-card rounded-lg shadow overflow-hidden">
             {groupedShows.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
-                No shows match your current filters.
+                {sortBy === 'reviewed'
+                  ? 'No artists reviewed yet.'
+                  : 'No shows match your current filters.'}
               </div>
             ) : (
               <div className="divide-y divide-border">
                 {groupedShows.map((group, index) => {
                   const isExpanded = expandedGroups.has(group.artist_id);
-                  const gAdded   = group.shows.filter(s => s.status === 'added').length;
-                  const gSkipped = group.shows.filter(s => s.status === 'skipped').length;
-                  const gPending = group.shows.filter(s => s.status === 'pending').length;
-                  const allReviewed = gPending === 0;
-                  const allAdded    = allReviewed && gAdded === group.show_count;
-                  const allSkipped  = allReviewed && gSkipped === group.show_count;
-                  const rank = sortBy !== 'year' ? index + 1 : null;
 
-                  // Header swipe: only when nothing reviewed yet (all pending)
-                  const headerCanSwipe = gPending === group.show_count;
+                  // In Reviewed view, compute stats across all shows (not just pending)
+                  const relevantShows = sortBy === 'reviewed'
+                    ? group.shows
+                    : group.shows; // already filtered to pending-only for other views
+                  const gAdded   = relevantShows.filter(s => s.status === 'added').length;
+                  const gSkipped = relevantShows.filter(s => s.status === 'skipped').length;
+                  const gPending = relevantShows.filter(s => s.status === 'pending').length;
+                  const allReviewed = gPending === 0;
+                  const allAdded    = allReviewed && gAdded === relevantShows.length;
+                  const allSkipped  = allReviewed && gSkipped === relevantShows.length;
+
+                  // Rank: only in non-reviewed, non-year views
+                  const rank = (sortBy !== 'year' && sortBy !== 'reviewed') ? index + 1 : null;
+
+                  // Header swipe: only when nothing reviewed yet (pending-only views)
+                  const headerCanSwipe = sortBy !== 'reviewed' && gPending === group.show_count;
 
                   const spotifyUrl = group.spotify_artist_id
                     ? `https://open.spotify.com/artist/${group.spotify_artist_id}`
@@ -639,7 +706,7 @@ export default function LikelyShowsPage() {
                                   ({group.show_count} shows · {uniqueArtistCount} artists)
                                 </span>
                               ) : (
-                                <span className="text-muted-foreground text-sm">
+                                <span className="text-muted-foreground text-sm whitespace-nowrap">
                                   <span className="group-hover/row:text-primary transition-colors">
                                     {group.show_count} {group.show_count === 1 ? 'show' : 'shows'}
                                   </span>
@@ -671,8 +738,8 @@ export default function LikelyShowsPage() {
                               )}
                             </div>
 
-                            {/* Match score bar */}
-                            {sortBy !== 'year' && group.match_score > 0 && (
+                            {/* Match score bar — hidden in Reviewed view */}
+                            {sortBy !== 'year' && sortBy !== 'reviewed' && group.match_score > 0 && (
                               <div className="flex items-center gap-2 mt-1">
                                 <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden flex-shrink-0">
                                   <div className="h-full bg-primary rounded-full"
@@ -731,7 +798,7 @@ export default function LikelyShowsPage() {
                             )}
                           </div>
 
-                          {/* Mobile bulk/clear buttons — only shown when swipe is disabled (partial review or all done) */}
+                          {/* Mobile bulk/clear buttons — only when swipe is disabled */}
                           <div className="flex md:hidden gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
                             {gPending > 0 && (gAdded > 0 || gSkipped > 0) && (
                               <>
@@ -830,10 +897,9 @@ export default function LikelyShowsPage() {
                                   </div>
                                 </div>
 
-                                {/* Mobile row — compact single line, no action icons */}
+                                {/* Mobile row */}
                                 <div className="md:hidden px-4 py-2.5">
                                   <div className="flex items-center gap-2 min-w-0">
-                                    {/* Status dot */}
                                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                                       isAdded ? 'bg-green-500' : isSkipped ? 'bg-destructive' : 'bg-muted-foreground/30'
                                     }`} />
