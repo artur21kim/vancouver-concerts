@@ -533,11 +533,11 @@ export default function LikelyShowsPage() {
       <main className="min-h-screen bg-background py-6 px-4">
         <div className="max-w-7xl mx-auto">
 
-          {/* ── Header ── */}
-          <div className="mb-4 sticky top-16 bg-background py-3 z-30">
+          {/* ── Sticky header: title + stats + filters + tip ── */}
+          <div className="sticky top-16 bg-background pt-3 pb-2 z-30">
 
             {/* Desktop: title + Done button side by side */}
-            <div className="hidden md:flex items-start justify-between gap-3">
+            <div className="hidden md:flex items-start justify-between gap-3 mb-3">
               <div>
                 <h1 className="text-4xl font-bold text-foreground mb-0.5">Likely Shows You Attended</h1>
                 <p className="text-muted-foreground text-sm">Based on confirmed venues and your Spotify library</p>
@@ -551,7 +551,7 @@ export default function LikelyShowsPage() {
             </div>
 
             {/* Mobile: title full-width, Done button on its own row below */}
-            <div className="md:hidden">
+            <div className="md:hidden mb-3">
               <h1 className="text-2xl font-bold text-foreground mb-0.5">Likely Shows You Attended</h1>
               <p className="text-muted-foreground text-sm mb-2">Based on confirmed venues and your Spotify library</p>
               <div className="flex justify-start">
@@ -564,29 +564,26 @@ export default function LikelyShowsPage() {
               </div>
             </div>
 
-          </div>
+            {/* Stats — single compact row */}
+            <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground/70 flex-wrap">
+              <span>
+                <span className="font-semibold text-foreground">{reviewedShowsCount}</span>
+                <span className="text-muted-foreground/50">/{totalShows}</span>
+                {' '}shows
+              </span>
+              <span className="text-border select-none">·</span>
+              <span>
+                <span className="font-semibold text-foreground">{reviewedArtistsCount}</span>
+                <span className="text-muted-foreground/50">/{totalArtists}</span>
+                {' '}artists
+              </span>
+              <span className="text-border select-none">·</span>
+              <span>added <span className="font-semibold text-green-500/80">{addedCount}</span></span>
+              <span className="text-border select-none">·</span>
+              <span>skipped <span className="font-semibold text-destructive/80">{skippedCount}</span></span>
+            </div>
 
-          {/* ── Stats — single compact row ── */}
-          <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground/70 flex-wrap">
-            <span>
-              <span className="font-semibold text-foreground">{reviewedShowsCount}</span>
-              <span className="text-muted-foreground/50">/{totalShows}</span>
-              {' '}<span className="hidden sm:inline">shows</span><span className="sm:hidden">shows</span>
-            </span>
-            <span className="text-border select-none">·</span>
-            <span>
-              <span className="font-semibold text-foreground">{reviewedArtistsCount}</span>
-              <span className="text-muted-foreground/50">/{totalArtists}</span>
-              {' '}artists
-            </span>
-            <span className="text-border select-none">·</span>
-            <span>added <span className="font-semibold text-green-500/80">{addedCount}</span></span>
-            <span className="text-border select-none">·</span>
-            <span>skipped <span className="font-semibold text-destructive/80">{skippedCount}</span></span>
-          </div>
-
-          {/* ── Filters — wrapped in stacking context to stay below sticky header ── */}
-          <div className="relative z-0">
+            {/* Filters */}
           <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 mb-3">
             {/* Year slider — hidden in Reviewed view */}
             {sortBy !== 'reviewed' && (
@@ -624,9 +621,9 @@ export default function LikelyShowsPage() {
               )}
             </div>
           </div>
-          </div>{/* end z-0 filter wrapper */}
+          </div>
 
-          {/* ── Tip banner — shown in non-reviewed views once any artist is reviewed ── */}
+          {/* ── Tip banner — inside sticky block ── */}
           {showTipBanner && (
             <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-muted/40 border border-border/50">
               <span className="text-muted-foreground/60 text-xs flex-shrink-0">💡</span>
@@ -642,6 +639,8 @@ export default function LikelyShowsPage() {
               </p>
             </div>
           )}
+
+          </div>{/* end sticky header */}
 
           {/* ── Groups ── */}
           <div className="bg-card rounded-lg shadow overflow-hidden">
@@ -720,7 +719,7 @@ export default function LikelyShowsPage() {
                                   </span>
                                   {group.spotify_song_count > 0 && (
                                     <>
-                                      <span className="mx-1.5 text-muted-foreground/40">·</span>
+                                      <span className="mx-1.5 text-muted-foreground/40">&</span>
                                       {spotifyUrl ? (
                                         <a
                                           href={spotifyUrl}
