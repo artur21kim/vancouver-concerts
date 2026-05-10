@@ -566,20 +566,23 @@ export default function LikelyShowsPage() {
 
           </div>
 
-          {/* ── Stats — 2×2 grid on mobile, inline row on desktop ── */}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 md:flex md:items-center md:gap-3 mb-3 text-sm text-muted-foreground/70">
+          {/* ── Stats — single compact row ── */}
+          <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground/70 flex-wrap">
             <span>
-              Shows{' '}
               <span className="font-semibold text-foreground">{reviewedShowsCount}</span>
-              <span className="text-muted-foreground/50"> / {totalShows}</span>
+              <span className="text-muted-foreground/50">/{totalShows}</span>
+              {' '}<span className="hidden sm:inline">shows</span><span className="sm:hidden">shows</span>
             </span>
+            <span className="text-border select-none">·</span>
             <span>
-              Artists{' '}
               <span className="font-semibold text-foreground">{reviewedArtistsCount}</span>
-              <span className="text-muted-foreground/50"> / {totalArtists}</span>
+              <span className="text-muted-foreground/50">/{totalArtists}</span>
+              {' '}artists
             </span>
-            <span>Added <span className="font-semibold text-green-500/80 ml-0.5">{addedCount}</span></span>
-            <span>Skipped <span className="font-semibold text-destructive/80 ml-0.5">{skippedCount}</span></span>
+            <span className="text-border select-none">·</span>
+            <span>added <span className="font-semibold text-green-500/80">{addedCount}</span></span>
+            <span className="text-border select-none">·</span>
+            <span>skipped <span className="font-semibold text-destructive/80">{skippedCount}</span></span>
           </div>
 
           {/* ── Filters — stacked on mobile, single row on desktop ── */}
@@ -699,14 +702,17 @@ export default function LikelyShowsPage() {
 
                           {/* Name + metadata + match bar */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                              <span className="font-semibold text-foreground">{group.artist_name}</span>
+                            {/* Single line: truncating name + nowrap metadata */}
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-semibold text-foreground truncate">
+                                {group.artist_name}
+                              </span>
                               {sortBy === 'year' ? (
-                                <span className="text-muted-foreground text-sm">
+                                <span className="text-muted-foreground text-sm whitespace-nowrap flex-shrink-0">
                                   ({group.show_count} shows · {uniqueArtistCount} artists)
                                 </span>
                               ) : (
-                                <span className="text-muted-foreground text-sm whitespace-nowrap">
+                                <span className="text-muted-foreground text-sm whitespace-nowrap flex-shrink-0">
                                   <span className="group-hover/row:text-primary transition-colors">
                                     {group.show_count} {group.show_count === 1 ? 'show' : 'shows'}
                                   </span>
