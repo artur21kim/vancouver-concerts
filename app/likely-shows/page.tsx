@@ -585,7 +585,8 @@ export default function LikelyShowsPage() {
             <span>skipped <span className="font-semibold text-destructive/80">{skippedCount}</span></span>
           </div>
 
-          {/* ── Filters — stacked on mobile, single row on desktop ── */}
+          {/* ── Filters — wrapped in stacking context to stay below sticky header ── */}
+          <div className="relative z-0">
           <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 mb-3">
             {/* Year slider — hidden in Reviewed view */}
             {sortBy !== 'reviewed' && (
@@ -623,6 +624,7 @@ export default function LikelyShowsPage() {
               )}
             </div>
           </div>
+          </div>{/* end z-0 filter wrapper */}
 
           {/* ── Tip banner — shown in non-reviewed views once any artist is reviewed ── */}
           {showTipBanner && (
@@ -718,7 +720,7 @@ export default function LikelyShowsPage() {
                                   </span>
                                   {group.spotify_song_count > 0 && (
                                     <>
-                                      <span className="mx-1.5 text-muted-foreground/40">&</span>
+                                      <span className="mx-1.5 text-muted-foreground/40">·</span>
                                       {spotifyUrl ? (
                                         <a
                                           href={spotifyUrl}
