@@ -436,9 +436,11 @@ export default function LikelyShowsPage() {
 
   const handleBulkAction = async (groupId: number, action: 'add' | 'skip') => {
     const status: 'added' | 'skipped' = action === 'add' ? 'added' : 'skipped';
-    const groupShows = sortBy === 'year'
+    const groupShows = (sortBy === 'year'
       ? allShows.filter(s => parseInt(s.date.split('-')[0]) === groupId)
-      : allShows.filter(s => s.artist_id === groupId);
+      : allShows.filter(s => s.artist_id === groupId)
+    ).filter(s => s.status === 'pending');
+    if (!groupShows.length) return;
     try {
       const response = await fetch('/api/shows/bulk-update', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
