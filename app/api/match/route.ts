@@ -40,6 +40,15 @@ export async function GET(request: Request) {
     const firstConcertYear = profile.first_concert_year;
     const yesterdayVancouver = getVancouverYesterday();
 
+    // Check if scores already exist for this user (locked from first run)
+    const { data: existingScores } = await supabase
+      .from('user_artist_scores')
+      .select('artist_id')
+      .eq('user_id', user.id)
+      .limit(1);
+
+    const scoresAlreadyLocked = existingScores && existingScores.length > 0;
+
     const { data: userVenues } = await supabase
       .from('user_venues')
       .select('venue_id, status')
@@ -54,9 +63,6 @@ export async function GET(request: Request) {
       (userVenues || []).filter(v => v.status === 'no').map(v => v.venue_id)
     );
 
-    // Single DB-side join: returns only artists in dim_artist that match
-    // user's Spotify songs with >= 2 liked songs. Avoids both the 1000-row
-    // fetch limit and the .in() URL length limit.
     const { data: matchedArtists, error: matchError } = await supabase
       .rpc('get_user_matched_artists', { p_user_id: user.id, p_min_song_count: 2 });
 
@@ -71,7 +77,6 @@ export async function GET(request: Request) {
       }, { status: 400 });
     }
 
-    // Build song count lookup from RPC results
     const artistSongCounts: Record<string, number> = {};
     for (const row of matchedArtists) {
       artistSongCounts[row.spotify_artist_id] = Number(row.song_count);
@@ -81,7 +86,6 @@ export async function GET(request: Request) {
 
     console.log(`📊 ${matchedArtists.length} artists matched with >= 2 liked songs`);
 
-    // Fetch shows within the user's concert history window, up to yesterday
     const { data: shows, error: showsError } = await supabase
       .from('fact_shows')
       .select(`
@@ -111,7 +115,6 @@ export async function GET(request: Request) {
       }, { status: 404 });
     }
 
-    // Count shows per artist (excluding 'no' venues)
     const artistShowCountsFiltered = shows.reduce((acc: any, show: any) => {
       if (noVenueIds.has(show.venue_id)) return acc;
       if (!acc[show.artist_id]) acc[show.artist_id] = 0;
@@ -125,7 +128,6 @@ export async function GET(request: Request) {
       return acc;
     }, {});
 
-    // Only include artists who actually have shows in the valid date range
     const artistsWithShows = matchedArtists.filter(
       (a: any) => (artistShowCountsAll[a.artist_id] || 0) > 0
     );
@@ -167,15 +169,43 @@ export async function GET(request: Request) {
     const currentRunArtists = [...scoredArtists].sort((a, b) => b.match_score - a.match_score);
     const allArtists = [...scoredArtists].sort((a, b) => b.match_score_all - a.match_score_all);
 
-    // Normalize scores so #1 artist = 100%, preserving ranking order
     const maxCurrentScore = currentRunArtists[0]?.match_score || 1;
     const maxAllScore = allArtists[0]?.match_score_all || 1;
+
     currentRunArtists.forEach(a => {
       a.match_score = Math.round((a.match_score / maxCurrentScore) * 1000) / 10;
     });
     allArtists.forEach(a => {
       a.match_score_all = Math.round((a.match_score_all / maxAllScore) * 1000) / 10;
     });
+
+    // Write scores to user_artist_scores on first run only (locked forever after)
+    if (!scoresAlreadyLocked) {
+      console.log(`💾 Writing ${currentRunArtists.length} artist scores to user_artist_scores (first run)`);
+      const scoreRecords = currentRunArtists.map(a => ({
+        user_id: user.id,
+        artist_id: a.artist_id,
+        spotify_song_count: a.spotify_song_count,
+        raw_score: Math.round((a.match_score / 100) * maxCurrentScore * 10) / 10,
+        normalized_score: a.match_score,
+      }));
+
+      // Batch insert in chunks of 500 to avoid request size limits
+      const chunkSize = 500;
+      for (let i = 0; i < scoreRecords.length; i += chunkSize) {
+        const chunk = scoreRecords.slice(i, i + chunkSize);
+        const { error: scoreError } = await supabase
+          .from('user_artist_scores')
+          .insert(chunk);
+        if (scoreError) {
+          console.error('Error writing artist scores:', scoreError);
+          // Non-fatal — continue without scores being locked
+        }
+      }
+      console.log(`✅ Artist scores locked for user ${user.id}`);
+    } else {
+      console.log(`ℹ️ Artist scores already locked for user ${user.id}, skipping write`);
+    }
 
     // Build venue scores
     const venueScores: any = {};
@@ -236,7 +266,7 @@ export async function GET(request: Request) {
         total_spotify_artists: matchedArtists.length,
         total_shows_count: shows.length,
         total_venues_matched: Object.keys(venueScores).length,
-        // Send full lists — client handles display/expand logic
+        scores_locked: scoresAlreadyLocked,
         current_run_artists: currentRunArtists,
         all_artists: allArtists,
         all_venues: allRankedVenues,

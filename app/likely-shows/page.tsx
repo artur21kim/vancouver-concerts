@@ -293,6 +293,10 @@ export default function LikelyShowsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [allShows, setAllShows] = useState<Show[]>([]);
+  const [lessLikelyShows, setLessLikelyShows] = useState<Show[]>([]);
+  const [stretchShows, setStretchShows] = useState<Show[]>([]);
+  const [lessLikelyOpen, setLessLikelyOpen] = useState(false);
+  const [stretchOpen, setStretchOpen] = useState(false);
   const [groupedShows, setGroupedShows] = useState<GroupedShows[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
   const [yearRange, setYearRange] = useState<[number, number]>([2008, currentYear]);
@@ -310,7 +314,11 @@ export default function LikelyShowsPage() {
       }
       const result = await response.json();
       const shows = result.data.shows.map((show: any) => ({ ...show, status: 'pending' as const }));
+      const less = (result.data.less_likely_shows || []).map((show: any) => ({ ...show, status: 'pending' as const }));
+      const stretch = (result.data.stretch_shows || []).map((show: any) => ({ ...show, status: 'pending' as const }));
       setAllShows(shows);
+      setLessLikelyShows(less);
+      setStretchShows(stretch);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load shows');
     } finally {
@@ -500,6 +508,12 @@ export default function LikelyShowsPage() {
   const totalArtists         = new Set(allShows.map(s => s.artist_id)).size;
   const reviewedArtistsCount = new Set(allShows.filter(s => s.status !== 'pending').map(s => s.artist_id)).size;
   const uniqueArtistCount    = new Set(groupedShows.map(g => g.artist_id)).size;
+
+  // Less Likely / Stretch derived
+  const lessLikelyPending  = lessLikelyShows.filter(s => s.status === 'pending').length;
+  const lessLikelyAdded    = lessLikelyShows.filter(s => s.status === 'added').length;
+  const lessLikelySkipped  = lessLikelyShows.filter(s => s.status === 'skipped').length;
+  const stretchPending     = stretchShows.filter(s => s.status === 'pending').length;
 
   const showTipBanner = sortBy !== 'reviewed' && sortBy !== 'year' && reviewedShowsCount > 0;
 
@@ -941,6 +955,214 @@ export default function LikelyShowsPage() {
               </div>
             )}
           </div>
+
+          {/* ── Less Likely Shows (collapsed) ── */}
+          {lessLikelyShows.length > 0 && (
+            <div className="mt-4 bg-card rounded-lg shadow overflow-hidden">
+              <button
+                onClick={() => setLessLikelyOpen(o => !o)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition text-left"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-semibold text-card-foreground text-sm">Less Likely Shows</span>
+                  <span className="text-muted-foreground text-sm font-normal">({lessLikelyShows.length})</span>
+                  {lessLikelyAdded > 0 && (
+                    <span className="text-xs font-medium text-green-500/80">· {lessLikelyAdded} added</span>
+                  )}
+                </div>
+                <span className="text-muted-foreground text-sm ml-3">{lessLikelyOpen ? '▼' : '▶'}</span>
+              </button>
+
+              {lessLikelyOpen && (
+                <>
+                  <div className="px-4 py-2.5 bg-amber-500/5 border-y border-amber-500/20">
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      ⚠️ These shows have a lower match score (&lt;10%) or fewer liked songs (&lt;3). They may be less accurate — review with that in mind.
+                    </p>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {(() => {
+                      // Group less likely shows by artist
+                      const grouped = lessLikelyShows.reduce((acc, show) => {
+                        const existing = acc.find(g => g.artist_id === show.artist_id);
+                        if (existing) { existing.shows.push(show); existing.show_count++; }
+                        else acc.push({
+                          artist_id: show.artist_id,
+                          artist_name: show.artist_name,
+                          spotify_artist_id: show.spotify_artist_id,
+                          show_count: 1,
+                          match_score: show.match_score,
+                          spotify_song_count: show.spotify_song_count,
+                          vancouver_show_count: show.vancouver_show_count,
+                          shows: [show],
+                        });
+                        return acc;
+                      }, [] as GroupedShows[]);
+                      grouped.sort((a, b) => b.match_score - a.match_score);
+                      grouped.forEach(g => g.shows.sort((a, b) => b.date.localeCompare(a.date)));
+
+                      return grouped.map(group => {
+                        const isExpanded = expandedGroups.has(group.artist_id + 900000);
+                        const gPending = group.shows.filter(s => s.status === 'pending').length;
+                        const gAdded = group.shows.filter(s => s.status === 'added').length;
+                        const gSkipped = group.shows.filter(s => s.status === 'skipped').length;
+                        const allReviewed = gPending === 0;
+
+                        return (
+                          <div key={group.artist_id}>
+                            <div
+                              className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                              onClick={() => setExpandedGroups(prev => {
+                                const n = new Set(prev);
+                                const key = group.artist_id + 900000;
+                                n.has(key) ? n.delete(key) : n.add(key);
+                                return n;
+                              })}
+                            >
+                              <span className="text-muted-foreground text-[10px] leading-none w-4 flex-shrink-0">
+                                {isExpanded ? '▲' : '▼'}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="font-semibold text-foreground truncate text-sm">{group.artist_name}</span>
+                                  <span className="text-muted-foreground text-xs whitespace-nowrap flex-shrink-0">
+                                    {group.show_count} {group.show_count === 1 ? 'show' : 'shows'}
+                                    {group.spotify_song_count > 0 && ` · ${group.spotify_song_count} songs`}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <div className="w-16 h-1 bg-muted rounded-full overflow-hidden">
+                                    <div className="h-full bg-amber-500/60 rounded-full" style={{ width: `${Math.min(group.match_score, 100)}%` }} />
+                                  </div>
+                                  <span className="text-xs text-muted-foreground tabular-nums">{group.match_score.toFixed(1)}%</span>
+                                </div>
+                              </div>
+                              {allReviewed && (
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${
+                                  gAdded > 0 && gSkipped === 0 ? 'bg-green-500/15 text-green-500' :
+                                  gSkipped > 0 && gAdded === 0 ? 'bg-destructive/15 text-destructive' :
+                                  'bg-primary/15 text-primary'
+                                }`}>
+                                  {gAdded > 0 && gSkipped === 0 ? '✓ Added' : gSkipped > 0 && gAdded === 0 ? '✗ Skipped' : `${gAdded + gSkipped} reviewed`}
+                                </span>
+                              )}
+                              <div className="flex gap-1.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                                {gPending > 0 && (
+                                  <>
+                                    <button
+                                      onClick={() => handleBulkAction(group.artist_id, 'add')}
+                                      className="px-2 py-1 text-xs font-semibold rounded bg-green-700/80 text-white hover:bg-green-700 transition"
+                                    >
+                                      {gAdded > 0 || gSkipped > 0 ? '+Rest' : 'Add All'}
+                                    </button>
+                                    <button
+                                      onClick={() => handleBulkAction(group.artist_id, 'skip')}
+                                      className="px-2 py-1 text-xs font-semibold rounded bg-red-700/80 text-white hover:bg-red-700 transition"
+                                    >
+                                      {gAdded > 0 || gSkipped > 0 ? '−Rest' : 'Skip All'}
+                                    </button>
+                                  </>
+                                )}
+                                {allReviewed && (
+                                  <button
+                                    onClick={() => handleClearAll(group.artist_id)}
+                                    className="px-2 py-1 text-xs font-medium rounded border border-border text-muted-foreground hover:text-foreground transition"
+                                  >
+                                    Clear
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {isExpanded && (
+                              <div className="border-t border-border bg-background/50">
+                                <div className="md:hidden flex items-center justify-between px-4 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/40">
+                                  <span>Date · Venue</span>
+                                  <span className="normal-case font-normal text-muted-foreground/40">swipe ↔</span>
+                                </div>
+                                {group.shows.map(show => {
+                                  const isAdded = show.status === 'added';
+                                  const isSkipped = show.status === 'skipped';
+                                  return (
+                                    <SwipeableShowRow
+                                      key={show.show_id}
+                                      show={show}
+                                      onAdd={() => handleAddShow(show.show_id)}
+                                      onSkip={() => handleSkipShow(show.show_id)}
+                                    >
+                                      {/* Desktop */}
+                                      <div className="hidden md:grid px-5 py-3 items-center grid-cols-[48px_120px_1fr]">
+                                        <div className="flex items-center gap-2">
+                                          <button onClick={() => handleAddShow(show.show_id)} className="focus:outline-none">
+                                            <svg className={`w-5 h-5 transition-colors ${isAdded ? 'fill-primary text-primary' : 'fill-none text-muted-foreground hover:text-primary'}`} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                                            </svg>
+                                          </button>
+                                          <button onClick={() => handleSkipShow(show.show_id)} className="focus:outline-none">
+                                            <svg className={`w-4 h-4 transition-colors ${isSkipped ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'}`} stroke="currentColor" strokeWidth="2.5" fill="none" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                        <span className="text-sm text-foreground whitespace-nowrap">
+                                          {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                        </span>
+                                        <div className="flex items-center gap-1.5 min-w-0 pr-3">
+                                          <span className="text-sm text-muted-foreground truncate">{show.venue_name}</span>
+                                          <CapacityBadge category={show.capacity_category} />
+                                        </div>
+                                      </div>
+                                      {/* Mobile */}
+                                      <div className="md:hidden px-4 py-2.5">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isAdded ? 'bg-green-500' : isSkipped ? 'bg-destructive' : 'bg-muted-foreground/30'}`} />
+                                          <span className="text-xs text-muted-foreground/70 flex-shrink-0 tabular-nums">
+                                            {(() => { const [y, m, d] = show.date.split('-'); return new Date(+y, +m - 1, +d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); })()}
+                                          </span>
+                                          <span className="text-xs text-muted-foreground truncate ml-auto">{show.venue_name}</span>
+                                          <CapacityBadge category={show.capacity_category} />
+                                        </div>
+                                      </div>
+                                    </SwipeableShowRow>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Stretch Shows toggle (opt-in) ── */}
+          {stretchShows.length > 0 && (
+            <div className="mt-4 bg-card rounded-lg shadow overflow-hidden">
+              <button
+                onClick={() => setStretchOpen(o => !o)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-card-foreground text-sm">All Other Matches</span>
+                  <span className="text-muted-foreground text-sm font-normal">({stretchShows.length})</span>
+                </div>
+                <span className="text-muted-foreground text-sm ml-3">{stretchOpen ? '▼' : '▶'}</span>
+              </button>
+              {stretchOpen && (
+                <div className="px-4 py-3 border-t border-border">
+                  <p className="text-xs text-muted-foreground">
+                    These artists matched your Spotify library but have a very low match score (&lt;1%). They are unlikely to be shows you attended but may be useful for users with longer concert histories.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {stretchShows.length} shows across {new Set(stretchShows.map(s => s.artist_id)).size} artists — go to <button onClick={() => router.push('/my-shows')} className="text-primary underline">My Shows</button> to manually add any you know you attended.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Bottom CTA ── */}
           <div className="mt-6 bg-card rounded-lg shadow p-5 text-center">

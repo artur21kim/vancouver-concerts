@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+// Thresholds derived from data analysis
+const MIN_SONGS_MAIN = 3;        // ≥3 liked songs for main list
+const MIN_SCORE_MAIN = 10.0;     // ≥10% normalized score for main list
+const MIN_SCORE_LESS_LIKELY = 1.0; // ≥1% for Less Likely (anything below is Stretch)
+
 export async function GET(request: Request) {
   try {
     const supabase = await createClient();
@@ -32,9 +37,25 @@ export async function GET(request: Request) {
 
     console.log(`🚫 Excluding ${noVenueIds.size} venues user said 'no' to`);
 
-    // Single DB-side join: returns only artists in dim_artist that match
-    // user's Spotify songs with >= 2 liked songs. Avoids both the 1000-row
-    // fetch limit and the .in() URL length limit.
+    // Load locked scores from first run
+    const { data: lockedScores, error: scoresError } = await supabase
+      .from('user_artist_scores')
+      .select('artist_id, spotify_song_count, normalized_score')
+      .eq('user_id', user.id);
+
+    const hasLockedScores = !scoresError && lockedScores && lockedScores.length > 0;
+
+    // Build score lookup maps
+    const lockedScoreMap: Record<number, number> = {};
+    const lockedSongCountMap: Record<number, number> = {};
+    if (hasLockedScores) {
+      for (const row of lockedScores) {
+        lockedScoreMap[row.artist_id] = Number(row.normalized_score);
+        lockedSongCountMap[row.artist_id] = Number(row.spotify_song_count);
+      }
+    }
+
+    // Fall back to live RPC if no locked scores yet (first run before match completes)
     const { data: matchedArtists, error: matchError } = await supabase
       .rpc('get_user_matched_artists', { p_user_id: user.id, p_min_song_count: 2 });
 
@@ -46,11 +67,10 @@ export async function GET(request: Request) {
     if (!matchedArtists || matchedArtists.length === 0) {
       return NextResponse.json({
         success: true,
-        data: { shows: [], total_shows: 0, message: 'No Spotify data found or no artists matched Vancouver shows.' }
+        data: { shows: [], less_likely_shows: [], total_shows: 0, message: 'No Spotify data found or no artists matched Vancouver shows.' }
       });
     }
 
-    // Build song count lookup from RPC results
     const artistSongCounts: Record<string, number> = {};
     for (const row of matchedArtists) {
       artistSongCounts[row.spotify_artist_id] = Number(row.song_count);
@@ -60,7 +80,6 @@ export async function GET(request: Request) {
 
     console.log(`📊 ${matchedArtists.length} artists matched with >= 2 liked songs`);
 
-    // Get user's first concert year
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('first_concert_year')
@@ -69,7 +88,6 @@ export async function GET(request: Request) {
 
     const firstConcertYear = profile?.first_concert_year || 2000;
 
-    // Fetch ALL shows for matched artists from first_concert_year onwards
     const { data: shows, error: showsError } = await supabase
       .from('fact_shows')
       .select(`
@@ -99,11 +117,11 @@ export async function GET(request: Request) {
     if (!shows || shows.length === 0) {
       return NextResponse.json({
         success: true,
-        data: { shows: [], total_shows: 0, message: 'No shows found matching your criteria.' }
+        data: { shows: [], less_likely_shows: [], total_shows: 0, message: 'No shows found matching your criteria.' }
       });
     }
 
-    // Fetch show IDs to exclude
+    // Fetch show IDs to exclude (already reviewed)
     const [attendedResult, skippedResult] = await Promise.all([
       supabase
         .from('user_shows')
@@ -124,7 +142,7 @@ export async function GET(request: Request) {
 
     console.log(`🚫 Excluding ${excludedShowIds.size} shows (${(attendedResult.data || []).length} attended, ${(skippedResult.data || []).length} skipped)`);
 
-    // Transform, filter out 'no' venues and excluded shows
+    // Transform and filter
     const transformedShows = shows
       .filter((show: any) => !noVenueIds.has(show.venue_id) && !excludedShowIds.has(show.show_id))
       .map((show: any) => {
@@ -143,50 +161,101 @@ export async function GET(request: Request) {
         };
       });
 
-    // Calculate match scores
+    // Calculate match scores — use locked scores if available, else compute live
     const artistShowCounts = transformedShows.reduce((acc: any, show: any) => {
       if (!acc[show.artist_id]) acc[show.artist_id] = 0;
       acc[show.artist_id]++;
       return acc;
     }, {});
 
-    const maxSpotifyCount = Math.max(...Object.values(artistSongCounts) as number[]);
-    const maxVancouverCount = Math.max(...(Object.values(artistShowCounts) as number[]), 1);
+    let artistMatchScores: Record<number, {
+      match_score: number;
+      spotify_song_count: number;
+      vancouver_show_count: number;
+    }> = {};
 
-    const artistMatchScores = matchedArtists.reduce((acc: any, artist: any) => {
-      const spotifyCount = artistSongCounts[artist.spotify_artist_id] || 0;
-      const vancouverCount = artistShowCounts[artist.artist_id] || 0;
-      const spotifyScore = (spotifyCount / maxSpotifyCount) * 100;
-      const vancouverScore = (vancouverCount / maxVancouverCount) * 100;
-      acc[artist.artist_id] = {
-        match_score: (0.8 * spotifyScore) + (0.2 * vancouverScore),
-        spotify_song_count: spotifyCount,
-        vancouver_show_count: vancouverCount
+    if (hasLockedScores) {
+      // Use locked normalized scores — stable across re-runs
+      for (const artist of matchedArtists) {
+        const lockedScore = lockedScoreMap[artist.artist_id];
+        const lockedSongs = lockedSongCountMap[artist.artist_id];
+        if (lockedScore !== undefined) {
+          artistMatchScores[artist.artist_id] = {
+            match_score: lockedScore,
+            spotify_song_count: lockedSongs ?? artistSongCounts[artist.spotify_artist_id] ?? 0,
+            vancouver_show_count: artistShowCounts[artist.artist_id] || 0,
+          };
+        }
+      }
+    } else {
+      // First run before scores locked — compute live (same formula as match route)
+      const maxSpotifyCount = Math.max(...Object.values(artistSongCounts) as number[]);
+      const maxVancouverCount = Math.max(...(Object.values(artistShowCounts) as number[]), 1);
+
+      artistMatchScores = matchedArtists.reduce((acc: any, artist: any) => {
+        const spotifyCount = artistSongCounts[artist.spotify_artist_id] || 0;
+        const vancouverCount = artistShowCounts[artist.artist_id] || 0;
+        const spotifyScore = (spotifyCount / maxSpotifyCount) * 100;
+        const vancouverScore = (vancouverCount / maxVancouverCount) * 100;
+        const rawScore = (0.8 * spotifyScore) + (0.2 * vancouverScore);
+        // Normalize so #1 = 100
+        acc[artist.artist_id] = {
+          match_score: rawScore, // will normalize below
+          spotify_song_count: spotifyCount,
+          vancouver_show_count: vancouverCount
+        };
+        return acc;
+      }, {});
+
+      // Normalize
+      const maxScore = Math.max(...Object.values(artistMatchScores).map((a: any) => a.match_score), 1);
+      for (const id of Object.keys(artistMatchScores)) {
+        artistMatchScores[Number(id)].match_score =
+          Math.round((artistMatchScores[Number(id)].match_score / maxScore) * 1000) / 10;
+      }
+    }
+
+    // Attach scores and tier to each show
+    const showsWithScores = transformedShows.map(show => {
+      const scores = artistMatchScores[show.artist_id];
+      const songCount = scores?.spotify_song_count ?? 0;
+      const matchScore = scores?.match_score ?? 0;
+
+      // Determine tier
+      const isMain = songCount >= MIN_SONGS_MAIN && matchScore >= MIN_SCORE_MAIN;
+      const isLessLikely = !isMain && matchScore >= MIN_SCORE_LESS_LIKELY;
+      // anything below MIN_SCORE_LESS_LIKELY is "stretch" — returned separately
+
+      return {
+        ...show,
+        match_score: matchScore,
+        spotify_song_count: songCount,
+        vancouver_show_count: scores?.vancouver_show_count ?? 0,
+        tier: isMain ? 'main' : isLessLikely ? 'less_likely' : 'stretch',
       };
-      return acc;
-    }, {});
+    });
 
-    const showsWithScores = transformedShows.map(show => ({
-      ...show,
-      match_score: artistMatchScores[show.artist_id]?.match_score || 0,
-      spotify_song_count: artistMatchScores[show.artist_id]?.spotify_song_count || 0,
-      vancouver_show_count: artistMatchScores[show.artist_id]?.vancouver_show_count || 0
-    }));
+    const mainShows = showsWithScores.filter(s => s.tier === 'main');
+    const lessLikelyShows = showsWithScores.filter(s => s.tier === 'less_likely');
+    const stretchShows = showsWithScores.filter(s => s.tier === 'stretch');
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`✅ LIKELY SHOWS COMPLETE — ${showsWithScores.length} pending shows (${excludedShowIds.size} excluded) in ${duration}s`);
+    console.log(`✅ LIKELY SHOWS COMPLETE — ${mainShows.length} main, ${lessLikelyShows.length} less likely, ${stretchShows.length} stretch (${excludedShowIds.size} excluded) in ${duration}s`);
 
     await supabase
       .from('user_profiles')
-      .update({ likely_shows_total: showsWithScores.length })
+      .update({ likely_shows_total: mainShows.length + lessLikelyShows.length })
       .eq('user_id', user.id);
 
     return NextResponse.json({
       success: true,
       data: {
-        shows: showsWithScores,
-        total_shows: showsWithScores.length,
-        matched_artists: matchedArtistIds.length
+        shows: mainShows,
+        less_likely_shows: lessLikelyShows,
+        stretch_shows: stretchShows,
+        total_shows: mainShows.length + lessLikelyShows.length + stretchShows.length,
+        matched_artists: matchedArtistIds.length,
+        scores_source: hasLockedScores ? 'locked' : 'live',
       }
     });
 
