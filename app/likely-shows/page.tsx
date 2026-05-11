@@ -583,14 +583,12 @@ export default function LikelyShowsPage() {
             {/* Stats — single compact row */}
             <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground/70 flex-wrap">
               <span>
-                <span className="font-semibold text-foreground">{reviewedShowsCount}</span>
-                <span className="text-muted-foreground/50">/{totalShows}</span>
-                {' '}shows
+                <span className="font-semibold text-foreground">{pendingCount}</span>
+                {' '}pending
               </span>
               <span className="text-border select-none">·</span>
               <span>
-                <span className="font-semibold text-foreground">{reviewedArtistsCount}</span>
-                <span className="text-muted-foreground/50">/{totalArtists}</span>
+                <span className="font-semibold text-foreground">{totalArtists}</span>
                 {' '}artists
               </span>
               <span className="text-border select-none">·</span>
@@ -650,7 +648,7 @@ export default function LikelyShowsPage() {
                 >
                   Reviewed
                 </button>
-                {' '}once all shows are checked. Nothing is permanent.
+                {' '}once all shows are checked. Changes can be reverted there.
               </p>
             </div>
           )}
@@ -963,11 +961,14 @@ export default function LikelyShowsPage() {
                 onClick={() => setLessLikelyOpen(o => !o)}
                 className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition text-left"
               >
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
                   <span className="font-semibold text-card-foreground text-sm">Less Likely Shows</span>
                   <span className="text-muted-foreground text-sm font-normal">({lessLikelyShows.length})</span>
                   {lessLikelyAdded > 0 && (
                     <span className="text-xs font-medium text-green-500/80">· {lessLikelyAdded} added</span>
+                  )}
+                  {lessLikelySkipped > 0 && (
+                    <span className="text-xs font-medium text-destructive/70">· {lessLikelySkipped} skipped</span>
                   )}
                 </div>
                 <span className="text-muted-foreground text-sm ml-3">{lessLikelyOpen ? '▼' : '▶'}</span>
@@ -975,9 +976,11 @@ export default function LikelyShowsPage() {
 
               {lessLikelyOpen && (
                 <>
-                  <div className="px-4 py-2.5 bg-amber-500/5 border-y border-amber-500/20">
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
-                      ⚠️ These shows have a lower match score (&lt;10%) or fewer liked songs (&lt;3). They may be less accurate — review with that in mind.
+                  <div className="px-4 py-2 border-y border-amber-500/20 bg-amber-500/5">
+                    <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 flex-wrap">
+                      Shows with 1–2
+                      <SpotifyIcon className="w-3 h-3 inline-block flex-shrink-0 text-[#1DB954]" />
+                      songs or a match score below 10%
                     </p>
                   </div>
                   <div className="divide-y divide-border">
