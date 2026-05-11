@@ -641,14 +641,14 @@ export default function LikelyShowsPage() {
             <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-muted/40 border border-border/50">
               <span className="text-muted-foreground/60 text-xs flex-shrink-0">💡</span>
               <p className="text-xs text-muted-foreground/70">
-                Artists move to{' '}
+                Changes can be reverted in{' '}
                 <button
                   onClick={() => setSortBy('reviewed')}
                   className="text-primary underline underline-offset-2 hover:text-primary/80 transition"
                 >
                   Reviewed
                 </button>
-                {' '}once all shows are checked. Changes can be reverted there.
+                .
               </p>
             </div>
           )}
@@ -978,9 +978,9 @@ export default function LikelyShowsPage() {
                 <>
                   <div className="px-4 py-2 border-y border-amber-500/20 bg-amber-500/5">
                     <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 flex-wrap">
-                      Shows with 1–2
+                      Shows with match score below 10% or 1–2
                       <SpotifyIcon className="w-3 h-3 inline-block flex-shrink-0 text-[#1DB954]" />
-                      songs or a match score below 10%
+                      songs
                     </p>
                   </div>
                   <div className="divide-y divide-border">
