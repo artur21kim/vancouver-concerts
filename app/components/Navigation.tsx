@@ -136,9 +136,9 @@ export default function Navigation() {
           </div>
         </div>
 
-        {/* Desktop breadcrumb row */}
+        {/* Breadcrumb row — shown on both mobile and desktop when applicable */}
         {breadcrumbs && (
-          <div className="hidden md:flex items-center gap-1.5 pb-2 text-xs -ml-4">
+          <div className="flex items-center gap-1.5 pb-2 text-xs md:-ml-4">
             {breadcrumbs.map((crumb, i) => {
               const isLast = i === breadcrumbs.length - 1
               return (
