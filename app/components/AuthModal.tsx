@@ -40,10 +40,10 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
                 if (data.user) {
                     const { error: profileError } = await supabase
                         .from('user_profiles')
-                        .insert({
-                            user_id: data.user.id,
-                            username,
-                        })
+                        .upsert(
+                            { user_id: data.user.id, username },
+                            { onConflict: 'user_id', ignoreDuplicates: true }
+                        )
 
                     if (profileError) throw profileError
                 }
