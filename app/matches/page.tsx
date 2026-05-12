@@ -41,14 +41,17 @@ type MatchData = {
 };
 
 type CapacityFilter  = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown';
-type ArtistView     = 'current' | 'all';
 type VenueStatus    = 'yes' | 'no' | 'not_sure';
 type MobileTab      = 'unreviewed' | 'all';
 
 const VENUES_PER_PAGE  = 10;
-const ARTISTS_DEFAULT  = 10; // shown by default before expanding
+const ARTISTS_DEFAULT  = 10;
 const SWIPE_THRESHOLD  = 72;
 const SWIPE_MAX        = 110;
+
+// Thresholds matching Likely Shows page
+const MIN_SCORE_STRONG = 10.0;
+const MIN_SONGS_STRONG = 3;
 
 // ─── Capacity helpers ─────────────────────────────────────────────────────────
 const CAPACITY_BUTTONS: {
@@ -71,6 +74,10 @@ function capacityFilterKey(category: string | null): CapacityFilter {
   if (c.includes('x-large') || c.includes('10k')) return 'xlarge';
   if (c.includes('large'))   return 'large';
   return 'unknown';
+}
+
+function isStrongMatch(artist: Artist): boolean {
+  return artist.match_score_all >= MIN_SCORE_STRONG && artist.spotify_song_count >= MIN_SONGS_STRONG;
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -316,25 +323,18 @@ function MobileVenueCard({
 }
 
 // ─── Artist bar chart ─────────────────────────────────────────────────────────
-function ArtistBarChart({ artists, artistView, expanded }: {
+function ArtistBarChart({ artists, expanded }: {
   artists: Artist[];
-  artistView: ArtistView;
   expanded: boolean;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
 
-  // Always scale relative to the global #1 (full list, not just visible slice)
-  const globalMax = Math.max(...artists.map(a => artistView === 'current' ? a.match_score : a.match_score_all), 1);
+  // Always scale relative to the global #1 across the full list
+  const globalMax = Math.max(...artists.map(a => a.match_score_all), 1);
 
   const displayArtists = expanded ? artists : artists.slice(0, ARTISTS_DEFAULT);
 
   if (displayArtists.length === 0) return <p className="text-muted-foreground text-center py-12">No artists to display</p>;
-
-  const shows = (a: Artist) => artistView === 'current' ? a.vancouver_show_count : a.vancouver_show_count_all;
-  const score = (a: Artist) => artistView === 'current' ? a.match_score : a.match_score_all;
-
-  const songsPct  = (a: Artist) => Math.min((score(a) / globalMax) * 100 * 0.7, 100);
-  const showsPct  = (a: Artist) => Math.min((score(a) / globalMax) * 100 * 0.3, 100);
 
   return (
     <div className="w-full space-y-1.5">
@@ -348,9 +348,15 @@ function ArtistBarChart({ artists, artistView, expanded }: {
 
       {displayArtists.map((artist, i) => {
         const isHovered = hovered === artist.artist_id;
-        const sp  = songsPct(artist);
-        const shp = showsPct(artist);
-        const sc  = score(artist);
+        const strong = isStrongMatch(artist);
+        const sc = artist.match_score_all;
+        const barPct = Math.min((sc / globalMax) * 100, 100);
+
+        // Strong: segmented teal (songs 80%, shows 20% of bar width)
+        // Weak: single flat amber bar
+        const songsPct  = strong ? barPct * 0.7 : 0;
+        const showsPct  = strong ? barPct * 0.3 : 0;
+        const amberPct  = strong ? 0 : barPct;
 
         return (
           <div
@@ -379,27 +385,41 @@ function ArtistBarChart({ artists, artistView, expanded }: {
               )}
             </div>
 
-            {/* Segmented bar */}
+            {/* Bar */}
             <div className="flex-1 relative">
               <div className="flex h-5 bg-muted/40" style={{ borderRadius: '9999px' }}>
-                <div
-                  className="h-full transition-all duration-300"
-                  style={{
-                    width: `${sp}%`,
-                    backgroundColor: '#0d9488',
-                    borderRadius: shp > 0 ? '9999px 0 0 9999px' : '9999px',
-                  }}
-                  title={`${artist.spotify_song_count} songs in library`}
-                />
-                {shp > 0 && (
+                {strong ? (
+                  <>
+                    <div
+                      className="h-full transition-all duration-300"
+                      style={{
+                        width: `${songsPct}%`,
+                        backgroundColor: '#0d9488',
+                        borderRadius: showsPct > 0 ? '9999px 0 0 9999px' : '9999px',
+                      }}
+                      title={`${artist.spotify_song_count} songs in library`}
+                    />
+                    {showsPct > 0 && (
+                      <div
+                        className="h-full transition-all duration-300"
+                        style={{
+                          width: `${showsPct}%`,
+                          backgroundColor: '#5eead4',
+                          borderRadius: '0 9999px 9999px 0',
+                        }}
+                        title={`${artist.vancouver_show_count_all} Vancouver shows`}
+                      />
+                    )}
+                  </>
+                ) : (
                   <div
                     className="h-full transition-all duration-300"
                     style={{
-                      width: `${shp}%`,
-                      backgroundColor: '#5eead4',
-                      borderRadius: '0 9999px 9999px 0',
+                      width: `${amberPct}%`,
+                      backgroundColor: '#f59e0b',
+                      borderRadius: '9999px',
                     }}
-                    title={`${shows(artist)} Vancouver shows`}
+                    title={`${artist.spotify_song_count} songs · ${artist.vancouver_show_count_all} Vancouver shows`}
                   />
                 )}
               </div>
@@ -408,22 +428,22 @@ function ArtistBarChart({ artists, artistView, expanded }: {
               {isHovered && (
                 <div className="absolute left-0 -top-10 z-10 bg-card border border-border rounded-lg px-2.5 py-1.5 text-[10px] text-muted-foreground whitespace-nowrap shadow-lg pointer-events-none flex items-center gap-3">
                   <span className="flex items-center gap-1">
-                    <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: '#0d9488' }} />
+                    <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: strong ? '#0d9488' : '#f59e0b' }} />
                     <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 24 24" fill="#1DB954">
                       <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
                     </svg>
                     {artist.spotify_song_count} songs
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: '#5eead4' }} />
-                    📍 {shows(artist)} shows
+                    <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: strong ? '#5eead4' : '#f59e0b' }} />
+                    📍 {artist.vancouver_show_count_all} shows
                   </span>
                 </div>
               )}
             </div>
 
             {/* Score */}
-            <span className="w-16 text-right text-xs font-semibold text-primary tabular-nums flex-shrink-0">
+            <span className={`w-16 text-right text-xs font-semibold tabular-nums flex-shrink-0 ${strong ? 'text-primary' : 'text-amber-500'}`}>
               {sc.toFixed(1)}%
             </span>
           </div>
@@ -440,6 +460,10 @@ function ArtistBarChart({ artists, artistView, expanded }: {
           <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: '#5eead4' }} />
           <span>Vancouver shows</span>
         </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: '#f59e0b' }} />
+          <span>Weaker match (&lt;10% or &lt;3 songs)</span>
+        </div>
       </div>
     </div>
   );
@@ -447,17 +471,10 @@ function ArtistBarChart({ artists, artistView, expanded }: {
 
 // ─── Venue pagination controls ────────────────────────────────────────────────
 function VenuePaginationControls({
-  currentPage,
-  totalPages,
-  totalVenues,
-  onPrev,
-  onNext,
+  currentPage, totalPages, totalVenues, onPrev, onNext,
 }: {
-  currentPage: number;
-  totalPages: number;
-  totalVenues: number;
-  onPrev: () => void;
-  onNext: () => void;
+  currentPage: number; totalPages: number; totalVenues: number;
+  onPrev: () => void; onNext: () => void;
 }) {
   return (
     <div className="flex items-center justify-between mb-3">
@@ -506,7 +523,6 @@ export default function MatchesPage() {
   const [venuePage, setVenuePage]           = useState(1);
 
   // Artist state
-  const [artistView, setArtistView]       = useState<ArtistView>('current');
   const [artistExpanded, setArtistExpanded] = useState(false);
 
   useEffect(() => { fetchMatches(); }, []);
@@ -516,7 +532,6 @@ export default function MatchesPage() {
       const res = await fetch('/api/match');
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed'); }
       const result = await res.json();
-      // Support both old shape (top_artists) and new shape (current_run_artists)
       const data: MatchData = {
         ...result.data,
         current_run_artists: result.data.current_run_artists ?? result.data.top_artists ?? [],
@@ -589,18 +604,9 @@ export default function MatchesPage() {
     safeMobileAllPage * VENUES_PER_PAGE,
   );
 
-  // Artist lists for each tab
-  const currentRunArtists = matchData?.current_run_artists ?? [];
-  const allArtists        = matchData?.all_artists ?? [];
-  const activeArtistList  = artistView === 'current' ? currentRunArtists : allArtists;
+  const allArtists = matchData?.all_artists ?? [];
 
   const setCapacityAndReset = (f: CapacityFilter) => { setCapacityFilter(f); setVenuePage(1); };
-
-  // Reset expand state when switching tabs
-  const handleArtistViewChange = (view: ArtistView) => {
-    setArtistView(view);
-    setArtistExpanded(false);
-  };
 
   // ── Loading / error ───────────────────────────────────────────────────────────
   if (loading) return (
@@ -773,7 +779,6 @@ export default function MatchesPage() {
                 )}
               </div>
 
-              {/* Pagination at bottom */}
               {totalVenuePages > 1 && (
                 <div className="mt-4">
                   <VenuePaginationControls
@@ -914,35 +919,22 @@ export default function MatchesPage() {
 
           {/* ── Artists section ── */}
           <div className="bg-card rounded-lg shadow-lg p-4 md:p-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-1">
+            <div className="mb-1">
               <h2 className="text-xl md:text-2xl font-bold text-card-foreground">Top Matched Artists</h2>
-              <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
-                <button onClick={() => handleArtistViewChange('current')}
-                  className={`px-3 py-1.5 transition-colors ${artistView === 'current' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                  Current Run
-                </button>
-                <button onClick={() => handleArtistViewChange('all')}
-                  className={`px-3 py-1.5 transition-colors ${artistView === 'all' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                  All Artists
-                </button>
-              </div>
             </div>
 
             <p className="text-xs md:text-sm text-muted-foreground mb-4">
-              {artistView === 'current'
-                ? `Artists with past Vancouver shows since ${matchData.first_concert_year} — top ${Math.min(ARTISTS_DEFAULT, currentRunArtists.length)} shown`
-                : `All ${allArtists.length} matched artists ranked by match score — top ${Math.min(ARTISTS_DEFAULT, allArtists.length)} shown`}
-              {activeArtistList.length > ARTISTS_DEFAULT && !artistExpanded && ` of ${activeArtistList.length}`}
+              {`All ${allArtists.length} matched artists ranked by match score — top ${Math.min(ARTISTS_DEFAULT, allArtists.length)} shown`}
+              {allArtists.length > ARTISTS_DEFAULT && !artistExpanded && ` of ${allArtists.length}`}
             </p>
 
             <ArtistBarChart
-              artists={activeArtistList}
-              artistView={artistView}
+              artists={allArtists}
               expanded={artistExpanded}
             />
 
             {/* Expand / collapse */}
-            {activeArtistList.length > ARTISTS_DEFAULT && (
+            {allArtists.length > ARTISTS_DEFAULT && (
               <div className="mt-4 pt-3 border-t border-border flex justify-center">
                 <button
                   onClick={() => setArtistExpanded(prev => !prev)}
@@ -950,7 +942,7 @@ export default function MatchesPage() {
                 >
                   {artistExpanded
                     ? <>Show top {ARTISTS_DEFAULT} only ↑</>
-                    : <>View all {activeArtistList.length} artists ↓</>}
+                    : <>View all {allArtists.length} artists ↓</>}
                 </button>
               </div>
             )}
