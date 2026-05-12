@@ -470,7 +470,10 @@ function ArtistBarChart({ artists, expanded }: {
         </div>
         <div className="flex items-center gap-1.5">
           <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: '#f59e0b' }} />
-          <span>Weak match (&lt;10% or &lt;3 songs)</span>
+          <span
+            className="border-b border-dashed border-muted-foreground/50 cursor-default"
+            title="Score below 10% or fewer than 3 liked songs"
+          >Weak match</span>
         </div>
       </div>
     </div>
@@ -734,7 +737,7 @@ export default function MatchesPage() {
               <p className="text-xs md:text-sm text-muted-foreground">
                 {hasConfirmedSome ? (
                   <><span className="text-primary font-medium">{reviewedCount} venue{reviewedCount !== 1 ? 's' : ''} reviewed</span> — you can continue or keep reviewing below.</>
-                ) : 'Review venues below to improve your results, or continue directly to Likely Shows.'}
+                ) : 'Review your top matched venues below to improve results.'}
               </p>
               <button
                 onClick={handleSaveAndContinue}
@@ -755,7 +758,7 @@ export default function MatchesPage() {
                 <div>
                   <h2 className="text-xl md:text-2xl font-bold text-card-foreground">Top Matched Venues</h2>
                   <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
-                    Which of these venues have you attended? Each hosted shows by artists in your Spotify library.
+                    Which of these venues have you attended? Review 1 or more to improve your results
                   </p>
                 </div>
                 {/* Desktop capacity filter */}
