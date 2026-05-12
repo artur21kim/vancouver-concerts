@@ -349,7 +349,7 @@ function ArtistBarChart({ artists, expanded }: {
         <span className="w-5 flex-shrink-0" />
         <span className="w-40 md:w-56 flex-shrink-0 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Artist</span>
         <span className="flex-1" />
-        <span className="w-16 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">Match Score</span>
+        <span className="w-16 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0 whitespace-nowrap">Match Score</span>
       </div>
 
       {displayArtists.map((artist, i) => {
@@ -430,9 +430,9 @@ function ArtistBarChart({ artists, expanded }: {
                 )}
               </div>
 
-              {/* Hover tooltip — rendered below the bar, left-aligned */}
+              {/* Hover tooltip — inline, vertically centred on the bar, anchored to bar left */}
               {isHovered && (
-                <div className="absolute top-full left-0 mt-0.5 pointer-events-none z-10">
+                <div className="absolute inset-y-0 left-0 flex items-center pointer-events-none z-20">
                   <div className="bg-card/95 border border-border rounded px-2 py-1 text-[10px] text-muted-foreground whitespace-nowrap shadow-md flex items-center gap-2.5">
                     <span className="flex items-center gap-1">
                       <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: strong ? '#0d9488' : '#f59e0b' }} />
@@ -694,6 +694,59 @@ export default function MatchesPage() {
             </div>
           </div>
 
+          {/* ── Artists section ── */}
+          <div className="bg-card rounded-lg shadow-lg p-4 md:p-6 mb-6 md:mb-8">
+            <div className="mb-1">
+              <h2 className="text-xl md:text-2xl font-bold text-card-foreground">Top Matched Artists</h2>
+            </div>
+
+            <p className="text-xs md:text-sm text-muted-foreground mb-4">
+              {`All ${allArtists.length} matched artists ranked by match score — top ${Math.min(ARTISTS_DEFAULT, allArtists.length)} shown`}
+              {allArtists.length > ARTISTS_DEFAULT && !artistExpanded && ` of ${allArtists.length}`}
+            </p>
+
+            <ArtistBarChart
+              artists={allArtists}
+              expanded={artistExpanded}
+            />
+
+            {/* Expand / collapse */}
+            {allArtists.length > ARTISTS_DEFAULT && (
+              <div className="mt-4 pt-3 border-t border-border flex justify-center">
+                <button
+                  onClick={() => setArtistExpanded(prev => !prev)}
+                  className="flex items-center gap-2 px-5 py-2 rounded-lg border border-primary text-primary text-sm font-semibold hover:bg-primary hover:text-primary-foreground transition-colors"
+                >
+                  {artistExpanded
+                    ? <>Show top {ARTISTS_DEFAULT} only ↑</>
+                    : <>View all {allArtists.length} artists ↓</>}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ── Between-sections CTA ── */}
+          <div className="bg-card rounded-lg shadow p-4 md:p-5 mb-6 md:mb-8 border border-primary/20">
+            {error && (
+              <div className="mb-3 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2">{error}</div>
+            )}
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <p className="text-xs md:text-sm text-muted-foreground">
+                {hasConfirmedSome ? (
+                  <><span className="text-primary font-medium">{reviewedCount} venue{reviewedCount !== 1 ? 's' : ''} reviewed</span> — you can continue or keep reviewing below.</>
+                ) : 'Review venues below to improve your results, or continue directly to Likely Shows.'}
+              </p>
+              <button
+                onClick={handleSaveAndContinue}
+                disabled={saving}
+                className="px-6 py-3 rounded-lg font-semibold text-sm md:text-base transition-colors flex items-center justify-center gap-2 flex-shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {saving && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />}
+                {saving ? 'Saving...' : 'Save & Continue to Likely Shows →'}
+              </button>
+            </div>
+          </div>
+
           {/* ── Venues section ── */}
           <div className="bg-card rounded-lg shadow-lg p-4 md:p-6 mb-6 md:mb-8">
 
@@ -923,37 +976,6 @@ export default function MatchesPage() {
                 </button>
               </div>
             </div>
-          </div>
-
-          {/* ── Artists section ── */}
-          <div className="bg-card rounded-lg shadow-lg p-4 md:p-6">
-            <div className="mb-1">
-              <h2 className="text-xl md:text-2xl font-bold text-card-foreground">Top Matched Artists</h2>
-            </div>
-
-            <p className="text-xs md:text-sm text-muted-foreground mb-4">
-              {`All ${allArtists.length} matched artists ranked by match score — top ${Math.min(ARTISTS_DEFAULT, allArtists.length)} shown`}
-              {allArtists.length > ARTISTS_DEFAULT && !artistExpanded && ` of ${allArtists.length}`}
-            </p>
-
-            <ArtistBarChart
-              artists={allArtists}
-              expanded={artistExpanded}
-            />
-
-            {/* Expand / collapse */}
-            {allArtists.length > ARTISTS_DEFAULT && (
-              <div className="mt-4 pt-3 border-t border-border flex justify-center">
-                <button
-                  onClick={() => setArtistExpanded(prev => !prev)}
-                  className="flex items-center gap-2 px-5 py-2 rounded-lg border border-primary text-primary text-sm font-semibold hover:bg-primary hover:text-primary-foreground transition-colors"
-                >
-                  {artistExpanded
-                    ? <>Show top {ARTISTS_DEFAULT} only ↑</>
-                    : <>View all {allArtists.length} artists ↓</>}
-                </button>
-              </div>
-            )}
           </div>
 
         </div>
