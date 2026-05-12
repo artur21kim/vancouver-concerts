@@ -704,8 +704,9 @@ export default function MatchesPage() {
             </div>
 
             <p className="text-xs md:text-sm text-muted-foreground mb-4">
-              {`All ${allArtists.length} matched artists ranked by match score — top ${Math.min(ARTISTS_DEFAULT, allArtists.length)} shown`}
-              {allArtists.length > ARTISTS_DEFAULT && !artistExpanded && ` of ${allArtists.length}`}
+              {artistExpanded
+                ? `All ${allArtists.length} matched artists ranked by match score`
+                : `All ${allArtists.length} matched artists ranked by match score — top ${Math.min(ARTISTS_DEFAULT, allArtists.length)} shown`}
             </p>
 
             <ArtistBarChart
