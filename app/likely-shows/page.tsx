@@ -305,11 +305,6 @@ export default function LikelyShowsPage() {
 
   useEffect(() => { fetchLikelyShows(); }, []);
   useEffect(() => { applyFiltersAndSort(); }, [allShows, yearRange, sortBy]);
-  useEffect(() => {
-    if (lessLikelyAdded + lessLikelySkipped > 0 && lessLikelyFilter === 'all') {
-      setLessLikelyFilter('unreviewed');
-    }
-  }, [lessLikelyAdded, lessLikelySkipped]);
 
   const fetchLikelyShows = async () => {
     try {
@@ -560,6 +555,12 @@ export default function LikelyShowsPage() {
   const stretchPending     = stretchShows.filter(s => s.status === 'pending').length;
 
   const showTipBanner = sortBy !== 'reviewed' && sortBy !== 'year' && reviewedShowsCount > 0;
+
+  useEffect(() => {
+    if (lessLikelyAdded + lessLikelySkipped > 0 && lessLikelyFilter === 'all') {
+      setLessLikelyFilter('unreviewed');
+    }
+  }, [lessLikelyAdded, lessLikelySkipped]);
 
   if (loading) return (
     <>
