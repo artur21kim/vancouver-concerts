@@ -58,9 +58,10 @@ const PRE1960_LABEL     = 'Pre-1960s'
 // ── Helper: decade string → RPC p_decade param ────────────────
 function decadeToParam(d: Decade): string | null {
   if (d === 'all') return null
-  // '1950s' and earlier all map to 'pre1960s' if the decade is before 1960
-  const start = parseInt(d.substring(0, 4))
-  return start < 1960 ? 'pre1960s' : d
+  // Always pass the actual decade string (e.g. '1920s') so the RPC
+  // filters to that specific decade. 'pre1960s' is only used by the
+  // all-time chart aggregation bucket label, never for drill-down.
+  return d
 }
 
 // ── Helper: capacity filter applied to ChartRow[] ────────────
@@ -512,7 +513,7 @@ export default function HomeClient({
             {hasActiveFilter && (
               <button
                 onClick={handleClearAll}
-                className="text-xs border border-border rounded px-2 py-1.5 text-muted-foreground hover:border-destructive hover:text-destructive transition-colors whitespace-nowrap"
+                className="text-xs border border-destructive text-destructive rounded px-2 py-1.5 hover:bg-destructive/10 transition-colors whitespace-nowrap"
               >
                 Clear All
               </button>
