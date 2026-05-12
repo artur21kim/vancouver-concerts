@@ -348,8 +348,8 @@ function ArtistBarChart({ artists, expanded }: {
       <div className="flex items-center gap-3 pb-1 px-2 border-b border-border">
         <span className="w-5 flex-shrink-0" />
         <span className="w-40 md:w-56 flex-shrink-0 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Artist</span>
-        <span className="flex-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Match Score</span>
-        <span className="w-16 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">Score</span>
+        <span className="flex-1" />
+        <span className="w-16 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">Match Score</span>
       </div>
 
       {displayArtists.map((artist, i) => {
@@ -430,9 +430,9 @@ function ArtistBarChart({ artists, expanded }: {
                 )}
               </div>
 
-              {/* Hover tooltip — rendered inline over the bar */}
+              {/* Hover tooltip — rendered below the bar, left-aligned */}
               {isHovered && (
-                <div className="absolute inset-0 flex items-center justify-start pl-2 pointer-events-none z-10">
+                <div className="absolute top-full left-0 mt-0.5 pointer-events-none z-10">
                   <div className="bg-card/95 border border-border rounded px-2 py-1 text-[10px] text-muted-foreground whitespace-nowrap shadow-md flex items-center gap-2.5">
                     <span className="flex items-center gap-1">
                       <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: strong ? '#0d9488' : '#f59e0b' }} />
@@ -470,7 +470,7 @@ function ArtistBarChart({ artists, expanded }: {
         </div>
         <div className="flex items-center gap-1.5">
           <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: '#f59e0b' }} />
-          <span>Weaker match (&lt;10% or &lt;3 songs)</span>
+          <span>Weak match (&lt;10% or &lt;3 songs)</span>
         </div>
       </div>
     </div>
