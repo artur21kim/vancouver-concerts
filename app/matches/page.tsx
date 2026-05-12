@@ -759,7 +759,9 @@ export default function MatchesPage() {
                 <div>
                   <h2 className="text-xl md:text-2xl font-bold text-card-foreground">Top Matched Venues</h2>
                   <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
-                    Which of these venues have you attended? Review 1 or more to improve your results
+                    Which of these venues have you attended? Review{' '}
+                    <span className="text-primary font-medium">1 or more</span>{' '}
+                    to improve your results
                   </p>
                 </div>
                 {/* Desktop capacity filter */}
