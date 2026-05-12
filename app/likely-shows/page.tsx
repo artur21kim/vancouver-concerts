@@ -301,9 +301,15 @@ export default function LikelyShowsPage() {
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
   const [yearRange, setYearRange] = useState<[number, number]>([2008, currentYear]);
   const [sortBy, setSortBy] = useState<'relevance' | 'artist' | 'count' | 'year' | 'reviewed'>('relevance');
+  const [lessLikelyFilter, setLessLikelyFilter] = useState<'all' | 'unreviewed'>('all');
 
   useEffect(() => { fetchLikelyShows(); }, []);
   useEffect(() => { applyFiltersAndSort(); }, [allShows, yearRange, sortBy]);
+  useEffect(() => {
+    if (lessLikelyAdded + lessLikelySkipped > 0 && lessLikelyFilter === 'all') {
+      setLessLikelyFilter('unreviewed');
+    }
+  }, [lessLikelyAdded, lessLikelySkipped]);
 
   const fetchLikelyShows = async () => {
     try {
@@ -1012,7 +1018,23 @@ export default function LikelyShowsPage() {
                     <span className="text-xs font-medium text-destructive/70">· {lessLikelySkipped} skipped</span>
                   )}
                 </div>
-                <span className="text-muted-foreground text-sm ml-3">{lessLikelyOpen ? '▼' : '▶'}</span>
+                <div className="flex items-center gap-2 ml-3 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                  <div className="flex rounded-md border border-border overflow-hidden text-xs">
+                    <button
+                      onClick={() => setLessLikelyFilter('unreviewed')}
+                      className={`px-2.5 py-1 transition ${lessLikelyFilter === 'unreviewed' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:bg-muted/50'}`}
+                    >
+                      Unreviewed
+                    </button>
+                    <button
+                      onClick={() => setLessLikelyFilter('all')}
+                      className={`px-2.5 py-1 border-l border-border transition ${lessLikelyFilter === 'all' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:bg-muted/50'}`}
+                    >
+                      All
+                    </button>
+                  </div>
+                  <span className="text-muted-foreground text-sm">{lessLikelyOpen ? '▼' : '▶'}</span>
+                </div>
               </button>
 
               {lessLikelyOpen && (
@@ -1042,15 +1064,29 @@ export default function LikelyShowsPage() {
                         });
                         return acc;
                       }, [] as GroupedShows[]);
-                      grouped.sort((a, b) => b.match_score - a.match_score);
+
                       grouped.forEach(g => g.shows.sort((a, b) => b.date.localeCompare(a.date)));
 
-                      return grouped.map(group => {
-                        const isExpanded = expandedGroups.has(group.artist_id + 900000);
+                      // Unreviewed groups first, then reviewed — within each group sort by match score
+                      grouped.sort((a, b) => {
+                        const aReviewed = a.shows.every(s => s.status !== 'pending');
+                        const bReviewed = b.shows.every(s => s.status !== 'pending');
+                        if (aReviewed !== bReviewed) return aReviewed ? 1 : -1;
+                        return b.match_score - a.match_score;
+                      });
+
+                      // Apply unreviewed filter
+                      const visible = lessLikelyFilter === 'unreviewed'
+                        ? grouped.filter(g => g.shows.some(s => s.status === 'pending'))
+                        : grouped;
+
+                      return visible.map(group => {
                         const gPending = group.shows.filter(s => s.status === 'pending').length;
                         const gAdded = group.shows.filter(s => s.status === 'added').length;
                         const gSkipped = group.shows.filter(s => s.status === 'skipped').length;
                         const allReviewed = gPending === 0;
+                        // Auto-collapse fully reviewed groups
+                        const isExpanded = allReviewed ? false : expandedGroups.has(group.artist_id + 900000);
 
                         return (
                           <div key={group.artist_id}>
