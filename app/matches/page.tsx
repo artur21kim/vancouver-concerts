@@ -329,10 +329,16 @@ function ArtistBarChart({ artists, expanded }: {
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
 
+  // Sort: strong matches first (by score desc), then weak matches (by score desc)
+  const sortedArtists = [
+    ...artists.filter(a => isStrongMatch(a)).sort((a, b) => b.match_score_all - a.match_score_all),
+    ...artists.filter(a => !isStrongMatch(a)).sort((a, b) => b.match_score_all - a.match_score_all),
+  ];
+
   // Always scale relative to the global #1 across the full list
   const globalMax = Math.max(...artists.map(a => a.match_score_all), 1);
 
-  const displayArtists = expanded ? artists : artists.slice(0, ARTISTS_DEFAULT);
+  const displayArtists = expanded ? sortedArtists : sortedArtists.slice(0, ARTISTS_DEFAULT);
 
   if (displayArtists.length === 0) return <p className="text-muted-foreground text-center py-12">No artists to display</p>;
 
@@ -386,7 +392,7 @@ function ArtistBarChart({ artists, expanded }: {
             </div>
 
             {/* Bar */}
-            <div className="flex-1 relative">
+            <div className="flex-1 relative overflow-visible">
               <div className="flex h-5 bg-muted/40" style={{ borderRadius: '9999px' }}>
                 {strong ? (
                   <>
@@ -424,20 +430,22 @@ function ArtistBarChart({ artists, expanded }: {
                 )}
               </div>
 
-              {/* Hover tooltip */}
+              {/* Hover tooltip — rendered inline over the bar */}
               {isHovered && (
-                <div className="absolute left-0 -top-10 z-10 bg-card border border-border rounded-lg px-2.5 py-1.5 text-[10px] text-muted-foreground whitespace-nowrap shadow-lg pointer-events-none flex items-center gap-3">
-                  <span className="flex items-center gap-1">
-                    <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: strong ? '#0d9488' : '#f59e0b' }} />
-                    <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 24 24" fill="#1DB954">
-                      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-                    </svg>
-                    {artist.spotify_song_count} songs
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: strong ? '#5eead4' : '#f59e0b' }} />
-                    📍 {artist.vancouver_show_count_all} shows
-                  </span>
+                <div className="absolute inset-0 flex items-center justify-start pl-2 pointer-events-none z-10">
+                  <div className="bg-card/95 border border-border rounded px-2 py-1 text-[10px] text-muted-foreground whitespace-nowrap shadow-md flex items-center gap-2.5">
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: strong ? '#0d9488' : '#f59e0b' }} />
+                      <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 24 24" fill="#1DB954">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                      </svg>
+                      {artist.spotify_song_count} songs
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: strong ? '#5eead4' : '#f59e0b' }} />
+                      📍 {artist.vancouver_show_count_all} shows
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
