@@ -424,6 +424,17 @@ export default function LikelyShowsPage() {
     } catch { alert('Failed to update show. Please try again.'); return allShows; }
   };
 
+  const updateLessLikelyShowStatus = async (showId: number, status: 'added' | 'skipped') => {
+    try {
+      const response = await fetch('/api/shows/update-status', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ show_id: showId, status, source: 'likely_shows' })
+      });
+      if (!response.ok) throw new Error('Failed');
+      setLessLikelyShows(prev => prev.map(s => s.show_id === showId ? { ...s, status } : s));
+    } catch { alert('Failed to update show. Please try again.'); }
+  };
+
   const handleAddShow = async (showId: number) => {
     const updated = await updateShowStatus(showId, 'added');
     const show = updated.find(s => s.show_id === showId);
@@ -459,6 +470,33 @@ export default function LikelyShowsPage() {
       setAllShows(updated);
       setTimeout(() => autoCollapseIfComplete(groupId, updated), 100);
     } catch { alert('Failed to update shows. Please try again.'); }
+  };
+
+  const handleLessLikelyBulkAction = async (artistId: number, action: 'add' | 'skip') => {
+    const status: 'added' | 'skipped' = action === 'add' ? 'added' : 'skipped';
+    const groupShows = lessLikelyShows.filter(s => s.artist_id === artistId && s.status === 'pending');
+    if (!groupShows.length) return;
+    try {
+      const response = await fetch('/api/shows/bulk-update', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ show_ids: groupShows.map(s => s.show_id), status, source: 'likely_shows' })
+      });
+      if (!response.ok) throw new Error('Failed');
+      setLessLikelyShows(prev => prev.map(s => groupShows.some(g => g.show_id === s.show_id) ? { ...s, status } : s));
+    } catch { alert('Failed to update shows. Please try again.'); }
+  };
+
+  const handleLessLikelyClearAll = async (artistId: number) => {
+    if (!confirm('Clear all reviews for this group?')) return;
+    const groupShows = lessLikelyShows.filter(s => s.artist_id === artistId);
+    try {
+      const response = await fetch('/api/shows/bulk-update', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ show_ids: groupShows.map(s => s.show_id), status: 'pending', source: 'likely_shows' })
+      });
+      if (!response.ok) throw new Error('Failed');
+      setLessLikelyShows(prev => prev.map(s => groupShows.some(g => g.show_id === s.show_id) ? { ...s, status: 'pending' as const } : s));
+    } catch { alert('Failed to clear reviews. Please try again.'); }
   };
 
   const handleRestAction = async (groupId: number, action: 'add' | 'skip') => {
@@ -964,6 +1002,9 @@ export default function LikelyShowsPage() {
                 <div className="flex items-center gap-2 min-w-0 flex-wrap">
                   <span className="font-semibold text-card-foreground text-sm">Less Likely Shows</span>
                   <span className="text-muted-foreground text-sm font-normal">({lessLikelyShows.length})</span>
+                  {lessLikelyPending > 0 && (
+                    <span className="text-xs text-muted-foreground/60">· {lessLikelyPending} pending</span>
+                  )}
                   {lessLikelyAdded > 0 && (
                     <span className="text-xs font-medium text-green-500/80">· {lessLikelyAdded} added</span>
                   )}
@@ -978,7 +1019,7 @@ export default function LikelyShowsPage() {
                 <>
                   <div className="px-4 py-2 border-y border-amber-500/20 bg-amber-500/5">
                     <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 flex-wrap">
-                      Shows with match score below 10% or 1–2
+                      Shows with match score <span className="text-primary font-medium">below 10%</span> or 1–2
                       <SpotifyIcon className="w-3 h-3 inline-block flex-shrink-0 text-[#1DB954]" />
                       songs
                     </p>
@@ -1053,13 +1094,13 @@ export default function LikelyShowsPage() {
                                 {gPending > 0 && (
                                   <>
                                     <button
-                                      onClick={() => handleBulkAction(group.artist_id, 'add')}
+                                      onClick={() => handleLessLikelyBulkAction(group.artist_id, 'add')}
                                       className="px-2 py-1 text-xs font-semibold rounded bg-green-700/80 text-white hover:bg-green-700 transition"
                                     >
                                       {gAdded > 0 || gSkipped > 0 ? '+Rest' : 'Add All'}
                                     </button>
                                     <button
-                                      onClick={() => handleBulkAction(group.artist_id, 'skip')}
+                                      onClick={() => handleLessLikelyBulkAction(group.artist_id, 'skip')}
                                       className="px-2 py-1 text-xs font-semibold rounded bg-red-700/80 text-white hover:bg-red-700 transition"
                                     >
                                       {gAdded > 0 || gSkipped > 0 ? '−Rest' : 'Skip All'}
@@ -1068,7 +1109,7 @@ export default function LikelyShowsPage() {
                                 )}
                                 {allReviewed && (
                                   <button
-                                    onClick={() => handleClearAll(group.artist_id)}
+                                    onClick={() => handleLessLikelyClearAll(group.artist_id)}
                                     className="px-2 py-1 text-xs font-medium rounded border border-border text-muted-foreground hover:text-foreground transition"
                                   >
                                     Clear
@@ -1090,18 +1131,18 @@ export default function LikelyShowsPage() {
                                     <SwipeableShowRow
                                       key={show.show_id}
                                       show={show}
-                                      onAdd={() => handleAddShow(show.show_id)}
-                                      onSkip={() => handleSkipShow(show.show_id)}
+                                      onAdd={() => updateLessLikelyShowStatus(show.show_id, 'added')}
+                                      onSkip={() => updateLessLikelyShowStatus(show.show_id, 'skipped')}
                                     >
                                       {/* Desktop */}
                                       <div className="hidden md:grid px-5 py-3 items-center grid-cols-[48px_120px_1fr]">
                                         <div className="flex items-center gap-2">
-                                          <button onClick={() => handleAddShow(show.show_id)} className="focus:outline-none">
+                                          <button onClick={() => updateLessLikelyShowStatus(show.show_id, 'added')} className="focus:outline-none">
                                             <svg className={`w-5 h-5 transition-colors ${isAdded ? 'fill-primary text-primary' : 'fill-none text-muted-foreground hover:text-primary'}`} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                                               <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
                                             </svg>
                                           </button>
-                                          <button onClick={() => handleSkipShow(show.show_id)} className="focus:outline-none">
+                                          <button onClick={() => updateLessLikelyShowStatus(show.show_id, 'skipped')} className="focus:outline-none">
                                             <svg className={`w-4 h-4 transition-colors ${isSkipped ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'}`} stroke="currentColor" strokeWidth="2.5" fill="none" viewBox="0 0 24 24">
                                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                             </svg>
