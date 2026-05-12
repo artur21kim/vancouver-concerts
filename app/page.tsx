@@ -4,113 +4,75 @@ import HomeClient from './HomeClient'
 
 export const revalidate = 3600
 
+export type ChartRow = {
+  bucket:   string
+  sort_key: number
+  small:    number
+  medium:   number
+  large:    number
+  xlarge:   number
+  unknown:  number
+}
+
+export type TopArtist = {
+  artist_id:   number
+  artist_name: string
+  show_count:  number
+}
+
+export type TopVenue = {
+  venue_id:          number
+  venue_name:        string
+  capacity_category: string | null
+  show_count:        number
+}
+
+export type HomeStats = {
+  total_shows:    number
+  unique_artists: number
+  unique_venues:  number
+  min_date:       string | null
+  max_date:       string | null
+}
+
+export type DrillStats = {
+  total_shows:    number
+  unique_artists: number
+  unique_venues:  number
+}
+
 export default async function Home() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  const pageSize = 1000
+  const [statsRes, chartRes, artistsRes, venuesRes] = await Promise.all([
+    supabase.rpc('get_home_stats'),
+    supabase.rpc('get_home_chart_data', { p_decade: null, p_year: null }),
+    supabase.rpc('get_home_top_artists', { p_decade: null, p_year: null, p_month: null }),
+    supabase.rpc('get_home_top_venues',  { p_decade: null, p_year: null, p_month: null }),
+  ])
 
-  // Fetch all shows in batches — lean, ID-only
-  let allShowsRaw: any[] = []
-  let showPage = 0
-  let hasMoreShows = true
+  if (statsRes.error)   console.error('home stats error:',   statsRes.error)
+  if (chartRes.error)   console.error('home chart error:',   chartRes.error)
+  if (artistsRes.error) console.error('home artists error:', artistsRes.error)
+  if (venuesRes.error)  console.error('home venues error:',  venuesRes.error)
 
-  while (hasMoreShows) {
-    const { data, error } = await supabase
-      .from('fact_shows')
-      .select('show_id, date, artist_id, venue_id, show_type')
-      .order('date', { ascending: false })
-      .range(showPage * pageSize, (showPage + 1) * pageSize - 1)
-
-    if (error) {
-      console.error('Error fetching page', showPage, error)
-      return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="text-center">
-            <p className="text-red-600 text-lg mb-4">Failed to load concert data</p>
-          </div>
-        </div>
-      )
-    }
-
-    if (data && data.length > 0) {
-      allShowsRaw = [...allShowsRaw, ...data]
-      showPage++
-      hasMoreShows = data.length === pageSize
-    } else {
-      hasMoreShows = false
-    }
-  }
-
-  // Fetch artists
-  let allArtists: any[] = []
-  let artistPage = 0
-  let hasMoreArtists = true
-
-  while (hasMoreArtists) {
-    const { data, error } = await supabase
-      .from('dim_artist')
-      .select('artist_id, artist_name')
-      .order('artist_name')
-      .range(artistPage * pageSize, (artistPage + 1) * pageSize - 1)
-
-    if (error) { console.error('Error fetching artists', error); break }
-    if (data && data.length > 0) {
-      allArtists = [...allArtists, ...data]
-      artistPage++
-      hasMoreArtists = data.length === pageSize
-    } else {
-      hasMoreArtists = false
-    }
-  }
-
-  // Fetch venues with capacity info
-  let allVenues: any[] = []
-  let venuePage = 0
-  let hasMoreVenues = true
-
-  while (hasMoreVenues) {
-    const { data, error } = await supabase
-      .from('dim_venue')
-      .select('venue_id, venue_name, capacity_category, status')
-      .order('venue_name')
-      .range(venuePage * pageSize, (venuePage + 1) * pageSize - 1)
-
-    if (error) { console.error('Error fetching venues', error); break }
-    if (data && data.length > 0) {
-      allVenues = [...allVenues, ...data]
-      venuePage++
-      hasMoreVenues = data.length === pageSize
-    } else {
-      hasMoreVenues = false
-    }
-  }
-
-  if (allShowsRaw.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-          <p className="text-gray-600">Loading concert history...</p>
-        </div>
-      </div>
-    )
-  }
-
-  const shows = allShowsRaw.map((show: any) => ({
-    show_id: show.show_id,
-    date: show.date,
-    artist_id: show.artist_id,
-    venue_id: show.venue_id,
-    show_type: show.show_type,
-  }))
+  const stats:   HomeStats   = statsRes.data   ?? { total_shows: 0, unique_artists: 0, unique_venues: 0, min_date: null, max_date: null }
+  const chart:   ChartRow[]  = chartRes.data   ?? []
+  const artists: TopArtist[] = artistsRes.data ?? []
+  const venues:  TopVenue[]  = venuesRes.data  ?? []
 
   return (
     <>
       <Navigation />
-      <HomeClient shows={shows} artists={allArtists} venues={allVenues} />
+      <HomeClient
+        initialStats={stats}
+        initialChart={chart}
+        initialArtists={artists}
+        initialVenues={venues}
+      />
     </>
   )
 }

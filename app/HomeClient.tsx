@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Chart as ChartJS,
@@ -13,33 +13,16 @@ import {
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
 import { useTheme } from 'next-themes'
+import type { ChartRow, TopArtist, TopVenue, HomeStats, DrillStats } from './page'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
-type Show = {
-  show_id: number
-  date: string
-  artist_id: number
-  venue_id: number
-  show_type: string | null
-}
-
-type Artist = {
-  artist_id: number
-  artist_name: string
-}
-
-type Venue = {
-  venue_id: number
-  venue_name: string
-  capacity_category: string | null
-  status: string | null
-}
-
+// ── Types ─────────────────────────────────────────────────────
 type CapacityBucket = 'small' | 'medium' | 'large' | 'xlarge' | 'unknown'
 type CapacityFilter = 'all' | CapacityBucket
 type Decade = 'all' | '1900s' | '1910s' | '1920s' | '1930s' | '1940s' | '1950s' | '1960s' | '1970s' | '1980s' | '1990s' | '2000s' | '2010s' | '2020s'
 
+// ── Capacity metadata (unchanged from original) ───────────────
 const CAPACITY_META: Record<CapacityBucket, {
   label: string
   legendLabel: string
@@ -51,7 +34,7 @@ const CAPACITY_META: Record<CapacityBucket, {
   hoverBg: string
 }> = {
   small:   { label: 'S',  legendLabel: 'Small (<500)',      tooltipLabel: 'Small',   tooltip: 'Small (< 500)',     unselectedClass: 'text-purple-400 dark:text-purple-300',  bg: 'rgba(139, 92, 192, 0.7)',   border: 'rgba(139, 92, 192, 1)',  hoverBg: 'rgba(139, 92, 192, 0.9)' },
-  medium: { label: 'M', legendLabel: 'Medium (500–1.5K)', tooltipLabel: 'Medium', tooltip: 'Medium (500–1.5K)', unselectedClass: 'text-[#3A8FBD]', bg: 'rgba(58, 143, 189, 0.75)', border: 'rgba(58, 143, 189, 1)', hoverBg: 'rgba(58, 143, 189, 0.95)' },
+  medium:  { label: 'M',  legendLabel: 'Medium (500–1.5K)', tooltipLabel: 'Medium',  tooltip: 'Medium (500–1.5K)', unselectedClass: 'text-[#3A8FBD]',                        bg: 'rgba(58, 143, 189, 0.75)',  border: 'rgba(58, 143, 189, 1)',  hoverBg: 'rgba(58, 143, 189, 0.95)' },
   large:   { label: 'L',  legendLabel: 'Large (1.5K–10K)',  tooltipLabel: 'Large',   tooltip: 'Large (1.5K–10K)',  unselectedClass: 'text-orange-600 dark:text-orange-400',  bg: 'rgba(234, 88, 12, 0.75)',   border: 'rgba(234, 88, 12, 1)',   hoverBg: 'rgba(234, 88, 12, 0.95)' },
   xlarge:  { label: 'XL', legendLabel: 'X-Large (10K+)',    tooltipLabel: 'X-Large', tooltip: 'X-Large (10K+)',    unselectedClass: 'text-rose-600 dark:text-rose-400',      bg: 'rgba(225, 29, 72, 0.75)',   border: 'rgba(225, 29, 72, 1)',   hoverBg: 'rgba(225, 29, 72, 0.95)' },
   unknown: { label: '?',  legendLabel: 'Unknown',           tooltipLabel: 'Unknown', tooltip: 'Unknown capacity',  unselectedClass: 'text-gray-400 dark:text-gray-500',      bg: 'rgba(156, 163, 175, 0.65)', border: 'rgba(156, 163, 175, 1)', hoverBg: 'rgba(156, 163, 175, 0.8)' },
@@ -61,202 +44,275 @@ const LEGEND_TO_TOOLTIP: Record<string, string> = Object.fromEntries(
   Object.values(CAPACITY_META).map(m => [m.legendLabel, m.tooltipLabel])
 )
 
-const CAPACITY_BUCKETS: CapacityBucket[] = ['small', 'medium', 'large', 'xlarge', 'unknown']
-const CAPACITY_BUTTON_ORDER: (CapacityFilter)[] = ['all', 'small', 'medium', 'large', 'xlarge', 'unknown']
-
+const CAPACITY_BUCKETS: CapacityBucket[]             = ['small', 'medium', 'large', 'xlarge', 'unknown']
+const CAPACITY_BUTTON_ORDER: CapacityFilter[]         = ['all', 'small', 'medium', 'large', 'xlarge', 'unknown']
 const CAPACITY_DISPLAY_NAMES: Record<CapacityBucket, string> = {
   small: 'Small', medium: 'Medium', large: 'Large', xlarge: 'X-Large', unknown: 'Unknown'
 }
 
 const DECADES: Decade[] = ['all', '1900s', '1910s', '1920s', '1930s', '1940s', '1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s']
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const MONTH_NAMES_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-const PRE1960_LABEL = 'Pre-1960s'
+const MONTH_NAMES       = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const MONTH_NAMES_FULL  = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const PRE1960_LABEL     = 'Pre-1960s'
 
-function capacityKey(category: string | null): CapacityBucket {
-  if (!category) return 'unknown'
-  const c = category.toLowerCase()
-  if (c.includes('small')) return 'small'
-  if (c.includes('medium')) return 'medium'
-  if (c.includes('x-large')) return 'xlarge'
-  if (c.includes('large')) return 'large'
-  return 'unknown'
+// ── Helper: decade string → RPC p_decade param ────────────────
+function decadeToParam(d: Decade): string | null {
+  if (d === 'all') return null
+  // '1950s' and earlier all map to 'pre1960s' if the decade is before 1960
+  const start = parseInt(d.substring(0, 4))
+  return start < 1960 ? 'pre1960s' : d
 }
 
+// ── Helper: capacity filter applied to ChartRow[] ────────────
+function filterChartRows(rows: ChartRow[], cap: CapacityFilter): ChartRow[] {
+  if (cap === 'all') return rows
+  return rows.map(r => ({
+    ...r,
+    small:   cap === 'small'   ? r.small   : 0,
+    medium:  cap === 'medium'  ? r.medium  : 0,
+    large:   cap === 'large'   ? r.large   : 0,
+    xlarge:  cap === 'xlarge'  ? r.xlarge  : 0,
+    unknown: cap === 'unknown' ? r.unknown : 0,
+  }))
+}
+
+// ── Helper: filter top lists by capacity ─────────────────────
+function filterVenues(venues: TopVenue[], cap: CapacityFilter): TopVenue[] {
+  if (cap === 'all') return venues
+  const catMap: Record<CapacityBucket, string> = {
+    small:   'Small (<500)',
+    medium:  'Medium (500-1.5K)',
+    large:   'Large (1.5K-10K)',
+    xlarge:  'X-Large (10K+)',
+    unknown: '',
+  }
+  return venues.filter(v =>
+    cap === 'unknown'
+      ? v.capacity_category === null
+      : v.capacity_category === catMap[cap as CapacityBucket]
+  )
+}
+
+
+// ── Main component ────────────────────────────────────────────
 export default function HomeClient({
-  shows,
-  artists,
-  venues,
+  initialStats,
+  initialChart,
+  initialArtists,
+  initialVenues,
 }: {
-  shows: Show[]
-  artists: Artist[]
-  venues: Venue[]
+  initialStats:   HomeStats
+  initialChart:   ChartRow[]
+  initialArtists: TopArtist[]
+  initialVenues:  TopVenue[]
 }) {
   const router = useRouter()
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
+
+  // ── View state ────────────────────────────────────────────
   const [selectedDecade, setSelectedDecade] = useState<Decade>('all')
-  const [selectedYear, setSelectedYear] = useState<number | null>(null)
-  const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
-  const [showAllArtists, setShowAllArtists] = useState(false)
-  const [showAllVenues, setShowAllVenues] = useState(false)
+  const [selectedYear,   setSelectedYear]   = useState<number | null>(null)
+  const [selectedMonth,  setSelectedMonth]  = useState<number | null>(null)
   const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all')
+  const [showAllArtists, setShowAllArtists] = useState(false)
+  const [showAllVenues,  setShowAllVenues]  = useState(false)
+
+  // ── Drill-down data state ─────────────────────────────────
+  const [chartRows,   setChartRows]   = useState<ChartRow[]>(initialChart)
+  const [artists,     setArtists]     = useState<TopArtist[]>(initialArtists)
+  const [venues,      setVenues]      = useState<TopVenue[]>(initialVenues)
+  const [drillStats,  setDrillStats]  = useState<DrillStats | null>(null)
+  const [loading,     setLoading]     = useState(false)
+
 
   useEffect(() => { setMounted(true) }, [])
 
-  const isDrilled = selectedDecade !== 'all' || selectedYear !== null || selectedMonth !== null
+  const isDrilled       = selectedDecade !== 'all' || selectedYear !== null || selectedMonth !== null
   const hasActiveFilter = isDrilled || capacityFilter !== 'all'
 
-  const handleClearAll = () => {
+  // ── Fetch drill-down data ─────────────────────────────────
+  const fetchDrillData = useCallback(async (
+    decade: Decade,
+    year:   number | null,
+    month:  number | null,
+  ) => {
+    const isAllTime = decade === 'all' && year === null && month === null
+
+    if (isAllTime) {
+      // Restore initial server-fetched data
+      setChartRows(initialChart)
+      setArtists(initialArtists)
+      setVenues(initialVenues)
+      setDrillStats(null)
+      return
+    }
+
+    setLoading(true)
+    const params = new URLSearchParams()
+    if (decade !== 'all') params.set('decade', decadeToParam(decade) ?? '')
+    if (year  !== null)   params.set('year',   String(year))
+    if (month !== null)   params.set('month',  String(month))
+
+    try {
+      const res  = await fetch(`/api/home/drill?${params.toString()}`)
+      const data = await res.json()
+      setChartRows(data.chart   ?? [])
+      setArtists(data.artists   ?? [])
+      setVenues(data.venues     ?? [])
+      setDrillStats(data.stats  ?? null)
+    } catch (e) {
+      console.error('Drill-down fetch error:', e)
+    } finally {
+      setLoading(false)
+    }
+  }, [initialChart, initialArtists, initialVenues])
+
+  // ── Clear all ─────────────────────────────────────────────
+  const handleClearAll = useCallback(() => {
     setSelectedDecade('all')
     setSelectedYear(null)
     setSelectedMonth(null)
     setCapacityFilter('all')
-  }
+    fetchDrillData('all', null, null)
+  }, [fetchDrillData])
 
-  const artistMap = useMemo(() => {
-    const map = new Map<number, Artist>()
-    artists.forEach(a => map.set(a.artist_id, a))
-    return map
-  }, [artists])
+  // ── Decade click ─────────────────────────────────────────
+  const handleDecadeClick = useCallback((decade: Decade) => {
+    setSelectedDecade(decade)
+    setSelectedYear(null)
+    setSelectedMonth(null)
+    fetchDrillData(decade, null, null)
+  }, [fetchDrillData])
 
-  const venueMap = useMemo(() => {
-    const map = new Map<number, Venue>()
-    venues.forEach(v => map.set(v.venue_id, v))
-    return map
-  }, [venues])
+  // ── Year click (from chart bar click) ────────────────────
+  const handleYearClick = useCallback((year: number, decade: Decade) => {
+    setSelectedDecade(decade)
+    setSelectedYear(year)
+    setSelectedMonth(null)
+    fetchDrillData(decade, year, null)
+  }, [fetchDrillData])
 
-  const venueFilteredIds = useMemo(() => {
-    if (capacityFilter === 'all') return null
-    const ids = new Set<number>()
-    venues.forEach(v => {
-      if (capacityKey(v.capacity_category) === capacityFilter) ids.add(v.venue_id)
-    })
-    return ids
-  }, [venues, capacityFilter])
+  // ── Month click (from chart bar click in year view) ──────
+  const handleMonthClick = useCallback((monthIndex: number) => {
+    // monthIndex is 0-based (Jan=0); API expects 1-based
+    setSelectedMonth(monthIndex)
+    fetchDrillData(selectedDecade, selectedYear, monthIndex + 1)
+  }, [fetchDrillData, selectedDecade, selectedYear])
 
-  const filteredShows = useMemo(() => {
-    let filtered = shows
-    if (venueFilteredIds !== null) {
-      filtered = filtered.filter(s => venueFilteredIds.has(s.venue_id))
-    }
-    if (selectedMonth !== null && selectedYear) {
-      return filtered.filter(show => {
-        const date = new Date(show.date + 'T12:00:00')
-        return date.getFullYear() === selectedYear && date.getMonth() === selectedMonth
-      })
-    }
-    if (selectedYear) {
-      return filtered.filter(show => new Date(show.date + 'T12:00:00').getFullYear() === selectedYear)
-    }
-    if (selectedDecade === 'all') return filtered
-    const decadeStart = parseInt(selectedDecade.substring(0, 4))
-    const decadeEnd = decadeStart + 9
-    return filtered.filter(show => {
-      const year = new Date(show.date + 'T12:00:00').getFullYear()
-      return year >= decadeStart && year <= decadeEnd
-    })
-  }, [shows, selectedDecade, selectedYear, selectedMonth, venueFilteredIds])
+  // ── Chart nav prev/next ───────────────────────────────────
+  const handleNavDecade = useCallback((newDecade: Decade) => {
+    setSelectedDecade(newDecade)
+    setSelectedYear(null)
+    setSelectedMonth(null)
+    fetchDrillData(newDecade, null, null)
+  }, [fetchDrillData])
 
+  const handleNavYear = useCallback((newYear: number) => {
+    const newDecade = `${Math.floor(newYear / 10) * 10}s` as Decade
+    setSelectedDecade(newDecade)
+    setSelectedYear(newYear)
+    setSelectedMonth(null)
+    fetchDrillData(newDecade, newYear, null)
+  }, [fetchDrillData])
+
+  // ── Filtered chart rows (capacity applied client-side) ────
+  const filteredChartRows = useMemo(
+    () => filterChartRows(chartRows, capacityFilter),
+    [chartRows, capacityFilter]
+  )
+
+  // ── Filtered venues (capacity applied client-side) ────────
+  const filteredVenues = useMemo(
+    () => filterVenues(venues, capacityFilter),
+    [venues, capacityFilter]
+  )
+
+  // ── Stats ─────────────────────────────────────────────────
   const stats = useMemo(() => {
-    const totalShows = filteredShows.length
-    const uniqueArtists = new Set(filteredShows.map(s => s.artist_id)).size
-    const uniqueVenues = new Set(filteredShows.map(s => s.venue_id)).size
+    const isDrilled = selectedDecade !== 'all' || selectedYear !== null || selectedMonth !== null
+
+    // All-time view: use server-fetched baseline stats
+    // Drilled view: use exact counts from get_home_drill_stats RPC
+    const totalShows    = isDrilled && drillStats ? drillStats.total_shows    : initialStats.total_shows
+    const uniqueArtists = isDrilled && drillStats ? drillStats.unique_artists : initialStats.unique_artists
+    const uniqueVenues  = isDrilled && drillStats ? drillStats.unique_venues  : initialStats.unique_venues
 
     let fourthCard: { label: string; value: string } | null = null
     if (selectedYear && !selectedMonth) {
-      const avg = Math.round(totalShows / 12)
-      fourthCard = { label: 'Shows per Month', value: avg.toLocaleString() }
+      fourthCard = { label: 'Shows per Month', value: Math.round(totalShows / 12).toLocaleString() }
     } else if (selectedDecade !== 'all' && !selectedYear) {
-      const avg = Math.round(totalShows / 10)
-      fourthCard = { label: 'Shows per Year', value: avg.toLocaleString() }
+      fourthCard = { label: 'Shows per Year', value: Math.round(totalShows / 10).toLocaleString() }
     } else if (selectedDecade === 'all' && !selectedYear) {
       fourthCard = { label: 'Date Range', value: '1900–2026' }
     }
 
     return { totalShows, uniqueArtists, uniqueVenues, fourthCard }
-  }, [filteredShows, selectedDecade, selectedYear, selectedMonth])
+  }, [initialStats, drillStats, selectedYear, selectedMonth, selectedDecade])
 
+  // ── Chart data ────────────────────────────────────────────
   const chartData = useMemo(() => {
-    if (selectedMonth !== null && selectedYear) return { labels: [], datasets: [] }
+    if (selectedMonth !== null) return { labels: [], datasets: [] }
 
-    let labels: string[] = []
-    let getBucket: (show: Show) => string
-
-    if (selectedYear) {
-      labels = MONTH_NAMES
-      getBucket = (show) => MONTH_NAMES[parseInt(show.date.split('-')[1]) - 1]
-    } else if (selectedDecade === 'all') {
-      labels = [PRE1960_LABEL, '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s']
-      getBucket = (show) => {
-        const year = new Date(show.date + 'T12:00:00').getFullYear()
-        if (year < 1960) return PRE1960_LABEL
-        return `${Math.floor(year / 10) * 10}s`
-      }
-    } else {
-      const decadeStart = parseInt(selectedDecade.substring(0, 4))
-      labels = Array.from({ length: 10 }, (_, i) => (decadeStart + i).toString())
-      getBucket = (show) => new Date(show.date + 'T12:00:00').getFullYear().toString()
-    }
-
-    const labelSet = new Set(labels)
-    const chartShows = selectedDecade === 'all' && !selectedYear
-      ? (venueFilteredIds !== null ? shows.filter(s => venueFilteredIds.has(s.venue_id)) : shows)
-      : filteredShows
-
-    const counts: Record<CapacityBucket, Record<string, number>> = {
-      small:   Object.fromEntries(labels.map(l => [l, 0])),
-      medium:  Object.fromEntries(labels.map(l => [l, 0])),
-      large:   Object.fromEntries(labels.map(l => [l, 0])),
-      xlarge:  Object.fromEntries(labels.map(l => [l, 0])),
-      unknown: Object.fromEntries(labels.map(l => [l, 0])),
-    }
-
-    chartShows.forEach(show => {
-      const bucket = getBucket(show)
-      if (!labelSet.has(bucket)) return
-      const venue = venueMap.get(show.venue_id)
-      const cap = capacityKey(venue?.capacity_category ?? null)
-      counts[cap][bucket] = (counts[cap][bucket] || 0) + 1
-    })
+    const labels = filteredChartRows.map(r => r.bucket)
 
     const columnTotals: Record<string, number> = {}
-    labels.forEach(l => {
-      columnTotals[l] = CAPACITY_BUCKETS.reduce((sum, k) => sum + (counts[k][l] || 0), 0)
+    filteredChartRows.forEach(r => {
+      columnTotals[r.bucket] = r.small + r.medium + r.large + r.xlarge + r.unknown
     })
 
     return {
       labels,
       datasets: CAPACITY_BUCKETS.map(k => ({
-        label: CAPACITY_META[k].legendLabel,
-        data: labels.map(l => counts[k][l] || 0),
-        backgroundColor: CAPACITY_META[k].bg,
-        hoverBackgroundColor: CAPACITY_META[k].hoverBg,
-        borderColor: CAPACITY_META[k].border,
-        borderWidth: 0,
-        hoverBorderWidth: 1,
-        stack: 'stack',
+        label:                  CAPACITY_META[k].legendLabel,
+        data:                   filteredChartRows.map(r => r[k]),
+        backgroundColor:        CAPACITY_META[k].bg,
+        hoverBackgroundColor:   CAPACITY_META[k].hoverBg,
+        borderColor:            CAPACITY_META[k].border,
+        borderWidth:            0,
+        hoverBorderWidth:       1,
+        stack:                  'stack',
         columnTotals,
       }))
     }
-  }, [shows, filteredShows, selectedDecade, selectedYear, selectedMonth, venueMap, venueFilteredIds])
+  }, [filteredChartRows, selectedMonth])
 
-  const topArtists = useMemo(() => {
-    const counts: { [key: number]: number } = {}
-    filteredShows.forEach(show => { counts[show.artist_id] = (counts[show.artist_id] || 0) + 1 })
-    return Object.entries(counts)
-      .map(([id, count]) => ({ artist_id: parseInt(id), artist_name: artistMap.get(parseInt(id))?.artist_name || '', show_count: count }))
-      .sort((a, b) => b.show_count - a.show_count)
-  }, [filteredShows, artistMap])
+  // ── Chart nav metadata ────────────────────────────────────
+  const chartNav = useMemo(() => {
+    if (selectedMonth !== null && selectedYear) {
+      return { title: `Shows in ${MONTH_NAMES[selectedMonth]} ${selectedYear}`, prev: null, next: null }
+    }
+    if (selectedYear) {
+      const prev = selectedYear - 1
+      const next = selectedYear + 1
+      return {
+        title: `Shows in ${selectedYear}`,
+        prev: prev >= 1900 ? { label: `← ${prev}`, onClick: () => handleNavYear(prev) } : null,
+        next: next <= 2026 ? { label: `${next} →`, onClick: () => handleNavYear(next) } : null,
+      }
+    }
+    if (selectedDecade !== 'all') {
+      const s = parseInt(selectedDecade.substring(0, 4))
+      return {
+        title: `Shows in the ${selectedDecade}`,
+        prev: s - 10 >= 1900 ? { label: `← ${s - 10}s`, onClick: () => handleNavDecade(`${s - 10}s` as Decade) } : null,
+        next: s + 10 <= 2020 ? { label: `${s + 10}s →`, onClick: () => handleNavDecade(`${s + 10}s` as Decade) } : null,
+      }
+    }
+    return { title: 'Shows by Decade', prev: null, next: null }
+  }, [selectedDecade, selectedYear, selectedMonth, handleNavYear, handleNavDecade])
 
-  const topVenues = useMemo(() => {
-    const counts: { [key: number]: number } = {}
-    filteredShows.forEach(show => { counts[show.venue_id] = (counts[show.venue_id] || 0) + 1 })
-    return Object.entries(counts)
-      .map(([id, count]) => ({ venue_id: parseInt(id), venue_name: venueMap.get(parseInt(id))?.venue_name || '', show_count: count }))
-      .sort((a, b) => b.show_count - a.show_count)
-  }, [filteredShows, venueMap])
+  // ── Filter context label ──────────────────────────────────
+  const filterContext = useMemo(() => {
+    const parts: string[] = []
+    if (selectedMonth !== null && selectedYear) parts.push(`${MONTH_NAMES[selectedMonth]} ${selectedYear}`)
+    else if (selectedYear)                       parts.push(selectedYear.toString())
+    else if (selectedDecade !== 'all')           parts.push(selectedDecade)
+    if (capacityFilter !== 'all')                parts.push(`${CAPACITY_DISPLAY_NAMES[capacityFilter as CapacityBucket]} Venues`)
+    return parts.length > 0 ? parts.join(' · ') : null
+  }, [selectedDecade, selectedYear, selectedMonth, capacityFilter])
 
+  // ── Chart options ─────────────────────────────────────────
   const chartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
@@ -266,7 +322,7 @@ export default function HomeClient({
         position: 'bottom' as const,
         labels: {
           boxWidth: 14,
-          padding: 12,
+          padding:  12,
           font: { size: 12 },
           color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.75)',
         },
@@ -288,13 +344,13 @@ export default function HomeClient({
             return label
           },
           label: (item: any) => {
-            const dataset = item.chart.data.datasets[item.datasetIndex]
+            const dataset      = item.chart.data.datasets[item.datasetIndex]
             const columnTotals = dataset.columnTotals as Record<string, number>
-            const label = item.chart.data.labels[item.dataIndex] as string
-            const total = columnTotals[label] || 0
-            const value = item.parsed.y
+            const label        = item.chart.data.labels[item.dataIndex] as string
+            const total        = columnTotals[label] || 0
+            const value        = item.parsed.y
             if (value === 0) return undefined
-            const pct = total > 0 ? Math.round((value / total) * 100) : 0
+            const pct       = total > 0 ? Math.round((value / total) * 100) : 0
             const shortLabel = LEGEND_TO_TOOLTIP[item.dataset.label] ?? item.dataset.label
             return `${shortLabel}: ${pct}%`
           },
@@ -310,68 +366,40 @@ export default function HomeClient({
       x: { stacked: true, grid: { display: false }, border: { display: false } },
       y: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { display: false }, border: { display: false } }
     },
-    onClick: (event: any, elements: any) => {
-      if (elements.length > 0) {
-        const index = elements[0].index
-        if (selectedYear) {
-          router.push(`/browse?year=${selectedYear}&month=${index + 1}`)
-        } else if (selectedDecade === 'all') {
-          const label = chartData.labels?.[index] as string
-          if (label === PRE1960_LABEL) {
-            setSelectedDecade('1950s'); setSelectedYear(null); setSelectedMonth(null)
-          } else {
-            setSelectedDecade(label as Decade); setSelectedYear(null); setSelectedMonth(null)
-          }
+    onClick: (_event: any, elements: any) => {
+      if (!elements.length) return
+      const index = elements[0].index
+      const label = chartData.labels?.[index] as string
+
+      if (selectedYear) {
+        // Year view → clicking a month navigates to browse
+        router.push(`/browse?year=${selectedYear}&month=${index + 1}`)
+      } else if (selectedDecade === 'all') {
+        // All-time view → drill into decade
+        if (label === PRE1960_LABEL) {
+          handleDecadeClick('1950s')
         } else {
-          setSelectedYear(parseInt(selectedDecade.substring(0, 4)) + index)
-          setSelectedMonth(null)
+          handleDecadeClick(label as Decade)
         }
+      } else {
+        // Decade view → drill into year
+        const year        = filteredChartRows[index]?.sort_key
+        const clickDecade = selectedDecade
+        if (year) handleYearClick(year, clickDecade)
       }
     }
-  }), [selectedDecade, selectedYear, chartData, router, resolvedTheme])
+  }), [selectedDecade, selectedYear, chartData, router, resolvedTheme, filteredChartRows, handleDecadeClick, handleYearClick])
 
-  const chartNav = useMemo(() => {
-    if (selectedMonth !== null && selectedYear) {
-      return { title: `Shows in ${MONTH_NAMES[selectedMonth]} ${selectedYear}`, prev: null, next: null }
-    }
-    if (selectedYear) {
-      const prev = selectedYear - 1
-      const next = selectedYear + 1
-      return {
-        title: `Shows in ${selectedYear}`,
-        prev: prev >= 1900 ? { label: `← ${prev}`, onClick: () => { setSelectedYear(prev); setSelectedDecade(`${Math.floor(prev / 10) * 10}s` as Decade) } } : null,
-        next: next <= 2026 ? { label: `${next} →`, onClick: () => { setSelectedYear(next); setSelectedDecade(`${Math.floor(next / 10) * 10}s` as Decade) } } : null,
-      }
-    }
-    if (selectedDecade !== 'all') {
-      const s = parseInt(selectedDecade.substring(0, 4))
-      return {
-        title: `Shows in the ${selectedDecade}`,
-        prev: s - 10 >= 1900 ? { label: `← ${s - 10}s`, onClick: () => { setSelectedDecade(`${s - 10}s` as Decade); setSelectedYear(null) } } : null,
-        next: s + 10 <= 2020 ? { label: `${s + 10}s →`, onClick: () => { setSelectedDecade(`${s + 10}s` as Decade); setSelectedYear(null) } } : null,
-      }
-    }
-    return { title: 'Shows by Decade', prev: null, next: null }
-  }, [selectedDecade, selectedYear, selectedMonth])
-
-  const filterContext = useMemo(() => {
-    const parts: string[] = []
-    if (selectedMonth !== null && selectedYear) parts.push(`${MONTH_NAMES[selectedMonth]} ${selectedYear}`)
-    else if (selectedYear) parts.push(selectedYear.toString())
-    else if (selectedDecade !== 'all') parts.push(selectedDecade)
-    if (capacityFilter !== 'all') parts.push(`${CAPACITY_DISPLAY_NAMES[capacityFilter as CapacityBucket]} Venues`)
-    return parts.length > 0 ? parts.join(' · ') : null
-  }, [selectedDecade, selectedYear, selectedMonth, capacityFilter])
-
+  // ── Render ────────────────────────────────────────────────
   return (
     <main className="min-h-screen bg-background py-4 md:py-6 px-4">
       <div className="max-w-7xl mx-auto">
 
         {/* Stats Cards */}
         <div className="grid grid-cols-4 gap-2 md:gap-3 mb-3 md:mb-4">
-          <StatCard label="Shows" value={stats.totalShows.toLocaleString()} />
+          <StatCard label="Shows"   value={stats.totalShows.toLocaleString()} />
           <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
-          <StatCard label="Venues" value={stats.uniqueVenues.toLocaleString()} />
+          <StatCard label="Venues"  value={stats.uniqueVenues.toLocaleString()} />
           {stats.fourthCard ? (
             <StatCard label={stats.fourthCard.label} value={stats.fourthCard.value} />
           ) : (
@@ -413,9 +441,20 @@ export default function HomeClient({
         </div>
 
         {/* Chart card */}
-        <div className="bg-card rounded-lg shadow-lg p-4 md:p-4 mb-3 md:mb-4">
+        <div className="bg-card rounded-lg shadow-lg p-4 md:p-4 mb-3 md:mb-4 relative">
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-card/70 rounded-lg z-10">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            </div>
+          )}
           <div style={{ height: '320px', cursor: 'pointer' }} className="md:h-[420px]">
-            <Bar data={chartData} options={chartOptions} />
+            {selectedMonth !== null ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                Select a month from the chart to view individual shows.
+              </div>
+            ) : (
+              <Bar data={chartData} options={chartOptions} />
+            )}
           </div>
         </div>
 
@@ -424,14 +463,13 @@ export default function HomeClient({
 
           {/* Row 1: Venue size pill + Year dropdown + Clear All */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Venue size pill — Discover-style joined pill with dividers */}
             <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
               {CAPACITY_BUTTON_ORDER.map((k, i) => {
-                const isAll = k === 'all'
+                const isAll    = k === 'all'
                 const isActive = capacityFilter === k
                 const unselectedClass = isAll ? 'text-muted-foreground' : CAPACITY_META[k as CapacityBucket].unselectedClass
-                const label = isAll ? 'All Venues' : CAPACITY_META[k as CapacityBucket].label
-                const tooltip = isAll ? 'All venues' : CAPACITY_META[k as CapacityBucket].tooltip
+                const label           = isAll ? 'All Venues' : CAPACITY_META[k as CapacityBucket].label
+                const tooltip         = isAll ? 'All venues' : CAPACITY_META[k as CapacityBucket].tooltip
                 return (
                   <button
                     key={k}
@@ -453,8 +491,15 @@ export default function HomeClient({
               value={selectedYear || ''}
               onChange={(e) => {
                 const year = e.target.value ? parseInt(e.target.value) : null
-                setSelectedYear(year); setSelectedMonth(null)
-                if (year) setSelectedDecade(`${Math.floor(year / 10) * 10}s` as Decade)
+                if (year) {
+                  const decade = `${Math.floor(year / 10) * 10}s` as Decade
+                  setSelectedDecade(decade)
+                  setSelectedYear(year)
+                  setSelectedMonth(null)
+                  fetchDrillData(decade, year, null)
+                } else {
+                  handleClearAll()
+                }
               }}
               className="w-28 px-2 py-1 text-xs border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
@@ -476,7 +521,7 @@ export default function HomeClient({
 
           <div className="border-t border-border" />
 
-          {/* Row 2: Decade buttons — horizontal scroll only */}
+          {/* Row 2: Decade buttons */}
           <div className="overflow-x-auto -mx-3 px-3 md:-mx-4 md:px-4">
             <div className="flex gap-2 min-w-max">
               {DECADES.map((decade) => {
@@ -486,7 +531,7 @@ export default function HomeClient({
                 return (
                   <button
                     key={decade}
-                    onClick={() => { setSelectedDecade(decade); setSelectedYear(null); setSelectedMonth(null) }}
+                    onClick={() => handleDecadeClick(decade)}
                     className={`px-3 md:px-4 py-2 rounded-md text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
                       isActive
                         ? 'bg-primary text-primary-foreground'
@@ -509,20 +554,34 @@ export default function HomeClient({
 
         {/* Top tables */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+
+          {/* Top Artists */}
           <div className="bg-card rounded-lg shadow-lg p-4 md:p-5">
             <h2 className="text-xl md:text-2xl font-bold text-foreground mb-3 md:mb-4">
               Top {showAllArtists ? '25' : '10'} Artists
-              {filterContext && <span className="text-sm md:text-base font-normal text-muted-foreground ml-2">({filterContext})</span>}
+              {filterContext && (
+                <span className="text-sm md:text-base font-normal text-muted-foreground ml-2">
+                  ({filterContext})
+                </span>
+              )}
             </h2>
-            {topArtists.length > 0 ? (
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+              </div>
+            ) : artists.length > 0 ? (
               <>
                 <div className="space-y-2 md:space-y-3">
-                  {topArtists.slice(0, showAllArtists ? 25 : 10).map((artist, index) => (
+                  {artists.slice(0, showAllArtists ? 25 : 10).map((artist, index) => (
                     <div key={artist.artist_id} className="flex items-center justify-between py-0.5">
                       <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                        <span className="text-base md:text-lg font-semibold text-muted-foreground w-4 md:w-6 flex-shrink-0">{index + 1}</span>
-                        <button onClick={() => router.push(`/browse?artist_id=${artist.artist_id}`)}
-                          className="text-sm md:text-base text-primary hover:opacity-80 hover:underline text-left truncate">
+                        <span className="text-base md:text-lg font-semibold text-muted-foreground w-4 md:w-6 flex-shrink-0">
+                          {index + 1}
+                        </span>
+                        <button
+                          onClick={() => router.push(`/browse?artist_id=${artist.artist_id}`)}
+                          className="text-sm md:text-base text-primary hover:opacity-80 hover:underline text-left truncate"
+                        >
                           {artist.artist_name}
                         </button>
                       </div>
@@ -532,29 +591,47 @@ export default function HomeClient({
                     </div>
                   ))}
                 </div>
-                {topArtists.length > 10 && (
-                  <button onClick={() => setShowAllArtists(!showAllArtists)} className="mt-3 text-primary hover:opacity-80 text-xs md:text-sm font-medium">
+                {artists.length > 10 && (
+                  <button
+                    onClick={() => setShowAllArtists(!showAllArtists)}
+                    className="mt-3 text-primary hover:opacity-80 text-xs md:text-sm font-medium"
+                  >
                     {showAllArtists ? '← Show less' : 'View more →'}
                   </button>
                 )}
               </>
-            ) : <p className="text-sm text-muted-foreground">No shows in this period</p>}
+            ) : (
+              <p className="text-sm text-muted-foreground">No shows in this period</p>
+            )}
           </div>
 
+          {/* Top Venues */}
           <div className="bg-card rounded-lg shadow-lg p-4 md:p-5">
             <h2 className="text-xl md:text-2xl font-bold text-foreground mb-3 md:mb-4">
               Top {showAllVenues ? '25' : '10'} Venues
-              {filterContext && <span className="text-sm md:text-base font-normal text-muted-foreground ml-2">({filterContext})</span>}
+              {filterContext && (
+                <span className="text-sm md:text-base font-normal text-muted-foreground ml-2">
+                  ({filterContext})
+                </span>
+              )}
             </h2>
-            {topVenues.length > 0 ? (
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+              </div>
+            ) : filteredVenues.length > 0 ? (
               <>
                 <div className="space-y-2 md:space-y-3">
-                  {topVenues.slice(0, showAllVenues ? 25 : 10).map((venue, index) => (
+                  {filteredVenues.slice(0, showAllVenues ? 25 : 10).map((venue, index) => (
                     <div key={venue.venue_id} className="flex items-center justify-between py-0.5">
                       <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                        <span className="text-base md:text-lg font-semibold text-muted-foreground w-4 md:w-6 flex-shrink-0">{index + 1}</span>
-                        <button onClick={() => router.push(`/browse?venue_id=${venue.venue_id}`)}
-                          className="text-sm md:text-base text-primary hover:opacity-80 hover:underline text-left truncate">
+                        <span className="text-base md:text-lg font-semibold text-muted-foreground w-4 md:w-6 flex-shrink-0">
+                          {index + 1}
+                        </span>
+                        <button
+                          onClick={() => router.push(`/browse?venue_id=${venue.venue_id}`)}
+                          className="text-sm md:text-base text-primary hover:opacity-80 hover:underline text-left truncate"
+                        >
                           {venue.venue_name}
                         </button>
                       </div>
@@ -564,14 +641,20 @@ export default function HomeClient({
                     </div>
                   ))}
                 </div>
-                {topVenues.length > 10 && (
-                  <button onClick={() => setShowAllVenues(!showAllVenues)} className="mt-3 text-primary hover:opacity-80 text-xs md:text-sm font-medium">
+                {filteredVenues.length > 10 && (
+                  <button
+                    onClick={() => setShowAllVenues(!showAllVenues)}
+                    className="mt-3 text-primary hover:opacity-80 text-xs md:text-sm font-medium"
+                  >
                     {showAllVenues ? '← Show less' : 'View more →'}
                   </button>
                 )}
               </>
-            ) : <p className="text-sm text-muted-foreground">No shows in this period</p>}
+            ) : (
+              <p className="text-sm text-muted-foreground">No shows in this period</p>
+            )}
           </div>
+
         </div>
       </div>
     </main>
