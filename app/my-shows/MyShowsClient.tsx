@@ -5,7 +5,8 @@ import { useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  Area, AreaChart,
   PieChart, Pie, Cell,
 } from 'recharts'
 
@@ -62,6 +63,7 @@ function getCapMeta(category: string | null) {
 }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const SPOTIFY_GREEN = '#1DB954'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d })()
@@ -93,7 +95,7 @@ function SpotifyLink({ artistId }: { artistId: string }) {
       target="_blank" rel="noopener noreferrer" title="Open in Spotify"
       onClick={e => e.stopPropagation()}
       className="flex-shrink-0 hover:opacity-70 transition-opacity">
-      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="#1DB954">
+      <svg className="w-3 h-3" viewBox="0 0 24 24" fill={SPOTIFY_GREEN}>
         <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
       </svg>
     </a>
@@ -113,25 +115,28 @@ function SetlistLink({ url }: { url: string }) {
 // ── Timeline tooltips ─────────────────────────────────────────────────────────
 function YearTip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
-  const d = payload[0]?.payload
+  const shows = payload.find((p: any) => p.dataKey === 'shows')?.value
+  const songs = payload.find((p: any) => p.dataKey === 'songsPerMonth')?.value
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
-      <p className="font-semibold text-foreground mb-0.5">{label}</p>
-      {d?.shows > 0 && <p className="text-primary">{d.shows} {d.shows === 1 ? 'show' : 'shows'}</p>}
-      {d?.songsPerMonth != null && <p className="text-purple-400">{d.songsPerMonth.toFixed(1)} songs/month avg</p>}
+      <p className="font-semibold text-foreground mb-1">{label}</p>
+      {shows != null && shows > 0 && <p className="text-primary">{shows} {shows === 1 ? 'show' : 'shows'}</p>}
+      {songs != null && <p style={{ color: SPOTIFY_GREEN }}>{songs.toFixed(1)} songs/month avg</p>}
     </div>
   )
 }
 
 function MonthTip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
-  const d = payload[0]?.payload
+  const shows  = payload.find((p: any) => p.dataKey === 'shows')?.value
+  const future = payload.find((p: any) => p.dataKey === 'future')?.value
+  const songs  = payload.find((p: any) => p.dataKey === 'songs')?.value
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
-      <p className="font-semibold text-foreground mb-0.5">{label}</p>
-      {d?.shows > 0    && <p className="text-primary">{d.shows} {d.shows === 1 ? 'show' : 'shows'}</p>}
-      {d?.future > 0   && <p className="text-amber-400">{d.future} upcoming</p>}
-      {d?.songs != null && <p className="text-purple-400">{d.songs} songs added</p>}
+      <p className="font-semibold text-foreground mb-1">{label}</p>
+      {shows  > 0 && <p className="text-primary">{shows} {shows === 1 ? 'show' : 'shows'}</p>}
+      {future > 0 && <p className="text-amber-400">{future} upcoming</p>}
+      {songs != null && songs > 0 && <p style={{ color: SPOTIFY_GREEN }}>{songs} songs added</p>}
     </div>
   )
 }
@@ -188,7 +193,9 @@ function ArtistBar({ artist, max, onNavigate }: {
         </div>
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
-        <span className="text-xs text-muted-foreground tabular-nums">{artist.total} {artist.total === 1 ? 'show' : 'shows'}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {artist.total} {artist.total === 1 ? 'show' : 'shows'}
+        </span>
         {artist.spotifyId && <SpotifyLink artistId={artist.spotifyId} />}
       </div>
     </div>
@@ -217,7 +224,7 @@ export default function MyShowsClient({
   const [showAllArtists, setShowAllArtists] = useState(false)
   const PER_PAGE = 50
 
-  const hasSpotify = spotifySongs.length > 0
+  const hasSpotify     = spotifySongs.length > 0
   const anyFilterActive = selectedYear !== null || capFilter !== 'all'
 
   // ── Base stats ────────────────────────────────────────────────────────────
@@ -230,14 +237,13 @@ export default function MyShowsClient({
       artists: new Set(shows.map(s => s.artist.artist_id)).size,
       venues:  new Set(shows.map(s => s.venue.venue_id)).size,
       past, future,
-      firstShow: sortedPast[0]                   ?? null,
+      firstShow: sortedPast[0]                     ?? null,
       lastShow:  sortedPast[sortedPast.length - 1] ?? null,
     }
   }, [shows])
 
-  // ── Spotify songs aggregated by year → songs/month ────────────────────────
+  // ── Spotify: avg songs/month per year ────────────────────────────────────
   const spotifyByYear = useMemo(() => {
-    // count songs per year-month, then average months per year
     const monthCounts: Record<string, Record<string, number>> = {}
     for (const s of spotifySongs) {
       const dt = new Date(s.added_at)
@@ -249,29 +255,27 @@ export default function MyShowsClient({
     const result: Record<string, number> = {}
     for (const [year, months] of Object.entries(monthCounts)) {
       const totalSongs = Object.values(months).reduce((a, b) => a + b, 0)
-      const numMonths  = Object.keys(months).length
-      result[year] = totalSongs / numMonths   // avg songs per active month
+      result[year] = totalSongs / Object.keys(months).length
     }
     return result
   }, [spotifySongs])
 
-  // ── Spotify songs aggregated by year+month (for drilldown) ────────────────
+  // ── Spotify: raw songs per month for drilldown ────────────────────────────
   const spotifyByYearMonth = useMemo(() => {
     const result: Record<string, Record<number, number>> = {}
     for (const s of spotifySongs) {
       const dt = new Date(s.added_at)
       const y  = String(dt.getFullYear())
-      const m  = dt.getMonth()  // 0-indexed
+      const m  = dt.getMonth()
       if (!result[y]) result[y] = {}
       result[y][m] = (result[y][m] ?? 0) + 1
     }
     return result
   }, [spotifySongs])
 
-  const firstSpotifyYear = useMemo(() => {
-    const years = Object.keys(spotifyByYear).sort()
-    return years[0] ?? null
-  }, [spotifyByYear])
+  const firstSpotifyYear = useMemo(() =>
+    Object.keys(spotifyByYear).sort()[0] ?? null
+  , [spotifyByYear])
 
   // ── Year-level timeline ───────────────────────────────────────────────────
   const yearTimelineData = useMemo(() => {
@@ -285,13 +289,12 @@ export default function MyShowsClient({
       if (isFuture(s.date)) byYear[y].future++
       else                  byYear[y].past++
     }
-    // union of show years + spotify years
     const allYears = new Set([...Object.keys(byYear), ...Object.keys(spotifyByYear)])
     return [...allYears].sort().map(year => ({
       year,
-      shows: (byYear[year]?.past ?? 0) + (byYear[year]?.future ?? 0),
-      past:  byYear[year]?.past   ?? 0,
-      future: byYear[year]?.future ?? 0,
+      shows:         (byYear[year]?.past ?? 0) + (byYear[year]?.future ?? 0),
+      past:          byYear[year]?.past   ?? 0,
+      future:        byYear[year]?.future ?? 0,
       songsPerMonth: hasSpotify ? (spotifyByYear[year] ?? null) : null,
     }))
   }, [shows, timelineScope, stats, spotifyByYear, hasSpotify])
@@ -322,7 +325,7 @@ export default function MyShowsClient({
   const firstYear = stats.firstShow?.date.split('-')[0]
   const lastYear  = stats.lastShow?.date.split('-')[0]
 
-  // ── Year-filtered set (feeds charts + list) ───────────────────────────────
+  // ── Year-filtered set ─────────────────────────────────────────────────────
   const yearFiltered = useMemo(() => {
     if (!selectedYear) return shows
     return shows.filter(s => s.date.split('-')[0] === selectedYear)
@@ -343,7 +346,7 @@ export default function MyShowsClient({
 
   const maxArtistShows = topArtists[0]?.total ?? 1
 
-  // ── Donut data + venue breakdown ─────────────────────────────────────────
+  // ── Donut + venue breakdown ───────────────────────────────────────────────
   const { donutData, venueBreakdown } = useMemo(() => {
     const counts: Record<string, number> = {}
     const venueByCap: Record<string, Record<number, { name: string; count: number }>> = {}
@@ -381,7 +384,6 @@ export default function MyShowsClient({
     setPage(1); setPageInput('1'); setShowAllArtists(false)
   }, [])
 
-  // ── Filtered + sorted list ────────────────────────────────────────────────
   const filtered = useMemo(() => {
     if (capFilter === 'all') return yearFiltered
     return yearFiltered.filter(s => getCapMeta(s.venue.capacity_category).key === capFilter)
@@ -439,24 +441,6 @@ export default function MyShowsClient({
     </svg>
   )
 
-  // ── Shared gradient defs ──────────────────────────────────────────────────
-  const GradientDefs = () => (
-    <defs>
-      <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
-        <stop offset="95%" stopColor="#0d9488" stopOpacity={0.02}/>
-      </linearGradient>
-      <linearGradient id="gradSongs" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="5%"  stopColor="#a855f7" stopOpacity={0.25}/>
-        <stop offset="95%" stopColor="#a855f7" stopOpacity={0.02}/>
-      </linearGradient>
-      <linearGradient id="gradFuture" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.3}/>
-        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02}/>
-      </linearGradient>
-    </defs>
-  )
-
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
@@ -464,38 +448,30 @@ export default function MyShowsClient({
       <main className="min-h-screen bg-background py-6 md:py-8 px-4">
         <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
 
-          {/* Title + Clear All */}
-          <div className="flex items-center justify-between gap-4">
-            <h1 className="text-3xl md:text-4xl font-bold text-foreground">My Shows</h1>
-            {anyFilterActive && (
-              <button onClick={clearAll}
-                className="px-3 py-1.5 rounded-md border border-destructive text-destructive text-sm font-semibold hover:bg-destructive hover:text-white transition-colors flex-shrink-0">
-                Clear All
-              </button>
-            )}
-          </div>
+          <h1 className="text-3xl md:text-4xl font-bold text-foreground">My Shows</h1>
 
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-2 md:gap-4">
-            {[
-              { label: 'Shows',   value: stats.total.toLocaleString() },
-              { label: 'Artists', value: stats.artists.toLocaleString() },
-              { label: 'Venues',  value: stats.venues.toLocaleString() },
-            ].map(s => (
-              <div key={s.label} className="bg-card rounded-lg shadow border border-border p-3 md:p-4">
-                <p className="text-[10px] md:text-sm text-muted-foreground mb-0.5 leading-tight">{s.label}</p>
-                <p className="text-lg md:text-2xl font-bold text-foreground">{s.value}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* ── Concert Timeline ── */}
+          {/* ── Concert Timeline (stats inline in header) ── */}
           {yearTimelineData.length > 0 && (
             <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5">
-              {/* Header */}
+
+              {/* Header row */}
               <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h2 className="text-lg md:text-xl font-bold text-foreground">Concert Timeline</h2>
+                  {/* Compact stat pills */}
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="bg-muted rounded-md px-2 py-0.5 font-medium text-foreground">{stats.total} shows</span>
+                    <span className="bg-muted rounded-md px-2 py-0.5 font-medium text-foreground">{stats.artists} artists</span>
+                    <span className="bg-muted rounded-md px-2 py-0.5 font-medium text-foreground">{stats.venues} venues</span>
+                  </div>
+                  {/* Clear All — Browse/Home style */}
+                  {anyFilterActive && (
+                    <button onClick={clearAll}
+                      className="px-2.5 py-0.5 rounded-md border border-destructive text-destructive text-xs font-semibold hover:bg-destructive hover:text-white transition-colors">
+                      Clear All
+                    </button>
+                  )}
+                  {/* Year drilldown back chip */}
                   {selectedYear && (
                     <button onClick={() => { setSelectedYear(null); setCapFilter('all') }}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/20 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors">
@@ -518,17 +494,17 @@ export default function MyShowsClient({
               </div>
 
               {/* Legend */}
-              <div className="flex items-center gap-4 mb-2 text-xs text-muted-foreground flex-wrap">
+              <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1.5">
                   <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#0d9488' }} />
-                  Shows
+                  {selectedYear ? 'Shows' : 'Shows per year'}
                 </span>
                 {hasSpotify && (
                   <span className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#a855f7' }} />
+                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: SPOTIFY_GREEN }} />
                     {selectedYear ? 'Songs added' : 'Songs/month avg'}
                     {firstSpotifyYear && !selectedYear && (
-                      <span className="text-muted-foreground/50">(from {firstSpotifyYear})</span>
+                      <span className="text-muted-foreground/50 ml-0.5">(from {firstSpotifyYear})</span>
                     )}
                   </span>
                 )}
@@ -538,46 +514,94 @@ export default function MyShowsClient({
                     Upcoming
                   </span>
                 )}
+                {!selectedYear && firstYear && (
+                  <span className="flex items-center gap-1.5">
+                    <svg width="12" height="12" viewBox="0 0 12 12">
+                      <circle cx="6" cy="6" r="5" fill="#0d9488" stroke="var(--background)" strokeWidth="2"/>
+                    </svg>
+                    First show
+                  </span>
+                )}
+                {!selectedYear && lastYear && lastYear !== firstYear && (
+                  <span className="flex items-center gap-1.5">
+                    <svg width="12" height="12" viewBox="0 0 12 12">
+                      <circle cx="6" cy="6" r="5" fill="#5eead4" stroke="var(--background)" strokeWidth="2"/>
+                    </svg>
+                    Last show
+                  </span>
+                )}
               </div>
 
-              {/* ── Shows mini-chart ── */}
-              <div style={{ height: 110 }}>
+              {/* Chart — dual Y-axis via ComposedChart */}
+              <div style={{ height: 180 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   {selectedYear ? (
-                    <AreaChart data={monthTimelineData} margin={{ top: 10, right: 8, left: -20, bottom: 0 }}>
-                      <GradientDefs />
-                      <XAxis dataKey="month" tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    /* Month drilldown */
+                    <ComposedChart
+                      data={monthTimelineData}
+                      margin={{ top: 20, right: hasSpotify ? 45 : 8, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#0d9488" stopOpacity={0.02}/>
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="month" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis yAxisId="shows" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      {hasSpotify && (
+                        <YAxis yAxisId="songs" orientation="right"
+                          tick={{ fill: SPOTIFY_GREEN, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      )}
                       <Tooltip content={<MonthTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
-                      <Area type="monotone" dataKey="shows" stroke="#0d9488" strokeWidth={2} fill="url(#gradShows)"
+                      <Area yAxisId="shows" type="monotone" dataKey="shows"
+                        stroke="#0d9488" strokeWidth={2} fill="url(#gradShows)"
                         dot={(p: any) => {
                           const { cx, cy, payload } = p
-                          if (payload.shows === 0 && payload.future === 0) return <g key={`e-${cx}`} />
+                          if ((payload.shows ?? 0) + (payload.future ?? 0) === 0) return <g key={`e-${cx}`} />
                           return <circle key={`s-${cx}`} cx={cx} cy={cy} r={3} fill="#0d9488" stroke="var(--background)" strokeWidth={1.5}/>
                         }}
                         activeDot={{ r: 4, fill: '#0d9488' }} />
                       {stats.future.length > 0 && (
-                        <Area type="monotone" dataKey="future" stroke="#f59e0b" strokeWidth={2} fill="url(#gradFuture)"
+                        <Area yAxisId="shows" type="monotone" dataKey="future"
+                          stroke="#f59e0b" strokeWidth={2} fill="none"
                           dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 4, fill: '#f59e0b' }} />
                       )}
-                    </AreaChart>
+                      {hasSpotify && (
+                        <Line yAxisId="songs" type="monotone" dataKey="songs"
+                          stroke={SPOTIFY_GREEN} strokeWidth={2} dot={false}
+                          connectNulls={false} activeDot={{ r: 4, fill: SPOTIFY_GREEN }} />
+                      )}
+                    </ComposedChart>
                   ) : (
-                    <AreaChart data={yearTimelineData} margin={{ top: 10, right: 8, left: -20, bottom: 0 }}
+                    /* Year overview */
+                    <ComposedChart
+                      data={yearTimelineData}
+                      margin={{ top: 20, right: hasSpotify ? 45 : 8, left: -20, bottom: 0 }}
                       onClick={(d: any) => { const y = d?.activeLabel; if (y) handleYearClick(y) }}
                       style={{ cursor: 'pointer' }}>
-                      <GradientDefs />
+                      <defs>
+                        <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#0d9488" stopOpacity={0.02}/>
+                        </linearGradient>
+                      </defs>
                       <XAxis dataKey="year"
                         tick={({ x, y, payload }: any) => (
-                          <text x={x} y={y + 12} textAnchor="middle" fontSize={10}
+                          <text x={x} y={y + 12} textAnchor="middle" fontSize={11}
                             fill={selectedYear === payload.value ? 'var(--primary)' : 'var(--muted-foreground)'}
                             fontWeight={selectedYear === payload.value ? 700 : 400}>
                             {payload.value}
                           </text>
                         )}
                         axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <YAxis yAxisId="shows" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      {hasSpotify && (
+                        <YAxis yAxisId="songs" orientation="right"
+                          tick={{ fill: SPOTIFY_GREEN, fontSize: 10 }} axisLine={false} tickLine={false} />
+                      )}
                       <Tooltip content={<YearTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
-                      <Area type="monotone" dataKey="shows" stroke="#0d9488" strokeWidth={2} fill="url(#gradShows)"
+                      <Area yAxisId="shows" type="monotone" dataKey="shows"
+                        stroke="#0d9488" strokeWidth={2} fill="url(#gradShows)"
                         dot={(p: any) => {
                           const { cx, cy, payload } = p
                           if (payload.year === firstYear) return <circle key={`f-${cx}`} cx={cx} cy={cy} r={5} fill="#0d9488" stroke="var(--background)" strokeWidth={2}/>
@@ -585,55 +609,15 @@ export default function MyShowsClient({
                           return <circle key={`d-${cx}`} cx={cx} cy={cy} r={3} fill="#0d9488" fillOpacity={0.7}/>
                         }}
                         activeDot={{ r: 5, fill: '#0d9488' }} />
-                      {stats.future.length > 0 && (
-                        <Area type="monotone" dataKey="future" stroke="#f59e0b" strokeWidth={2} fill="url(#gradFuture)"
-                          dot={{ r: 3, fill: '#f59e0b', fillOpacity: 0.8 }} activeDot={{ r: 5, fill: '#f59e0b' }} />
+                      {hasSpotify && (
+                        <Line yAxisId="songs" type="monotone" dataKey="songsPerMonth"
+                          stroke={SPOTIFY_GREEN} strokeWidth={2} dot={false}
+                          connectNulls={false} activeDot={{ r: 4, fill: SPOTIFY_GREEN }} />
                       )}
-                    </AreaChart>
+                    </ComposedChart>
                   )}
                 </ResponsiveContainer>
               </div>
-
-              {/* ── Spotify songs mini-chart (only if connected) ── */}
-              {hasSpotify && (
-                <div style={{ height: 80 }} className="mt-1">
-                  <ResponsiveContainer width="100%" height="100%">
-                    {selectedYear ? (
-                      <AreaChart data={monthTimelineData} margin={{ top: 5, right: 8, left: -20, bottom: 0 }}>
-                        <GradientDefs />
-                        <XAxis dataKey="month" tick={false} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                        <Tooltip content={<MonthTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
-                        <Area type="monotone" dataKey="songs" stroke="#a855f7" strokeWidth={2} fill="url(#gradSongs)"
-                          connectNulls={false}
-                          dot={(p: any) => {
-                            const { cx, cy, payload } = p
-                            if (payload.songs == null || payload.songs === 0) return <g key={`e-${cx}`} />
-                            return <circle key={`sp-${cx}`} cx={cx} cy={cy} r={3} fill="#a855f7" stroke="var(--background)" strokeWidth={1.5}/>
-                          }}
-                          activeDot={{ r: 4, fill: '#a855f7' }} />
-                      </AreaChart>
-                    ) : (
-                      <AreaChart data={yearTimelineData} margin={{ top: 5, right: 8, left: -20, bottom: 0 }}
-                        onClick={(d: any) => { const y = d?.activeLabel; if (y) handleYearClick(y) }}
-                        style={{ cursor: 'pointer' }}>
-                        <GradientDefs />
-                        <XAxis dataKey="year" tick={false} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                        <Tooltip content={<YearTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
-                        <Area type="monotone" dataKey="songsPerMonth" stroke="#a855f7" strokeWidth={2} fill="url(#gradSongs)"
-                          connectNulls={false}
-                          dot={(p: any) => {
-                            const { cx, cy, payload } = p
-                            if (payload.songsPerMonth == null) return <g key={`e-${cx}`} />
-                            return <circle key={`sp-${cx}`} cx={cx} cy={cy} r={3} fill="#a855f7" fillOpacity={0.8}/>
-                          }}
-                          activeDot={{ r: 4, fill: '#a855f7' }} />
-                      </AreaChart>
-                    )}
-                  </ResponsiveContainer>
-                </div>
-              )}
 
               {/* First / last show */}
               {!selectedYear && (stats.firstShow || stats.lastShow) && (
@@ -696,13 +680,12 @@ export default function MyShowsClient({
                 )}
               </div>
 
-              {/* Donut */}
+              {/* Venues by Size donut */}
               <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5">
-                <h2 className="text-lg font-bold text-foreground mb-1">
+                <h2 className="text-lg font-bold text-foreground mb-4">
                   Venues by Size
                   {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                 </h2>
-                <p className="text-xs text-muted-foreground mb-3">Hover for venue breakdown · Click to filter</p>
                 {donutData.length === 0 ? (
                   <p className="text-sm text-muted-foreground italic">No shows in {selectedYear}.</p>
                 ) : (
