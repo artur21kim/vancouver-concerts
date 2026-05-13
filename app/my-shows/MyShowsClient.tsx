@@ -43,12 +43,8 @@ type ViewMode      = 'card' | 'table'
 const CAP_KEYS = ['small', 'medium', 'large', 'xlarge', 'unknown'] as const
 
 const CAP_META: Record<string, {
-  key: CapFilter
-  shortLabel: string
-  legendLabel: string
-  color: string
-  badgeBg: string
-  badgeText: string
+  key: CapFilter; shortLabel: string; legendLabel: string
+  color: string; badgeBg: string; badgeText: string
 }> = {
   'small (<500)':      { key: 'small',   shortLabel: 'S',  legendLabel: 'Small (<500)',      color: 'rgba(139,92,246,0.85)',  badgeBg: 'bg-purple-500/20', badgeText: 'text-purple-300'  },
   'medium (500-1.5k)': { key: 'medium',  shortLabel: 'M',  legendLabel: 'Medium (500–1.5K)', color: 'rgba(58,143,189,0.85)',  badgeBg: 'bg-blue-500/20',   badgeText: 'text-[#3A8FBD]'  },
@@ -81,15 +77,6 @@ function fmtDate(date: string) {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-card rounded-lg shadow border border-border p-3 md:p-4">
-      <p className="text-[10px] md:text-sm text-muted-foreground mb-0.5 leading-tight">{label}</p>
-      <p className="text-lg md:text-2xl font-bold text-foreground">{value}</p>
-    </div>
-  )
-}
-
 function CapacityBadge({ category }: { category: string | null }) {
   const m = getCapMeta(category)
   if (m.key === 'unknown') return null
@@ -124,32 +111,32 @@ function SetlistLink({ url }: { url: string }) {
 }
 
 // ── Timeline tooltips ─────────────────────────────────────────────────────────
-function YearTimelineTip({ active, payload, label }: any) {
+function YearTip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   const d = payload[0]?.payload
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
       <p className="font-semibold text-foreground mb-0.5">{label}</p>
-      {d?.past   > 0 && <p className="text-primary">{d.past} past {d.past === 1 ? 'show' : 'shows'}</p>}
-      {d?.future > 0 && <p className="text-amber-400">{d.future} upcoming {d.future === 1 ? 'show' : 'shows'}</p>}
-      <p className="text-muted-foreground/70 mt-1">Click to drill down</p>
+      {d?.shows > 0 && <p className="text-primary">{d.shows} {d.shows === 1 ? 'show' : 'shows'}</p>}
+      {d?.songsPerMonth != null && <p className="text-purple-400">{d.songsPerMonth.toFixed(1)} songs/month avg</p>}
     </div>
   )
 }
 
-function MonthTimelineTip({ active, payload, label }: any) {
+function MonthTip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   const d = payload[0]?.payload
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
       <p className="font-semibold text-foreground mb-0.5">{label}</p>
-      {d?.past   > 0 && <p className="text-primary">{d.past} past {d.past === 1 ? 'show' : 'shows'}</p>}
-      {d?.future > 0 && <p className="text-amber-400">{d.future} upcoming {d.future === 1 ? 'show' : 'shows'}</p>}
+      {d?.shows > 0    && <p className="text-primary">{d.shows} {d.shows === 1 ? 'show' : 'shows'}</p>}
+      {d?.future > 0   && <p className="text-amber-400">{d.future} upcoming</p>}
+      {d?.songs != null && <p className="text-purple-400">{d.songs} songs added</p>}
     </div>
   )
 }
 
-// ── Donut venue tooltip ───────────────────────────────────────────────────────
+// ── Donut tooltip ─────────────────────────────────────────────────────────────
 function DonutTip({ active, payload, venueBreakdown }: any) {
   if (!active || !payload?.length) return null
   const entry  = payload[0]?.payload
@@ -173,8 +160,7 @@ function DonutTip({ active, payload, venueBreakdown }: any) {
 // ── Stacked horizontal bar for artists ────────────────────────────────────────
 function ArtistBar({ artist, max, onNavigate }: {
   artist: { name: string; spotifyId: string | null; total: number; byCapacity: Record<string, number> }
-  max: number
-  onNavigate: () => void
+  max: number; onNavigate: () => void
 }) {
   const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
   const segments = CAP_KEYS.map(key => ({
@@ -186,9 +172,7 @@ function ArtistBar({ artist, max, onNavigate }: {
     <div className="flex items-center gap-2 py-0.5">
       <button onClick={onNavigate}
         className="w-32 md:w-40 text-xs text-primary hover:opacity-80 hover:underline text-right truncate flex-shrink-0"
-        title={artist.name}>
-        {artist.name}
-      </button>
+        title={artist.name}>{artist.name}</button>
       <div className="flex-1 h-4 bg-muted/40 rounded-full overflow-hidden">
         <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
           {segments.map((seg, i) => {
@@ -197,18 +181,14 @@ function ArtistBar({ artist, max, onNavigate }: {
               <div key={seg.key} style={{
                 width: `${(seg.count / artist.total) * 100}%`,
                 backgroundColor: seg.color,
-                borderRadius: isFirst && isLast ? '9999px'
-                  : isFirst ? '9999px 0 0 9999px'
-                  : isLast  ? '0 9999px 9999px 0' : '0',
+                borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
               }} />
             )
           })}
         </div>
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {artist.total} {artist.total === 1 ? 'show' : 'shows'}
-        </span>
+        <span className="text-xs text-muted-foreground tabular-nums">{artist.total} {artist.total === 1 ? 'show' : 'shows'}</span>
         {artist.spotifyId && <SpotifyLink artistId={artist.spotifyId} />}
       </div>
     </div>
@@ -216,39 +196,84 @@ function ArtistBar({ artist, max, onNavigate }: {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }) {
+export default function MyShowsClient({
+  shows: initialShows,
+  spotifySongs,
+}: {
+  shows: Show[]
+  spotifySongs: { added_at: string }[]
+}) {
   const router = useRouter()
-  const [shows, setShows]             = useState(initialShows)
-  const [sortField, setSortField]     = useState<SortField>('date')
-  const [sortDir, setSortDir]         = useState<SortDir>('desc')
-  const [removingSet, setRemovingSet] = useState<Set<number>>(new Set())
-  const [page, setPage]               = useState(1)
-  const [pageInput, setPageInput]     = useState('1')
+  const [shows, setShows]               = useState(initialShows)
+  const [sortField, setSortField]       = useState<SortField>('date')
+  const [sortDir, setSortDir]           = useState<SortDir>('desc')
+  const [removingSet, setRemovingSet]   = useState<Set<number>>(new Set())
+  const [page, setPage]                 = useState(1)
+  const [pageInput, setPageInput]       = useState('1')
   const [timelineScope, setTimelineScope] = useState<TimelineScope>('all')
-  const [selectedYear, setSelectedYear]   = useState<string | null>(null)
-  const [capFilter, setCapFilter]         = useState<CapFilter>('all')
-  const [viewMode, setViewMode]           = useState<ViewMode>('card')
+  const [selectedYear, setSelectedYear] = useState<string | null>(null)
+  const [capFilter, setCapFilter]       = useState<CapFilter>('all')
+  const [viewMode, setViewMode]         = useState<ViewMode>('card')
   const [showAllArtists, setShowAllArtists] = useState(false)
   const PER_PAGE = 50
 
+  const hasSpotify = spotifySongs.length > 0
   const anyFilterActive = selectedYear !== null || capFilter !== 'all'
 
-  // ── Base stats (unfiltered) ───────────────────────────────────────────────
+  // ── Base stats ────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     const past   = shows.filter(s => !isFuture(s.date))
     const future = shows.filter(s =>  isFuture(s.date))
-    const sorted = [...past].sort((a, b) => a.date.localeCompare(b.date))
+    const sortedPast = [...past].sort((a, b) => a.date.localeCompare(b.date))
     return {
       total:   shows.length,
       artists: new Set(shows.map(s => s.artist.artist_id)).size,
       venues:  new Set(shows.map(s => s.venue.venue_id)).size,
       past, future,
-      firstShow: sorted[0]                 ?? null,
-      lastShow:  sorted[sorted.length - 1] ?? null,
+      firstShow: sortedPast[0]                   ?? null,
+      lastShow:  sortedPast[sortedPast.length - 1] ?? null,
     }
   }, [shows])
 
-  // ── Year-level timeline data ──────────────────────────────────────────────
+  // ── Spotify songs aggregated by year → songs/month ────────────────────────
+  const spotifyByYear = useMemo(() => {
+    // count songs per year-month, then average months per year
+    const monthCounts: Record<string, Record<string, number>> = {}
+    for (const s of spotifySongs) {
+      const dt = new Date(s.added_at)
+      const y  = String(dt.getFullYear())
+      const m  = String(dt.getMonth())
+      if (!monthCounts[y]) monthCounts[y] = {}
+      monthCounts[y][m] = (monthCounts[y][m] ?? 0) + 1
+    }
+    const result: Record<string, number> = {}
+    for (const [year, months] of Object.entries(monthCounts)) {
+      const totalSongs = Object.values(months).reduce((a, b) => a + b, 0)
+      const numMonths  = Object.keys(months).length
+      result[year] = totalSongs / numMonths   // avg songs per active month
+    }
+    return result
+  }, [spotifySongs])
+
+  // ── Spotify songs aggregated by year+month (for drilldown) ────────────────
+  const spotifyByYearMonth = useMemo(() => {
+    const result: Record<string, Record<number, number>> = {}
+    for (const s of spotifySongs) {
+      const dt = new Date(s.added_at)
+      const y  = String(dt.getFullYear())
+      const m  = dt.getMonth()  // 0-indexed
+      if (!result[y]) result[y] = {}
+      result[y][m] = (result[y][m] ?? 0) + 1
+    }
+    return result
+  }, [spotifySongs])
+
+  const firstSpotifyYear = useMemo(() => {
+    const years = Object.keys(spotifyByYear).sort()
+    return years[0] ?? null
+  }, [spotifyByYear])
+
+  // ── Year-level timeline ───────────────────────────────────────────────────
   const yearTimelineData = useMemo(() => {
     const src = timelineScope === 'past'     ? stats.past
               : timelineScope === 'upcoming' ? stats.future
@@ -260,12 +285,18 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
       if (isFuture(s.date)) byYear[y].future++
       else                  byYear[y].past++
     }
-    return Object.entries(byYear)
-      .sort(([a],[b]) => a.localeCompare(b))
-      .map(([year, c]) => ({ year, past: c.past, future: c.future }))
-  }, [shows, timelineScope, stats])
+    // union of show years + spotify years
+    const allYears = new Set([...Object.keys(byYear), ...Object.keys(spotifyByYear)])
+    return [...allYears].sort().map(year => ({
+      year,
+      shows: (byYear[year]?.past ?? 0) + (byYear[year]?.future ?? 0),
+      past:  byYear[year]?.past   ?? 0,
+      future: byYear[year]?.future ?? 0,
+      songsPerMonth: hasSpotify ? (spotifyByYear[year] ?? null) : null,
+    }))
+  }, [shows, timelineScope, stats, spotifyByYear, hasSpotify])
 
-  // ── Month-level timeline data (for drilldown) ─────────────────────────────
+  // ── Month drilldown ───────────────────────────────────────────────────────
   const monthTimelineData = useMemo(() => {
     if (!selectedYear) return []
     const src = timelineScope === 'past'     ? stats.past
@@ -273,26 +304,31 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
               : shows
     const inYear = src.filter(s => s.date.split('-')[0] === selectedYear)
     const byMonth: Record<number, { past: number; future: number }> = {}
-    for (let m = 1; m <= 12; m++) byMonth[m] = { past: 0, future: 0 }
+    for (let m = 0; m < 12; m++) byMonth[m] = { past: 0, future: 0 }
     for (const s of inYear) {
-      const m = parseInt(s.date.split('-')[1])
+      const m = parseInt(s.date.split('-')[1]) - 1
       if (isFuture(s.date)) byMonth[m].future++
       else                  byMonth[m].past++
     }
-    return Object.entries(byMonth)
-      .map(([m, c]) => ({ month: MONTHS[parseInt(m) - 1], past: c.past, future: c.future }))
-  }, [shows, selectedYear, timelineScope, stats])
+    const songsByMonth = spotifyByYearMonth[selectedYear] ?? {}
+    return Array.from({ length: 12 }, (_, m) => ({
+      month:  MONTHS[m],
+      shows:  byMonth[m].past,
+      future: byMonth[m].future,
+      songs:  hasSpotify ? (songsByMonth[m] ?? null) : null,
+    }))
+  }, [shows, selectedYear, timelineScope, stats, spotifyByYearMonth, hasSpotify])
 
   const firstYear = stats.firstShow?.date.split('-')[0]
   const lastYear  = stats.lastShow?.date.split('-')[0]
 
-  // ── Year-filtered shows (feeds charts + list) ─────────────────────────────
+  // ── Year-filtered set (feeds charts + list) ───────────────────────────────
   const yearFiltered = useMemo(() => {
     if (!selectedYear) return shows
     return shows.filter(s => s.date.split('-')[0] === selectedYear)
   }, [shows, selectedYear])
 
-  // ── Top artists from year-filtered set ───────────────────────────────────
+  // ── Top artists ───────────────────────────────────────────────────────────
   const topArtists = useMemo(() => {
     const map: Record<number, { name: string; spotifyId: string | null; total: number; byCapacity: Record<string, number> }> = {}
     for (const s of yearFiltered) {
@@ -307,61 +343,45 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
 
   const maxArtistShows = topArtists[0]?.total ?? 1
 
-  // ── Simple donut data (cap categories) + venue breakdown per cap ──────────
+  // ── Donut data + venue breakdown ─────────────────────────────────────────
   const { donutData, venueBreakdown } = useMemo(() => {
     const counts: Record<string, number> = {}
     const venueByCap: Record<string, Record<number, { name: string; count: number }>> = {}
-
     for (const s of yearFiltered) {
       const capKey = getCapMeta(s.venue.capacity_category).key
       counts[capKey] = (counts[capKey] ?? 0) + 1
-
       if (!venueByCap[capKey]) venueByCap[capKey] = {}
       const vid = s.venue.venue_id
       if (!venueByCap[capKey][vid]) venueByCap[capKey][vid] = { name: s.venue.venue_name, count: 0 }
       venueByCap[capKey][vid].count++
     }
-
     const donut = CAP_KEYS
-      .map(key => ({
-        name:  CAP_BY_KEY[key].legendLabel,
-        key,
-        value: counts[key] ?? 0,
-        color: CAP_BY_KEY[key].color,
-      }))
+      .map(key => ({ name: CAP_BY_KEY[key].legendLabel, key, value: counts[key] ?? 0, color: CAP_BY_KEY[key].color }))
       .filter(d => d.value > 0)
-
-    // sort venues within each cap by count desc
     const breakdown: Record<string, { name: string; count: number }[]> = {}
-    for (const [capKey, venues] of Object.entries(venueByCap)) {
-      breakdown[capKey] = Object.values(venues).sort((a, b) => b.count - a.count)
+    for (const [k, venues] of Object.entries(venueByCap)) {
+      breakdown[k] = Object.values(venues).sort((a, b) => b.count - a.count)
     }
-
     return { donutData: donut, venueBreakdown: breakdown }
   }, [yearFiltered])
 
-  // ── Cap filter handler ────────────────────────────────────────────────────
+  // ── Handlers ──────────────────────────────────────────────────────────────
   const handleCap = useCallback((key: CapFilter) => {
     setCapFilter(prev => prev === key ? 'all' : key)
     setPage(1); setPageInput('1')
   }, [])
 
-  // ── Year click → drilldown ────────────────────────────────────────────────
   const handleYearClick = useCallback((year: string) => {
     setSelectedYear(prev => prev === year ? null : year)
-    setCapFilter('all')
-    setPage(1); setPageInput('1')
-    setShowAllArtists(false)
+    setCapFilter('all'); setPage(1); setPageInput('1'); setShowAllArtists(false)
   }, [])
 
   const clearAll = useCallback(() => {
-    setSelectedYear(null)
-    setCapFilter('all')
-    setPage(1); setPageInput('1')
-    setShowAllArtists(false)
+    setSelectedYear(null); setCapFilter('all')
+    setPage(1); setPageInput('1'); setShowAllArtists(false)
   }, [])
 
-  // ── Final filtered + sorted list ──────────────────────────────────────────
+  // ── Filtered + sorted list ────────────────────────────────────────────────
   const filtered = useMemo(() => {
     if (capFilter === 'all') return yearFiltered
     return yearFiltered.filter(s => getCapMeta(s.venue.capacity_category).key === capFilter)
@@ -386,7 +406,6 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
   const totalPages   = Math.ceil(sorted.length / PER_PAGE)
   const currentShows = sorted.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
   const removeShow = async (id: number) => {
     setRemovingSet(prev => new Set(prev).add(id))
     try {
@@ -420,6 +439,24 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
     </svg>
   )
 
+  // ── Shared gradient defs ──────────────────────────────────────────────────
+  const GradientDefs = () => (
+    <defs>
+      <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
+        <stop offset="95%" stopColor="#0d9488" stopOpacity={0.02}/>
+      </linearGradient>
+      <linearGradient id="gradSongs" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="5%"  stopColor="#a855f7" stopOpacity={0.25}/>
+        <stop offset="95%" stopColor="#a855f7" stopOpacity={0.02}/>
+      </linearGradient>
+      <linearGradient id="gradFuture" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.3}/>
+        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02}/>
+      </linearGradient>
+    </defs>
+  )
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
@@ -432,7 +469,7 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
             <h1 className="text-3xl md:text-4xl font-bold text-foreground">My Shows</h1>
             {anyFilterActive && (
               <button onClick={clearAll}
-                className="px-4 py-2 rounded-lg bg-destructive text-white text-sm font-semibold hover:opacity-90 transition-opacity flex-shrink-0">
+                className="px-3 py-1.5 rounded-md border border-destructive text-destructive text-sm font-semibold hover:bg-destructive hover:text-white transition-colors flex-shrink-0">
                 Clear All
               </button>
             )}
@@ -440,15 +477,23 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-2 md:gap-4">
-            <StatCard label="Shows"   value={stats.total.toLocaleString()} />
-            <StatCard label="Artists" value={stats.artists.toLocaleString()} />
-            <StatCard label="Venues"  value={stats.venues.toLocaleString()} />
+            {[
+              { label: 'Shows',   value: stats.total.toLocaleString() },
+              { label: 'Artists', value: stats.artists.toLocaleString() },
+              { label: 'Venues',  value: stats.venues.toLocaleString() },
+            ].map(s => (
+              <div key={s.label} className="bg-card rounded-lg shadow border border-border p-3 md:p-4">
+                <p className="text-[10px] md:text-sm text-muted-foreground mb-0.5 leading-tight">{s.label}</p>
+                <p className="text-lg md:text-2xl font-bold text-foreground">{s.value}</p>
+              </div>
+            ))}
           </div>
 
           {/* ── Concert Timeline ── */}
           {yearTimelineData.length > 0 && (
             <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5">
-              <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+              {/* Header */}
+              <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h2 className="text-lg md:text-xl font-bold text-foreground">Concert Timeline</h2>
                   {selectedYear && (
@@ -473,11 +518,18 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
               </div>
 
               {/* Legend */}
-              <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground flex-wrap">
-                {stats.past.length > 0 && (
+              <div className="flex items-center gap-4 mb-2 text-xs text-muted-foreground flex-wrap">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#0d9488' }} />
+                  Shows
+                </span>
+                {hasSpotify && (
                   <span className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#0d9488' }} />
-                    Past shows
+                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#a855f7' }} />
+                    {selectedYear ? 'Songs added' : 'Songs/month avg'}
+                    {firstSpotifyYear && !selectedYear && (
+                      <span className="text-muted-foreground/50">(from {firstSpotifyYear})</span>
+                    )}
                   </span>
                 )}
                 {stats.future.length > 0 && (
@@ -486,117 +538,104 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
                     Upcoming
                   </span>
                 )}
-                {!selectedYear && firstYear && (
-                  <span className="flex items-center gap-1.5">
-                    <svg width="12" height="12" viewBox="0 0 12 12">
-                      <circle cx="6" cy="6" r="5" fill="#0d9488" stroke="var(--background)" strokeWidth="2"/>
-                    </svg>
-                    First show
-                  </span>
-                )}
-                {!selectedYear && lastYear && lastYear !== firstYear && (
-                  <span className="flex items-center gap-1.5">
-                    <svg width="12" height="12" viewBox="0 0 12 12">
-                      <circle cx="6" cy="6" r="5" fill="#5eead4" stroke="var(--background)" strokeWidth="2"/>
-                    </svg>
-                    Last show
-                  </span>
-                )}
-                <span className="text-muted-foreground/50">
-                  {selectedYear ? `Showing monthly breakdown for ${selectedYear}` : '· Click a year to drill down'}
-                </span>
               </div>
 
-              <div style={{ height: 180 }}>
+              {/* ── Shows mini-chart ── */}
+              <div style={{ height: 110 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   {selectedYear ? (
-                    /* ── Month drilldown ── */
-                    <AreaChart data={monthTimelineData} margin={{ top: 20, right: 8, left: -20, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="areaPastM" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#0d9488" stopOpacity={0.02}/>
-                        </linearGradient>
-                        <linearGradient id="areaFutureM" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02}/>
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="month"
-                        tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-                        axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-                        axisLine={false} tickLine={false} allowDecimals={false} />
-                      <Tooltip content={<MonthTimelineTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
-                      <Area type="monotone" dataKey="past"
-                        stroke="#0d9488" strokeWidth={2} fill="url(#areaPastM)"
-                        dot={(props: any) => {
-                          const { cx, cy, payload } = props
-                          if ((payload.past + payload.future) === 0) return <g key={`empty-${cx}`} />
-                          return <circle key={`md-${cx}`} cx={cx} cy={cy} r={4} fill="#0d9488" stroke="var(--background)" strokeWidth={2}/>
+                    <AreaChart data={monthTimelineData} margin={{ top: 10, right: 8, left: -20, bottom: 0 }}>
+                      <GradientDefs />
+                      <XAxis dataKey="month" tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip content={<MonthTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                      <Area type="monotone" dataKey="shows" stroke="#0d9488" strokeWidth={2} fill="url(#gradShows)"
+                        dot={(p: any) => {
+                          const { cx, cy, payload } = p
+                          if (payload.shows === 0 && payload.future === 0) return <g key={`e-${cx}`} />
+                          return <circle key={`s-${cx}`} cx={cx} cy={cy} r={3} fill="#0d9488" stroke="var(--background)" strokeWidth={1.5}/>
                         }}
-                        activeDot={{ r: 5, fill: '#0d9488' }}
-                      />
+                        activeDot={{ r: 4, fill: '#0d9488' }} />
                       {stats.future.length > 0 && (
-                        <Area type="monotone" dataKey="future"
-                          stroke="#f59e0b" strokeWidth={2} fill="url(#areaFutureM)"
-                          dot={{ r: 3, fill: '#f59e0b', fillOpacity: 0.8 }}
-                          activeDot={{ r: 5, fill: '#f59e0b' }}
-                        />
+                        <Area type="monotone" dataKey="future" stroke="#f59e0b" strokeWidth={2} fill="url(#gradFuture)"
+                          dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 4, fill: '#f59e0b' }} />
                       )}
                     </AreaChart>
                   ) : (
-                    /* ── Year overview ── */
-                    <AreaChart data={yearTimelineData} margin={{ top: 20, right: 8, left: -20, bottom: 0 }}
-                      onClick={(data: any) => { const y = data?.activeLabel; if (y) handleYearClick(y) }}
+                    <AreaChart data={yearTimelineData} margin={{ top: 10, right: 8, left: -20, bottom: 0 }}
+                      onClick={(d: any) => { const y = d?.activeLabel; if (y) handleYearClick(y) }}
                       style={{ cursor: 'pointer' }}>
-                      <defs>
-                        <linearGradient id="areaPast" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#0d9488" stopOpacity={0.02}/>
-                        </linearGradient>
-                        <linearGradient id="areaFuture" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02}/>
-                        </linearGradient>
-                      </defs>
+                      <GradientDefs />
                       <XAxis dataKey="year"
                         tick={({ x, y, payload }: any) => (
-                          <text x={x} y={y + 12} textAnchor="middle" fontSize={11}
+                          <text x={x} y={y + 12} textAnchor="middle" fontSize={10}
                             fill={selectedYear === payload.value ? 'var(--primary)' : 'var(--muted-foreground)'}
                             fontWeight={selectedYear === payload.value ? 700 : 400}>
                             {payload.value}
                           </text>
                         )}
                         axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-                        axisLine={false} tickLine={false} allowDecimals={false} />
-                      <Tooltip content={<YearTimelineTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
-                      <Area type="monotone" dataKey="past"
-                        stroke="#0d9488" strokeWidth={2} fill="url(#areaPast)"
-                        dot={(props: any) => {
-                          const { cx, cy, payload } = props
-                          if (payload.year === firstYear)
-                            return <circle key={`f-${cx}`} cx={cx} cy={cy} r={5} fill="#0d9488" stroke="var(--background)" strokeWidth={2}/>
-                          if (payload.year === lastYear && lastYear !== firstYear)
-                            return <circle key={`l-${cx}`} cx={cx} cy={cy} r={5} fill="#5eead4" stroke="var(--background)" strokeWidth={2}/>
+                      <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip content={<YearTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                      <Area type="monotone" dataKey="shows" stroke="#0d9488" strokeWidth={2} fill="url(#gradShows)"
+                        dot={(p: any) => {
+                          const { cx, cy, payload } = p
+                          if (payload.year === firstYear) return <circle key={`f-${cx}`} cx={cx} cy={cy} r={5} fill="#0d9488" stroke="var(--background)" strokeWidth={2}/>
+                          if (payload.year === lastYear && lastYear !== firstYear) return <circle key={`l-${cx}`} cx={cx} cy={cy} r={5} fill="#5eead4" stroke="var(--background)" strokeWidth={2}/>
                           return <circle key={`d-${cx}`} cx={cx} cy={cy} r={3} fill="#0d9488" fillOpacity={0.7}/>
                         }}
-                        activeDot={{ r: 5, fill: '#0d9488' }}
-                      />
+                        activeDot={{ r: 5, fill: '#0d9488' }} />
                       {stats.future.length > 0 && (
-                        <Area type="monotone" dataKey="future"
-                          stroke="#f59e0b" strokeWidth={2} fill="url(#areaFuture)"
-                          dot={{ r: 3, fill: '#f59e0b', fillOpacity: 0.8 }}
-                          activeDot={{ r: 5, fill: '#f59e0b' }}
-                        />
+                        <Area type="monotone" dataKey="future" stroke="#f59e0b" strokeWidth={2} fill="url(#gradFuture)"
+                          dot={{ r: 3, fill: '#f59e0b', fillOpacity: 0.8 }} activeDot={{ r: 5, fill: '#f59e0b' }} />
                       )}
                     </AreaChart>
                   )}
                 </ResponsiveContainer>
               </div>
 
-              {/* First / last show — justify-between */}
+              {/* ── Spotify songs mini-chart (only if connected) ── */}
+              {hasSpotify && (
+                <div style={{ height: 80 }} className="mt-1">
+                  <ResponsiveContainer width="100%" height="100%">
+                    {selectedYear ? (
+                      <AreaChart data={monthTimelineData} margin={{ top: 5, right: 8, left: -20, bottom: 0 }}>
+                        <GradientDefs />
+                        <XAxis dataKey="month" tick={false} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                        <Tooltip content={<MonthTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                        <Area type="monotone" dataKey="songs" stroke="#a855f7" strokeWidth={2} fill="url(#gradSongs)"
+                          connectNulls={false}
+                          dot={(p: any) => {
+                            const { cx, cy, payload } = p
+                            if (payload.songs == null || payload.songs === 0) return <g key={`e-${cx}`} />
+                            return <circle key={`sp-${cx}`} cx={cx} cy={cy} r={3} fill="#a855f7" stroke="var(--background)" strokeWidth={1.5}/>
+                          }}
+                          activeDot={{ r: 4, fill: '#a855f7' }} />
+                      </AreaChart>
+                    ) : (
+                      <AreaChart data={yearTimelineData} margin={{ top: 5, right: 8, left: -20, bottom: 0 }}
+                        onClick={(d: any) => { const y = d?.activeLabel; if (y) handleYearClick(y) }}
+                        style={{ cursor: 'pointer' }}>
+                        <GradientDefs />
+                        <XAxis dataKey="year" tick={false} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                        <Tooltip content={<YearTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                        <Area type="monotone" dataKey="songsPerMonth" stroke="#a855f7" strokeWidth={2} fill="url(#gradSongs)"
+                          connectNulls={false}
+                          dot={(p: any) => {
+                            const { cx, cy, payload } = p
+                            if (payload.songsPerMonth == null) return <g key={`e-${cx}`} />
+                            return <circle key={`sp-${cx}`} cx={cx} cy={cy} r={3} fill="#a855f7" fillOpacity={0.8}/>
+                          }}
+                          activeDot={{ r: 4, fill: '#a855f7' }} />
+                      </AreaChart>
+                    )}
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* First / last show */}
               {!selectedYear && (stats.firstShow || stats.lastShow) && (
                 <div className="flex items-start justify-between gap-2 mt-2 text-xs text-muted-foreground">
                   {stats.firstShow && (
@@ -629,8 +668,6 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
                   {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                 </h2>
                 <p className="text-xs text-muted-foreground mb-3">Shows by venue size</p>
-
-                {/* Cap legend */}
                 <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3 text-[10px] text-muted-foreground">
                   {(['small', 'medium', 'large', 'xlarge'] as const).map(key => (
                     <span key={key} className="flex items-center gap-1">
@@ -639,7 +676,6 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
                     </span>
                   ))}
                 </div>
-
                 {topArtists.length === 0 ? (
                   <p className="text-sm text-muted-foreground italic">No shows in {selectedYear}.</p>
                 ) : (
@@ -660,29 +696,23 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
                 )}
               </div>
 
-              {/* Simple donut — Venues by Size */}
+              {/* Donut */}
               <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5">
                 <h2 className="text-lg font-bold text-foreground mb-1">
                   Venues by Size
                   {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                 </h2>
                 <p className="text-xs text-muted-foreground mb-3">Hover for venue breakdown · Click to filter</p>
-
                 {donutData.length === 0 ? (
                   <p className="text-sm text-muted-foreground italic">No shows in {selectedYear}.</p>
                 ) : (
                   <div className="flex flex-col md:flex-row items-center gap-4">
-                    {/* Donut */}
                     <div className="flex-shrink-0" style={{ width: 200, height: 200 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie
-                            data={donutData}
-                            cx="50%" cy="50%"
-                            innerRadius={55} outerRadius={88}
-                            paddingAngle={2} dataKey="value" stroke="none"
-                            onClick={(d: any) => handleCap(d.key as CapFilter)}
-                            style={{ cursor: 'pointer' }}>
+                          <Pie data={donutData} cx="50%" cy="50%"
+                            innerRadius={55} outerRadius={88} paddingAngle={2} dataKey="value" stroke="none"
+                            onClick={(d: any) => handleCap(d.key as CapFilter)} style={{ cursor: 'pointer' }}>
                             {donutData.map(entry => (
                               <Cell key={entry.key} fill={entry.color}
                                 opacity={capFilter === 'all' || capFilter === entry.key ? 1 : 0.25} />
@@ -692,8 +722,6 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
-
-                    {/* Legend */}
                     <div className="flex-1 w-full space-y-2">
                       {donutData.map(entry => {
                         const pct      = Math.round((entry.value / yearFiltered.length) * 100)
@@ -731,7 +759,6 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
             </div>
           ) : (
             <div className="bg-card rounded-lg shadow border border-border overflow-hidden">
-
               {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-wrap gap-2">
                 <div className="flex items-center gap-3 flex-wrap">
@@ -754,9 +781,7 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
                       <button key={m} onClick={() => setViewMode(m)}
                         className={`px-2.5 py-1 capitalize transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
                           viewMode === m ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
-                        }`}>
-                        {m}
-                      </button>
+                        }`}>{m}</button>
                     ))}
                   </div>
                 </div>
@@ -769,28 +794,22 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
                   <div className="hidden md:grid bg-muted border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider"
                     style={{ gridTemplateColumns: '40px 120px 1fr' }}>
                     <div className="px-3 py-3" />
-                    <button className="px-3 py-3 text-left hover:text-foreground" onClick={() => handleSort('date')}>
-                      Date{sortArrow('date')}
-                    </button>
+                    <button className="px-3 py-3 text-left hover:text-foreground" onClick={() => handleSort('date')}>Date{sortArrow('date')}</button>
                     <div className="px-3 py-3 flex gap-3">
                       <button className="hover:text-foreground" onClick={() => handleSort('artist')}>Artist{sortArrow('artist')}</button>
                       <span className="text-muted-foreground/30">/</span>
                       <button className="hover:text-foreground" onClick={() => handleSort('venue')}>Venue{sortArrow('venue')}</button>
                     </div>
                   </div>
-
-                  <div className="md:hidden grid bg-muted border-b border-border px-3 py-2"
-                    style={{ gridTemplateColumns: '28px 80px 1fr' }}>
+                  <div className="md:hidden grid bg-muted border-b border-border px-3 py-2" style={{ gridTemplateColumns: '28px 80px 1fr' }}>
                     <div />
-                    <button className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground"
-                      onClick={() => handleSort('date')}>Date{sortArrow('date')}</button>
+                    <button className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground" onClick={() => handleSort('date')}>Date{sortArrow('date')}</button>
                     <div className="flex gap-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                       <button className="hover:text-foreground" onClick={() => handleSort('artist')}>Artist{sortArrow('artist')}</button>
                       <span className="text-muted-foreground/30">/</span>
                       <button className="hover:text-foreground" onClick={() => handleSort('venue')}>Venue{sortArrow('venue')}</button>
                     </div>
                   </div>
-
                   <div className="divide-y divide-border">
                     {sorted.length === 0 ? (
                       <div className="text-center py-10 text-muted-foreground">No shows match this filter.</div>
@@ -798,13 +817,11 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
                       const removing = removingSet.has(show.show_id)
                       const future   = isFuture(show.date)
                       return (
-                        <div key={show.show_id}
-                          className={`hover:bg-muted/30 transition-colors ${future ? 'bg-amber-500/5' : ''}`}>
+                        <div key={show.show_id} className={`hover:bg-muted/30 transition-colors ${future ? 'bg-amber-500/5' : ''}`}>
                           {/* Desktop */}
                           <div className="hidden md:grid items-center" style={{ gridTemplateColumns: '40px 120px 1fr' }}>
                             <div className="px-3 py-3.5 flex items-center">
-                              <button onClick={() => removeShow(show.show_id)} disabled={removing}
-                                className="focus:outline-none disabled:opacity-50">
+                              <button onClick={() => removeShow(show.show_id)} disabled={removing} className="focus:outline-none disabled:opacity-50">
                                 {removing ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={5} />}
                               </button>
                             </div>
@@ -870,12 +887,9 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
                     <thead className="bg-muted border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       <tr>
                         <th className="px-3 py-3 w-10" />
-                        <th className="px-3 py-3 text-left cursor-pointer hover:text-foreground whitespace-nowrap"
-                          onClick={() => handleSort('date')}>Date{sortArrow('date')}</th>
-                        <th className="px-3 py-3 text-left cursor-pointer hover:text-foreground"
-                          onClick={() => handleSort('artist')}>Artist{sortArrow('artist')}</th>
-                        <th className="px-3 py-3 text-left cursor-pointer hover:text-foreground"
-                          onClick={() => handleSort('venue')}>Venue{sortArrow('venue')}</th>
+                        <th className="px-3 py-3 text-left cursor-pointer hover:text-foreground whitespace-nowrap" onClick={() => handleSort('date')}>Date{sortArrow('date')}</th>
+                        <th className="px-3 py-3 text-left cursor-pointer hover:text-foreground" onClick={() => handleSort('artist')}>Artist{sortArrow('artist')}</th>
+                        <th className="px-3 py-3 text-left cursor-pointer hover:text-foreground" onClick={() => handleSort('venue')}>Venue{sortArrow('venue')}</th>
                         <th className="px-3 py-3 text-left">Festival</th>
                       </tr>
                     </thead>
@@ -886,8 +900,7 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
                         const removing = removingSet.has(show.show_id)
                         const future   = isFuture(show.date)
                         return (
-                          <tr key={show.show_id}
-                            className={`hover:bg-muted/30 transition-colors ${future ? 'bg-amber-500/5' : ''}`}>
+                          <tr key={show.show_id} className={`hover:bg-muted/30 transition-colors ${future ? 'bg-amber-500/5' : ''}`}>
                             <td className="px-3 py-3">
                               <button onClick={() => removeShow(show.show_id)} disabled={removing} className="focus:outline-none disabled:opacity-50">
                                 {removing ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={5} />}
@@ -900,9 +913,7 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
                             <td className="px-3 py-3">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <button onClick={() => router.push(`/browse?artist_id=${show.artist.artist_id}`)}
-                                  className="text-primary hover:opacity-80 hover:underline text-left">
-                                  {show.artist.artist_name}
-                                </button>
+                                  className="text-primary hover:opacity-80 hover:underline text-left">{show.artist.artist_name}</button>
                                 {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
                                 {show.setlist_url && <SetlistLink url={show.setlist_url} />}
                               </div>
@@ -910,9 +921,7 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
                             <td className="px-3 py-3">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <button onClick={() => router.push(`/browse?venue_id=${show.venue.venue_id}`)}
-                                  className="text-muted-foreground hover:text-primary hover:underline text-left">
-                                  {show.venue.venue_name}
-                                </button>
+                                  className="text-muted-foreground hover:text-primary hover:underline text-left">{show.venue.venue_name}</button>
                                 <CapacityBadge category={show.venue.capacity_category} />
                               </div>
                             </td>
@@ -932,9 +941,7 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
                 <div className="bg-muted px-4 py-3 border-t border-border">
                   <div className="flex items-center justify-between">
                     <button onClick={() => handlePage(page - 1)} disabled={page === 1}
-                      className="px-3 py-1.5 text-sm border border-border rounded-md bg-card text-foreground hover:bg-muted/80 disabled:opacity-50">
-                      Previous
-                    </button>
+                      className="px-3 py-1.5 text-sm border border-border rounded-md bg-card text-foreground hover:bg-muted/80 disabled:opacity-50">Previous</button>
                     <form onSubmit={e => {
                       e.preventDefault()
                       const p = parseInt(pageInput)
@@ -949,9 +956,7 @@ export default function MyShowsClient({ shows: initialShows }: { shows: Show[] }
                       <span className="text-sm text-muted-foreground">/ {totalPages}</span>
                     </form>
                     <button onClick={() => handlePage(page + 1)} disabled={page === totalPages}
-                      className="px-3 py-1.5 text-sm border border-border rounded-md bg-card text-foreground hover:bg-muted/80 disabled:opacity-50">
-                      Next
-                    </button>
+                      className="px-3 py-1.5 text-sm border border-border rounded-md bg-card text-foreground hover:bg-muted/80 disabled:opacity-50">Next</button>
                   </div>
                 </div>
               )}

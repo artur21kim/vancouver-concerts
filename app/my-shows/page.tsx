@@ -15,6 +15,7 @@ export default async function MyShowsPage() {
         redirect('/')
     }
 
+    // ── User shows ────────────────────────────────────────────────────────────
     const { data: userShows, error } = await supabase
         .from('user_shows')
         .select(`
@@ -46,11 +47,11 @@ export default async function MyShowsPage() {
 
     if (error) {
         console.error('Error fetching user shows:', error)
-        return <MyShowsClient shows={[]} />
+        return <MyShowsClient shows={[]} spotifySongs={[]} />
     }
 
     if (!userShows || userShows.length === 0) {
-        return <MyShowsClient shows={[]} />
+        return <MyShowsClient shows={[]} spotifySongs={[]} />
     }
 
     const shows = userShows.map((us: any) => {
@@ -86,5 +87,14 @@ export default async function MyShowsPage() {
         }
     }).filter(Boolean)
 
-    return <MyShowsClient shows={shows as any} />
+    // ── Spotify songs (added_at only — for timeline overlay) ─────────────────
+    const { data: spotifySongsRaw } = await supabase
+        .from('user_spotify_songs')
+        .select('added_at')
+        .eq('user_id', user.id)
+        .not('added_at', 'is', null)
+
+    const spotifySongs: { added_at: string }[] = spotifySongsRaw ?? []
+
+    return <MyShowsClient shows={shows as any} spotifySongs={spotifySongs} />
 }
