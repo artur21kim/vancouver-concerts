@@ -86,6 +86,8 @@ export async function GET(request: Request) {
 
     console.log(`📊 ${matchedArtists.length} artists matched with >= 2 liked songs`);
 
+    // Use .range(0, 9999) instead of .limit() — Supabase JS client silently
+    // caps .limit() at 1000 rows when combined with large .in() arrays.
     const { data: shows, error: showsError } = await supabase
       .from('fact_shows')
       .select(`
@@ -103,7 +105,7 @@ export async function GET(request: Request) {
       .in('artist_id', matchedArtistIds)
       .gte('date', `${firstConcertYear}-01-01`)
       .lte('date', yesterdayVancouver)
-      .limit(5000);
+      .range(0, 9999);  // ← replaces .limit(5000) which was silently capped at 1000
 
     if (showsError) {
       return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
@@ -114,6 +116,8 @@ export async function GET(request: Request) {
         error: `No shows found for your artists from ${firstConcertYear} onwards.` 
       }, { status: 404 });
     }
+
+    console.log(`📍 Fetched ${shows.length} shows from fact_shows`);
 
     const artistShowCountsFiltered = shows.reduce((acc: any, show: any) => {
       if (noVenueIds.has(show.venue_id)) return acc;
@@ -199,7 +203,6 @@ export async function GET(request: Request) {
           .insert(chunk);
         if (scoreError) {
           console.error('Error writing artist scores:', scoreError);
-          // Non-fatal — continue without scores being locked
         }
       }
       console.log(`✅ Artist scores locked for user ${user.id}`);

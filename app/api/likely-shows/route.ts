@@ -88,6 +88,8 @@ export async function GET(request: Request) {
 
     const firstConcertYear = profile?.first_concert_year || 2000;
 
+    // Use .range(0, 9999) instead of .limit() — Supabase JS client silently
+    // caps .limit() at 1000 rows when combined with large .in() arrays.
     const { data: shows, error: showsError } = await supabase
       .from('fact_shows')
       .select(`
@@ -108,7 +110,7 @@ export async function GET(request: Request) {
       `)
       .in('artist_id', matchedArtistIds)
       .gte('date', `${firstConcertYear}-01-01`)
-      .limit(5000);
+      .range(0, 9999);  // ← replaces .limit(5000) which was silently capped at 1000
 
     if (showsError) {
       return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
@@ -120,6 +122,8 @@ export async function GET(request: Request) {
         data: { shows: [], less_likely_shows: [], total_shows: 0, message: 'No shows found matching your criteria.' }
       });
     }
+
+    console.log(`📍 Fetched ${shows.length} shows from fact_shows`);
 
     // Fetch show IDs to exclude (already reviewed)
     const [attendedResult, skippedResult] = await Promise.all([
@@ -198,16 +202,15 @@ export async function GET(request: Request) {
         const spotifyScore = (spotifyCount / maxSpotifyCount) * 100;
         const vancouverScore = (vancouverCount / maxVancouverCount) * 100;
         const rawScore = (0.8 * spotifyScore) + (0.2 * vancouverScore);
-        // Normalize so #1 = 100
         acc[artist.artist_id] = {
-          match_score: rawScore, // will normalize below
+          match_score: rawScore,
           spotify_song_count: spotifyCount,
           vancouver_show_count: vancouverCount
         };
         return acc;
       }, {});
 
-      // Normalize
+      // Normalize so #1 = 100
       const maxScore = Math.max(...Object.values(artistMatchScores).map((a: any) => a.match_score), 1);
       for (const id of Object.keys(artistMatchScores)) {
         artistMatchScores[Number(id)].match_score =
@@ -221,10 +224,8 @@ export async function GET(request: Request) {
       const songCount = scores?.spotify_song_count ?? 0;
       const matchScore = scores?.match_score ?? 0;
 
-      // Determine tier
       const isMain = songCount >= MIN_SONGS_MAIN && matchScore >= MIN_SCORE_MAIN;
       const isLessLikely = !isMain && matchScore >= MIN_SCORE_LESS_LIKELY;
-      // anything below MIN_SCORE_LESS_LIKELY is "stretch" — returned separately
 
       return {
         ...show,
