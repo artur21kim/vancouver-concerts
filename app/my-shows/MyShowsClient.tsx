@@ -5,9 +5,8 @@ import { useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
-  ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  Area, AreaChart,
-  PieChart, Pie, Cell,
+  ComposedChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  AreaChart, PieChart, Pie, Cell,
 } from 'recharts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -116,24 +115,22 @@ function SetlistLink({ url }: { url: string }) {
 function YearTip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   const shows = payload.find((p: any) => p.dataKey === 'shows')?.value
-  const songs = payload.find((p: any) => p.dataKey === 'songsPerMonth')?.value
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
-      <p className="font-semibold text-foreground mb-1">{label}</p>
+      <p className="font-semibold text-foreground mb-0.5">{label}</p>
       {shows != null && shows > 0 && <p className="text-primary">{shows} {shows === 1 ? 'show' : 'shows'}</p>}
-      {songs != null && <p style={{ color: SPOTIFY_GREEN }}>{songs.toFixed(1)} songs/month avg</p>}
     </div>
   )
 }
 
 function MonthTip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
-  const shows  = payload.find((p: any) => p.dataKey === 'shows')?.value
-  const future = payload.find((p: any) => p.dataKey === 'future')?.value
+  const shows  = payload.find((p: any) => p.dataKey === 'shows')?.value  ?? 0
+  const future = payload.find((p: any) => p.dataKey === 'future')?.value ?? 0
   const songs  = payload.find((p: any) => p.dataKey === 'songs')?.value
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
-      <p className="font-semibold text-foreground mb-1">{label}</p>
+      <p className="font-semibold text-foreground mb-0.5">{label}</p>
       {shows  > 0 && <p className="text-primary">{shows} {shows === 1 ? 'show' : 'shows'}</p>}
       {future > 0 && <p className="text-amber-400">{future} upcoming</p>}
       {songs != null && songs > 0 && <p style={{ color: SPOTIFY_GREEN }}>{songs} songs added</p>}
@@ -175,9 +172,13 @@ function ArtistBar({ artist, max, onNavigate }: {
 
   return (
     <div className="flex items-center gap-2 py-0.5">
-      <button onClick={onNavigate}
-        className="w-32 md:w-40 text-xs text-primary hover:opacity-80 hover:underline text-right truncate flex-shrink-0"
-        title={artist.name}>{artist.name}</button>
+      {/* Name + Spotify icon inline */}
+      <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
+        <button onClick={onNavigate}
+          className="text-xs text-primary hover:opacity-80 hover:underline truncate text-right"
+          title={artist.name}>{artist.name}</button>
+        {artist.spotifyId && <SpotifyLink artistId={artist.spotifyId} />}
+      </div>
       <div className="flex-1 h-4 bg-muted/40 rounded-full overflow-hidden">
         <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
           {segments.map((seg, i) => {
@@ -192,12 +193,9 @@ function ArtistBar({ artist, max, onNavigate }: {
           })}
         </div>
       </div>
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {artist.total} {artist.total === 1 ? 'show' : 'shows'}
-        </span>
-        {artist.spotifyId && <SpotifyLink artistId={artist.spotifyId} />}
-      </div>
+      <span className="text-xs text-muted-foreground tabular-nums flex-shrink-0">
+        {artist.total} {artist.total === 1 ? 'show' : 'shows'}
+      </span>
     </div>
   )
 }
@@ -224,7 +222,7 @@ export default function MyShowsClient({
   const [showAllArtists, setShowAllArtists] = useState(false)
   const PER_PAGE = 50
 
-  const hasSpotify     = spotifySongs.length > 0
+  const hasSpotify      = spotifySongs.length > 0
   const anyFilterActive = selectedYear !== null || capFilter !== 'all'
 
   // ── Base stats ────────────────────────────────────────────────────────────
@@ -242,25 +240,7 @@ export default function MyShowsClient({
     }
   }, [shows])
 
-  // ── Spotify: avg songs/month per year ────────────────────────────────────
-  const spotifyByYear = useMemo(() => {
-    const monthCounts: Record<string, Record<string, number>> = {}
-    for (const s of spotifySongs) {
-      const dt = new Date(s.added_at)
-      const y  = String(dt.getFullYear())
-      const m  = String(dt.getMonth())
-      if (!monthCounts[y]) monthCounts[y] = {}
-      monthCounts[y][m] = (monthCounts[y][m] ?? 0) + 1
-    }
-    const result: Record<string, number> = {}
-    for (const [year, months] of Object.entries(monthCounts)) {
-      const totalSongs = Object.values(months).reduce((a, b) => a + b, 0)
-      result[year] = totalSongs / Object.keys(months).length
-    }
-    return result
-  }, [spotifySongs])
-
-  // ── Spotify: raw songs per month for drilldown ────────────────────────────
+  // ── Spotify: raw songs per month for drilldown only ───────────────────────
   const spotifyByYearMonth = useMemo(() => {
     const result: Record<string, Record<number, number>> = {}
     for (const s of spotifySongs) {
@@ -273,11 +253,12 @@ export default function MyShowsClient({
     return result
   }, [spotifySongs])
 
-  const firstSpotifyYear = useMemo(() =>
-    Object.keys(spotifyByYear).sort()[0] ?? null
-  , [spotifyByYear])
+  const firstSpotifyYear = useMemo(() => {
+    const years = Object.keys(spotifyByYearMonth).sort()
+    return years[0] ?? null
+  }, [spotifyByYearMonth])
 
-  // ── Year-level timeline ───────────────────────────────────────────────────
+  // ── Year-level timeline (shows only) ─────────────────────────────────────
   const yearTimelineData = useMemo(() => {
     const src = timelineScope === 'past'     ? stats.past
               : timelineScope === 'upcoming' ? stats.future
@@ -289,17 +270,12 @@ export default function MyShowsClient({
       if (isFuture(s.date)) byYear[y].future++
       else                  byYear[y].past++
     }
-    const allYears = new Set([...Object.keys(byYear), ...Object.keys(spotifyByYear)])
-    return [...allYears].sort().map(year => ({
-      year,
-      shows:         (byYear[year]?.past ?? 0) + (byYear[year]?.future ?? 0),
-      past:          byYear[year]?.past   ?? 0,
-      future:        byYear[year]?.future ?? 0,
-      songsPerMonth: hasSpotify ? (spotifyByYear[year] ?? null) : null,
-    }))
-  }, [shows, timelineScope, stats, spotifyByYear, hasSpotify])
+    return Object.entries(byYear)
+      .sort(([a],[b]) => a.localeCompare(b))
+      .map(([year, c]) => ({ year, shows: c.past + c.future, past: c.past, future: c.future }))
+  }, [shows, timelineScope, stats])
 
-  // ── Month drilldown ───────────────────────────────────────────────────────
+  // ── Month drilldown (shows + Spotify songs) ───────────────────────────────
   const monthTimelineData = useMemo(() => {
     if (!selectedYear) return []
     const src = timelineScope === 'past'     ? stats.past
@@ -314,16 +290,23 @@ export default function MyShowsClient({
       else                  byMonth[m].past++
     }
     const songsByMonth = spotifyByYearMonth[selectedYear] ?? {}
+    const hasSongsThisYear = Object.keys(songsByMonth).length > 0
     return Array.from({ length: 12 }, (_, m) => ({
       month:  MONTHS[m],
       shows:  byMonth[m].past,
       future: byMonth[m].future,
-      songs:  hasSpotify ? (songsByMonth[m] ?? null) : null,
+      // only include songs key if this year has Spotify data
+      ...(hasSpotify && hasSongsThisYear ? { songs: songsByMonth[m] ?? 0 } : {}),
     }))
   }, [shows, selectedYear, timelineScope, stats, spotifyByYearMonth, hasSpotify])
 
   const firstYear = stats.firstShow?.date.split('-')[0]
   const lastYear  = stats.lastShow?.date.split('-')[0]
+
+  // does the drilled-down year have Spotify data?
+  const drilldownHasSpotify = selectedYear
+    ? hasSpotify && Object.keys(spotifyByYearMonth[selectedYear] ?? {}).length > 0
+    : false
 
   // ── Year-filtered set ─────────────────────────────────────────────────────
   const yearFiltered = useMemo(() => {
@@ -450,24 +433,24 @@ export default function MyShowsClient({
 
           <h1 className="text-3xl md:text-4xl font-bold text-foreground">My Shows</h1>
 
-          {/* ── Concert Timeline (stats inline in header) ── */}
+          {/* ── Concert Timeline ── */}
           {yearTimelineData.length > 0 && (
             <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5">
 
-              {/* Header row */}
+              {/* Header */}
               <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h2 className="text-lg md:text-xl font-bold text-foreground">Concert Timeline</h2>
                   {/* Compact stat pills */}
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2 text-xs">
                     <span className="bg-muted rounded-md px-2 py-0.5 font-medium text-foreground">{stats.total} shows</span>
                     <span className="bg-muted rounded-md px-2 py-0.5 font-medium text-foreground">{stats.artists} artists</span>
                     <span className="bg-muted rounded-md px-2 py-0.5 font-medium text-foreground">{stats.venues} venues</span>
                   </div>
-                  {/* Clear All — Browse/Home style */}
+                  {/* Clear All — outlined red, no white-text hover */}
                   {anyFilterActive && (
                     <button onClick={clearAll}
-                      className="px-2.5 py-0.5 rounded-md border border-destructive text-destructive text-xs font-semibold hover:bg-destructive hover:text-white transition-colors">
+                      className="px-2.5 py-0.5 rounded-md border border-destructive text-destructive text-xs font-semibold hover:bg-destructive/10 transition-colors">
                       Clear All
                     </button>
                   )}
@@ -499,47 +482,31 @@ export default function MyShowsClient({
                   <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#0d9488' }} />
                   {selectedYear ? 'Shows' : 'Shows per year'}
                 </span>
-                {hasSpotify && (
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: SPOTIFY_GREEN }} />
-                    {selectedYear ? 'Songs added' : 'Songs/month avg'}
-                    {firstSpotifyYear && !selectedYear && (
-                      <span className="text-muted-foreground/50 ml-0.5">(from {firstSpotifyYear})</span>
-                    )}
-                  </span>
-                )}
                 {stats.future.length > 0 && (
                   <span className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#f59e0b' }} />
                     Upcoming
                   </span>
                 )}
-                {!selectedYear && firstYear && (
+                {drilldownHasSpotify && (
                   <span className="flex items-center gap-1.5">
-                    <svg width="12" height="12" viewBox="0 0 12 12">
-                      <circle cx="6" cy="6" r="5" fill="#0d9488" stroke="var(--background)" strokeWidth="2"/>
-                    </svg>
-                    First show
-                  </span>
-                )}
-                {!selectedYear && lastYear && lastYear !== firstYear && (
-                  <span className="flex items-center gap-1.5">
-                    <svg width="12" height="12" viewBox="0 0 12 12">
-                      <circle cx="6" cy="6" r="5" fill="#5eead4" stroke="var(--background)" strokeWidth="2"/>
-                    </svg>
-                    Last show
+                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: SPOTIFY_GREEN }} />
+                    Songs added
+                    {firstSpotifyYear && (
+                      <span className="text-muted-foreground/50 ml-0.5">(Spotify from {firstSpotifyYear})</span>
+                    )}
                   </span>
                 )}
               </div>
 
-              {/* Chart — dual Y-axis via ComposedChart */}
+              {/* Chart */}
               <div style={{ height: 180 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   {selectedYear ? (
-                    /* Month drilldown */
+                    /* ── Month drilldown: shows area + optional Spotify line ── */
                     <ComposedChart
                       data={monthTimelineData}
-                      margin={{ top: 20, right: hasSpotify ? 45 : 8, left: -20, bottom: 0 }}>
+                      margin={{ top: 20, right: drilldownHasSpotify ? 45 : 8, left: -20, bottom: 0 }}>
                       <defs>
                         <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
@@ -548,7 +515,7 @@ export default function MyShowsClient({
                       </defs>
                       <XAxis dataKey="month" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
                       <YAxis yAxisId="shows" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                      {hasSpotify && (
+                      {drilldownHasSpotify && (
                         <YAxis yAxisId="songs" orientation="right"
                           tick={{ fill: SPOTIFY_GREEN, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
                       )}
@@ -566,23 +533,33 @@ export default function MyShowsClient({
                           stroke="#f59e0b" strokeWidth={2} fill="none"
                           dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 4, fill: '#f59e0b' }} />
                       )}
-                      {hasSpotify && (
+                      {drilldownHasSpotify && (
                         <Line yAxisId="songs" type="monotone" dataKey="songs"
-                          stroke={SPOTIFY_GREEN} strokeWidth={2} dot={false}
-                          connectNulls={false} activeDot={{ r: 4, fill: SPOTIFY_GREEN }} />
+                          stroke={SPOTIFY_GREEN} strokeWidth={2}
+                          dot={(p: any) => {
+                            const { cx, cy, payload } = p
+                            if (!payload.songs || payload.songs === 0) return <g key={`e-${cx}`} />
+                            return <circle key={`sp-${cx}`} cx={cx} cy={cy} r={3} fill={SPOTIFY_GREEN} stroke="var(--background)" strokeWidth={1.5}/>
+                          }}
+                          connectNulls={false}
+                          activeDot={{ r: 4, fill: SPOTIFY_GREEN }} />
                       )}
                     </ComposedChart>
                   ) : (
-                    /* Year overview */
-                    <ComposedChart
+                    /* ── Year overview: clean single area chart ── */
+                    <AreaChart
                       data={yearTimelineData}
-                      margin={{ top: 20, right: hasSpotify ? 45 : 8, left: -20, bottom: 0 }}
+                      margin={{ top: 20, right: 8, left: -20, bottom: 0 }}
                       onClick={(d: any) => { const y = d?.activeLabel; if (y) handleYearClick(y) }}
                       style={{ cursor: 'pointer' }}>
                       <defs>
                         <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
                           <stop offset="95%" stopColor="#0d9488" stopOpacity={0.02}/>
+                        </linearGradient>
+                        <linearGradient id="gradFuture" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02}/>
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="year"
@@ -594,13 +571,9 @@ export default function MyShowsClient({
                           </text>
                         )}
                         axisLine={false} tickLine={false} />
-                      <YAxis yAxisId="shows" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                      {hasSpotify && (
-                        <YAxis yAxisId="songs" orientation="right"
-                          tick={{ fill: SPOTIFY_GREEN, fontSize: 10 }} axisLine={false} tickLine={false} />
-                      )}
+                      <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                       <Tooltip content={<YearTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
-                      <Area yAxisId="shows" type="monotone" dataKey="shows"
+                      <Area type="monotone" dataKey="shows"
                         stroke="#0d9488" strokeWidth={2} fill="url(#gradShows)"
                         dot={(p: any) => {
                           const { cx, cy, payload } = p
@@ -609,12 +582,13 @@ export default function MyShowsClient({
                           return <circle key={`d-${cx}`} cx={cx} cy={cy} r={3} fill="#0d9488" fillOpacity={0.7}/>
                         }}
                         activeDot={{ r: 5, fill: '#0d9488' }} />
-                      {hasSpotify && (
-                        <Line yAxisId="songs" type="monotone" dataKey="songsPerMonth"
-                          stroke={SPOTIFY_GREEN} strokeWidth={2} dot={false}
-                          connectNulls={false} activeDot={{ r: 4, fill: SPOTIFY_GREEN }} />
+                      {stats.future.length > 0 && (
+                        <Area type="monotone" dataKey="future"
+                          stroke="#f59e0b" strokeWidth={2} fill="url(#gradFuture)"
+                          dot={{ r: 3, fill: '#f59e0b', fillOpacity: 0.8 }}
+                          activeDot={{ r: 5, fill: '#f59e0b' }} />
                       )}
-                    </ComposedChart>
+                    </AreaChart>
                   )}
                 </ResponsiveContainer>
               </div>
@@ -651,7 +625,6 @@ export default function MyShowsClient({
                   Top Artists
                   {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                 </h2>
-                <p className="text-xs text-muted-foreground mb-3">Shows by venue size</p>
                 <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3 text-[10px] text-muted-foreground">
                   {(['small', 'medium', 'large', 'xlarge'] as const).map(key => (
                     <span key={key} className="flex items-center gap-1">
@@ -680,7 +653,7 @@ export default function MyShowsClient({
                 )}
               </div>
 
-              {/* Venues by Size donut */}
+              {/* Venues by Size */}
               <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5">
                 <h2 className="text-lg font-bold text-foreground mb-4">
                   Venues by Size
@@ -742,7 +715,6 @@ export default function MyShowsClient({
             </div>
           ) : (
             <div className="bg-card rounded-lg shadow border border-border overflow-hidden">
-              {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-wrap gap-2">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h2 className="text-base font-semibold text-foreground">All Shows</h2>
@@ -801,7 +773,6 @@ export default function MyShowsClient({
                       const future   = isFuture(show.date)
                       return (
                         <div key={show.show_id} className={`hover:bg-muted/30 transition-colors ${future ? 'bg-amber-500/5' : ''}`}>
-                          {/* Desktop */}
                           <div className="hidden md:grid items-center" style={{ gridTemplateColumns: '40px 120px 1fr' }}>
                             <div className="px-3 py-3.5 flex items-center">
                               <button onClick={() => removeShow(show.show_id)} disabled={removing} className="focus:outline-none disabled:opacity-50">
@@ -830,7 +801,6 @@ export default function MyShowsClient({
                               </div>
                             </div>
                           </div>
-                          {/* Mobile */}
                           <div className="md:hidden grid items-center px-3 py-2.5" style={{ gridTemplateColumns: '28px 80px 1fr' }}>
                             <button onClick={() => removeShow(show.show_id)} disabled={removing} className="focus:outline-none disabled:opacity-50">
                               {removing ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={4} />}
