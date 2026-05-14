@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   ComposedChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  AreaChart, PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis,
+  AreaChart, PieChart, Pie, Cell,
 } from 'recharts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ type SortDir       = 'asc' | 'desc'
 type ViewMode      = 'shows' | 'sets' | 'festivals'
 type SetsSubView   = 'card' | 'table'
 type CapFilter     = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown'
-type ArtistChartMode = 'bar' | 'bubble'
+type ArtistChartMode = 'bar' | 'years'
 
 // ── Capacity metadata ─────────────────────────────────────────────────────────
 const CAP_KEYS = ['small', 'medium', 'large', 'xlarge', 'unknown'] as const
@@ -219,20 +219,8 @@ function DonutTip({ active, payload, venueBreakdown }: any) {
   )
 }
 
-// ── Bubble chart tooltip ──────────────────────────────────────────────────────
-function BubbleTip({ active, payload }: any) {
-  if (!active || !payload?.length) return null
-  const d = payload[0]?.payload
-  if (!d) return null
-  return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2.5 text-xs shadow-lg pointer-events-none min-w-[160px]">
-      <p className="font-semibold text-foreground mb-1">{d.name}</p>
-      <p className="text-primary">{d.shows} {d.shows === 1 ? 'show' : 'shows'}</p>
-      <p className="text-muted-foreground">{d.years.join(', ')}</p>
-      {d.dominantVenue && <p className="text-muted-foreground mt-0.5">mostly {d.dominantVenue}</p>}
-    </div>
-  )
-}
+// ── Year dot tooltip ──────────────────────────────────────────────────────────
+type YearDotTooltip = { name: string; year: string; venue: string; capKey: CapFilter } | null
 
 // ── Artist bar with custom hover tooltip ──────────────────────────────────────
 function ArtistBar({ artist, max, onNavigate }: {
@@ -312,123 +300,117 @@ function ArtistBar({ artist, max, onNavigate }: {
   )
 }
 
-// ── Artist bubble chart ───────────────────────────────────────────────────────
-function ArtistBubbleChart({ artists, onShowAll, showAll }: {
+// ── Year-segmented artist bars ────────────────────────────────────────────────
+function ArtistYearBars({ artists, max, onNavigate }: {
   artists: {
     name: string; spotifyId: string | null; total: number
-    byCapacity: Record<string, number>; years: string[]
-    dominantCapKey: CapFilter; dominantVenue: string
+    byCapacity: Record<string, number>
+    showsByYear: Record<string, { venue: string; capKey: CapFilter }[]>
   }[]
-  onShowAll: () => void; showAll: boolean
+  max: number; onNavigate: (name: string) => void
 }) {
-  const BUBBLE_CAP = 25
-  const display = showAll ? artists : artists.slice(0, BUBBLE_CAP)
-
-  const data = display.map((a, i) => ({
-    name: a.name,
-    shows: a.total,
-    // x = first year they appear
-    x: parseInt(a.years[0]),
-    // y = index (staggered to avoid overlap)
-    y: i,
-    // z = show count drives bubble size
-    z: a.total,
-    years: a.years,
-    dominantVenue: a.dominantVenue,
-    fill: CAP_BY_KEY[a.dominantCapKey]?.color ?? 'rgba(13,148,136,0.7)',
-  }))
+  const [dotTooltip, setDotTooltip] = useState<YearDotTooltip>(null)
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
 
   return (
-    <div>
-      <div style={{ height: Math.max(200, display.length * 22) }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <ScatterChart margin={{ top: 8, right: 16, left: -20, bottom: 0 }}>
-            <XAxis
-              dataKey="x" type="number" name="Year"
-              domain={['dataMin - 1', 'dataMax + 1']}
-              tickCount={8}
-              tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-              axisLine={false} tickLine={false}
-            />
-            <YAxis dataKey="y" type="number" hide />
-            <ZAxis dataKey="z" range={[40, 400]} />
-            <Tooltip content={<BubbleTip />} cursor={false} />
-            <Scatter data={data} shape={(props: any) => {
-              const { cx, cy, r, payload } = props
-              return (
-                <circle
-                  cx={cx} cy={cy} r={r}
-                  fill={payload.fill}
-                  fillOpacity={0.75}
-                  stroke={payload.fill}
-                  strokeOpacity={0.4}
-                  strokeWidth={1}
-                />
-              )
-            }} />
-          </ScatterChart>
-        </ResponsiveContainer>
+    <div className="w-full space-y-2.5 relative">
+      {/* Column headers */}
+      <div className="flex items-center gap-3 pb-1 px-2 border-b border-border">
+        <span className="w-32 md:w-40 flex-shrink-0" />
+        <span className="flex-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Appearances by year</span>
+        <span className="w-8 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">#</span>
       </div>
+
+      {artists.map(artist => {
+        const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
+        const segments = CAP_KEYS.map(key => ({
+          key, count: artist.byCapacity[key] ?? 0,
+          color: CAP_BY_KEY[key]?.color ?? 'rgba(156,163,175,0.75)',
+        })).filter(s => s.count > 0)
+        const years = Object.keys(artist.showsByYear).sort()
+
+        return (
+          <div key={artist.name} className="flex items-start gap-3 px-2">
+            {/* Name */}
+            <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0 pt-1">
+              <button onClick={() => onNavigate(artist.name)}
+                className="text-xs text-primary hover:opacity-80 hover:underline truncate text-right"
+                title={artist.name}>{artist.name}</button>
+              {artist.spotifyId && <SpotifyLink artistId={artist.spotifyId} />}
+            </div>
+
+            {/* Bar + year dots stacked */}
+            <div className="flex-1 min-w-0">
+              {/* Bar */}
+              <div className="h-4 bg-muted/40 rounded-full overflow-hidden mb-1.5">
+                <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
+                  {segments.map((seg, i) => {
+                    const isFirst = i === 0, isLast = i === segments.length - 1
+                    return (
+                      <div key={seg.key} style={{
+                        width: `${(seg.count / artist.total) * 100}%`,
+                        backgroundColor: seg.color,
+                        borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
+                      }} />
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Year dots */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {years.map(year => {
+                  const yearShows = artist.showsByYear[year] ?? []
+                  const dominantCap = yearShows.length > 0 ? yearShows[0].capKey : 'unknown'
+                  const dotColor = CAP_BY_KEY[dominantCap]?.color ?? 'rgba(13,148,136,0.7)'
+                  return (
+                    <button
+                      key={year}
+                      className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors group"
+                      onMouseEnter={e => {
+                        setDotTooltip({ name: artist.name, year, venue: yearShows[0]?.venue ?? '', capKey: dominantCap })
+                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                        setTooltipPos({ x: rect.left, y: rect.top })
+                      }}
+                      onMouseLeave={() => setDotTooltip(null)}
+                    >
+                      <span className="w-2 h-2 rounded-full flex-shrink-0 transition-transform group-hover:scale-125" style={{ backgroundColor: dotColor }} />
+                      <span>{year}</span>
+                      {yearShows.length > 1 && <span className="text-muted-foreground/50">×{yearShows.length}</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Count */}
+            <span className="text-xs tabular-nums flex-shrink-0 pt-1 w-8 text-right" style={{ color: TEAL }}>{artist.total}</span>
+          </div>
+        )
+      })}
+
+      {/* Fixed tooltip */}
+      {dotTooltip && (
+        <div className="fixed z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none"
+          style={{ left: tooltipPos.x + 12, top: tooltipPos.y - 60 }}>
+          <p className="font-semibold text-foreground">{dotTooltip.name} · {dotTooltip.year}</p>
+          {dotTooltip.venue && <p className="text-muted-foreground mt-0.5">{dotTooltip.venue}</p>}
+          <p className="mt-0.5" style={{ color: CAP_BY_KEY[dotTooltip.capKey]?.color ?? TEAL }}>
+            {CAP_BY_KEY[dotTooltip.capKey]?.legendLabel ?? ''}
+          </p>
+        </div>
+      )}
+
       {/* Legend */}
-      <div className="flex items-center gap-3 mt-2 flex-wrap text-[10px] text-muted-foreground">
+      <div className="flex items-center gap-3 pt-2 border-t border-border text-[10px] text-muted-foreground flex-wrap">
         {CAP_KEYS.filter(k => k !== 'unknown').map(key => (
           <span key={key} className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: CAP_BY_KEY[key].color }} />
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CAP_BY_KEY[key].color }} />
             {CAP_BY_KEY[key].legendLabel}
           </span>
         ))}
-        <span className="text-muted-foreground/60">· bubble size = show count · x-axis = first year</span>
+        <span className="text-muted-foreground/50">· dot color = dominant venue size that year</span>
       </div>
-      {!showAll && artists.length > BUBBLE_CAP && (
-        <button onClick={onShowAll} className="mt-2 text-xs text-primary hover:opacity-80 font-medium">
-          Show all {artists.length} artists as table →
-        </button>
-      )}
-    </div>
-  )
-}
-
-// ── Artist table (full list) ──────────────────────────────────────────────────
-function ArtistTable({ artists, onNavigate }: {
-  artists: { name: string; spotifyId: string | null; total: number; byCapacity: Record<string, number>; years: string[] }[]
-  onNavigate: (name: string) => void
-}) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="border-b border-border">
-            <th className="text-left py-2 text-muted-foreground font-medium">#</th>
-            <th className="text-left py-2 text-muted-foreground font-medium">Artist</th>
-            <th className="text-right py-2 text-muted-foreground font-medium">Shows</th>
-            <th className="text-left py-2 text-muted-foreground font-medium pl-4">Sizes</th>
-            <th className="text-left py-2 text-muted-foreground font-medium pl-4">Years</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border/50">
-          {artists.map((a, i) => (
-            <tr key={a.name} className="hover:bg-muted/20 transition-colors">
-              <td className="py-1.5 text-muted-foreground/50 w-6">{i + 1}</td>
-              <td className="py-1.5">
-                <button onClick={() => onNavigate(a.name)}
-                  className="text-primary hover:opacity-80 hover:underline text-left">{a.name}</button>
-                {a.spotifyId && <span className="ml-1"><SpotifyLink artistId={a.spotifyId} /></span>}
-              </td>
-              <td className="py-1.5 text-right tabular-nums" style={{ color: TEAL }}>{a.total}</td>
-              <td className="py-1.5 pl-4">
-                <div className="flex items-center gap-0.5">
-                  {CAP_KEYS.filter(k => k !== 'unknown' && (a.byCapacity[k] ?? 0) > 0).map(key => (
-                    <span key={key} className={`text-[9px] font-bold px-1 py-px rounded ${CAP_BY_KEY[key].badgeBg} ${CAP_BY_KEY[key].badgeText}`}>
-                      {CAP_BY_KEY[key].shortLabel}×{a.byCapacity[key]}
-                    </span>
-                  ))}
-                </div>
-              </td>
-              <td className="py-1.5 pl-4 text-muted-foreground/70">{a.years.join(', ')}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   )
 }
@@ -448,7 +430,6 @@ export default function MyShowsClient({
   const [viewMode, setViewMode]                 = useState<ViewMode>('shows')
   const [setsSubView, setSetsSubView]           = useState<SetsSubView>('card')
   const [artistChartMode, setArtistChartMode]   = useState<ArtistChartMode>('bar')
-  const [artistShowAll, setArtistShowAll]       = useState(false)
   const [sortField, setSortField]               = useState<SortField>('date')
   const [sortDir, setSortDir]                   = useState<SortDir>('desc')
   const [removingSet, setRemovingSet]           = useState<Set<number>>(new Set())
@@ -597,34 +578,30 @@ export default function MyShowsClient({
 
   // ── Top artists (with venue + year data) ──────────────────────────────────
   const topArtists = useMemo(() => {
+    const src = viewMode === 'festivals' ? yearFiltered.filter(isFestivalShow) : yearFiltered
     const map: Record<number, {
       name: string; spotifyId: string | null; total: number
-      byCapacity: Record<string, number>; byVenue: Record<string, number>; byYear: Set<string>
+      byCapacity: Record<string, number>; byVenue: Record<string, number>
+      showsByYear: Record<string, { venue: string; capKey: CapFilter }[]>
     }> = {}
-    for (const s of yearFiltered) {
+    for (const s of src) {
       const id     = s.artist.artist_id
-      const capKey = getCapMeta(s.venue.capacity_category).key
+      const capKey = getCapMeta(s.venue.capacity_category).key as CapFilter
       const year   = s.date.split('-')[0]
-      if (!map[id]) map[id] = { name: s.artist.artist_name, spotifyId: s.artist.spotify_artist_id, total: 0, byCapacity: {}, byVenue: {}, byYear: new Set() }
+      if (!map[id]) map[id] = { name: s.artist.artist_name, spotifyId: s.artist.spotify_artist_id, total: 0, byCapacity: {}, byVenue: {}, showsByYear: {} }
       map[id].total++
       map[id].byCapacity[capKey] = (map[id].byCapacity[capKey] ?? 0) + 1
       map[id].byVenue[s.venue.venue_name] = (map[id].byVenue[s.venue.venue_name] ?? 0) + 1
-      map[id].byYear.add(year)
+      if (!map[id].showsByYear[year]) map[id].showsByYear[year] = []
+      map[id].showsByYear[year].push({ venue: s.venue.venue_name, capKey })
     }
     return Object.values(map)
       .map(a => {
-        const dominantCapEntry = CAP_KEYS.map(k => ({ k, c: a.byCapacity[k] ?? 0 })).sort((x, y) => y.c - x.c)[0]
-        const dominantVenueEntry = Object.entries(a.byVenue).sort((x, y) => y[1] - x[1])[0]
-        return {
-          ...a,
-          years: Array.from(a.byYear).sort(),
-          dominantCapKey: (dominantCapEntry?.k ?? 'unknown') as CapFilter,
-          dominantVenue: dominantVenueEntry?.[0] ?? '',
-          venueBreakdown: Object.entries(a.byVenue).map(([name, count]) => ({ name, count })).sort((x, y) => y.count - x.count),
-        }
+        const venueBreakdown = Object.entries(a.byVenue).map(([name, count]) => ({ name, count })).sort((x, y) => y.count - x.count)
+        return { ...a, venueBreakdown }
       })
       .sort((a, b) => b.total - a.total)
-  }, [yearFiltered])
+  }, [yearFiltered, viewMode])
 
   const maxArtistShows = topArtists[0]?.total ?? 1
 
@@ -990,47 +967,46 @@ export default function MyShowsClient({
                     Top Artists
                     {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                   </h2>
-                  {/* Bar / Bubble toggle */}
+                  {/* Bar / Years toggle */}
                   <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
-                    {(['bar', 'bubble'] as ArtistChartMode[]).map((m, i) => (
-                      <button key={m} onClick={() => { setArtistChartMode(m); setArtistShowAll(false) }}
-                        className={`px-2.5 py-1 capitalize transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                    {([['bar', 'Bar'], ['years', 'Years']] as [ArtistChartMode, string][]).map(([m, label], i) => (
+                      <button key={m} onClick={() => setArtistChartMode(m)}
+                        className={`px-2.5 py-1 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
                           artistChartMode === m ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
-                        }`}>{m}</button>
+                        }`}>{label}</button>
                     ))}
                   </div>
                 </div>
 
                 {topArtists.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">No shows in {selectedYear}.</p>
+                  <p className="text-sm text-muted-foreground italic">No shows{selectedYear ? ` in ${selectedYear}` : ''}.</p>
                 ) : artistChartMode === 'bar' ? (
                   <>
                     <div className="space-y-1.5">
-                      {topArtists.slice(0, showAllArtists ? undefined : 5).map(artist => (
+                      {topArtists.slice(0, showAllArtists ? undefined : 10).map(artist => (
                         <ArtistBar key={artist.name} artist={artist} max={maxArtistShows}
                           onNavigate={() => router.push(`/browse?artist=${encodeURIComponent(artist.name)}`)} />
                       ))}
                     </div>
-                    {topArtists.length > 5 && (
+                    {topArtists.length > 10 && (
                       <button onClick={() => setShowAllArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
                         {showAllArtists ? '← Show less' : `View all ${topArtists.length} artists →`}
                       </button>
                     )}
                   </>
-                ) : artistShowAll ? (
+                ) : (
                   <>
-                    <ArtistTable
-                      artists={topArtists}
+                    <ArtistYearBars
+                      artists={topArtists.slice(0, showAllArtists ? undefined : 10)}
+                      max={maxArtistShows}
                       onNavigate={(name) => router.push(`/browse?artist=${encodeURIComponent(name)}`)}
                     />
-                    <button onClick={() => setArtistShowAll(false)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">← Back to bubble chart</button>
+                    {topArtists.length > 10 && (
+                      <button onClick={() => setShowAllArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
+                        {showAllArtists ? '← Show less' : `View all ${topArtists.length} artists →`}
+                      </button>
+                    )}
                   </>
-                ) : (
-                  <ArtistBubbleChart
-                    artists={topArtists}
-                    onShowAll={() => setArtistShowAll(true)}
-                    showAll={artistShowAll}
-                  />
                 )}
               </div>
 
