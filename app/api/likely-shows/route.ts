@@ -94,7 +94,8 @@ export async function GET(request: Request) {
         p_min_song_count: 2,
         p_from_date: `${firstConcertYear}-01-01`,
         p_to_date: new Date().toISOString().split('T')[0],
-      });
+      })
+      .range(0, 49999); // Arbitrary large limit to ensure we get all matches without truncation
 
     if (showsError) {
       console.error('Shows RPC error:', showsError);
