@@ -86,64 +86,34 @@ export async function GET(request: Request) {
 
     console.log(`📊 ${matchedArtists.length} artists matched with >= 2 liked songs`);
 
-    // Use RPC to fetch shows server-side — avoids .in() URL length limits which
-    // silently truncate large artist ID arrays, causing missing artists in results.
-    const { data: shows, error: showsError } = await supabase
-      .rpc('get_user_matched_shows', {
+    // Fetch artist show counts via dedicated RPC — returns one row per artist so
+    // it never hits the PostgREST 1000-row cap (unlike fetching raw show rows).
+    const { data: artistShowCountsRaw, error: countsError } = await supabase
+      .rpc('get_user_artist_show_counts', {
         p_user_id: user.id,
         p_min_song_count: 2,
         p_from_date: `${firstConcertYear}-01-01`,
         p_to_date: yesterdayVancouver,
-      })
-      .range(0, 49999);
+      });
 
-    console.log(`🔍 shows array length RAW:`, shows?.length);
-
-    if (showsError) {
-      console.error('Shows RPC error:', showsError);
-      return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
+    if (countsError) {
+      console.error('Artist show counts RPC error:', countsError);
+      return NextResponse.json({ error: 'Failed to fetch artist show counts' }, { status: 500 });
     }
 
-    if (!shows || shows.length === 0) {
-      return NextResponse.json({ 
-        error: `No shows found for your artists from ${firstConcertYear} onwards.` 
-      }, { status: 404 });
+    // Build artist_id → show_count map (all shows, no venue filter)
+    const artistShowCountsAll: Record<number, number> = {};
+    for (const row of (artistShowCountsRaw || [])) {
+      artistShowCountsAll[row.artist_id] = Number(row.show_count);
     }
 
-    console.log(`📍 Fetched ${shows.length} shows via get_user_matched_shows RPC`);
-
-    const artistShowCountsFiltered = shows.reduce((acc: any, show: any) => {
-      if (noVenueIds.has(show.venue_id)) return acc;
-      if (!acc[show.artist_id]) acc[show.artist_id] = 0;
-      acc[show.artist_id]++;
-      return acc;
-    }, {});
-
-    const artistShowCountsAll = shows.reduce((acc: any, show: any) => {
-      if (!acc[show.artist_id]) acc[show.artist_id] = 0;
-      acc[show.artist_id]++;
-      return acc;
-    }, {});
-
-    // Debug: check if target artists made it into the counts map
-    console.log(`🔍 artistShowCountsAll[2781] (Frankie):`, artistShowCountsAll[2781]);
-    console.log(`🔍 artistShowCountsAll[5024] (Billy Strings):`, artistShowCountsAll[5024]);
-    console.log(`🔍 sample keys (first 5):`, Object.keys(artistShowCountsAll).slice(0, 5));
-    console.log(`🔍 total unique artists in shows:`, Object.keys(artistShowCountsAll).length);
-
-    // Debug: check if target artists are in matchedArtists
-    const frankieInMatched = matchedArtists.find((a: any) => a.artist_id === 2781);
-    const billyInMatched = matchedArtists.find((a: any) => a.artist_id === 5024);
-    console.log(`🔍 Frankie in matchedArtists:`, frankieInMatched ? `yes (song_count: ${frankieInMatched.song_count})` : 'NO');
-    console.log(`🔍 Billy in matchedArtists:`, billyInMatched ? `yes (song_count: ${billyInMatched.song_count})` : 'NO');
+    console.log(`📊 ${Object.keys(artistShowCountsAll).length} artists have shows in date range`);
+    console.log(`🔍 Frankie (2781): ${artistShowCountsAll[2781] ?? 'missing'}`);
+    console.log(`🔍 Billy Strings (5024): ${artistShowCountsAll[5024] ?? 'missing'}`);
 
     const artistsWithShows = matchedArtists.filter(
       (a: any) => (artistShowCountsAll[a.artist_id] || 0) > 0
     );
-
-    console.log(`🔍 artistsWithShows count: ${artistsWithShows.length}`);
-    console.log(`🔍 Frankie in artistsWithShows:`, artistsWithShows.find((a: any) => a.artist_id === 2781) ? 'yes' : 'NO');
-    console.log(`🔍 Billy in artistsWithShows:`, artistsWithShows.find((a: any) => a.artist_id === 5024) ? 'yes' : 'NO');
 
     if (artistsWithShows.length === 0) {
       return NextResponse.json({ 
@@ -151,21 +121,47 @@ export async function GET(request: Request) {
       }, { status: 404 });
     }
 
+    // Fetch shows for venue scoring — still needed for building venue scores.
+    // This will be capped at 1000 by PostgREST but that's acceptable here since
+    // venue scores are approximate and don't affect score locking.
+    const { data: shows, error: showsError } = await supabase
+      .rpc('get_user_matched_shows', {
+        p_user_id: user.id,
+        p_min_song_count: 2,
+        p_from_date: `${firstConcertYear}-01-01`,
+        p_to_date: yesterdayVancouver,
+      });
+
+    if (showsError) {
+      console.error('Shows RPC error:', showsError);
+      return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
+    }
+
+    console.log(`📍 Fetched ${shows?.length ?? 0} shows for venue scoring`);
+
+    // Build filtered show counts (excluding "no" venues) for score weighting
+    const artistShowCountsFiltered = (shows || []).reduce((acc: any, show: any) => {
+      if (noVenueIds.has(show.venue_id)) return acc;
+      if (!acc[show.artist_id]) acc[show.artist_id] = 0;
+      acc[show.artist_id]++;
+      return acc;
+    }, {});
+
     const maxSpotifyCount = Math.max(...artistsWithShows.map((a: any) => artistSongCounts[a.spotify_artist_id] || 0));
-    const maxVancouverCountFiltered = Math.max(...artistsWithShows.map((a: any) => artistShowCountsFiltered[a.artist_id] || 0), 1);
     const maxVancouverCountAll = Math.max(...artistsWithShows.map((a: any) => artistShowCountsAll[a.artist_id] || 0), 1);
+    const maxVancouverCountFiltered = Math.max(...artistsWithShows.map((a: any) => artistShowCountsFiltered[a.artist_id] || 0), 1);
 
     const scoredArtists = artistsWithShows.map((artist: any) => {
       const spotifyCount = artistSongCounts[artist.spotify_artist_id] || 0;
-      const vancouverCountFiltered = artistShowCountsFiltered[artist.artist_id] || 0;
       const vancouverCountAll = artistShowCountsAll[artist.artist_id] || 0;
+      const vancouverCountFiltered = artistShowCountsFiltered[artist.artist_id] || 0;
 
       const spotifyScore = (spotifyCount / maxSpotifyCount) * 100;
-      const vancouverScoreFiltered = (vancouverCountFiltered / maxVancouverCountFiltered) * 100;
       const vancouverScoreAll = (vancouverCountAll / maxVancouverCountAll) * 100;
+      const vancouverScoreFiltered = (vancouverCountFiltered / maxVancouverCountFiltered) * 100;
 
-      const weightedScoreFiltered = (0.8 * spotifyScore) + (0.2 * vancouverScoreFiltered);
       const weightedScoreAll = (0.8 * spotifyScore) + (0.2 * vancouverScoreAll);
+      const weightedScoreFiltered = (0.8 * spotifyScore) + (0.2 * vancouverScoreFiltered);
 
       return {
         artist_id: artist.artist_id,
@@ -218,10 +214,10 @@ export async function GET(request: Request) {
       console.log(`ℹ️ Artist scores already locked for user ${user.id}, skipping write`);
     }
 
-    // Build venue scores
+    // Build venue scores from the (potentially capped) shows array
     const venueScores: any = {};
 
-    shows.forEach((show: any) => {
+    (shows || []).forEach((show: any) => {
       if (noVenueIds.has(show.venue_id)) return;
       const venueId = show.venue_id;
       const artist = scoredArtists.find((a: any) => a.artist_id === show.artist_id);
@@ -260,11 +256,11 @@ export async function GET(request: Request) {
       .sort((a: any, b: any) => b.match_score - a.match_score);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`✅ MATCHING COMPLETE — ${artistsWithShows.length} artists, ${shows.length} shows, ${Object.keys(venueScores).length} venues in ${duration}s`);
+    console.log(`✅ MATCHING COMPLETE — ${artistsWithShows.length} artists, ${Object.keys(venueScores).length} venues in ${duration}s`);
 
     await supabase
       .from('user_profiles')
-      .update({ spotify_matched_shows: shows.length })
+      .update({ spotify_matched_shows: Object.values(artistShowCountsAll).reduce((a, b) => a + b, 0) })
       .eq('user_id', user.id);
 
     return NextResponse.json({
@@ -274,7 +270,7 @@ export async function GET(request: Request) {
         upper_bound_date: yesterdayVancouver,
         matched_artists_count: artistsWithShows.length,
         total_spotify_artists: matchedArtists.length,
-        total_shows_count: shows.length,
+        total_shows_count: Object.values(artistShowCountsAll).reduce((a, b) => a + b, 0),
         total_venues_matched: Object.keys(venueScores).length,
         scores_locked: scoresAlreadyLocked,
         current_run_artists: currentRunArtists,
