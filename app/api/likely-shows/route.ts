@@ -200,7 +200,17 @@ export async function GET(request: Request) {
     }
 
     // Attach scores and tier to each show
-    const showsWithScores = transformedShows.map(show => {
+    const showsWithScores = transformedShows.map((show: {
+      show_id: number;
+      date: string;
+      artist_id: number;
+      artist_name: string;
+      venue_id: number;
+      venue_name: string;
+      capacity_category: string | null;
+      spotify_artist_id: string;
+      status: 'pending';
+    }) => {
       const scores = artistMatchScores[show.artist_id];
       const songCount = scores?.spotify_song_count ?? 0;
       const matchScore = scores?.match_score ?? 0;
