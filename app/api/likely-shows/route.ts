@@ -93,16 +93,16 @@ export async function GET(request: Request) {
         p_user_id: user.id,
         p_min_song_count: 2,
         p_from_date: `${firstConcertYear}-01-01`,
-        p_to_date: yesterdayVancouver,
+        p_to_date: new Date().toISOString().split('T')[0],
       })
       .range(0, 49999);
-
-    console.log(`🔍 shows array length RAW:`, shows?.length);
 
     if (showsError) {
       console.error('Shows RPC error:', showsError);
       return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
     }
+
+    console.log(`🔍 shows array length RAW:`, shows?.length);
 
     if (!shows || shows.length === 0) {
       return NextResponse.json({
