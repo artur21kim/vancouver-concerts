@@ -227,9 +227,9 @@ export async function GET(request: Request) {
       };
     });
 
-    const mainShows = showsWithScores.filter(s => s.tier === 'main');
-    const lessLikelyShows = showsWithScores.filter(s => s.tier === 'less_likely');
-    const stretchShows = showsWithScores.filter(s => s.tier === 'stretch');
+    const mainShows = showsWithScores.filter((s: any) => s.tier === 'main');
+    const lessLikelyShows = showsWithScores.filter((s: any) => s.tier === 'less_likely');
+    const stretchShows = showsWithScores.filter((s: any) => s.tier === 'stretch');
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log(`✅ LIKELY SHOWS COMPLETE — ${mainShows.length} main, ${lessLikelyShows.length} less likely, ${stretchShows.length} stretch (${excludedShowIds.size} excluded) in ${duration}s`);
