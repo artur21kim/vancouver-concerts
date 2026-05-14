@@ -76,8 +76,6 @@ export async function GET(request: Request) {
       artistSongCounts[row.spotify_artist_id] = Number(row.song_count);
     }
 
-    const matchedArtistIds = matchedArtists.map((a: any) => a.artist_id);
-
     console.log(`📊 ${matchedArtists.length} artists matched with >= 2 liked songs`);
 
     const { data: profile } = await supabase
@@ -88,31 +86,18 @@ export async function GET(request: Request) {
 
     const firstConcertYear = profile?.first_concert_year || 2000;
 
-    // Use .range(0, 9999) instead of .limit() — Supabase JS client silently
-    // caps .limit() at 1000 rows when combined with large .in() arrays.
+    // Use RPC to fetch shows server-side — avoids .in() URL length limits which
+    // silently truncate large artist ID arrays, causing missing artists in results.
     const { data: shows, error: showsError } = await supabase
-      .from('fact_shows')
-      .select(`
-        show_id,
-        date,
-        artist_id,
-        venue_id,
-        dim_artist!inner (
-          artist_id,
-          artist_name,
-          spotify_artist_id
-        ),
-        dim_venue!inner (
-          venue_id,
-          venue_name,
-          capacity_category
-        )
-      `)
-      .in('artist_id', matchedArtistIds)
-      .gte('date', `${firstConcertYear}-01-01`)
-      .range(0, 9999);  // ← replaces .limit(5000) which was silently capped at 1000
+      .rpc('get_user_matched_shows', {
+        p_user_id: user.id,
+        p_min_song_count: 2,
+        p_from_date: `${firstConcertYear}-01-01`,
+        p_to_date: new Date().toISOString().split('T')[0],
+      });
 
     if (showsError) {
+      console.error('Shows RPC error:', showsError);
       return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
     }
 
@@ -123,7 +108,7 @@ export async function GET(request: Request) {
       });
     }
 
-    console.log(`📍 Fetched ${shows.length} shows from fact_shows`);
+    console.log(`📍 Fetched ${shows.length} shows via get_user_matched_shows RPC`);
 
     // Fetch show IDs to exclude (already reviewed)
     const [attendedResult, skippedResult] = await Promise.all([
@@ -146,26 +131,22 @@ export async function GET(request: Request) {
 
     console.log(`🚫 Excluding ${excludedShowIds.size} shows (${(attendedResult.data || []).length} attended, ${(skippedResult.data || []).length} skipped)`);
 
-    // Transform and filter
+    // Transform and filter — RPC already joins artist/venue so shape is flat
     const transformedShows = shows
       .filter((show: any) => !noVenueIds.has(show.venue_id) && !excludedShowIds.has(show.show_id))
-      .map((show: any) => {
-        const artist = Array.isArray(show.dim_artist) ? show.dim_artist[0] : show.dim_artist;
-        const venue = Array.isArray(show.dim_venue) ? show.dim_venue[0] : show.dim_venue;
-        return {
-          show_id: show.show_id,
-          date: show.date,
-          artist_id: artist.artist_id,
-          artist_name: artist.artist_name,
-          venue_id: venue.venue_id,
-          venue_name: venue.venue_name,
-          capacity_category: venue.capacity_category ?? null,
-          spotify_artist_id: artist.spotify_artist_id,
-          status: 'pending' as const
-        };
-      });
+      .map((show: any) => ({
+        show_id: show.show_id,
+        date: show.date,
+        artist_id: show.artist_id,
+        artist_name: show.artist_name,
+        venue_id: show.venue_id,
+        venue_name: show.venue_name,
+        capacity_category: show.capacity_category ?? null,
+        spotify_artist_id: show.spotify_artist_id,
+        status: 'pending' as const
+      }));
 
-    // Calculate match scores — use locked scores if available, else compute live
+    // Calculate match scores
     const artistShowCounts = transformedShows.reduce((acc: any, show: any) => {
       if (!acc[show.artist_id]) acc[show.artist_id] = 0;
       acc[show.artist_id]++;
@@ -192,7 +173,7 @@ export async function GET(request: Request) {
         }
       }
     } else {
-      // First run before scores locked — compute live (same formula as match route)
+      // First run before scores locked — compute live
       const maxSpotifyCount = Math.max(...Object.values(artistSongCounts) as number[]);
       const maxVancouverCount = Math.max(...(Object.values(artistShowCounts) as number[]), 1);
 
@@ -255,7 +236,7 @@ export async function GET(request: Request) {
         less_likely_shows: lessLikelyShows,
         stretch_shows: stretchShows,
         total_shows: mainShows.length + lessLikelyShows.length + stretchShows.length,
-        matched_artists: matchedArtistIds.length,
+        matched_artists: matchedArtists.length,
         scores_source: hasLockedScores ? 'locked' : 'live',
       }
     });

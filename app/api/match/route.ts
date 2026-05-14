@@ -82,32 +82,20 @@ export async function GET(request: Request) {
       artistSongCounts[row.spotify_artist_id] = Number(row.song_count);
     }
 
-    const matchedArtistIds = matchedArtists.map((a: any) => a.artist_id);
-
     console.log(`📊 ${matchedArtists.length} artists matched with >= 2 liked songs`);
 
-    // Use .range(0, 9999) instead of .limit() — Supabase JS client silently
-    // caps .limit() at 1000 rows when combined with large .in() arrays.
+    // Use RPC to fetch shows server-side — avoids .in() URL length limits which
+    // silently truncate large artist ID arrays, causing missing artists in results.
     const { data: shows, error: showsError } = await supabase
-      .from('fact_shows')
-      .select(`
-        show_id,
-        date,
-        artist_id,
-        venue_id,
-        dim_venue!inner (
-          venue_id,
-          venue_name,
-          capacity,
-          capacity_category
-        )
-      `)
-      .in('artist_id', matchedArtistIds)
-      .gte('date', `${firstConcertYear}-01-01`)
-      .lte('date', yesterdayVancouver)
-      .range(0, 9999);  // ← replaces .limit(5000) which was silently capped at 1000
+      .rpc('get_user_matched_shows', {
+        p_user_id: user.id,
+        p_min_song_count: 2,
+        p_from_date: `${firstConcertYear}-01-01`,
+        p_to_date: yesterdayVancouver,
+      });
 
     if (showsError) {
+      console.error('Shows RPC error:', showsError);
       return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
     }
 
@@ -117,7 +105,7 @@ export async function GET(request: Request) {
       }, { status: 404 });
     }
 
-    console.log(`📍 Fetched ${shows.length} shows from fact_shows`);
+    console.log(`📍 Fetched ${shows.length} shows via get_user_matched_shows RPC`);
 
     const artistShowCountsFiltered = shows.reduce((acc: any, show: any) => {
       if (noVenueIds.has(show.venue_id)) return acc;
@@ -183,7 +171,7 @@ export async function GET(request: Request) {
       a.match_score_all = Math.round((a.match_score_all / maxAllScore) * 1000) / 10;
     });
 
-    // Write scores to user_artist_scores on first run only (locked forever after)
+    // Write scores on first run only (locked forever after)
     if (!scoresAlreadyLocked) {
       console.log(`💾 Writing ${currentRunArtists.length} artist scores to user_artist_scores (first run)`);
       const scoreRecords = currentRunArtists.map(a => ({
@@ -194,7 +182,6 @@ export async function GET(request: Request) {
         normalized_score: a.match_score,
       }));
 
-      // Batch insert in chunks of 500 to avoid request size limits
       const chunkSize = 500;
       for (let i = 0; i < scoreRecords.length; i += chunkSize) {
         const chunk = scoreRecords.slice(i, i + chunkSize);
@@ -215,16 +202,15 @@ export async function GET(request: Request) {
 
     shows.forEach((show: any) => {
       if (noVenueIds.has(show.venue_id)) return;
-      const venue = Array.isArray(show.dim_venue) ? show.dim_venue[0] : show.dim_venue;
-      const venueId = venue.venue_id;
+      const venueId = show.venue_id;
       const artist = scoredArtists.find((a: any) => a.artist_id === show.artist_id);
 
       if (!venueScores[venueId]) {
         venueScores[venueId] = {
           venue_id: venueId,
-          venue_name: venue.venue_name,
-          capacity: venue.capacity || null,
-          capacity_category: venue.capacity_category || null,
+          venue_name: show.venue_name,
+          capacity: show.capacity || null,
+          capacity_category: show.capacity_category || null,
           total_shows: 0,
           unique_artists: new Set(),
           raw_score: 0,
