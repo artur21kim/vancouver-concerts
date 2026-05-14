@@ -40,6 +40,8 @@ export async function GET(request: Request) {
     const firstConcertYear = profile.first_concert_year;
     const yesterdayVancouver = getVancouverYesterday();
 
+    console.log(`📅 Date range: ${firstConcertYear}-01-01 to ${yesterdayVancouver}`);
+
     // Check if scores already exist for this user (locked from first run)
     const { data: existingScores } = await supabase
       .from('user_artist_scores')
@@ -120,9 +122,25 @@ export async function GET(request: Request) {
       return acc;
     }, {});
 
+    // Debug: check if target artists made it into the counts map
+    console.log(`🔍 artistShowCountsAll[2781] (Frankie):`, artistShowCountsAll[2781]);
+    console.log(`🔍 artistShowCountsAll[5024] (Billy Strings):`, artistShowCountsAll[5024]);
+    console.log(`🔍 sample keys (first 5):`, Object.keys(artistShowCountsAll).slice(0, 5));
+    console.log(`🔍 total unique artists in shows:`, Object.keys(artistShowCountsAll).length);
+
+    // Debug: check if target artists are in matchedArtists
+    const frankieInMatched = matchedArtists.find((a: any) => a.artist_id === 2781);
+    const billyInMatched = matchedArtists.find((a: any) => a.artist_id === 5024);
+    console.log(`🔍 Frankie in matchedArtists:`, frankieInMatched ? `yes (song_count: ${frankieInMatched.song_count})` : 'NO');
+    console.log(`🔍 Billy in matchedArtists:`, billyInMatched ? `yes (song_count: ${billyInMatched.song_count})` : 'NO');
+
     const artistsWithShows = matchedArtists.filter(
       (a: any) => (artistShowCountsAll[a.artist_id] || 0) > 0
     );
+
+    console.log(`🔍 artistsWithShows count: ${artistsWithShows.length}`);
+    console.log(`🔍 Frankie in artistsWithShows:`, artistsWithShows.find((a: any) => a.artist_id === 2781) ? 'yes' : 'NO');
+    console.log(`🔍 Billy in artistsWithShows:`, artistsWithShows.find((a: any) => a.artist_id === 5024) ? 'yes' : 'NO');
 
     if (artistsWithShows.length === 0) {
       return NextResponse.json({ 
