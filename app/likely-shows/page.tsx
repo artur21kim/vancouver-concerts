@@ -299,6 +299,7 @@ export default function LikelyShowsPage() {
   const [stretchOpen, setStretchOpen] = useState(false);
   const [groupedShows, setGroupedShows] = useState<GroupedShows[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
+  const [expandedLessLikelyGroups, setExpandedLessLikelyGroups] = useState<Set<number>>(new Set());
   const [yearRange, setYearRange] = useState<[number, number]>([2008, currentYear]);
   const [sortBy, setSortBy] = useState<'relevance' | 'artist' | 'count' | 'year' | 'reviewed'>('relevance');
   const [lessLikelyFilter, setLessLikelyFilter] = useState<'all' | 'unreviewed'>('all');
@@ -334,7 +335,6 @@ export default function LikelyShowsPage() {
     });
 
     if (sortBy === 'reviewed') {
-      // Show only groups where at least one show has been reviewed
       const grouped = withinRange.reduce((acc, show) => {
         const existing = acc.find(g => g.artist_id === show.artist_id);
         if (existing) { existing.shows.push(show); existing.show_count++; }
@@ -359,7 +359,6 @@ export default function LikelyShowsPage() {
     }
 
     if (sortBy === 'year') {
-      // Year view: all shows regardless of status (user can review within year groups)
       const yearGroups = withinRange.reduce((acc, show) => {
         const year = parseInt(show.date.split('-')[0]);
         const existing = acc.find(g => g.artist_id === year);
@@ -378,7 +377,6 @@ export default function LikelyShowsPage() {
       return;
     }
 
-    // All other views: show only groups with at least one pending show
     const pendingShows = withinRange.filter(s => s.status === 'pending');
     const grouped = pendingShows.reduce((acc, show) => {
       const existing = acc.find(g => g.artist_id === show.artist_id);
@@ -412,6 +410,13 @@ export default function LikelyShowsPage() {
     }
   };
 
+  const autoCollapseLessLikelyIfComplete = (artistId: number, updatedShows: Show[]) => {
+    const groupShows = updatedShows.filter(s => s.artist_id === artistId);
+    if (groupShows.every(s => s.status !== 'pending')) {
+      setExpandedLessLikelyGroups(prev => { const n = new Set(prev); n.delete(artistId); return n; });
+    }
+  };
+
   const updateShowStatus = async (showId: number, status: 'added' | 'skipped') => {
     try {
       const response = await fetch('/api/shows/update-status', {
@@ -432,8 +437,10 @@ export default function LikelyShowsPage() {
         body: JSON.stringify({ show_id: showId, status, source: 'likely_shows' })
       });
       if (!response.ok) throw new Error('Failed');
-      setLessLikelyShows(prev => prev.map(s => s.show_id === showId ? { ...s, status } : s));
-    } catch { alert('Failed to update show. Please try again.'); }
+      const updated = lessLikelyShows.map(s => s.show_id === showId ? { ...s, status } : s);
+      setLessLikelyShows(updated);
+      return updated;
+    } catch { alert('Failed to update show. Please try again.'); return lessLikelyShows; }
   };
 
   const handleAddShow = async (showId: number) => {
@@ -452,6 +459,18 @@ export default function LikelyShowsPage() {
       const groupId = sortBy === 'year' ? parseInt(show.date.split('-')[0]) : show.artist_id;
       setTimeout(() => autoCollapseIfComplete(groupId, updated), 100);
     }
+  };
+
+  const handleLessLikelyAddShow = async (showId: number) => {
+    const updated = await updateLessLikelyShowStatus(showId, 'added');
+    const show = updated.find(s => s.show_id === showId);
+    if (show) setTimeout(() => autoCollapseLessLikelyIfComplete(show.artist_id, updated), 100);
+  };
+
+  const handleLessLikelySkipShow = async (showId: number) => {
+    const updated = await updateLessLikelyShowStatus(showId, 'skipped');
+    const show = updated.find(s => s.show_id === showId);
+    if (show) setTimeout(() => autoCollapseLessLikelyIfComplete(show.artist_id, updated), 100);
   };
 
   const handleBulkAction = async (groupId: number, action: 'add' | 'skip') => {
@@ -483,7 +502,9 @@ export default function LikelyShowsPage() {
         body: JSON.stringify({ show_ids: groupShows.map(s => s.show_id), status, source: 'likely_shows' })
       });
       if (!response.ok) throw new Error('Failed');
-      setLessLikelyShows(prev => prev.map(s => groupShows.some(g => g.show_id === s.show_id) ? { ...s, status } : s));
+      const updated = lessLikelyShows.map(s => groupShows.some(g => g.show_id === s.show_id) ? { ...s, status } : s);
+      setLessLikelyShows(updated);
+      setTimeout(() => autoCollapseLessLikelyIfComplete(artistId, updated), 100);
     } catch { alert('Failed to update shows. Please try again.'); }
   };
 
@@ -538,23 +559,24 @@ export default function LikelyShowsPage() {
     setExpandedGroups(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
 
+  const toggleLessLikelyGroup = (id: number) => {
+    setExpandedLessLikelyGroups(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+
   // ── Derived stats ─────────────────────────────────────────────────────────
   const totalShows           = allShows.length;
   const addedCount           = allShows.filter(s => s.status === 'added').length;
   const skippedCount         = allShows.filter(s => s.status === 'skipped').length;
   const pendingCount         = allShows.filter(s => s.status === 'pending').length;
-  const reviewedShowsCount   = addedCount + skippedCount;
   const totalArtists         = new Set(allShows.map(s => s.artist_id)).size;
-  const reviewedArtistsCount = new Set(allShows.filter(s => s.status !== 'pending').map(s => s.artist_id)).size;
   const uniqueArtistCount    = new Set(groupedShows.map(g => g.artist_id)).size;
 
-  // Less Likely / Stretch derived
   const lessLikelyPending  = lessLikelyShows.filter(s => s.status === 'pending').length;
   const lessLikelyAdded    = lessLikelyShows.filter(s => s.status === 'added').length;
   const lessLikelySkipped  = lessLikelyShows.filter(s => s.status === 'skipped').length;
   const stretchPending     = stretchShows.filter(s => s.status === 'pending').length;
 
-  const showTipBanner = sortBy !== 'reviewed' && sortBy !== 'year' && reviewedShowsCount > 0;
+  const showTipBanner = sortBy !== 'reviewed' && sortBy !== 'year' && (addedCount + skippedCount) > 0;
 
   useEffect(() => {
     if (lessLikelyAdded + lessLikelySkipped > 0 && lessLikelyFilter === 'all') {
@@ -594,10 +616,9 @@ export default function LikelyShowsPage() {
       <main className="min-h-screen bg-background py-6 px-4">
         <div className="max-w-7xl mx-auto">
 
-          {/* ── Sticky header: title + stats + filters + tip ── */}
+          {/* ── Sticky header ── */}
           <div className="sticky top-16 bg-background pt-3 pb-2 z-30">
 
-            {/* Desktop: title + Done button side by side */}
             <div className="hidden md:flex items-start justify-between gap-3 mb-3">
               <div>
                 <h1 className="text-4xl font-bold text-foreground mb-0.5">Likely Shows You Attended</h1>
@@ -611,7 +632,6 @@ export default function LikelyShowsPage() {
               </button>
             </div>
 
-            {/* Mobile: title full-width, Done button on its own row below */}
             <div className="md:hidden mb-3">
               <h1 className="text-2xl font-bold text-foreground mb-0.5">Likely Shows You Attended</h1>
               <p className="text-muted-foreground text-sm mb-2">Based on confirmed venues and your Spotify library</p>
@@ -625,7 +645,6 @@ export default function LikelyShowsPage() {
               </div>
             </div>
 
-            {/* Stats — single compact row */}
             <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground/70 flex-wrap">
               <span>
                 <span className="font-semibold text-foreground">{pendingCount}</span>
@@ -642,65 +661,60 @@ export default function LikelyShowsPage() {
               <span>skipped <span className="font-semibold text-destructive/80">{skippedCount}</span></span>
             </div>
 
-            {/* Filters */}
-          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 mb-3">
-            {/* Year slider — hidden in Reviewed view */}
-            {sortBy !== 'reviewed' && (
-              <div className="flex items-center gap-2.5 flex-1">
-                <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0 tabular-nums">
-                  {yearRange[0]} – {yearRange[1]}
-                </span>
-                <div className="flex-1">
-                  <DualRangeSlider min={2008} max={currentYear} value={yearRange} onChange={setYearRange} />
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 mb-3">
+              {sortBy !== 'reviewed' && (
+                <div className="flex items-center gap-2.5 flex-1">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0 tabular-nums">
+                    {yearRange[0]} – {yearRange[1]}
+                  </span>
+                  <div className="flex-1">
+                    <DualRangeSlider min={2008} max={currentYear} value={yearRange} onChange={setYearRange} />
+                  </div>
                 </div>
+              )}
+
+              <div className="flex items-center gap-2 md:gap-3">
+                {sortBy !== 'reviewed' && <span className="hidden md:inline text-border select-none text-lg">|</span>}
+                <select
+                  value={sortBy}
+                  onChange={e => setSortBy(e.target.value as typeof sortBy)}
+                  className="flex-1 md:flex-none px-2.5 py-1.5 border border-border rounded-lg bg-background text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="relevance">Match Score</option>
+                  <option value="count">Show Count</option>
+                  <option value="artist">Artist Name</option>
+                  <option value="year">By Year</option>
+                  <option value="reviewed">Reviewed</option>
+                </select>
+                {sortBy !== 'reviewed' && (
+                  <button
+                    onClick={() => setYearRange([2008, currentYear])}
+                    className="text-xs border border-red-500/40 text-red-400 rounded px-2 py-1 hover:bg-red-500/10 hover:border-red-500 transition flex-shrink-0"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {showTipBanner && (
+              <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-muted/40 border border-border/50">
+                <span className="text-muted-foreground/60 text-xs flex-shrink-0">💡</span>
+                <p className="text-xs text-muted-foreground/70">
+                  Changes can be reverted in{' '}
+                  <button
+                    onClick={() => setSortBy('reviewed')}
+                    className="text-primary underline underline-offset-2 hover:text-primary/80 transition"
+                  >
+                    Reviewed
+                  </button>
+                  .
+                </p>
               </div>
             )}
-
-            {/* Sort + Reset */}
-            <div className="flex items-center gap-2 md:gap-3">
-              {sortBy !== 'reviewed' && <span className="hidden md:inline text-border select-none text-lg">|</span>}
-              <select
-                value={sortBy}
-                onChange={e => setSortBy(e.target.value as typeof sortBy)}
-                className="flex-1 md:flex-none px-2.5 py-1.5 border border-border rounded-lg bg-background text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="relevance">Match Score</option>
-                <option value="count">Show Count</option>
-                <option value="artist">Artist Name</option>
-                <option value="year">By Year</option>
-                <option value="reviewed">Reviewed</option>
-              </select>
-              {sortBy !== 'reviewed' && (
-                <button
-                  onClick={() => setYearRange([2008, currentYear])}
-                  className="text-xs border border-red-500/40 text-red-400 rounded px-2 py-1 hover:bg-red-500/10 hover:border-red-500 transition flex-shrink-0"
-                >
-                  Reset
-                </button>
-              )}
-            </div>
           </div>
 
-          {/* ── Tip banner — inside sticky block ── */}
-          {showTipBanner && (
-            <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-muted/40 border border-border/50">
-              <span className="text-muted-foreground/60 text-xs flex-shrink-0">💡</span>
-              <p className="text-xs text-muted-foreground/70">
-                Changes can be reverted in{' '}
-                <button
-                  onClick={() => setSortBy('reviewed')}
-                  className="text-primary underline underline-offset-2 hover:text-primary/80 transition"
-                >
-                  Reviewed
-                </button>
-                .
-              </p>
-            </div>
-          )}
-
-          </div>{/* end sticky header */}
-
-          {/* ── Groups ── */}
+          {/* ── Main groups ── */}
           <div className="bg-card rounded-lg shadow overflow-hidden">
             {groupedShows.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
@@ -712,32 +726,21 @@ export default function LikelyShowsPage() {
               <div className="divide-y divide-border">
                 {groupedShows.map((group, index) => {
                   const isExpanded = expandedGroups.has(group.artist_id);
-
-                  // In Reviewed view, compute stats across all shows (not just pending)
-                  const relevantShows = sortBy === 'reviewed'
-                    ? group.shows
-                    : group.shows; // already filtered to pending-only for other views
+                  const relevantShows = group.shows;
                   const gAdded   = relevantShows.filter(s => s.status === 'added').length;
                   const gSkipped = relevantShows.filter(s => s.status === 'skipped').length;
                   const gPending = relevantShows.filter(s => s.status === 'pending').length;
                   const allReviewed = gPending === 0;
                   const allAdded    = allReviewed && gAdded === relevantShows.length;
                   const allSkipped  = allReviewed && gSkipped === relevantShows.length;
-
-                  // Rank: only in non-reviewed, non-year views
                   const rank = (sortBy !== 'year' && sortBy !== 'reviewed') ? index + 1 : null;
-
-                  // Header swipe: only when nothing reviewed yet (pending-only views)
                   const headerCanSwipe = sortBy !== 'reviewed' && gPending === group.show_count;
-
                   const spotifyUrl = group.spotify_artist_id
                     ? `https://open.spotify.com/artist/${group.spotify_artist_id}`
                     : null;
 
                   return (
                     <div key={group.artist_id}>
-
-                      {/* ── Group header ── */}
                       <SwipeableGroupHeader
                         canSwipe={headerCanSwipe}
                         onSwipeAdd={() => handleBulkAction(group.artist_id, 'add')}
@@ -747,7 +750,6 @@ export default function LikelyShowsPage() {
                           className="group/row flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
                           onClick={() => toggleGroup(group.artist_id)}
                         >
-                          {/* Rank + chevron merged into one column */}
                           <div className="flex items-center gap-1 w-10 flex-shrink-0 justify-center">
                             {rank !== null && (
                               <span className="text-base font-bold text-primary tabular-nums leading-none">
@@ -759,9 +761,7 @@ export default function LikelyShowsPage() {
                             </span>
                           </div>
 
-                          {/* Name + metadata + match bar */}
                           <div className="flex-1 min-w-0">
-                            {/* Single line: truncating name + nowrap metadata */}
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="font-semibold text-foreground truncate">
                                 {group.artist_name}
@@ -803,7 +803,6 @@ export default function LikelyShowsPage() {
                               )}
                             </div>
 
-                            {/* Match score bar — hidden in Reviewed view */}
                             {sortBy !== 'year' && sortBy !== 'reviewed' && group.match_score > 0 && (
                               <div className="flex items-center gap-2 mt-1">
                                 <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden flex-shrink-0">
@@ -817,7 +816,6 @@ export default function LikelyShowsPage() {
                             )}
                           </div>
 
-                          {/* Review status badge */}
                           {allReviewed && (
                             <span className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${
                               allAdded   ? 'bg-green-500/15 text-green-500' :
@@ -828,7 +826,6 @@ export default function LikelyShowsPage() {
                             </span>
                           )}
 
-                          {/* Desktop bulk/clear buttons */}
                           <div className="hidden md:flex gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
                             {gPending > 0 && (
                               (gAdded > 0 || gSkipped > 0) ? (
@@ -863,7 +860,6 @@ export default function LikelyShowsPage() {
                             )}
                           </div>
 
-                          {/* Mobile bulk/clear buttons — only when swipe is disabled */}
                           <div className="flex md:hidden gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
                             {gPending > 0 && (gAdded > 0 || gSkipped > 0) && (
                               <>
@@ -888,15 +884,10 @@ export default function LikelyShowsPage() {
                         </div>
                       </SwipeableGroupHeader>
 
-                      {/* ── Expanded show rows ── */}
                       {isExpanded && (
                         <div className="border-t border-border bg-background/50">
-
-                          {/* Desktop column headers */}
                           <div className={`hidden md:grid px-5 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/40 ${
-                            sortBy === 'year'
-                              ? 'grid-cols-[48px_120px_1fr_1fr]'
-                              : 'grid-cols-[48px_120px_1fr]'
+                            sortBy === 'year' ? 'grid-cols-[48px_120px_1fr_1fr]' : 'grid-cols-[48px_120px_1fr]'
                           }`}>
                             <span>Actions</span>
                             <span>Date</span>
@@ -904,7 +895,6 @@ export default function LikelyShowsPage() {
                             <span>Venue</span>
                           </div>
 
-                          {/* Mobile column headers */}
                           <div className="md:hidden flex items-center justify-between px-4 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/40">
                             <span>{sortBy === 'year' ? 'Date · Artist · Venue' : 'Date · Venue'}</span>
                             <span className="normal-case font-normal text-muted-foreground/40">swipe ↔</span>
@@ -921,37 +911,25 @@ export default function LikelyShowsPage() {
                                 onAdd={() => handleAddShow(show.show_id)}
                                 onSkip={() => handleSkipShow(show.show_id)}
                               >
-                                {/* Desktop row */}
                                 <div className={`hidden md:grid px-5 py-3 items-center ${
-                                  sortBy === 'year'
-                                    ? 'grid-cols-[48px_120px_1fr_1fr]'
-                                    : 'grid-cols-[48px_120px_1fr]'
+                                  sortBy === 'year' ? 'grid-cols-[48px_120px_1fr_1fr]' : 'grid-cols-[48px_120px_1fr]'
                                 }`}>
                                   <div className="flex items-center gap-2">
-                                    <button onClick={() => handleAddShow(show.show_id)} title="Add to My Shows"
-                                      className="focus:outline-none">
-                                      <svg className={`w-5 h-5 transition-colors ${isAdded
-                                        ? 'fill-primary text-primary'
-                                        : 'fill-none text-muted-foreground hover:text-primary'}`}
+                                    <button onClick={() => handleAddShow(show.show_id)} title="Add to My Shows" className="focus:outline-none">
+                                      <svg className={`w-5 h-5 transition-colors ${isAdded ? 'fill-primary text-primary' : 'fill-none text-muted-foreground hover:text-primary'}`}
                                         stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round"
-                                          d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
                                       </svg>
                                     </button>
-                                    <button onClick={() => handleSkipShow(show.show_id)} title="Skip this show"
-                                      className="focus:outline-none">
-                                      <svg className={`w-4 h-4 transition-colors ${isSkipped
-                                        ? 'text-destructive'
-                                        : 'text-muted-foreground hover:text-destructive'}`}
+                                    <button onClick={() => handleSkipShow(show.show_id)} title="Skip this show" className="focus:outline-none">
+                                      <svg className={`w-4 h-4 transition-colors ${isSkipped ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'}`}
                                         stroke="currentColor" strokeWidth="2.5" fill="none" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                       </svg>
                                     </button>
                                   </div>
                                   <span className="text-sm text-foreground whitespace-nowrap">
-                                    {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', {
-                                      year: 'numeric', month: 'short', day: 'numeric'
-                                    })}
+                                    {new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                                   </span>
                                   {sortBy === 'year' && (
                                     <span className="text-sm text-foreground truncate pr-3">{show.artist_name}</span>
@@ -962,7 +940,6 @@ export default function LikelyShowsPage() {
                                   </div>
                                 </div>
 
-                                {/* Mobile row */}
                                 <div className="md:hidden px-4 py-2.5">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
@@ -971,27 +948,21 @@ export default function LikelyShowsPage() {
                                     <span className="text-xs text-muted-foreground/70 flex-shrink-0 tabular-nums">
                                       {(() => {
                                         const [y, m, d] = show.date.split('-');
-                                        return new Date(+y, +m - 1, +d).toLocaleDateString('en-US', {
-                                          year: 'numeric', month: 'short', day: 'numeric'
-                                        });
+                                        return new Date(+y, +m - 1, +d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
                                       })()}
                                     </span>
                                     {sortBy === 'year' && (
                                       <span className="text-xs text-foreground truncate">{show.artist_name}</span>
                                     )}
-                                    <span className="text-xs text-muted-foreground truncate ml-auto">
-                                      {show.venue_name}
-                                    </span>
+                                    <span className="text-xs text-muted-foreground truncate ml-auto">{show.venue_name}</span>
                                     <CapacityBadge category={show.capacity_category} />
                                   </div>
                                 </div>
-
                               </SwipeableShowRow>
                             );
                           })}
                         </div>
                       )}
-
                     </div>
                   );
                 })}
@@ -999,7 +970,7 @@ export default function LikelyShowsPage() {
             )}
           </div>
 
-          {/* ── Less Likely Shows (collapsed) ── */}
+          {/* ── Less Likely Shows ── */}
           {lessLikelyShows.length > 0 && (
             <div className="mt-4 bg-card rounded-lg shadow overflow-hidden">
               <button
@@ -1047,6 +1018,24 @@ export default function LikelyShowsPage() {
                       songs
                     </p>
                   </div>
+
+                  {/* Mobile swipe hint */}
+                  <div className="md:hidden flex items-center justify-center gap-4 bg-muted/30 border-b border-border px-4 py-2">
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <svg className="w-3.5 h-3.5 text-destructive/80" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      <span className="text-xs">Swipe left to skip</span>
+                    </div>
+                    <span className="text-muted-foreground/40">·</span>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <span className="text-xs">Swipe right to add</span>
+                      <svg className="w-3.5 h-3.5 fill-primary text-primary" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                      </svg>
+                    </div>
+                  </div>
+
                   <div className="divide-y divide-border">
                     {(() => {
                       // Group less likely shows by artist
@@ -1068,7 +1057,7 @@ export default function LikelyShowsPage() {
 
                       grouped.forEach(g => g.shows.sort((a, b) => b.date.localeCompare(a.date)));
 
-                      // Unreviewed groups first, then reviewed — within each group sort by match score
+                      // Unreviewed groups first, then reviewed — within each sort by match score
                       grouped.sort((a, b) => {
                         const aReviewed = a.shows.every(s => s.status !== 'pending');
                         const bReviewed = b.shows.every(s => s.status !== 'pending');
@@ -1081,106 +1070,167 @@ export default function LikelyShowsPage() {
                         ? grouped.filter(g => g.shows.some(s => s.status === 'pending'))
                         : grouped;
 
-                      return visible.map(group => {
+                      return visible.map((group, index) => {
                         const gPending = group.shows.filter(s => s.status === 'pending').length;
-                        const gAdded = group.shows.filter(s => s.status === 'added').length;
+                        const gAdded   = group.shows.filter(s => s.status === 'added').length;
                         const gSkipped = group.shows.filter(s => s.status === 'skipped').length;
                         const allReviewed = gPending === 0;
-                        // Auto-collapse fully reviewed groups
-                        const isExpanded = allReviewed ? false : expandedGroups.has(group.artist_id + 900000);
+                        const isExpanded = !allReviewed && expandedLessLikelyGroups.has(group.artist_id);
+                        const headerCanSwipe = gPending === group.show_count;
+                        const spotifyUrl = group.spotify_artist_id
+                          ? `https://open.spotify.com/artist/${group.spotify_artist_id}`
+                          : null;
 
                         return (
                           <div key={group.artist_id}>
-                            <div
-                              className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
-                              onClick={() => setExpandedGroups(prev => {
-                                const n = new Set(prev);
-                                const key = group.artist_id + 900000;
-                                n.has(key) ? n.delete(key) : n.add(key);
-                                return n;
-                              })}
+                            {/* Less Likely group header — same pattern as main list */}
+                            <SwipeableGroupHeader
+                              canSwipe={headerCanSwipe}
+                              onSwipeAdd={() => handleLessLikelyBulkAction(group.artist_id, 'add')}
+                              onSwipeSkip={() => handleLessLikelyBulkAction(group.artist_id, 'skip')}
                             >
-                              <span className="text-muted-foreground text-[10px] leading-none w-4 flex-shrink-0">
-                                {isExpanded ? '▲' : '▼'}
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className="font-semibold text-foreground truncate text-sm">{group.artist_name}</span>
-                                  <span className="text-muted-foreground text-xs whitespace-nowrap flex-shrink-0">
-                                    {group.show_count} {group.show_count === 1 ? 'show' : 'shows'}
-                                    {group.spotify_song_count > 0 && ` · ${group.spotify_song_count} songs`}
+                              <div
+                                className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                                onClick={() => !allReviewed && toggleLessLikelyGroup(group.artist_id)}
+                              >
+                                {/* Amber rank number */}
+                                <div className="flex items-center gap-1 w-10 flex-shrink-0 justify-center">
+                                  <span className="text-sm font-bold text-amber-500 tabular-nums leading-none">
+                                    #{index + 1}
                                   </span>
+                                  {!allReviewed && (
+                                    <span className="text-muted-foreground text-[10px] leading-none">
+                                      {isExpanded ? '▲' : '▼'}
+                                    </span>
+                                  )}
                                 </div>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <div className="w-16 h-1 bg-muted rounded-full overflow-hidden">
-                                    <div className="h-full bg-amber-500/60 rounded-full" style={{ width: `${Math.min(group.match_score, 100)}%` }} />
-                                  </div>
-                                  <span className="text-xs text-muted-foreground tabular-nums">{group.match_score.toFixed(1)}%</span>
-                                </div>
-                              </div>
-                              {allReviewed && (
-                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${
-                                  gAdded > 0 && gSkipped === 0 ? 'bg-green-500/15 text-green-500' :
-                                  gSkipped > 0 && gAdded === 0 ? 'bg-destructive/15 text-destructive' :
-                                  'bg-primary/15 text-primary'
-                                }`}>
-                                  {gAdded > 0 && gSkipped === 0 ? '✓ Added' : gSkipped > 0 && gAdded === 0 ? '✗ Skipped' : `${gAdded + gSkipped} reviewed`}
-                                </span>
-                              )}
-                              <div className="flex gap-1.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                                {gPending > 0 && (
-                                  <>
-                                    <button
-                                      onClick={() => handleLessLikelyBulkAction(group.artist_id, 'add')}
-                                      className="px-2 py-1 text-xs font-semibold rounded bg-green-700/80 text-white hover:bg-green-700 transition"
-                                    >
-                                      {gAdded > 0 || gSkipped > 0 ? '+Rest' : 'Add All'}
-                                    </button>
-                                    <button
-                                      onClick={() => handleLessLikelyBulkAction(group.artist_id, 'skip')}
-                                      className="px-2 py-1 text-xs font-semibold rounded bg-red-700/80 text-white hover:bg-red-700 transition"
-                                    >
-                                      {gAdded > 0 || gSkipped > 0 ? '−Rest' : 'Skip All'}
-                                    </button>
-                                  </>
-                                )}
-                                {allReviewed && (
-                                  <button
-                                    onClick={() => handleLessLikelyClearAll(group.artist_id)}
-                                    className="px-2 py-1 text-xs font-medium rounded border border-border text-muted-foreground hover:text-foreground transition"
-                                  >
-                                    Clear
-                                  </button>
-                                )}
-                              </div>
-                            </div>
 
+                                {/* Name + metadata */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="font-semibold text-foreground truncate text-sm">{group.artist_name}</span>
+                                    <span className="text-muted-foreground text-xs whitespace-nowrap flex-shrink-0">
+                                      {group.show_count} {group.show_count === 1 ? 'show' : 'shows'}
+                                      {group.spotify_song_count > 0 && (
+                                        <>
+                                          <span className="mx-1 text-muted-foreground/40">&</span>
+                                          {spotifyUrl ? (
+                                            <a
+                                              href={spotifyUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              onClick={e => e.stopPropagation()}
+                                              className="inline-flex items-center gap-0.5 hover:text-[#1DB954] transition-colors"
+                                            >
+                                              <SpotifyIcon className="w-2.5 h-2.5 text-[#1DB954] inline" />
+                                              {group.spotify_song_count} songs
+                                            </a>
+                                          ) : (
+                                            <span className="inline-flex items-center gap-0.5">
+                                              <SpotifyIcon className="w-2.5 h-2.5 text-[#1DB954] inline" />
+                                              {group.spotify_song_count} songs
+                                            </span>
+                                          )}
+                                        </>
+                                      )}
+                                    </span>
+                                  </div>
+                                  {/* Amber score bar */}
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <div className="w-16 h-1 bg-muted rounded-full overflow-hidden">
+                                      <div className="h-full bg-amber-500/60 rounded-full" style={{ width: `${Math.min(group.match_score, 100)}%` }} />
+                                    </div>
+                                    <span className="text-xs text-muted-foreground tabular-nums">{group.match_score.toFixed(1)}%</span>
+                                  </div>
+                                </div>
+
+                                {/* Reviewed badge */}
+                                {allReviewed && (
+                                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${
+                                    gAdded > 0 && gSkipped === 0 ? 'bg-green-500/15 text-green-500' :
+                                    gSkipped > 0 && gAdded === 0 ? 'bg-destructive/15 text-destructive' :
+                                    'bg-primary/15 text-primary'
+                                  }`}>
+                                    {gAdded > 0 && gSkipped === 0 ? '✓ Added' : gSkipped > 0 && gAdded === 0 ? '✗ Skipped' : `${gAdded + gSkipped} reviewed`}
+                                  </span>
+                                )}
+
+                                {/* Desktop bulk buttons */}
+                                <div className="hidden md:flex gap-1.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                                  {gPending > 0 && (
+                                    <>
+                                      <button
+                                        onClick={() => handleLessLikelyBulkAction(group.artist_id, 'add')}
+                                        className="px-2 py-1 text-xs font-semibold rounded bg-green-700/80 text-white hover:bg-green-700 transition"
+                                      >
+                                        {gAdded > 0 || gSkipped > 0 ? '+Rest' : 'Add All'}
+                                      </button>
+                                      <button
+                                        onClick={() => handleLessLikelyBulkAction(group.artist_id, 'skip')}
+                                        className="px-2 py-1 text-xs font-semibold rounded bg-red-700/80 text-white hover:bg-red-700 transition"
+                                      >
+                                        {gAdded > 0 || gSkipped > 0 ? '−Rest' : 'Skip All'}
+                                      </button>
+                                    </>
+                                  )}
+                                  {allReviewed && (
+                                    <button
+                                      onClick={() => handleLessLikelyClearAll(group.artist_id)}
+                                      className="px-2 py-1 text-xs font-medium rounded border border-border text-muted-foreground hover:text-foreground transition"
+                                    >
+                                      Clear
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* Mobile clear button (only when reviewed) */}
+                                {allReviewed && (
+                                  <div className="flex md:hidden flex-shrink-0" onClick={e => e.stopPropagation()}>
+                                    <button
+                                      onClick={() => handleLessLikelyClearAll(group.artist_id)}
+                                      className="px-2 py-1 text-xs font-medium rounded border border-border text-muted-foreground hover:text-foreground transition"
+                                    >
+                                      Clear
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </SwipeableGroupHeader>
+
+                            {/* Expanded show rows — only pending shows visible, disappear on review */}
                             {isExpanded && (
                               <div className="border-t border-border bg-background/50">
                                 <div className="md:hidden flex items-center justify-between px-4 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/40">
                                   <span>Date · Venue</span>
                                   <span className="normal-case font-normal text-muted-foreground/40">swipe ↔</span>
                                 </div>
-                                {group.shows.map(show => {
-                                  const isAdded = show.status === 'added';
-                                  const isSkipped = show.status === 'skipped';
-                                  return (
+                                <div className="hidden md:grid px-5 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/40 grid-cols-[48px_120px_1fr]">
+                                  <span>Actions</span>
+                                  <span>Date</span>
+                                  <span>Venue</span>
+                                </div>
+
+                                {group.shows
+                                  .filter(show => show.status === 'pending')
+                                  .map(show => (
                                     <SwipeableShowRow
                                       key={show.show_id}
                                       show={show}
-                                      onAdd={() => updateLessLikelyShowStatus(show.show_id, 'added')}
-                                      onSkip={() => updateLessLikelyShowStatus(show.show_id, 'skipped')}
+                                      onAdd={() => handleLessLikelyAddShow(show.show_id)}
+                                      onSkip={() => handleLessLikelySkipShow(show.show_id)}
                                     >
-                                      {/* Desktop */}
+                                      {/* Desktop row */}
                                       <div className="hidden md:grid px-5 py-3 items-center grid-cols-[48px_120px_1fr]">
                                         <div className="flex items-center gap-2">
-                                          <button onClick={() => updateLessLikelyShowStatus(show.show_id, 'added')} className="focus:outline-none">
-                                            <svg className={`w-5 h-5 transition-colors ${isAdded ? 'fill-primary text-primary' : 'fill-none text-muted-foreground hover:text-primary'}`} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                          <button onClick={() => handleLessLikelyAddShow(show.show_id)} className="focus:outline-none">
+                                            <svg className="w-5 h-5 fill-none text-muted-foreground hover:text-primary transition-colors"
+                                              stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                                               <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
                                             </svg>
                                           </button>
-                                          <button onClick={() => updateLessLikelyShowStatus(show.show_id, 'skipped')} className="focus:outline-none">
-                                            <svg className={`w-4 h-4 transition-colors ${isSkipped ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'}`} stroke="currentColor" strokeWidth="2.5" fill="none" viewBox="0 0 24 24">
+                                          <button onClick={() => handleLessLikelySkipShow(show.show_id)} className="focus:outline-none">
+                                            <svg className="w-4 h-4 text-muted-foreground hover:text-destructive transition-colors"
+                                              stroke="currentColor" strokeWidth="2.5" fill="none" viewBox="0 0 24 24">
                                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                             </svg>
                                           </button>
@@ -1193,10 +1243,10 @@ export default function LikelyShowsPage() {
                                           <CapacityBadge category={show.capacity_category} />
                                         </div>
                                       </div>
-                                      {/* Mobile */}
+
+                                      {/* Mobile row */}
                                       <div className="md:hidden px-4 py-2.5">
                                         <div className="flex items-center gap-2 min-w-0">
-                                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isAdded ? 'bg-green-500' : isSkipped ? 'bg-destructive' : 'bg-muted-foreground/30'}`} />
                                           <span className="text-xs text-muted-foreground/70 flex-shrink-0 tabular-nums">
                                             {(() => { const [y, m, d] = show.date.split('-'); return new Date(+y, +m - 1, +d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); })()}
                                           </span>
@@ -1205,8 +1255,7 @@ export default function LikelyShowsPage() {
                                         </div>
                                       </div>
                                     </SwipeableShowRow>
-                                  );
-                                })}
+                                  ))}
                               </div>
                             )}
                           </div>
@@ -1219,7 +1268,7 @@ export default function LikelyShowsPage() {
             </div>
           )}
 
-          {/* ── Stretch Shows toggle (opt-in) ── */}
+          {/* ── Stretch Shows ── */}
           {stretchShows.length > 0 && (
             <div className="mt-4 bg-card rounded-lg shadow overflow-hidden">
               <button
