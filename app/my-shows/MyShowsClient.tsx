@@ -1,12 +1,12 @@
 'use client'
 
 import Navigation from '../components/Navigation'
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   ComposedChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  AreaChart, PieChart, Pie, Cell,
+  AreaChart, PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis,
 } from 'recharts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -47,6 +47,7 @@ type SortDir       = 'asc' | 'desc'
 type ViewMode      = 'shows' | 'sets' | 'festivals'
 type SetsSubView   = 'card' | 'table'
 type CapFilter     = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown'
+type ArtistChartMode = 'bar' | 'bubble'
 
 // ── Capacity metadata ─────────────────────────────────────────────────────────
 const CAP_KEYS = ['small', 'medium', 'large', 'xlarge', 'unknown'] as const
@@ -91,24 +92,17 @@ function isFestivalShow(show: Show) {
   return show.show_type === 'festival' || !!show.festival_name
 }
 
-// Headliner score: match_score > monthly_listeners > vancouver fallback > alpha
 function headlinerScore(show: Show): number {
   if (show.match_score != null && show.match_score > 0) return show.match_score * 1_000_000
   if (show.artist.monthly_listeners != null) return show.artist.monthly_listeners
   return 0
 }
 
-// ── Bill group: shows sharing same date+venue ─────────────────────────────────
+// ── Bill group ────────────────────────────────────────────────────────────────
 type BillGroup = {
-  key: string
-  date: string
-  venue_id: number
-  venue_name: string
-  capacity_category: string | null
-  shows: Show[]
-  headliner: Show
-  isFestival: boolean
-  festival_name: string | null
+  key: string; date: string; venue_id: number; venue_name: string
+  capacity_category: string | null; shows: Show[]; headliner: Show
+  isFestival: boolean; festival_name: string | null
 }
 
 function buildBillGroups(shows: Show[]): BillGroup[] {
@@ -119,19 +113,14 @@ function buildBillGroups(shows: Show[]): BillGroup[] {
     map.get(key)!.push(s)
   }
   const groups: BillGroup[] = []
-  for (const [key, groupShows] of map) {
-    const sorted = [...groupShows].sort((a, b) => headlinerScore(b) - headlinerScore(a))
-    const headliner = sorted[0]
+  for (const [key, gs] of map) {
+    const sorted = [...gs].sort((a, b) => headlinerScore(b) - headlinerScore(a))
     groups.push({
-      key,
-      date: headliner.date,
-      venue_id: headliner.venue.venue_id,
-      venue_name: headliner.venue.venue_name,
-      capacity_category: headliner.venue.capacity_category,
-      shows: sorted,
-      headliner,
-      isFestival: groupShows.some(isFestivalShow),
-      festival_name: groupShows.find(s => s.festival_name)?.festival_name ?? null,
+      key, date: sorted[0].date, venue_id: sorted[0].venue.venue_id,
+      venue_name: sorted[0].venue.venue_name, capacity_category: sorted[0].venue.capacity_category,
+      shows: sorted, headliner: sorted[0],
+      isFestival: gs.some(isFestivalShow),
+      festival_name: gs.find(s => s.festival_name)?.festival_name ?? null,
     })
   }
   return groups.sort((a, b) => b.date.localeCompare(a.date))
@@ -182,13 +171,14 @@ function SetlistLink({ url }: { url: string }) {
 }
 
 // ── Timeline tooltips ─────────────────────────────────────────────────────────
-function YearTip({ active, payload, label }: any) {
+function YearTip({ active, payload, label, viewMode }: any) {
   if (!active || !payload?.length) return null
-  const shows = payload.find((p: any) => p.dataKey === 'shows')?.value
+  const val = payload.find((p: any) => p.dataKey === 'shows')?.value
+  const label2 = viewMode === 'sets' ? 'sets' : viewMode === 'festivals' ? 'festivals' : 'shows'
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
       <p className="font-semibold text-foreground mb-0.5">{label}</p>
-      {shows != null && shows > 0 && <p className="text-primary">{shows} {shows === 1 ? 'show' : 'shows'}</p>}
+      {val != null && val > 0 && <p className="text-primary">{val} {val === 1 ? label2.slice(0,-1) : label2}</p>}
     </div>
   )
 }
@@ -204,24 +194,6 @@ function MonthTip({ active, payload, label }: any) {
       {shows  > 0 && <p className="text-primary">{shows} {shows === 1 ? 'show' : 'shows'}</p>}
       {future > 0 && <p className="text-amber-400">{future} upcoming</p>}
       {songs != null && songs > 0 && <p style={{ color: SPOTIFY_GREEN }}>{songs} songs added</p>}
-    </div>
-  )
-}
-
-// ── Artist bar tooltip: venue breakdown ───────────────────────────────────────
-function ArtistBarTip({ active, payload }: any) {
-  if (!active || !payload?.length) return null
-  const data = payload[0]?.payload
-  if (!data?.venueBreakdown) return null
-  return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2.5 text-xs shadow-lg pointer-events-none min-w-[180px]">
-      <p className="font-semibold text-foreground mb-1.5">{data.name}</p>
-      {data.venueBreakdown.map((v: { name: string; count: number }) => (
-        <div key={v.name} className="flex items-center justify-between gap-4 mb-0.5">
-          <span className="text-muted-foreground truncate">{v.name}</span>
-          <span className="text-primary font-medium tabular-nums flex-shrink-0">{v.count}</span>
-        </div>
-      ))}
     </div>
   )
 }
@@ -247,7 +219,22 @@ function DonutTip({ active, payload, venueBreakdown }: any) {
   )
 }
 
-// ── Stacked horizontal bar for artists ────────────────────────────────────────
+// ── Bubble chart tooltip ──────────────────────────────────────────────────────
+function BubbleTip({ active, payload }: any) {
+  if (!active || !payload?.length) return null
+  const d = payload[0]?.payload
+  if (!d) return null
+  return (
+    <div className="bg-card border border-border rounded-lg px-3 py-2.5 text-xs shadow-lg pointer-events-none min-w-[160px]">
+      <p className="font-semibold text-foreground mb-1">{d.name}</p>
+      <p className="text-primary">{d.shows} {d.shows === 1 ? 'show' : 'shows'}</p>
+      <p className="text-muted-foreground">{d.years.join(', ')}</p>
+      {d.dominantVenue && <p className="text-muted-foreground mt-0.5">mostly {d.dominantVenue}</p>}
+    </div>
+  )
+}
+
+// ── Artist bar with custom hover tooltip ──────────────────────────────────────
 function ArtistBar({ artist, max, onNavigate }: {
   artist: {
     name: string; spotifyId: string | null; total: number
@@ -256,52 +243,192 @@ function ArtistBar({ artist, max, onNavigate }: {
   }
   max: number; onNavigate: () => void
 }) {
+  const [tooltip, setTooltip] = useState<{ x: number; y: number } | null>(null)
+  const barRef = useRef<HTMLDivElement>(null)
+
   const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
   const segments = CAP_KEYS.map(key => ({
     key, count: artist.byCapacity[key] ?? 0,
     color: CAP_BY_KEY[key]?.color ?? 'rgba(156,163,175,0.75)',
   })).filter(s => s.count > 0)
 
-  // Build recharts-compatible data for tooltip
-  const chartData = [{ name: artist.name, value: artist.total, venueBreakdown: artist.venueBreakdown, ...Object.fromEntries(segments.map(s => [s.key, s.count])) }]
-
   return (
-    <div className="flex items-center gap-2 py-0.5">
+    <div className="flex items-center gap-2 py-0.5 relative">
       <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
         <button onClick={onNavigate}
           className="text-xs text-primary hover:opacity-80 hover:underline truncate text-right"
           title={artist.name}>{artist.name}</button>
         {artist.spotifyId && <SpotifyLink artistId={artist.spotifyId} />}
       </div>
-      {/* Custom bar with recharts tooltip overlay */}
-      <div className="flex-1 relative" style={{ height: '16px' }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-            <Tooltip content={<ArtistBarTip />} cursor={false} />
-            <Area type="monotone" dataKey="value" stroke="transparent" fill="transparent" />
-          </AreaChart>
-        </ResponsiveContainer>
-        {/* Actual visual bar rendered below the recharts layer */}
-        <div className="absolute inset-0 flex items-center pointer-events-none">
-          <div className="h-4 bg-muted/40 rounded-full overflow-hidden w-full">
-            <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
-              {segments.map((seg, i) => {
-                const isFirst = i === 0, isLast = i === segments.length - 1
-                return (
-                  <div key={seg.key} style={{
-                    width: `${(seg.count / artist.total) * 100}%`,
-                    backgroundColor: seg.color,
-                    borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
-                  }} />
-                )
-              })}
-            </div>
-          </div>
+
+      {/* Bar with hover tooltip */}
+      <div
+        ref={barRef}
+        className="flex-1 h-4 bg-muted/40 rounded-full overflow-hidden cursor-default relative"
+        onMouseEnter={e => {
+          const rect = barRef.current?.getBoundingClientRect()
+          if (rect) setTooltip({ x: e.clientX - rect.left, y: -8 })
+        }}
+        onMouseMove={e => {
+          const rect = barRef.current?.getBoundingClientRect()
+          if (rect) setTooltip({ x: e.clientX - rect.left, y: -8 })
+        }}
+        onMouseLeave={() => setTooltip(null)}
+      >
+        <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
+          {segments.map((seg, i) => {
+            const isFirst = i === 0, isLast = i === segments.length - 1
+            return (
+              <div key={seg.key} style={{
+                width: `${(seg.count / artist.total) * 100}%`,
+                backgroundColor: seg.color,
+                borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
+              }} />
+            )
+          })}
         </div>
+
+        {/* Custom tooltip */}
+        {tooltip && artist.venueBreakdown.length > 0 && (
+          <div
+            className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[180px]"
+            style={{ left: Math.min(tooltip.x, 200), bottom: '120%', transform: 'translateX(-30%)' }}
+          >
+            <p className="font-semibold text-foreground mb-1.5">{artist.name}</p>
+            {artist.venueBreakdown.map(v => (
+              <div key={v.name} className="flex items-center justify-between gap-4 mb-0.5">
+                <span className="text-muted-foreground truncate">{v.name}</span>
+                <span style={{ color: TEAL }} className="font-medium tabular-nums flex-shrink-0">{v.count}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
       <span className="text-xs tabular-nums flex-shrink-0" style={{ color: TEAL }}>
         {artist.total} {artist.total === 1 ? 'show' : 'shows'}
       </span>
+    </div>
+  )
+}
+
+// ── Artist bubble chart ───────────────────────────────────────────────────────
+function ArtistBubbleChart({ artists, onShowAll, showAll }: {
+  artists: {
+    name: string; spotifyId: string | null; total: number
+    byCapacity: Record<string, number>; years: string[]
+    dominantCapKey: CapFilter; dominantVenue: string
+  }[]
+  onShowAll: () => void; showAll: boolean
+}) {
+  const BUBBLE_CAP = 25
+  const display = showAll ? artists : artists.slice(0, BUBBLE_CAP)
+
+  const data = display.map((a, i) => ({
+    name: a.name,
+    shows: a.total,
+    // x = first year they appear
+    x: parseInt(a.years[0]),
+    // y = index (staggered to avoid overlap)
+    y: i,
+    // z = show count drives bubble size
+    z: a.total,
+    years: a.years,
+    dominantVenue: a.dominantVenue,
+    fill: CAP_BY_KEY[a.dominantCapKey]?.color ?? 'rgba(13,148,136,0.7)',
+  }))
+
+  return (
+    <div>
+      <div style={{ height: Math.max(200, display.length * 22) }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ScatterChart margin={{ top: 8, right: 16, left: -20, bottom: 0 }}>
+            <XAxis
+              dataKey="x" type="number" name="Year"
+              domain={['dataMin - 1', 'dataMax + 1']}
+              tickCount={8}
+              tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+              axisLine={false} tickLine={false}
+            />
+            <YAxis dataKey="y" type="number" hide />
+            <ZAxis dataKey="z" range={[40, 400]} />
+            <Tooltip content={<BubbleTip />} cursor={false} />
+            <Scatter data={data} shape={(props: any) => {
+              const { cx, cy, r, payload } = props
+              return (
+                <circle
+                  cx={cx} cy={cy} r={r}
+                  fill={payload.fill}
+                  fillOpacity={0.75}
+                  stroke={payload.fill}
+                  strokeOpacity={0.4}
+                  strokeWidth={1}
+                />
+              )
+            }} />
+          </ScatterChart>
+        </ResponsiveContainer>
+      </div>
+      {/* Legend */}
+      <div className="flex items-center gap-3 mt-2 flex-wrap text-[10px] text-muted-foreground">
+        {CAP_KEYS.filter(k => k !== 'unknown').map(key => (
+          <span key={key} className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: CAP_BY_KEY[key].color }} />
+            {CAP_BY_KEY[key].legendLabel}
+          </span>
+        ))}
+        <span className="text-muted-foreground/60">· bubble size = show count · x-axis = first year</span>
+      </div>
+      {!showAll && artists.length > BUBBLE_CAP && (
+        <button onClick={onShowAll} className="mt-2 text-xs text-primary hover:opacity-80 font-medium">
+          Show all {artists.length} artists as table →
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── Artist table (full list) ──────────────────────────────────────────────────
+function ArtistTable({ artists, onNavigate }: {
+  artists: { name: string; spotifyId: string | null; total: number; byCapacity: Record<string, number>; years: string[] }[]
+  onNavigate: (name: string) => void
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-border">
+            <th className="text-left py-2 text-muted-foreground font-medium">#</th>
+            <th className="text-left py-2 text-muted-foreground font-medium">Artist</th>
+            <th className="text-right py-2 text-muted-foreground font-medium">Shows</th>
+            <th className="text-left py-2 text-muted-foreground font-medium pl-4">Sizes</th>
+            <th className="text-left py-2 text-muted-foreground font-medium pl-4">Years</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border/50">
+          {artists.map((a, i) => (
+            <tr key={a.name} className="hover:bg-muted/20 transition-colors">
+              <td className="py-1.5 text-muted-foreground/50 w-6">{i + 1}</td>
+              <td className="py-1.5">
+                <button onClick={() => onNavigate(a.name)}
+                  className="text-primary hover:opacity-80 hover:underline text-left">{a.name}</button>
+                {a.spotifyId && <span className="ml-1"><SpotifyLink artistId={a.spotifyId} /></span>}
+              </td>
+              <td className="py-1.5 text-right tabular-nums" style={{ color: TEAL }}>{a.total}</td>
+              <td className="py-1.5 pl-4">
+                <div className="flex items-center gap-0.5">
+                  {CAP_KEYS.filter(k => k !== 'unknown' && (a.byCapacity[k] ?? 0) > 0).map(key => (
+                    <span key={key} className={`text-[9px] font-bold px-1 py-px rounded ${CAP_BY_KEY[key].badgeBg} ${CAP_BY_KEY[key].badgeText}`}>
+                      {CAP_BY_KEY[key].shortLabel}×{a.byCapacity[key]}
+                    </span>
+                  ))}
+                </div>
+              </td>
+              <td className="py-1.5 pl-4 text-muted-foreground/70">{a.years.join(', ')}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -314,92 +441,65 @@ export default function MyShowsClient({
   shows: Show[]
   spotifySongs: { added_at: string }[]
 }) {
-  const router = useRouter()
+  const router  = useRouter()
   const supabase = createClient()
 
-  const [shows, setShows]                   = useState(initialShows)
-  const [viewMode, setViewMode]             = useState<ViewMode>('shows')
-  const [setsSubView, setSetsSubView]       = useState<SetsSubView>('card')
-  const [sortField, setSortField]           = useState<SortField>('date')
-  const [sortDir, setSortDir]               = useState<SortDir>('desc')
-  const [removingSet, setRemovingSet]       = useState<Set<number>>(new Set())
-  const [page, setPage]                     = useState(1)
-  const [pageInput, setPageInput]           = useState('1')
-  const [selectedYear, setSelectedYear]     = useState<string | null>(null)
-  const [capFilter, setCapFilter]           = useState<CapFilter>('all')
-  const [showAllArtists, setShowAllArtists] = useState(false)
-  const [expandedBills, setExpandedBills]   = useState<Set<string>>(new Set())
+  const [shows, setShows]                       = useState(initialShows)
+  const [viewMode, setViewMode]                 = useState<ViewMode>('shows')
+  const [setsSubView, setSetsSubView]           = useState<SetsSubView>('card')
+  const [artistChartMode, setArtistChartMode]   = useState<ArtistChartMode>('bar')
+  const [artistShowAll, setArtistShowAll]       = useState(false)
+  const [sortField, setSortField]               = useState<SortField>('date')
+  const [sortDir, setSortDir]                   = useState<SortDir>('desc')
+  const [removingSet, setRemovingSet]           = useState<Set<number>>(new Set())
+  const [page, setPage]                         = useState(1)
+  const [pageInput, setPageInput]               = useState('1')
+  const [selectedYear, setSelectedYear]         = useState<string | null>(null)
+  const [capFilter, setCapFilter]               = useState<CapFilter>('all')
+  const [showAllArtists, setShowAllArtists]     = useState(false)
+  const [expandedBills, setExpandedBills]       = useState<Set<string>>(new Set())
 
-  // Unadded artists CTA
+  // Unadded CTA
   const [unaddedArtists, setUnaddedArtists]         = useState<UnaddedArtist[]>([])
   const [unaddedDismissed, setUnaddedDismissed]     = useState(false)
   const [unaddedExpanded, setUnaddedExpanded]       = useState(false)
   const [addingUnadded, setAddingUnadded]           = useState(false)
   const [sessionShowsModified, setSessionShowsModified] = useState(false)
 
-  const PER_PAGE = 50
+  const PER_PAGE   = 50
   const hasSpotify = spotifySongs.length > 0
   const anyFilterActive = selectedYear !== null || capFilter !== 'all'
 
-  // ── Check for unadded co-billed artists ───────────────────────────────────
+  // ── Unadded check ─────────────────────────────────────────────────────────
   const checkUnaddedArtists = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
       const addedShowIds = shows.map(s => s.show_id)
-      if (addedShowIds.length === 0) return
+      if (!addedShowIds.length) return
 
-      // Find all shows at same date+venue as shows user has added, excluding comedy
       const { data: coBilled } = await supabase
         .from('fact_shows')
-        .select(`
-          show_id, date, venue_id,
-          dim_artist ( artist_id, artist_name, spotify_artist_id ),
-          dim_venue ( venue_name ),
-          show_type
-        `)
+        .select('show_id, date, venue_id, show_type, dim_artist ( artist_id, artist_name, spotify_artist_id ), dim_venue ( venue_name )')
         .neq('show_type', 'comedy')
         .not('show_id', 'in', `(${addedShowIds.join(',')})`)
 
-      if (!coBilled || coBilled.length === 0) return
-
-      // Build set of (date, venue_id) pairs from user's shows
+      if (!coBilled?.length) return
       const userBills = new Set(shows.map(s => `${s.date}__${s.venue.venue_id}`))
-
       const unadded: UnaddedArtist[] = []
       for (const show of coBilled) {
-        const key = `${show.date}__${show.venue_id}`
-        if (!userBills.has(key)) continue
+        if (!userBills.has(`${show.date}__${show.venue_id}`)) continue
         const artist = Array.isArray(show.dim_artist) ? show.dim_artist[0] : show.dim_artist
-        const venue = Array.isArray(show.dim_venue) ? show.dim_venue[0] : show.dim_venue
+        const venue  = Array.isArray(show.dim_venue)  ? show.dim_venue[0]  : show.dim_venue
         if (!artist) continue
-        unadded.push({
-          show_id: show.show_id,
-          artist_name: artist.artist_name,
-          spotify_artist_id: artist.spotify_artist_id ?? null,
-          date: show.date,
-          venue_name: venue?.venue_name ?? '',
-        })
+        unadded.push({ show_id: show.show_id, artist_name: artist.artist_name, spotify_artist_id: artist.spotify_artist_id ?? null, date: show.date, venue_name: venue?.venue_name ?? '' })
       }
-
       setUnaddedArtists(unadded)
-    } catch (e) {
-      console.error('Error checking unadded artists:', e)
-    }
+    } catch (e) { console.error('Error checking unadded:', e) }
   }, [shows, supabase])
 
-  useEffect(() => {
-    checkUnaddedArtists()
-  }, [])
-
-  // Re-check if shows were modified this session
-  useEffect(() => {
-    if (sessionShowsModified) {
-      checkUnaddedArtists()
-      setSessionShowsModified(false)
-    }
-  }, [sessionShowsModified])
+  useEffect(() => { checkUnaddedArtists() }, [])
+  useEffect(() => { if (sessionShowsModified) { checkUnaddedArtists(); setSessionShowsModified(false) } }, [sessionShowsModified])
 
   // ── Base stats ────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -407,7 +507,7 @@ export default function MyShowsClient({
     const future = shows.filter(s =>  isFuture(s.date))
     const sortedPast = [...past].sort((a, b) => a.date.localeCompare(b.date))
     return {
-      total:   shows.length,
+      total: shows.length,
       artists: new Set(shows.map(s => s.artist.artist_id)).size,
       venues:  new Set(shows.map(s => s.venue.venue_id)).size,
       past, future,
@@ -416,7 +516,7 @@ export default function MyShowsClient({
     }
   }, [shows])
 
-  // ── Spotify songs per month ───────────────────────────────────────────────
+  // ── Spotify per month ─────────────────────────────────────────────────────
   const spotifyByYearMonth = useMemo(() => {
     const result: Record<string, Record<number, number>> = {}
     for (const s of spotifySongs) {
@@ -429,20 +529,36 @@ export default function MyShowsClient({
     return result
   }, [spotifySongs])
 
-  const firstSpotifyYear = useMemo(() => {
-    const years = Object.keys(spotifyByYearMonth).sort()
-    return years[0] ?? null
-  }, [spotifyByYearMonth])
+  const firstSpotifyYear = useMemo(() => Object.keys(spotifyByYearMonth).sort()[0] ?? null, [spotifyByYearMonth])
 
-  // ── Timeline data ─────────────────────────────────────────────────────────
+  // ── Year-filtered set ─────────────────────────────────────────────────────
+  const yearFiltered = useMemo(() => {
+    if (!selectedYear) return shows
+    return shows.filter(s => s.date.split('-')[0] === selectedYear)
+  }, [shows, selectedYear])
+
+  // ── Timeline data — respects view mode ───────────────────────────────────
   const yearTimelineData = useMemo(() => {
-    const src = viewMode === 'festivals' ? shows.filter(isFestivalShow) : shows
+    let src: (Show | BillGroup)[]
+
+    if (viewMode === 'festivals') {
+      src = shows.filter(isFestivalShow)
+    } else if (viewMode === 'shows') {
+      // one entry per bill (date+venue)
+      const groups = buildBillGroups(shows.filter(s => !isFestivalShow(s)))
+      src = groups
+    } else {
+      // sets: each individual show
+      src = shows
+    }
+
     const byYear: Record<string, { past: number; future: number }> = {}
-    for (const s of src) {
-      const y = s.date.split('-')[0]
+    for (const item of src) {
+      const date = 'date' in item ? item.date : (item as Show).date
+      const y = date.split('-')[0]
       if (!byYear[y]) byYear[y] = { past: 0, future: 0 }
-      if (isFuture(s.date)) byYear[y].future++
-      else                  byYear[y].past++
+      if (isFuture(date)) byYear[y].future++
+      else                byYear[y].past++
     }
     return Object.entries(byYear)
       .sort(([a],[b]) => a.localeCompare(b))
@@ -451,22 +567,21 @@ export default function MyShowsClient({
 
   const monthTimelineData = useMemo(() => {
     if (!selectedYear) return []
-    const src = viewMode === 'festivals' ? shows.filter(isFestivalShow) : shows
-    const inYear = src.filter(s => s.date.split('-')[0] === selectedYear)
+    const src = viewMode === 'festivals'
+      ? shows.filter(isFestivalShow).filter(s => s.date.split('-')[0] === selectedYear)
+      : shows.filter(s => s.date.split('-')[0] === selectedYear)
     const byMonth: Record<number, { past: number; future: number }> = {}
     for (let m = 0; m < 12; m++) byMonth[m] = { past: 0, future: 0 }
-    for (const s of inYear) {
+    for (const s of src) {
       const m = parseInt(s.date.split('-')[1]) - 1
       if (isFuture(s.date)) byMonth[m].future++
       else                  byMonth[m].past++
     }
     const songsByMonth = spotifyByYearMonth[selectedYear] ?? {}
-    const hasSongsThisYear = Object.keys(songsByMonth).length > 0
+    const hasSongs = Object.keys(songsByMonth).length > 0
     return Array.from({ length: 12 }, (_, m) => ({
-      month: MONTHS[m],
-      shows: byMonth[m].past,
-      future: byMonth[m].future,
-      ...(hasSpotify && hasSongsThisYear ? { songs: songsByMonth[m] ?? 0 } : {}),
+      month: MONTHS[m], shows: byMonth[m].past, future: byMonth[m].future,
+      ...(hasSpotify && hasSongs ? { songs: songsByMonth[m] ?? 0 } : {}),
     }))
   }, [shows, selectedYear, viewMode, spotifyByYearMonth, hasSpotify])
 
@@ -476,40 +591,44 @@ export default function MyShowsClient({
     ? hasSpotify && Object.keys(spotifyByYearMonth[selectedYear] ?? {}).length > 0
     : false
 
-  // ── Year-filtered set ─────────────────────────────────────────────────────
-  const yearFiltered = useMemo(() => {
-    if (!selectedYear) return shows
-    return shows.filter(s => s.date.split('-')[0] === selectedYear)
-  }, [shows, selectedYear])
+  const timelineLegendLabel = viewMode === 'sets' ? 'Sets per year'
+    : viewMode === 'festivals' ? 'Festivals per year'
+    : 'Shows per year'
 
-  // ── Top artists (with venue breakdown for tooltip) ─────────────────────────
+  // ── Top artists (with venue + year data) ──────────────────────────────────
   const topArtists = useMemo(() => {
     const map: Record<number, {
       name: string; spotifyId: string | null; total: number
-      byCapacity: Record<string, number>
-      byVenue: Record<string, number>
+      byCapacity: Record<string, number>; byVenue: Record<string, number>; byYear: Set<string>
     }> = {}
     for (const s of yearFiltered) {
-      const id  = s.artist.artist_id
+      const id     = s.artist.artist_id
       const capKey = getCapMeta(s.venue.capacity_category).key
-      if (!map[id]) map[id] = { name: s.artist.artist_name, spotifyId: s.artist.spotify_artist_id, total: 0, byCapacity: {}, byVenue: {} }
+      const year   = s.date.split('-')[0]
+      if (!map[id]) map[id] = { name: s.artist.artist_name, spotifyId: s.artist.spotify_artist_id, total: 0, byCapacity: {}, byVenue: {}, byYear: new Set() }
       map[id].total++
       map[id].byCapacity[capKey] = (map[id].byCapacity[capKey] ?? 0) + 1
       map[id].byVenue[s.venue.venue_name] = (map[id].byVenue[s.venue.venue_name] ?? 0) + 1
+      map[id].byYear.add(year)
     }
     return Object.values(map)
-      .map(a => ({
-        ...a,
-        venueBreakdown: Object.entries(a.byVenue)
-          .map(([name, count]) => ({ name, count }))
-          .sort((x, y) => y.count - x.count),
-      }))
+      .map(a => {
+        const dominantCapEntry = CAP_KEYS.map(k => ({ k, c: a.byCapacity[k] ?? 0 })).sort((x, y) => y.c - x.c)[0]
+        const dominantVenueEntry = Object.entries(a.byVenue).sort((x, y) => y[1] - x[1])[0]
+        return {
+          ...a,
+          years: Array.from(a.byYear).sort(),
+          dominantCapKey: (dominantCapEntry?.k ?? 'unknown') as CapFilter,
+          dominantVenue: dominantVenueEntry?.[0] ?? '',
+          venueBreakdown: Object.entries(a.byVenue).map(([name, count]) => ({ name, count })).sort((x, y) => y.count - x.count),
+        }
+      })
       .sort((a, b) => b.total - a.total)
   }, [yearFiltered])
 
   const maxArtistShows = topArtists[0]?.total ?? 1
 
-  // ── Donut + venue breakdown ───────────────────────────────────────────────
+  // ── Donut ─────────────────────────────────────────────────────────────────
   const { donutData, venueBreakdown } = useMemo(() => {
     const src = viewMode === 'festivals' ? yearFiltered.filter(isFestivalShow) : yearFiltered
     const counts: Record<string, number> = {}
@@ -534,7 +653,7 @@ export default function MyShowsClient({
 
   const donutTotal = donutData.reduce((s, d) => s + d.value, 0)
 
-  // ── Bill groups for Shows view ────────────────────────────────────────────
+  // ── Bill groups ───────────────────────────────────────────────────────────
   const billGroups = useMemo(() => {
     const src = yearFiltered.filter(s => !isFestivalShow(s))
     const filtered = capFilter === 'all' ? src : src.filter(s => getCapMeta(s.venue.capacity_category).key === capFilter)
@@ -546,44 +665,32 @@ export default function MyShowsClient({
     const src = yearFiltered.filter(isFestivalShow)
     const map = new Map<string, Show[]>()
     for (const s of src) {
-      const name = s.festival_name ?? 'Unknown Festival'
-      const year = s.date.split('-')[0]
-      const key  = `${name}__${year}`
+      const key = `${s.festival_name ?? 'Unknown'}__${s.date.split('-')[0]}`
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(s)
     }
-    return Array.from(map.entries())
-      .map(([key, festShows]) => {
-        const [name] = key.split('__')
-        const sorted = [...festShows].sort((a, b) => b.date.localeCompare(a.date))
-        const dates  = festShows.map(s => s.date).sort()
-        return {
-          key,
-          festival_name: name,
-          year: festShows[0].date.split('-')[0],
-          shows: sorted,
-          date_from: dates[0],
-          date_to:   dates[dates.length - 1],
-          venue_name: festShows[0].venue.venue_name,
-        }
-      })
-      .sort((a, b) => b.date_to.localeCompare(a.date_to))
+    return Array.from(map.entries()).map(([key, fs]) => {
+      const [name] = key.split('__')
+      const sorted = [...fs].sort((a, b) => b.date.localeCompare(a.date))
+      const dates  = fs.map(s => s.date).sort()
+      return { key, festival_name: name, year: fs[0].date.split('-')[0], shows: sorted, date_from: dates[0], date_to: dates[dates.length - 1], venue_name: fs[0].venue.venue_name }
+    }).sort((a, b) => b.date_to.localeCompare(a.date_to))
   }, [yearFiltered])
 
-  // ── Sets view (existing individual rows) ──────────────────────────────────
+  // ── Sets (sorted) ─────────────────────────────────────────────────────────
   const setsFiltered = useMemo(() => {
     const src = capFilter === 'all' ? yearFiltered : yearFiltered.filter(s => getCapMeta(s.venue.capacity_category).key === capFilter)
     return [...src].sort((a, b) => {
       let av: string, bv: string
       switch (sortField) {
-        case 'date':     av = a.date;                              bv = b.date;                              break
+        case 'date':     av = a.date; bv = b.date; break
         case 'artist':   av = a.artist.artist_name.toLowerCase(); bv = b.artist.artist_name.toLowerCase(); break
-        case 'venue':    av = a.venue.venue_name.toLowerCase();   bv = b.venue.venue_name.toLowerCase();   break
-        case 'added_at': av = a.added_at;                         bv = b.added_at;                         break
+        case 'venue':    av = a.venue.venue_name.toLowerCase(); bv = b.venue.venue_name.toLowerCase(); break
+        case 'added_at': av = a.added_at; bv = b.added_at; break
         default:         av = ''; bv = ''
       }
-      if (av < bv) return sortDir === 'asc' ? -1 :  1
-      if (av > bv) return sortDir === 'asc' ?  1 : -1
+      if (av < bv) return sortDir === 'asc' ? -1 : 1
+      if (av > bv) return sortDir === 'asc' ? 1 : -1
       return 0
     })
   }, [yearFiltered, capFilter, sortField, sortDir])
@@ -640,12 +747,10 @@ export default function MyShowsClient({
       if (!user) return
       const records = unaddedArtists.map(a => ({ user_id: user.id, show_id: a.show_id, status: 'attended', source: 'manual' }))
       await supabase.from('user_shows').upsert(records, { onConflict: 'user_id,show_id' })
-      // Refresh shows
       const { data: newShows } = await supabase
         .from('user_shows')
         .select(`show_id, added_at, source, fact_shows ( show_id, date, setlist_url, show_type, festival_name, dim_artist ( artist_id, artist_name, monthly_listeners, spotify_artist_id ), dim_venue ( venue_id, venue_name, capacity, capacity_category ) )`)
-        .eq('user_id', user.id)
-        .order('added_at', { ascending: false })
+        .eq('user_id', user.id).order('added_at', { ascending: false })
       if (newShows) {
         const mapped = newShows.map((us: any) => {
           const show = Array.isArray(us.fact_shows) ? us.fact_shows[0] : us.fact_shows
@@ -657,9 +762,8 @@ export default function MyShowsClient({
         }).filter(Boolean)
         setShows(mapped as Show[])
       }
-      setUnaddedArtists([])
-      setUnaddedDismissed(true)
-    } catch (e) { console.error('Error adding unadded artists:', e) }
+      setUnaddedArtists([]); setUnaddedDismissed(true)
+    } catch (e) { console.error('Error adding unadded:', e) }
     finally { setAddingUnadded(false) }
   }
 
@@ -680,13 +784,13 @@ export default function MyShowsClient({
 
           <h1 className="text-3xl md:text-4xl font-bold text-foreground">My Shows</h1>
 
-          {/* ── Unadded artists CTA ── */}
+          {/* ── Unadded CTA ── */}
           {!unaddedDismissed && unaddedArtists.length > 0 && (
             <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground mb-1">
-                    {unaddedArtists.length} artist{unaddedArtists.length !== 1 ? 's' : ''} from shows you attended {unaddedArtists.length !== 1 ? 'haven\'t' : 'hasn\'t'} been added yet
+                    {unaddedArtists.length} artist{unaddedArtists.length !== 1 ? 's' : ''} from shows you attended {unaddedArtists.length !== 1 ? "haven't" : "hasn't"} been added yet
                   </p>
                   {!unaddedExpanded ? (
                     <p className="text-xs text-muted-foreground truncate">
@@ -705,182 +809,239 @@ export default function MyShowsClient({
                     </div>
                   )}
                   <div className="flex items-center gap-3 mt-2">
-                    <button
-                      onClick={addUnaddedAll}
-                      disabled={addingUnadded}
-                      className="text-xs font-semibold px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition disabled:opacity-50"
-                    >
+                    <button onClick={addUnaddedAll} disabled={addingUnadded}
+                      className="text-xs font-semibold px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition disabled:opacity-50">
                       {addingUnadded ? 'Adding...' : 'Add All'}
                     </button>
-                    <button
-                      onClick={() => setUnaddedExpanded(v => !v)}
-                      className="text-xs text-primary hover:opacity-80 transition"
-                    >
+                    <button onClick={() => setUnaddedExpanded(v => !v)} className="text-xs text-primary hover:opacity-80 transition">
                       {unaddedExpanded ? 'Show less' : 'Review'}
                     </button>
                   </div>
                 </div>
-                <button
-                  onClick={() => setUnaddedDismissed(true)}
-                  className="text-muted-foreground hover:text-foreground transition text-lg leading-none flex-shrink-0"
-                >×</button>
+                <button onClick={() => setUnaddedDismissed(true)} className="text-muted-foreground hover:text-foreground transition text-lg leading-none flex-shrink-0">×</button>
               </div>
             </div>
           )}
 
-          {/* ── Concert Timeline + Donut side by side ── */}
+          {/* ── Concert Timeline (full width) ── */}
           {yearTimelineData.length > 0 && (
-            <div className="flex gap-4">
-              {/* Timeline — 75% */}
-              <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <h2 className="text-lg md:text-xl font-bold text-foreground">Concert Timeline</h2>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
-                        <span style={{ color: TEAL }}>{stats.total}</span>
-                        <span className="text-muted-foreground"> shows</span>
-                      </span>
-                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
-                        <span style={{ color: TEAL }}>{stats.artists}</span>
-                        <span className="text-muted-foreground"> artists</span>
-                      </span>
-                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
-                        <span style={{ color: TEAL }}>{stats.venues}</span>
-                        <span className="text-muted-foreground"> venues</span>
-                      </span>
-                    </div>
-                    {anyFilterActive && (
-                      <button onClick={clearAll}
-                        className="px-2.5 py-0.5 rounded-md border border-destructive text-destructive text-xs font-semibold hover:bg-destructive/10 transition-colors">
-                        Clear All
-                      </button>
-                    )}
-                    {selectedYear && (
-                      <button onClick={() => { setSelectedYear(null); setCapFilter('all') }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/20 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors">
-                        ← {selectedYear}
-                      </button>
-                    )}
+            <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5">
+              {/* Header with toggle top-right */}
+              <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h2 className="text-lg md:text-xl font-bold text-foreground">Concert Timeline</h2>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                      <span style={{ color: TEAL }}>{stats.total}</span>
+                      <span className="text-muted-foreground"> shows</span>
+                    </span>
+                    <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                      <span style={{ color: TEAL }}>{stats.artists}</span>
+                      <span className="text-muted-foreground"> artists</span>
+                    </span>
+                    <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                      <span style={{ color: TEAL }}>{stats.venues}</span>
+                      <span className="text-muted-foreground"> venues</span>
+                    </span>
                   </div>
+                  {anyFilterActive && (
+                    <button onClick={clearAll}
+                      className="px-2.5 py-0.5 rounded-md border border-destructive text-destructive text-xs font-semibold hover:bg-destructive/10 transition-colors">
+                      Clear All
+                    </button>
+                  )}
+                  {selectedYear && (
+                    <button onClick={() => { setSelectedYear(null); setCapFilter('all') }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/20 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors">
+                      ← {selectedYear}
+                    </button>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground flex-wrap">
+                {/* Shows/Sets/Festivals toggle — top right of timeline */}
+                <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium flex-shrink-0">
+                  {(['shows', 'sets', 'festivals'] as ViewMode[]).map((m, i) => (
+                    <button key={m} onClick={() => setViewMode(m)}
+                      className={`px-3 py-1.5 capitalize transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                        viewMode === m ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
+                      }`}>{m}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Timeline legend */}
+              <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground flex-wrap">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#0d9488' }} />
+                  {selectedYear ? (viewMode === 'sets' ? 'Sets' : viewMode === 'festivals' ? 'Festivals' : 'Shows') : timelineLegendLabel}
+                </span>
+                {stats.future.length > 0 && (
                   <span className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#0d9488' }} />
-                    {selectedYear ? 'Shows' : 'Shows per year'}
+                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#f59e0b' }} />
+                    Upcoming
                   </span>
-                  {stats.future.length > 0 && (
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#f59e0b' }} />
-                      Upcoming
-                    </span>
-                  )}
-                  {drilldownHasSpotify && (
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-sm inline-block" style={{ background: SPOTIFY_GREEN }} />
-                      Songs added
-                      {firstSpotifyYear && <span className="text-muted-foreground/50 ml-0.5">(from {firstSpotifyYear})</span>}
-                    </span>
-                  )}
-                </div>
-
-                <div style={{ height: 160 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    {selectedYear ? (
-                      <ComposedChart data={monthTimelineData} margin={{ top: 16, right: drilldownHasSpotify ? 40 : 8, left: -20, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#0d9488" stopOpacity={0.02}/>
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="month" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="shows" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                        {drilldownHasSpotify && (
-                          <YAxis yAxisId="songs" orientation="right" tick={{ fill: SPOTIFY_GREEN, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                        )}
-                        <Tooltip content={<MonthTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
-                        <Area yAxisId="shows" type="monotone" dataKey="shows" stroke="#0d9488" strokeWidth={2} fill="url(#gradShows)"
-                          dot={(p: any) => {
-                            const { cx, cy, payload } = p
-                            if ((payload.shows ?? 0) + (payload.future ?? 0) === 0) return <g key={`e-${cx}`} />
-                            return <circle key={`s-${cx}`} cx={cx} cy={cy} r={3} fill="#0d9488" stroke="var(--background)" strokeWidth={1.5}/>
-                          }} activeDot={{ r: 4, fill: '#0d9488' }} />
-                        {stats.future.length > 0 && (
-                          <Area yAxisId="shows" type="monotone" dataKey="future" stroke="#f59e0b" strokeWidth={2} fill="none"
-                            dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 4, fill: '#f59e0b' }} />
-                        )}
-                        {drilldownHasSpotify && (
-                          <Line yAxisId="songs" type="monotone" dataKey="songs" stroke={SPOTIFY_GREEN} strokeWidth={2}
-                            dot={(p: any) => {
-                              const { cx, cy, payload } = p
-                              if (!payload.songs || payload.songs === 0) return <g key={`e-${cx}`} />
-                              return <circle key={`sp-${cx}`} cx={cx} cy={cy} r={3} fill={SPOTIFY_GREEN} stroke="var(--background)" strokeWidth={1.5}/>
-                            }} connectNulls={false} activeDot={{ r: 4, fill: SPOTIFY_GREEN }} />
-                        )}
-                      </ComposedChart>
-                    ) : (
-                      <AreaChart data={yearTimelineData} margin={{ top: 16, right: 8, left: -20, bottom: 0 }}
-                        onClick={(d: any) => { const y = d?.activeLabel; if (y) handleYearClick(y) }}
-                        style={{ cursor: 'pointer' }}>
-                        <defs>
-                          <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#0d9488" stopOpacity={0.02}/>
-                          </linearGradient>
-                          <linearGradient id="gradFuture" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02}/>
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="year"
-                          tick={({ x, y, payload }: any) => (
-                            <text x={x} y={y + 12} textAnchor="middle" fontSize={11}
-                              fill={selectedYear === payload.value ? 'var(--primary)' : 'var(--muted-foreground)'}
-                              fontWeight={selectedYear === payload.value ? 700 : 400}>
-                              {payload.value}
-                            </text>
-                          )}
-                          axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                        <Tooltip content={<YearTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
-                        <Area type="monotone" dataKey="shows" stroke="#0d9488" strokeWidth={2} fill="url(#gradShows)"
-                          dot={(p: any) => {
-                            const { cx, cy, payload } = p
-                            if (payload.year === firstYear) return <circle key={`f-${cx}`} cx={cx} cy={cy} r={5} fill="#0d9488" stroke="var(--background)" strokeWidth={2}/>
-                            if (payload.year === lastYear && lastYear !== firstYear) return <circle key={`l-${cx}`} cx={cx} cy={cy} r={5} fill="#5eead4" stroke="var(--background)" strokeWidth={2}/>
-                            return <circle key={`d-${cx}`} cx={cx} cy={cy} r={3} fill="#0d9488" fillOpacity={0.7}/>
-                          }} activeDot={{ r: 5, fill: '#0d9488' }} />
-                        {stats.future.length > 0 && (
-                          <Area type="monotone" dataKey="future" stroke="#f59e0b" strokeWidth={2} fill="url(#gradFuture)"
-                            dot={{ r: 3, fill: '#f59e0b', fillOpacity: 0.8 }} activeDot={{ r: 5, fill: '#f59e0b' }} />
-                        )}
-                      </AreaChart>
-                    )}
-                  </ResponsiveContainer>
-                </div>
-
-                {!selectedYear && (stats.firstShow || stats.lastShow) && (
-                  <div className="flex items-start justify-between gap-2 mt-2 text-xs text-muted-foreground">
-                    {stats.firstShow && (
-                      <span>First: <span className="text-foreground font-medium">{stats.firstShow.artist.artist_name}</span> · {fmtDate(stats.firstShow.date)}</span>
-                    )}
-                    {stats.lastShow && lastYear !== firstYear && (
-                      <span className="text-right flex-shrink-0">Last: <span className="text-foreground font-medium">{stats.lastShow.artist.artist_name}</span> · {fmtDate(stats.lastShow.date)}</span>
-                    )}
-                  </div>
+                )}
+                {drilldownHasSpotify && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: SPOTIFY_GREEN }} />
+                    Songs added {firstSpotifyYear && <span className="text-muted-foreground/50 ml-0.5">(from {firstSpotifyYear})</span>}
+                  </span>
+                )}
+                {viewMode !== 'sets' && (
+                  <span className="text-muted-foreground/50 text-[10px]">
+                    {viewMode === 'shows' ? '· Bills with multiple acts count as 1 show' : '· Festival shows only'}
+                  </span>
                 )}
               </div>
 
-              {/* Donut — 25% */}
+              {/* Chart */}
+              <div style={{ height: 180 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  {selectedYear ? (
+                    <ComposedChart data={monthTimelineData} margin={{ top: 16, right: drilldownHasSpotify ? 40 : 8, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#0d9488" stopOpacity={0.02}/>
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="month" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis yAxisId="shows" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      {drilldownHasSpotify && (
+                        <YAxis yAxisId="songs" orientation="right" tick={{ fill: SPOTIFY_GREEN, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      )}
+                      <Tooltip content={<MonthTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                      <Area yAxisId="shows" type="monotone" dataKey="shows" stroke="#0d9488" strokeWidth={2} fill="url(#gradShows)"
+                        dot={(p: any) => {
+                          const { cx, cy, payload } = p
+                          if ((payload.shows ?? 0) + (payload.future ?? 0) === 0) return <g key={`e-${cx}`} />
+                          return <circle key={`s-${cx}`} cx={cx} cy={cy} r={3} fill="#0d9488" stroke="var(--background)" strokeWidth={1.5}/>
+                        }} activeDot={{ r: 4, fill: '#0d9488' }} />
+                      {stats.future.length > 0 && (
+                        <Area yAxisId="shows" type="monotone" dataKey="future" stroke="#f59e0b" strokeWidth={2} fill="none"
+                          dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 4, fill: '#f59e0b' }} />
+                      )}
+                      {drilldownHasSpotify && (
+                        <Line yAxisId="songs" type="monotone" dataKey="songs" stroke={SPOTIFY_GREEN} strokeWidth={2}
+                          dot={(p: any) => {
+                            const { cx, cy, payload } = p
+                            if (!payload.songs || payload.songs === 0) return <g key={`e-${cx}`} />
+                            return <circle key={`sp-${cx}`} cx={cx} cy={cy} r={3} fill={SPOTIFY_GREEN} stroke="var(--background)" strokeWidth={1.5}/>
+                          }} connectNulls={false} activeDot={{ r: 4, fill: SPOTIFY_GREEN }} />
+                      )}
+                    </ComposedChart>
+                  ) : (
+                    <AreaChart data={yearTimelineData} margin={{ top: 16, right: 8, left: -20, bottom: 0 }}
+                      onClick={(d: any) => { const y = d?.activeLabel; if (y) handleYearClick(y) }}
+                      style={{ cursor: 'pointer' }}>
+                      <defs>
+                        <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#0d9488" stopOpacity={0.02}/>
+                        </linearGradient>
+                        <linearGradient id="gradFuture" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02}/>
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="year"
+                        tick={({ x, y, payload }: any) => (
+                          <text x={x} y={y + 12} textAnchor="middle" fontSize={11}
+                            fill={selectedYear === payload.value ? 'var(--primary)' : 'var(--muted-foreground)'}
+                            fontWeight={selectedYear === payload.value ? 700 : 400}>
+                            {payload.value}
+                          </text>
+                        )}
+                        axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip content={(props: any) => <YearTip {...props} viewMode={viewMode} />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                      <Area type="monotone" dataKey="shows" stroke="#0d9488" strokeWidth={2} fill="url(#gradShows)"
+                        dot={(p: any) => {
+                          const { cx, cy, payload } = p
+                          if (payload.year === firstYear) return <circle key={`f-${cx}`} cx={cx} cy={cy} r={5} fill="#0d9488" stroke="var(--background)" strokeWidth={2}/>
+                          if (payload.year === lastYear && lastYear !== firstYear) return <circle key={`l-${cx}`} cx={cx} cy={cy} r={5} fill="#5eead4" stroke="var(--background)" strokeWidth={2}/>
+                          return <circle key={`d-${cx}`} cx={cx} cy={cy} r={3} fill="#0d9488" fillOpacity={0.7}/>
+                        }} activeDot={{ r: 5, fill: '#0d9488' }} />
+                      {stats.future.length > 0 && (
+                        <Area type="monotone" dataKey="future" stroke="#f59e0b" strokeWidth={2} fill="url(#gradFuture)"
+                          dot={{ r: 3, fill: '#f59e0b', fillOpacity: 0.8 }} activeDot={{ r: 5, fill: '#f59e0b' }} />
+                      )}
+                    </AreaChart>
+                  )}
+                </ResponsiveContainer>
+              </div>
+
+              {!selectedYear && (stats.firstShow || stats.lastShow) && (
+                <div className="flex items-start justify-between gap-2 mt-2 text-xs text-muted-foreground">
+                  {stats.firstShow && <span>First: <span className="text-foreground font-medium">{stats.firstShow.artist.artist_name}</span> · {fmtDate(stats.firstShow.date)}</span>}
+                  {stats.lastShow && lastYear !== firstYear && <span className="text-right flex-shrink-0">Last: <span className="text-foreground font-medium">{stats.lastShow.artist.artist_name}</span> · {fmtDate(stats.lastShow.date)}</span>}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Top Artists (65%) + Donut (35%) ── */}
+          {shows.length > 0 && (
+            <div className="flex gap-4">
+              {/* Top Artists */}
+              <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                  <h2 className="text-lg font-bold text-foreground">
+                    Top Artists
+                    {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
+                  </h2>
+                  {/* Bar / Bubble toggle */}
+                  <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
+                    {(['bar', 'bubble'] as ArtistChartMode[]).map((m, i) => (
+                      <button key={m} onClick={() => { setArtistChartMode(m); setArtistShowAll(false) }}
+                        className={`px-2.5 py-1 capitalize transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                          artistChartMode === m ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
+                        }`}>{m}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {topArtists.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">No shows in {selectedYear}.</p>
+                ) : artistChartMode === 'bar' ? (
+                  <>
+                    <div className="space-y-1.5">
+                      {topArtists.slice(0, showAllArtists ? undefined : 5).map(artist => (
+                        <ArtistBar key={artist.name} artist={artist} max={maxArtistShows}
+                          onNavigate={() => router.push(`/browse?artist=${encodeURIComponent(artist.name)}`)} />
+                      ))}
+                    </div>
+                    {topArtists.length > 5 && (
+                      <button onClick={() => setShowAllArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
+                        {showAllArtists ? '← Show less' : `View all ${topArtists.length} artists →`}
+                      </button>
+                    )}
+                  </>
+                ) : artistShowAll ? (
+                  <>
+                    <ArtistTable
+                      artists={topArtists}
+                      onNavigate={(name) => router.push(`/browse?artist=${encodeURIComponent(name)}`)}
+                    />
+                    <button onClick={() => setArtistShowAll(false)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">← Back to bubble chart</button>
+                  </>
+                ) : (
+                  <ArtistBubbleChart
+                    artists={topArtists}
+                    onShowAll={() => setArtistShowAll(true)}
+                    showAll={artistShowAll}
+                  />
+                )}
+              </div>
+
+              {/* Donut — compact */}
               <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 w-64 flex-shrink-0 hidden md:flex flex-col">
                 <h2 className="text-base font-bold text-foreground mb-3">Venues by Size</h2>
                 {donutData.length === 0 ? (
                   <p className="text-sm text-muted-foreground italic">No data</p>
                 ) : (
                   <>
-                    <div className="flex-shrink-0" style={{ height: 140 }}>
+                    <div style={{ height: 140 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie data={donutData} cx="50%" cy="50%"
@@ -910,9 +1071,7 @@ export default function MyShowsClient({
                         )
                       })}
                       {capFilter !== 'all' && (
-                        <button onClick={() => handleCap('all')} className="text-[10px] text-primary hover:underline mt-1">
-                          Clear filter ×
-                        </button>
+                        <button onClick={() => handleCap('all')} className="text-[10px] text-primary hover:underline mt-1">Clear filter ×</button>
                       )}
                     </div>
                   </>
@@ -921,35 +1080,7 @@ export default function MyShowsClient({
             </div>
           )}
 
-          {/* ── Top Artists (full width) ── */}
-          {shows.length > 0 && (
-            <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5">
-              <h2 className="text-lg font-bold text-foreground mb-3">
-                Top Artists
-                {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
-              </h2>
-              {topArtists.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No shows in {selectedYear}.</p>
-              ) : (
-                <>
-                  <div className="space-y-1.5">
-                    {topArtists.slice(0, showAllArtists ? undefined : 5).map(artist => (
-                      <ArtistBar key={artist.name} artist={artist} max={maxArtistShows}
-                        onNavigate={() => router.push(`/browse?artist=${encodeURIComponent(artist.name)}`)} />
-                    ))}
-                  </div>
-                  {topArtists.length > 5 && (
-                    <button onClick={() => setShowAllArtists(v => !v)}
-                      className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
-                      {showAllArtists ? '← Show less' : `View all ${topArtists.length} artists →`}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
-          {/* ── All Shows section ── */}
+          {/* ── Show list ── */}
           {shows.length === 0 ? (
             <div className="bg-card rounded-lg shadow border border-border p-12 text-center">
               <p className="text-muted-foreground text-lg mb-4">No shows added yet.</p>
@@ -960,19 +1091,10 @@ export default function MyShowsClient({
             </div>
           ) : (
             <div className="bg-card rounded-lg shadow border border-border overflow-hidden">
-              {/* Header: view toggle + count */}
+              {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-wrap gap-2">
                 <div className="flex items-center gap-3 flex-wrap">
-                  {/* View mode toggle */}
-                  <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
-                    {(['shows', 'sets', 'festivals'] as ViewMode[]).map((m, i) => (
-                      <button key={m} onClick={() => setViewMode(m)}
-                        className={`px-3 py-1.5 capitalize transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
-                          viewMode === m ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
-                        }`}>{m}</button>
-                    ))}
-                  </div>
-                  {/* Sets sub-view */}
+                  <span className="text-sm font-semibold text-foreground capitalize">{viewMode}</span>
                   {viewMode === 'sets' && (
                     <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                       {(['card', 'table'] as SetsSubView[]).map((m, i) => (
@@ -1014,31 +1136,17 @@ export default function MyShowsClient({
                     const supporters = group.shows.slice(1)
                     const MAX_INLINE = 3
                     const future = isFuture(group.date)
-
                     return (
                       <div key={group.key} className={future ? 'bg-amber-500/5' : ''}>
-                        {/* Bill header */}
                         <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors">
-                          {/* Remove headliner */}
-                          <button
-                            onClick={() => removeShow(group.headliner.show_id)}
-                            disabled={removingSet.has(group.headliner.show_id)}
-                            className="focus:outline-none disabled:opacity-50 flex-shrink-0"
-                          >
-                            {removingSet.has(group.headliner.show_id)
-                              ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" />
-                              : <HeartIcon size={5} />}
+                          <button onClick={() => removeShow(group.headliner.show_id)} disabled={removingSet.has(group.headliner.show_id)} className="focus:outline-none disabled:opacity-50 flex-shrink-0">
+                            {removingSet.has(group.headliner.show_id) ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={5} />}
                           </button>
-
-                          {/* Date */}
                           <div className="w-24 flex-shrink-0">
                             <p className="text-sm text-foreground whitespace-nowrap">{fmtDate(group.date)}</p>
                             {future && <span className="text-[9px] font-semibold text-amber-400">upcoming</span>}
                           </div>
-
-                          {/* Artists */}
                           <div className="flex-1 min-w-0">
-                            {/* Headliner */}
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {group.headliner.artist.spotify_artist_id ? (
                                 <SpotifyLink artistId={group.headliner.artist.spotify_artist_id} name={group.headliner.artist.artist_name} />
@@ -1047,70 +1155,41 @@ export default function MyShowsClient({
                               )}
                               {group.headliner.setlist_url && <SetlistLink url={group.headliner.setlist_url} />}
                             </div>
-                            {/* Supporters */}
                             {supporters.length > 0 && (
                               <div className="flex items-center gap-1 flex-wrap mt-0.5">
                                 {supporters.slice(0, MAX_INLINE).map((s, i) => (
                                   <span key={s.show_id} className="text-[11px] text-muted-foreground">
                                     {i > 0 && <span className="mx-0.5">·</span>}
                                     {s.artist.spotify_artist_id ? (
-                                      <a href={`https://open.spotify.com/artist/${s.artist.spotify_artist_id}`}
-                                        target="_blank" rel="noopener noreferrer"
-                                        className="hover:text-primary transition-colors">
-                                        {s.artist.artist_name}
-                                      </a>
+                                      <a href={`https://open.spotify.com/artist/${s.artist.spotify_artist_id}`} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">{s.artist.artist_name}</a>
                                     ) : s.artist.artist_name}
                                   </span>
                                 ))}
-                                {supporters.length > MAX_INLINE && (
-                                  <span className="text-[11px] text-muted-foreground/60">+ {supporters.length - MAX_INLINE} more</span>
-                                )}
+                                {supporters.length > MAX_INLINE && <span className="text-[11px] text-muted-foreground/60">+ {supporters.length - MAX_INLINE} more</span>}
                               </div>
                             )}
                           </div>
-
-                          {/* Venue + capacity */}
                           <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
                             <span className="text-sm text-muted-foreground">{group.venue_name}</span>
                             <CapacityBadge category={group.capacity_category} />
                           </div>
-
-                          {/* Expand toggle (only for multi-artist bills) */}
                           {group.shows.length > 1 && (
-                            <button
-                              onClick={() => setExpandedBills(prev => {
-                                const n = new Set(prev)
-                                n.has(group.key) ? n.delete(group.key) : n.add(group.key)
-                                return n
-                              })}
-                              className="text-muted-foreground text-[10px] flex-shrink-0 hover:text-foreground transition-colors"
-                            >
+                            <button onClick={() => setExpandedBills(prev => { const n = new Set(prev); n.has(group.key) ? n.delete(group.key) : n.add(group.key); return n })}
+                              className="text-muted-foreground text-[10px] flex-shrink-0 hover:text-foreground transition-colors">
                               {isExpanded ? '▲' : '▼'}
                             </button>
                           )}
                         </div>
-
-                        {/* Expanded individual sets within bill */}
                         {isExpanded && (
                           <div className="border-t border-border/40 bg-background/50 divide-y divide-border/30">
                             {group.shows.map((show, idx) => (
                               <div key={show.show_id} className="flex items-center gap-3 px-4 py-2 pl-12">
-                                <button
-                                  onClick={() => removeShow(show.show_id)}
-                                  disabled={removingSet.has(show.show_id)}
-                                  className="focus:outline-none disabled:opacity-50 flex-shrink-0"
-                                >
-                                  {removingSet.has(show.show_id)
-                                    ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" />
-                                    : <HeartIcon size={4} />}
+                                <button onClick={() => removeShow(show.show_id)} disabled={removingSet.has(show.show_id)} className="focus:outline-none disabled:opacity-50 flex-shrink-0">
+                                  {removingSet.has(show.show_id) ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={4} />}
                                 </button>
                                 <div className="flex-1 min-w-0 flex items-center gap-2">
                                   <span className="text-xs text-muted-foreground/60 w-4 flex-shrink-0">{idx + 1}</span>
-                                  {show.artist.spotify_artist_id ? (
-                                    <SpotifyLink artistId={show.artist.spotify_artist_id} name={show.artist.artist_name} />
-                                  ) : (
-                                    <span className="text-xs text-foreground">{show.artist.artist_name}</span>
-                                  )}
+                                  {show.artist.spotify_artist_id ? <SpotifyLink artistId={show.artist.spotify_artist_id} name={show.artist.artist_name} /> : <span className="text-xs text-foreground">{show.artist.artist_name}</span>}
                                   {show.setlist_url && <SetlistLink url={show.setlist_url} />}
                                 </div>
                                 {idx === 0 && <span className="text-[10px] text-primary/60 flex-shrink-0">headliner</span>}
@@ -1133,14 +1212,8 @@ export default function MyShowsClient({
                     const isExpanded = expandedBills.has(group.key)
                     return (
                       <div key={group.key}>
-                        <div
-                          className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
-                          onClick={() => setExpandedBills(prev => {
-                            const n = new Set(prev)
-                            n.has(group.key) ? n.delete(group.key) : n.add(group.key)
-                            return n
-                          })}
-                        >
+                        <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
+                          onClick={() => setExpandedBills(prev => { const n = new Set(prev); n.has(group.key) ? n.delete(group.key) : n.add(group.key); return n })}>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="font-semibold text-foreground">{group.festival_name}</span>
@@ -1148,14 +1221,8 @@ export default function MyShowsClient({
                             </div>
                             <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
                               <span style={{ color: TEAL }} className="font-medium">{group.shows.length} acts</span>
-                              <span>·</span>
-                              <span>{group.venue_name}</span>
-                              <span>·</span>
-                              <span>
-                                {group.date_from === group.date_to
-                                  ? fmtDate(group.date_from)
-                                  : `${fmtDate(group.date_from)} – ${fmtDate(group.date_to)}`}
-                              </span>
+                              <span>·</span><span>{group.venue_name}</span><span>·</span>
+                              <span>{group.date_from === group.date_to ? fmtDate(group.date_from) : `${fmtDate(group.date_from)} – ${fmtDate(group.date_to)}`}</span>
                             </div>
                           </div>
                           <span className="text-muted-foreground text-[10px]">{isExpanded ? '▲' : '▼'}</span>
@@ -1165,17 +1232,11 @@ export default function MyShowsClient({
                             {group.shows.map(show => (
                               <div key={show.show_id} className="flex items-center gap-3 px-4 py-2 pl-8">
                                 <button onClick={() => removeShow(show.show_id)} disabled={removingSet.has(show.show_id)} className="focus:outline-none disabled:opacity-50 flex-shrink-0">
-                                  {removingSet.has(show.show_id)
-                                    ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" />
-                                    : <HeartIcon size={4} />}
+                                  {removingSet.has(show.show_id) ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={4} />}
                                 </button>
                                 <span className="text-xs text-muted-foreground/60 w-20 flex-shrink-0 tabular-nums">{fmtDate(show.date)}</span>
                                 <div className="flex-1 min-w-0 flex items-center gap-1.5">
-                                  {show.artist.spotify_artist_id ? (
-                                    <SpotifyLink artistId={show.artist.spotify_artist_id} name={show.artist.artist_name} />
-                                  ) : (
-                                    <span className="text-xs text-foreground">{show.artist.artist_name}</span>
-                                  )}
+                                  {show.artist.spotify_artist_id ? <SpotifyLink artistId={show.artist.spotify_artist_id} name={show.artist.artist_name} /> : <span className="text-xs text-foreground">{show.artist.artist_name}</span>}
                                   {show.setlist_url && <SetlistLink url={show.setlist_url} />}
                                 </div>
                               </div>
@@ -1193,8 +1254,7 @@ export default function MyShowsClient({
                 <>
                   {setsSubView === 'card' && (
                     <>
-                      <div className="hidden md:grid bg-muted border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-                        style={{ gridTemplateColumns: '40px 120px 1fr' }}>
+                      <div className="hidden md:grid bg-muted border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider" style={{ gridTemplateColumns: '40px 120px 1fr' }}>
                         <div className="px-3 py-3" />
                         <button className="px-3 py-3 text-left hover:text-foreground" onClick={() => handleSort('date')}>Date{sortArrow('date')}</button>
                         <div className="px-3 py-3 flex gap-3">
@@ -1232,18 +1292,12 @@ export default function MyShowsClient({
                                 </div>
                                 <div className="px-3 py-3.5 min-w-0">
                                   <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                                    <button onClick={() => router.push(`/browse?artist_id=${show.artist.artist_id}`)}
-                                      className="text-sm font-medium text-primary hover:opacity-80 hover:underline">
-                                      {show.artist.artist_name}
-                                    </button>
+                                    <button onClick={() => router.push(`/browse?artist_id=${show.artist.artist_id}`)} className="text-sm font-medium text-primary hover:opacity-80 hover:underline">{show.artist.artist_name}</button>
                                     {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
                                     {show.setlist_url && <SetlistLink url={show.setlist_url} />}
                                   </div>
                                   <div className="flex items-center gap-1.5 flex-wrap">
-                                    <button onClick={() => router.push(`/browse?venue_id=${show.venue.venue_id}`)}
-                                      className="text-[13px] text-muted-foreground hover:text-primary hover:underline">
-                                      {show.venue.venue_name}
-                                    </button>
+                                    <button onClick={() => router.push(`/browse?venue_id=${show.venue.venue_id}`)} className="text-[13px] text-muted-foreground hover:text-primary hover:underline">{show.venue.venue_name}</button>
                                     <CapacityBadge category={show.venue.capacity_category} />
                                   </div>
                                 </div>
@@ -1258,17 +1312,11 @@ export default function MyShowsClient({
                                 </div>
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1 mb-0.5 flex-wrap">
-                                    <button onClick={() => router.push(`/browse?artist_id=${show.artist.artist_id}`)}
-                                      className="text-[11px] font-medium text-primary hover:opacity-80 truncate">
-                                      {show.artist.artist_name}
-                                    </button>
+                                    <button onClick={() => router.push(`/browse?artist_id=${show.artist.artist_id}`)} className="text-[11px] font-medium text-primary hover:opacity-80 truncate">{show.artist.artist_name}</button>
                                     {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
                                   </div>
                                   <div className="flex items-center gap-1 flex-wrap">
-                                    <button onClick={() => router.push(`/browse?venue_id=${show.venue.venue_id}`)}
-                                      className="text-[10px] text-muted-foreground hover:text-primary truncate">
-                                      {show.venue.venue_name}
-                                    </button>
+                                    <button onClick={() => router.push(`/browse?venue_id=${show.venue.venue_id}`)} className="text-[10px] text-muted-foreground hover:text-primary truncate">{show.venue.venue_name}</button>
                                     <CapacityBadge category={show.venue.capacity_category} />
                                   </div>
                                 </div>
@@ -1311,16 +1359,14 @@ export default function MyShowsClient({
                                 </td>
                                 <td className="px-3 py-3">
                                   <div className="flex items-center gap-1.5 flex-wrap">
-                                    <button onClick={() => router.push(`/browse?artist_id=${show.artist.artist_id}`)}
-                                      className="text-primary hover:opacity-80 hover:underline text-left">{show.artist.artist_name}</button>
+                                    <button onClick={() => router.push(`/browse?artist_id=${show.artist.artist_id}`)} className="text-primary hover:opacity-80 hover:underline text-left">{show.artist.artist_name}</button>
                                     {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
                                     {show.setlist_url && <SetlistLink url={show.setlist_url} />}
                                   </div>
                                 </td>
                                 <td className="px-3 py-3">
                                   <div className="flex items-center gap-1.5 flex-wrap">
-                                    <button onClick={() => router.push(`/browse?venue_id=${show.venue.venue_id}`)}
-                                      className="text-muted-foreground hover:text-primary hover:underline text-left">{show.venue.venue_name}</button>
+                                    <button onClick={() => router.push(`/browse?venue_id=${show.venue.venue_id}`)} className="text-muted-foreground hover:text-primary hover:underline text-left">{show.venue.venue_name}</button>
                                     <CapacityBadge category={show.venue.capacity_category} />
                                   </div>
                                 </td>
@@ -1335,18 +1381,12 @@ export default function MyShowsClient({
                     </div>
                   )}
 
-                  {/* Pagination (Sets view only) */}
                   {totalPages > 1 && (
                     <div className="bg-muted px-4 py-3 border-t border-border">
                       <div className="flex items-center justify-between">
                         <button onClick={() => handlePage(page - 1)} disabled={page === 1}
                           className="px-3 py-1.5 text-sm border border-border rounded-md bg-card text-foreground hover:bg-muted/80 disabled:opacity-50">Previous</button>
-                        <form onSubmit={e => {
-                          e.preventDefault()
-                          const p = parseInt(pageInput)
-                          if (!isNaN(p) && p >= 1 && p <= totalPages) setPage(p)
-                          else setPageInput(String(page))
-                        }} className="flex items-center gap-1">
+                        <form onSubmit={e => { e.preventDefault(); const p = parseInt(pageInput); if (!isNaN(p) && p >= 1 && p <= totalPages) setPage(p); else setPageInput(String(page)) }} className="flex items-center gap-1">
                           <input type="number" min="1" max={totalPages} value={pageInput}
                             onChange={e => setPageInput(e.target.value)}
                             onBlur={() => { const p = parseInt(pageInput); if (isNaN(p) || p < 1 || p > totalPages) setPageInput(String(page)) }}
