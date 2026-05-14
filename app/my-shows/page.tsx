@@ -54,6 +54,18 @@ export default async function MyShowsPage() {
         return <MyShowsClient shows={[]} spotifySongs={[]} />
     }
 
+    // ── Match scores for headliner determination ──────────────────────────────
+    const { data: scoreRows } = await supabase
+        .from('user_artist_scores')
+        .select('artist_id, normalized_score')
+        .eq('user_id', user.id)
+
+    const scoreMap: Record<number, number> = {}
+    for (const row of (scoreRows ?? [])) {
+        scoreMap[row.artist_id] = Number(row.normalized_score)
+    }
+
+    // ── Transform shows ───────────────────────────────────────────────────────
     const shows = userShows.map((us: any) => {
         const show = Array.isArray(us.fact_shows) ? us.fact_shows[0] : us.fact_shows
         if (!show) return null
@@ -72,6 +84,7 @@ export default async function MyShowsPage() {
             added_at:      us.added_at,
             notes:         null,
             source:        us.source,
+            match_score:   scoreMap[artist.artist_id] ?? null,
             artist: {
                 artist_id:         artist.artist_id,
                 artist_name:       artist.artist_name,
