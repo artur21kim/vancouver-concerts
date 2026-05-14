@@ -95,7 +95,9 @@ export async function GET(request: Request) {
         p_from_date: `${firstConcertYear}-01-01`,
         p_to_date: yesterdayVancouver,
       })
-      .range(0, 49999); // Arbitrary large limit to ensure we get all matches without truncation
+      .range(0, 49999);
+
+    console.log(`🔍 shows array length RAW:`, shows?.length);
 
     if (showsError) {
       console.error('Shows RPC error:', showsError);

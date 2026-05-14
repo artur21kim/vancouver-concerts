@@ -93,9 +93,11 @@ export async function GET(request: Request) {
         p_user_id: user.id,
         p_min_song_count: 2,
         p_from_date: `${firstConcertYear}-01-01`,
-        p_to_date: new Date().toISOString().split('T')[0],
+        p_to_date: yesterdayVancouver,
       })
-      .range(0, 49999); // Arbitrary large limit to ensure we get all matches without truncation
+      .range(0, 49999);
+
+    console.log(`🔍 shows array length RAW:`, shows?.length);
 
     if (showsError) {
       console.error('Shows RPC error:', showsError);
