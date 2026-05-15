@@ -47,7 +47,6 @@ type SortDir       = 'asc' | 'desc'
 type ViewMode      = 'shows' | 'sets' | 'festivals'
 type SetsSubView   = 'card' | 'table'
 type CapFilter     = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown'
-type ArtistChartMode = 'bar' | 'years'
 
 // ── Capacity metadata ─────────────────────────────────────────────────────────
 const CAP_KEYS = ['small', 'medium', 'large', 'xlarge', 'unknown'] as const
@@ -219,84 +218,6 @@ function DonutTip({ active, payload, venueBreakdown }: any) {
   )
 }
 
-// ── Artist bar with custom hover tooltip ──────────────────────────────────────
-function ArtistBar({ artist, max, onNavigate }: {
-  artist: {
-    name: string; spotifyId: string | null; total: number
-    byCapacity: Record<string, number>
-    venueBreakdown: { name: string; count: number }[]
-  }
-  max: number; onNavigate: () => void
-}) {
-  const [tooltip, setTooltip] = useState<{ x: number; y: number } | null>(null)
-  const barRef = useRef<HTMLDivElement>(null)
-
-  const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
-  const segments = CAP_KEYS.map(key => ({
-    key, count: artist.byCapacity[key] ?? 0,
-    color: CAP_BY_KEY[key]?.color ?? 'rgba(156,163,175,0.75)',
-  })).filter(s => s.count > 0)
-
-  return (
-    <div className="flex items-center gap-2 py-0.5 relative">
-      <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
-        <button onClick={onNavigate}
-          className="text-xs text-primary hover:opacity-80 hover:underline truncate text-right"
-          title={artist.name}>{artist.name}</button>
-        {artist.spotifyId && <SpotifyLink artistId={artist.spotifyId} />}
-      </div>
-
-      {/* Bar — no overflow-hidden so tooltip can escape */}
-      <div className="flex-1 relative"
-        onMouseEnter={e => {
-          const rect = barRef.current?.getBoundingClientRect()
-          if (rect) setTooltip({ x: e.clientX - rect.left, y: 0 })
-        }}
-        onMouseMove={e => {
-          const rect = barRef.current?.getBoundingClientRect()
-          if (rect) setTooltip({ x: e.clientX - rect.left, y: 0 })
-        }}
-        onMouseLeave={() => setTooltip(null)}
-      >
-        <div ref={barRef} className="h-4 bg-muted/40 rounded-full overflow-hidden cursor-default">
-          <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
-            {segments.map((seg, i) => {
-              const isFirst = i === 0, isLast = i === segments.length - 1
-              return (
-                <div key={seg.key} style={{
-                  width: `${(seg.count / artist.total) * 100}%`,
-                  backgroundColor: seg.color,
-                  borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
-                }} />
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Tooltip — outside overflow-hidden, positioned relative to outer div */}
-        {tooltip && artist.venueBreakdown.length > 0 && (
-          <div
-            className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[180px]"
-            style={{ left: Math.min(tooltip.x, 200), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}
-          >
-            <p className="font-semibold text-foreground mb-1.5">{artist.name}</p>
-            {artist.venueBreakdown.map(v => (
-              <div key={v.name} className="flex items-center justify-between gap-4 mb-0.5">
-                <span className="text-muted-foreground truncate">{v.name}</span>
-                <span style={{ color: TEAL }} className="font-medium tabular-nums flex-shrink-0">{v.count}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <span className="text-xs tabular-nums flex-shrink-0 w-16 text-right" style={{ color: TEAL }}>
-        {artist.total} {artist.total === 1 ? 'show' : 'shows'}
-      </span>
-    </div>
-  )
-}
-
 // ── Year-segmented artist bars ────────────────────────────────────────────────
 function ArtistYearBars({ artists, max, onNavigate }: {
   artists: {
@@ -313,17 +234,20 @@ function ArtistYearBars({ artists, max, onNavigate }: {
       {artists.map(artist => {
         const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
         const years = Object.keys(artist.showsByYear).sort()
-        // Build segments: one per year, width = show count that year / total
-        const yearSegments = years.map(year => {
+        // Build one sub-segment per individual show, grouped by year
+        // Each show gets equal width within the year's total bar share
+        const yearSegments = years.flatMap(year => {
           const yearShows = artist.showsByYear[year]
-          const count = yearShows.length
-          // dominant cap = most common cap key this year
-          const capCounts: Record<string, number> = {}
-          for (const s of yearShows) capCounts[s.capKey] = (capCounts[s.capKey] ?? 0) + 1
-          const capKey = (Object.entries(capCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'unknown') as CapFilter
-          const color = CAP_BY_KEY[capKey]?.color ?? 'rgba(156,163,175,0.75)'
-          const label = count > 1 ? `${year}×${count}` : year
-          return { year, count, capKey, color, label }
+          return yearShows.map((show, idx) => ({
+            year,
+            showIdx: idx,
+            totalInYear: yearShows.length,
+            venue: show.venue,
+            capKey: show.capKey,
+            color: CAP_BY_KEY[show.capKey]?.color ?? 'rgba(156,163,175,0.75)',
+            // width = 1 show / total shows (each show = equal slice of total bar)
+            widthPct: (1 / artist.total) * 100,
+          }))
         })
 
         return (
@@ -338,39 +262,42 @@ function ArtistYearBars({ artists, max, onNavigate }: {
 
             {/* Year-segmented bar */}
             <div className="flex-1 relative">
-              <div className="h-5 bg-muted/40 rounded-full overflow-hidden flex" style={{}}>
-                {/* Filled portion */}
+              <div className="h-5 bg-muted/40 rounded-full overflow-hidden flex">
                 <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
                   {yearSegments.map((seg, i) => {
                     const isFirst = i === 0, isLast = i === yearSegments.length - 1
-                    const segWidth = (seg.count / artist.total) * 100
+                    // Show year label only on the first slice of each year
+                    const showLabel = seg.showIdx === 0
+                    // Thin divider between slices; slightly thicker between different years
+                    const isYearBoundary = i > 0 && yearSegments[i - 1].year !== seg.year
                     return (
                       <div
-                        key={seg.year}
-                        className="h-full flex items-center justify-center overflow-hidden relative group cursor-default"
+                        key={`${seg.year}-${seg.showIdx}`}
+                        className="h-full flex items-center justify-center overflow-hidden cursor-default"
                         style={{
-                          width: `${segWidth}%`,
+                          width: `${seg.widthPct}%`,
                           backgroundColor: seg.color,
                           borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
-                          borderRight: !isLast ? '1px solid rgba(0,0,0,0.15)' : undefined,
+                          borderRight: !isLast ? `1px solid rgba(0,0,0,${isYearBoundary ? 0.3 : 0.12})` : undefined,
                         }}
                         onMouseEnter={e => {
                           const rect = (e.currentTarget as HTMLElement).closest('.flex-1')!.getBoundingClientRect()
-                          setTooltip({ artist: artist.name, year: seg.year, venue: artist.showsByYear[seg.year][0]?.venue ?? '', capKey: seg.capKey, x: e.clientX - rect.left, y: 0 })
+                          setTooltip({ artist: artist.name, year: seg.year, venue: seg.venue, capKey: seg.capKey, x: e.clientX - rect.left, y: 0 })
                         }}
                         onMouseLeave={() => setTooltip(null)}
                       >
-                        <span
-                          className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
-                          style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}
-                        >
-                          {seg.label}
-                        </span>
+                        {showLabel && (
+                          <span
+                            className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
+                            style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}
+                          >
+                            {seg.year}
+                          </span>
+                        )}
                       </div>
                     )
                   })}
                 </div>
-                {/* Empty remainder */}
               </div>
 
               {/* Tooltip */}
@@ -404,7 +331,7 @@ function ArtistYearBars({ artists, max, onNavigate }: {
             {CAP_BY_KEY[key].legendLabel}
           </span>
         ))}
-        <span className="text-muted-foreground/50">· each segment = 1 year · ×N = multiple shows</span>
+        <span className="text-muted-foreground/50">· each segment = 1 show · label on first show of each year</span>
       </div>
     </div>
   )
@@ -424,7 +351,6 @@ export default function MyShowsClient({
   const [shows, setShows]                       = useState(initialShows)
   const [viewMode, setViewMode]                 = useState<ViewMode>('shows')
   const [setsSubView, setSetsSubView]           = useState<SetsSubView>('card')
-  const [artistChartMode, setArtistChartMode]   = useState<ArtistChartMode>('bar')
   const [sortField, setSortField]               = useState<SortField>('date')
   const [sortDir, setSortDir]                   = useState<SortDir>('desc')
   const [removingSet, setRemovingSet]           = useState<Set<number>>(new Set())
@@ -541,7 +467,10 @@ export default function MyShowsClient({
       .map(([year, c]) => ({ year, shows: c.past + c.future, past: c.past, future: c.future }))
   }, [shows, viewMode])
 
-  const monthTimelineData = useMemo(() => {
+  const availableYears = useMemo(
+    () => yearTimelineData.map(d => d.year),
+    [yearTimelineData]
+  )
     if (!selectedYear) return []
     const src = viewMode === 'festivals'
       ? shows.filter(isFestivalShow).filter(s => s.date.split('-')[0] === selectedYear)
@@ -1004,7 +933,30 @@ export default function MyShowsClient({
                 </ResponsiveContainer>
               </div>
 
-              {!selectedYear && (stats.firstShow || stats.lastShow) && (
+              {selectedYear ? (() => {
+                const idx = availableYears.indexOf(selectedYear)
+                const prevYear = idx > 0 ? availableYears[idx - 1] : null
+                const nextYear = idx < availableYears.length - 1 ? availableYears[idx + 1] : null
+                return (
+                  <div className="flex items-center justify-center gap-3 mt-3">
+                    <button
+                      onClick={() => prevYear && setSelectedYear(prevYear)}
+                      disabled={!prevYear}
+                      className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      ‹ {prevYear ?? '—'}
+                    </button>
+                    <span className="text-xs text-muted-foreground tabular-nums">{selectedYear}</span>
+                    <button
+                      onClick={() => nextYear && setSelectedYear(nextYear)}
+                      disabled={!nextYear}
+                      className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      {nextYear ?? '—'} ›
+                    </button>
+                  </div>
+                )
+              })() : (stats.firstShow || stats.lastShow) && (
                 <div className="flex items-start justify-between gap-2 mt-2 text-xs text-muted-foreground">
                   {stats.firstShow && <span>First: <span className="text-foreground font-medium">{stats.firstShow.artist.artist_name}</span> · {fmtDate(stats.firstShow.date)}</span>}
                   {stats.lastShow && lastYear !== firstYear && <span className="text-right flex-shrink-0">Last: <span className="text-foreground font-medium">{stats.lastShow.artist.artist_name}</span> · {fmtDate(stats.lastShow.date)}</span>}
@@ -1023,33 +975,10 @@ export default function MyShowsClient({
                     Top Artists
                     {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                   </h2>
-                  {/* Bar / Years toggle */}
-                  <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
-                    {([['bar', 'Bar'], ['years', 'Years']] as [ArtistChartMode, string][]).map(([m, label], i) => (
-                      <button key={m} onClick={() => setArtistChartMode(m)}
-                        className={`px-2.5 py-1 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
-                          artistChartMode === m ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
-                        }`}>{label}</button>
-                    ))}
-                  </div>
                 </div>
 
                 {topArtists.length === 0 ? (
                   <p className="text-sm text-muted-foreground italic">No shows{selectedYear ? ` in ${selectedYear}` : ''}.</p>
-                ) : artistChartMode === 'bar' ? (
-                  <>
-                    <div className="space-y-1.5">
-                      {topArtists.slice(0, showAllArtists ? undefined : 10).map(artist => (
-                        <ArtistBar key={artist.name} artist={artist} max={maxArtistShows}
-                          onNavigate={() => router.push(`/browse?artist=${encodeURIComponent(artist.name)}`)} />
-                      ))}
-                    </div>
-                    {topArtists.length > 10 && (
-                      <button onClick={() => setShowAllArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
-                        {showAllArtists ? '← Show less' : `View all ${topArtists.length} artists →`}
-                      </button>
-                    )}
-                  </>
                 ) : (
                   <>
                     <ArtistYearBars
@@ -1164,71 +1093,47 @@ export default function MyShowsClient({
                   {billGroups.length === 0 ? (
                     <div className="text-center py-10 text-muted-foreground">No shows match this filter.</div>
                   ) : billGroups.map(group => {
-                    const isExpanded = expandedBills.has(group.key)
                     const supporters = group.shows.slice(1)
-                    const MAX_INLINE = 3
                     const future = isFuture(group.date)
                     return (
-                      <div key={group.key} className={future ? 'bg-amber-500/5' : ''}>
-                        <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors">
-                          <button onClick={() => removeShow(group.headliner.show_id)} disabled={removingSet.has(group.headliner.show_id)} className="focus:outline-none disabled:opacity-50 flex-shrink-0">
-                            {removingSet.has(group.headliner.show_id) ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={5} />}
-                          </button>
-                          <div className="w-24 flex-shrink-0">
-                            <p className="text-sm text-foreground whitespace-nowrap">{fmtDate(group.date)}</p>
-                            {future && <span className="text-[9px] font-semibold text-amber-400">upcoming</span>}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {group.headliner.artist.spotify_artist_id ? (
-                                <SpotifyLink artistId={group.headliner.artist.spotify_artist_id} name={group.headliner.artist.artist_name} />
-                              ) : (
-                                <span className="text-sm font-medium text-foreground">{group.headliner.artist.artist_name}</span>
-                              )}
-                              {group.headliner.setlist_url && <SetlistLink url={group.headliner.setlist_url} />}
-                            </div>
-                            {supporters.length > 0 && (
-                              <div className="flex items-center gap-1 flex-wrap mt-0.5">
-                                {supporters.slice(0, MAX_INLINE).map((s, i) => (
-                                  <span key={s.show_id} className="text-[11px] text-muted-foreground">
-                                    {i > 0 && <span className="mx-0.5">·</span>}
-                                    {s.artist.spotify_artist_id ? (
-                                      <a href={`https://open.spotify.com/artist/${s.artist.spotify_artist_id}`} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">{s.artist.artist_name}</a>
-                                    ) : s.artist.artist_name}
-                                  </span>
-                                ))}
-                                {supporters.length > MAX_INLINE && <span className="text-[11px] text-muted-foreground/60">+ {supporters.length - MAX_INLINE} more</span>}
-                              </div>
+                      <div key={group.key} className={`flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors ${future ? 'bg-amber-500/5' : ''}`}>
+                        <button onClick={() => removeShow(group.headliner.show_id)} disabled={removingSet.has(group.headliner.show_id)} className="focus:outline-none disabled:opacity-50 flex-shrink-0">
+                          {removingSet.has(group.headliner.show_id) ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={5} />}
+                        </button>
+                        {/* Date */}
+                        <div className="w-24 flex-shrink-0">
+                          <p className="text-sm text-foreground whitespace-nowrap">{fmtDate(group.date)}</p>
+                          {future && <span className="text-[9px] font-semibold text-amber-400">upcoming</span>}
+                        </div>
+                        {/* Artist + openers stacked */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            {group.headliner.artist.spotify_artist_id ? (
+                              <SpotifyLink artistId={group.headliner.artist.spotify_artist_id} name={group.headliner.artist.artist_name} />
+                            ) : (
+                              <span className="text-sm font-medium text-foreground">{group.headliner.artist.artist_name}</span>
                             )}
+                            {group.headliner.setlist_url && <SetlistLink url={group.headliner.setlist_url} />}
                           </div>
-                          <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
-                            <span className="text-sm text-muted-foreground">{group.venue_name}</span>
-                            <CapacityBadge category={group.capacity_category} />
-                          </div>
-                          {group.shows.length > 1 && (
-                            <button onClick={() => setExpandedBills(prev => { const n = new Set(prev); n.has(group.key) ? n.delete(group.key) : n.add(group.key); return n })}
-                              className="text-muted-foreground text-[10px] flex-shrink-0 hover:text-foreground transition-colors">
-                              {isExpanded ? '▲' : '▼'}
-                            </button>
+                          {supporters.length > 0 && (
+                            <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                              {supporters.slice(0, 3).map((s, i) => (
+                                <span key={s.show_id} className="text-[11px] text-muted-foreground">
+                                  {i > 0 && <span className="mx-0.5 opacity-40">·</span>}
+                                  {s.artist.spotify_artist_id ? (
+                                    <a href={`https://open.spotify.com/artist/${s.artist.spotify_artist_id}`} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">{s.artist.artist_name}</a>
+                                  ) : s.artist.artist_name}
+                                </span>
+                              ))}
+                              {supporters.length > 3 && <span className="text-[11px] text-muted-foreground/50">+ {supporters.length - 3} more</span>}
+                            </div>
                           )}
                         </div>
-                        {isExpanded && (
-                          <div className="border-t border-border/40 bg-background/50 divide-y divide-border/30">
-                            {group.shows.map((show, idx) => (
-                              <div key={show.show_id} className="flex items-center gap-3 px-4 py-2 pl-12">
-                                <button onClick={() => removeShow(show.show_id)} disabled={removingSet.has(show.show_id)} className="focus:outline-none disabled:opacity-50 flex-shrink-0">
-                                  {removingSet.has(show.show_id) ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={4} />}
-                                </button>
-                                <div className="flex-1 min-w-0 flex items-center gap-2">
-                                  <span className="text-xs text-muted-foreground/60 w-4 flex-shrink-0">{idx + 1}</span>
-                                  {show.artist.spotify_artist_id ? <SpotifyLink artistId={show.artist.spotify_artist_id} name={show.artist.artist_name} /> : <span className="text-xs text-foreground">{show.artist.artist_name}</span>}
-                                  {show.setlist_url && <SetlistLink url={show.setlist_url} />}
-                                </div>
-                                {idx === 0 && <span className="text-[10px] text-primary/60 flex-shrink-0">headliner</span>}
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        {/* Venue + badge — row 1 right */}
+                        <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-sm text-muted-foreground">{group.venue_name}</span>
+                          <CapacityBadge category={group.capacity_category} />
+                        </div>
                       </div>
                     )
                   })}
