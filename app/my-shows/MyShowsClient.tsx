@@ -266,8 +266,8 @@ function ArtistYearBars({ artists, max, onNavigate }: {
                 <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
                   {yearSegments.map((seg, i) => {
                     const isFirst = i === 0, isLast = i === yearSegments.length - 1
-                    // Show year label only on the first slice of each year
-                    const showLabel = seg.showIdx === 0
+                    // Show year label on every slice
+                    const showLabel = true
                     // Thin divider between slices; slightly thicker between different years
                     const isYearBoundary = i > 0 && yearSegments[i - 1].year !== seg.year
                     return (
@@ -331,7 +331,7 @@ function ArtistYearBars({ artists, max, onNavigate }: {
             {CAP_BY_KEY[key].legendLabel}
           </span>
         ))}
-        <span className="text-muted-foreground/50">· each segment = 1 show · label on first show of each year</span>
+        <span className="text-muted-foreground/50">· each segment = 1 show · color = venue size</span>
       </div>
     </div>
   )
@@ -940,21 +940,32 @@ export default function MyShowsClient({
                 const prevYear = idx > 0 ? availableYears[idx - 1] : null
                 const nextYear = idx < availableYears.length - 1 ? availableYears[idx + 1] : null
                 return (
-                  <div className="flex items-center justify-center gap-3 mt-3">
+                  <div className="flex items-center justify-center gap-2 mt-3">
                     <button
                       onClick={() => prevYear && setSelectedYear(prevYear)}
                       disabled={!prevYear}
-                      className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+                      style={{ background: 'rgba(94,234,212,0.15)', color: '#5eead4', border: '1px solid rgba(94,234,212,0.3)' }}
+                      onMouseEnter={e => { if (prevYear) (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.25)' }}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.15)'}
                     >
-                      ‹ {prevYear ?? '—'}
+                      ‹ {prevYear ?? ''}
                     </button>
-                    <span className="text-xs text-muted-foreground tabular-nums">{selectedYear}</span>
+                    <span
+                      className="px-4 py-1.5 rounded-full text-sm font-semibold tabular-nums"
+                      style={{ background: 'rgba(13,148,136,0.25)', color: '#0d9488', border: '1px solid rgba(13,148,136,0.5)' }}
+                    >
+                      {selectedYear}
+                    </span>
                     <button
                       onClick={() => nextYear && setSelectedYear(nextYear)}
                       disabled={!nextYear}
-                      className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+                      style={{ background: 'rgba(94,234,212,0.15)', color: '#5eead4', border: '1px solid rgba(94,234,212,0.3)' }}
+                      onMouseEnter={e => { if (nextYear) (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.25)' }}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.15)'}
                     >
-                      {nextYear ?? '—'} ›
+                      {nextYear ?? ''} ›
                     </button>
                   </div>
                 )
