@@ -22,45 +22,31 @@ export async function GET(request: Request) {
       timeZone: 'America/Vancouver',
     });
 
-    // Always fetch user's Spotify artists for highlighting purposes
-    const { data: userSongs, error: songsError } = await supabase
-      .from('user_spotify_songs')
-      .select('spotify_artist_id')
-      .eq('user_id', user.id);
-
-    if (songsError) {
-      return NextResponse.json({ error: 'Failed to fetch Spotify data' }, { status: 500 });
-    }
-
-    const artistSongCounts = (userSongs || []).reduce((acc: any, song: any) => {
-      const artistId = song.spotify_artist_id;
-      if (!acc[artistId]) acc[artistId] = 0;
-      acc[artistId]++;
-      return acc;
-    }, {});
-
-    const uniqueSpotifyArtistIds = Object.keys(artistSongCounts);
-
-    // Match Spotify artists to dim_artist for scoring + highlighting
+    // Use RPC to get matched artists — avoids .in() URL length limits with large Spotify libraries
     const { data: matchedArtists, error: artistsError } = await supabase
-      .from('dim_artist')
-      .select('artist_id, artist_name, spotify_artist_id')
-      .in('spotify_artist_id', uniqueSpotifyArtistIds.length > 0 ? uniqueSpotifyArtistIds : ['__none__']);
+      .rpc('get_user_matched_artists', { p_user_id: user.id, p_min_song_count: 1 });
 
     if (artistsError) {
+      console.error('Matched artists RPC error:', artistsError);
       return NextResponse.json({ error: 'Failed to match artists' }, { status: 500 });
     }
 
-    const matchedArtistIds = (matchedArtists || []).map(a => a.artist_id);
+    // Build lookup maps from RPC results
+    const matchedArtistIds = (matchedArtists || []).map((a: any) => a.artist_id);
 
-    // Build spotify_artist_id lookup by artist_id
-    const artistSpotifyIdMap = (matchedArtists || []).reduce((acc: any, artist: any) => {
-      acc[artist.artist_id] = artist.spotify_artist_id;
-      return acc;
-    }, {});
+    const artistSongCounts: Record<string, number> = {};
+    for (const row of (matchedArtists || [])) {
+      artistSongCounts[row.spotify_artist_id] = Number(row.song_count);
+    }
 
     // Build set of matched artist_ids for quick lookup
     const matchedArtistIdSet = new Set(matchedArtistIds);
+
+    // Build spotify_artist_id lookup by artist_id
+    const artistSpotifyIdMap: Record<number, string> = {};
+    for (const a of (matchedArtists || [])) {
+      artistSpotifyIdMap[a.artist_id] = a.spotify_artist_id;
+    }
 
     let shows: any[] = [];
 
@@ -89,6 +75,7 @@ export async function GET(request: Request) {
         .order('date', { ascending: true });
 
       if (showsError) {
+        console.error('Shows fetch error:', showsError);
         return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
       }
 
@@ -126,6 +113,7 @@ export async function GET(request: Request) {
         .order('date', { ascending: true });
 
       if (showsError) {
+        console.error('Shows fetch error:', showsError);
         return NextResponse.json({ error: 'Failed to fetch shows' }, { status: 500 });
       }
 
@@ -179,7 +167,7 @@ export async function GET(request: Request) {
       return acc;
     }, {});
 
-    const maxSpotifyCount = uniqueSpotifyArtistIds.length > 0
+    const maxSpotifyCount = Object.keys(artistSongCounts).length > 0
       ? Math.max(...(Object.values(artistSongCounts) as number[]))
       : 1;
     const maxVancouverCount = Math.max(...(Object.values(artistShowCounts) as number[]), 1);
