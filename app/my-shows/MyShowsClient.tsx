@@ -471,6 +471,8 @@ export default function MyShowsClient({
     () => yearTimelineData.map(d => d.year),
     [yearTimelineData]
   )
+
+  const monthTimelineData = useMemo(() => {
     if (!selectedYear) return []
     const src = viewMode === 'festivals'
       ? shows.filter(isFestivalShow).filter(s => s.date.split('-')[0] === selectedYear)
