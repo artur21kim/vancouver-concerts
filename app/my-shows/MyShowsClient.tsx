@@ -219,9 +219,6 @@ function DonutTip({ active, payload, venueBreakdown }: any) {
   )
 }
 
-// ── Year dot tooltip ──────────────────────────────────────────────────────────
-type YearDotTooltip = { name: string; year: string; venue: string; capKey: CapFilter } | null
-
 // ── Artist bar with custom hover tooltip ──────────────────────────────────────
 function ArtistBar({ artist, max, onNavigate }: {
   artist: {
@@ -249,38 +246,38 @@ function ArtistBar({ artist, max, onNavigate }: {
         {artist.spotifyId && <SpotifyLink artistId={artist.spotifyId} />}
       </div>
 
-      {/* Bar with hover tooltip */}
-      <div
-        ref={barRef}
-        className="flex-1 h-4 bg-muted/40 rounded-full overflow-hidden cursor-default relative"
+      {/* Bar — no overflow-hidden so tooltip can escape */}
+      <div className="flex-1 relative"
         onMouseEnter={e => {
           const rect = barRef.current?.getBoundingClientRect()
-          if (rect) setTooltip({ x: e.clientX - rect.left, y: -8 })
+          if (rect) setTooltip({ x: e.clientX - rect.left, y: 0 })
         }}
         onMouseMove={e => {
           const rect = barRef.current?.getBoundingClientRect()
-          if (rect) setTooltip({ x: e.clientX - rect.left, y: -8 })
+          if (rect) setTooltip({ x: e.clientX - rect.left, y: 0 })
         }}
         onMouseLeave={() => setTooltip(null)}
       >
-        <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
-          {segments.map((seg, i) => {
-            const isFirst = i === 0, isLast = i === segments.length - 1
-            return (
-              <div key={seg.key} style={{
-                width: `${(seg.count / artist.total) * 100}%`,
-                backgroundColor: seg.color,
-                borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
-              }} />
-            )
-          })}
+        <div ref={barRef} className="h-4 bg-muted/40 rounded-full overflow-hidden cursor-default">
+          <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
+            {segments.map((seg, i) => {
+              const isFirst = i === 0, isLast = i === segments.length - 1
+              return (
+                <div key={seg.key} style={{
+                  width: `${(seg.count / artist.total) * 100}%`,
+                  backgroundColor: seg.color,
+                  borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
+                }} />
+              )
+            })}
+          </div>
         </div>
 
-        {/* Custom tooltip */}
+        {/* Tooltip — outside overflow-hidden, positioned relative to outer div */}
         {tooltip && artist.venueBreakdown.length > 0 && (
           <div
             className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[180px]"
-            style={{ left: Math.min(tooltip.x, 200), bottom: '120%', transform: 'translateX(-30%)' }}
+            style={{ left: Math.min(tooltip.x, 200), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}
           >
             <p className="font-semibold text-foreground mb-1.5">{artist.name}</p>
             {artist.venueBreakdown.map(v => (
@@ -293,7 +290,7 @@ function ArtistBar({ artist, max, onNavigate }: {
         )}
       </div>
 
-      <span className="text-xs tabular-nums flex-shrink-0" style={{ color: TEAL }}>
+      <span className="text-xs tabular-nums flex-shrink-0 w-16 text-right" style={{ color: TEAL }}>
         {artist.total} {artist.total === 1 ? 'show' : 'shows'}
       </span>
     </div>
@@ -309,97 +306,95 @@ function ArtistYearBars({ artists, max, onNavigate }: {
   }[]
   max: number; onNavigate: (name: string) => void
 }) {
-  const [dotTooltip, setDotTooltip] = useState<YearDotTooltip>(null)
-  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [tooltip, setTooltip] = useState<{ artist: string; year: string; venue: string; capKey: CapFilter; x: number; y: number } | null>(null)
 
   return (
-    <div className="w-full space-y-2.5 relative">
-      {/* Column headers */}
-      <div className="flex items-center gap-3 pb-1 px-2 border-b border-border">
-        <span className="w-32 md:w-40 flex-shrink-0" />
-        <span className="flex-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Appearances by year</span>
-        <span className="w-8 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">#</span>
-      </div>
-
+    <div className="w-full space-y-1.5">
       {artists.map(artist => {
         const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
-        const segments = CAP_KEYS.map(key => ({
-          key, count: artist.byCapacity[key] ?? 0,
-          color: CAP_BY_KEY[key]?.color ?? 'rgba(156,163,175,0.75)',
-        })).filter(s => s.count > 0)
         const years = Object.keys(artist.showsByYear).sort()
+        // Build segments: one per year, width = show count that year / total
+        const yearSegments = years.map(year => {
+          const yearShows = artist.showsByYear[year]
+          const count = yearShows.length
+          // dominant cap = most common cap key this year
+          const capCounts: Record<string, number> = {}
+          for (const s of yearShows) capCounts[s.capKey] = (capCounts[s.capKey] ?? 0) + 1
+          const capKey = (Object.entries(capCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'unknown') as CapFilter
+          const color = CAP_BY_KEY[capKey]?.color ?? 'rgba(156,163,175,0.75)'
+          const label = count > 1 ? `${year}×${count}` : year
+          return { year, count, capKey, color, label }
+        })
 
         return (
-          <div key={artist.name} className="flex items-start gap-3 px-2">
-            {/* Name */}
-            <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0 pt-1">
+          <div key={artist.name} className="flex items-center gap-2 py-0.5">
+            {/* Name column */}
+            <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
               <button onClick={() => onNavigate(artist.name)}
                 className="text-xs text-primary hover:opacity-80 hover:underline truncate text-right"
                 title={artist.name}>{artist.name}</button>
               {artist.spotifyId && <SpotifyLink artistId={artist.spotifyId} />}
             </div>
 
-            {/* Bar + year dots stacked */}
-            <div className="flex-1 min-w-0">
-              {/* Bar */}
-              <div className="h-4 bg-muted/40 rounded-full overflow-hidden mb-1.5">
+            {/* Year-segmented bar */}
+            <div className="flex-1 relative">
+              <div className="h-5 bg-muted/40 rounded-full overflow-hidden flex" style={{}}>
+                {/* Filled portion */}
                 <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
-                  {segments.map((seg, i) => {
-                    const isFirst = i === 0, isLast = i === segments.length - 1
+                  {yearSegments.map((seg, i) => {
+                    const isFirst = i === 0, isLast = i === yearSegments.length - 1
+                    const segWidth = (seg.count / artist.total) * 100
                     return (
-                      <div key={seg.key} style={{
-                        width: `${(seg.count / artist.total) * 100}%`,
-                        backgroundColor: seg.color,
-                        borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
-                      }} />
+                      <div
+                        key={seg.year}
+                        className="h-full flex items-center justify-center overflow-hidden relative group cursor-default"
+                        style={{
+                          width: `${segWidth}%`,
+                          backgroundColor: seg.color,
+                          borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
+                          borderRight: !isLast ? '1px solid rgba(0,0,0,0.15)' : undefined,
+                        }}
+                        onMouseEnter={e => {
+                          const rect = (e.currentTarget as HTMLElement).closest('.flex-1')!.getBoundingClientRect()
+                          setTooltip({ artist: artist.name, year: seg.year, venue: artist.showsByYear[seg.year][0]?.venue ?? '', capKey: seg.capKey, x: e.clientX - rect.left, y: 0 })
+                        }}
+                        onMouseLeave={() => setTooltip(null)}
+                      >
+                        <span
+                          className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
+                          style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}
+                        >
+                          {seg.label}
+                        </span>
+                      </div>
                     )
                   })}
                 </div>
+                {/* Empty remainder */}
               </div>
 
-              {/* Year dots */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {years.map(year => {
-                  const yearShows = artist.showsByYear[year] ?? []
-                  const dominantCap = yearShows.length > 0 ? yearShows[0].capKey : 'unknown'
-                  const dotColor = CAP_BY_KEY[dominantCap]?.color ?? 'rgba(13,148,136,0.7)'
-                  return (
-                    <button
-                      key={year}
-                      className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors group"
-                      onMouseEnter={e => {
-                        setDotTooltip({ name: artist.name, year, venue: yearShows[0]?.venue ?? '', capKey: dominantCap })
-                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                        setTooltipPos({ x: rect.left, y: rect.top })
-                      }}
-                      onMouseLeave={() => setDotTooltip(null)}
-                    >
-                      <span className="w-2 h-2 rounded-full flex-shrink-0 transition-transform group-hover:scale-125" style={{ backgroundColor: dotColor }} />
-                      <span>{year}</span>
-                      {yearShows.length > 1 && <span className="text-muted-foreground/50">×{yearShows.length}</span>}
-                    </button>
-                  )
-                })}
-              </div>
+              {/* Tooltip */}
+              {tooltip?.artist === artist.name && (
+                <div
+                  className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px]"
+                  style={{ left: Math.min(tooltip.x, 220), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}
+                >
+                  <p className="font-semibold text-foreground">{artist.name} · {tooltip.year}</p>
+                  {tooltip.venue && <p className="text-muted-foreground mt-0.5">{tooltip.venue}</p>}
+                  <p className="mt-0.5" style={{ color: CAP_BY_KEY[tooltip.capKey]?.color ?? TEAL }}>
+                    {CAP_BY_KEY[tooltip.capKey]?.legendLabel ?? ''}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Count */}
-            <span className="text-xs tabular-nums flex-shrink-0 pt-1 w-8 text-right" style={{ color: TEAL }}>{artist.total}</span>
+            <span className="text-xs tabular-nums flex-shrink-0 w-16 text-right" style={{ color: TEAL }}>
+              {artist.total} {artist.total === 1 ? 'show' : 'shows'}
+            </span>
           </div>
         )
       })}
-
-      {/* Fixed tooltip */}
-      {dotTooltip && (
-        <div className="fixed z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none"
-          style={{ left: tooltipPos.x + 12, top: tooltipPos.y - 60 }}>
-          <p className="font-semibold text-foreground">{dotTooltip.name} · {dotTooltip.year}</p>
-          {dotTooltip.venue && <p className="text-muted-foreground mt-0.5">{dotTooltip.venue}</p>}
-          <p className="mt-0.5" style={{ color: CAP_BY_KEY[dotTooltip.capKey]?.color ?? TEAL }}>
-            {CAP_BY_KEY[dotTooltip.capKey]?.legendLabel ?? ''}
-          </p>
-        </div>
-      )}
 
       {/* Legend */}
       <div className="flex items-center gap-3 pt-2 border-t border-border text-[10px] text-muted-foreground flex-wrap">
@@ -409,7 +404,7 @@ function ArtistYearBars({ artists, max, onNavigate }: {
             {CAP_BY_KEY[key].legendLabel}
           </span>
         ))}
-        <span className="text-muted-foreground/50">· dot color = dominant venue size that year</span>
+        <span className="text-muted-foreground/50">· each segment = 1 year · ×N = multiple shows</span>
       </div>
     </div>
   )
@@ -675,6 +670,29 @@ export default function MyShowsClient({
   const totalPages   = Math.ceil(setsFiltered.length / PER_PAGE)
   const currentShows = setsFiltered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
+  // ── Dynamic stats counter (filter/view-mode aware) ────────────────────────
+  const dynamicStats = useMemo(() => {
+    if (viewMode === 'shows') {
+      const sets   = billGroups.reduce((n, g) => n + g.shows.length, 0)
+      const shows  = billGroups.length
+      const artists = new Set(billGroups.flatMap(g => g.shows.map(s => s.artist.artist_id))).size
+      const venues  = new Set(billGroups.flatMap(g => g.shows.map(s => s.venue.venue_id))).size
+      return { sets, shows, artists, venues, festivals: 0 }
+    }
+    if (viewMode === 'sets') {
+      const sets    = setsFiltered.length
+      const artists = new Set(setsFiltered.map(s => s.artist.artist_id)).size
+      const venues  = new Set(setsFiltered.map(s => s.venue.venue_id)).size
+      return { sets, shows: 0, artists, venues, festivals: 0 }
+    }
+    // festivals
+    const sets     = festivalGroups.reduce((n, g) => n + g.shows.length, 0)
+    const festivals = festivalGroups.length
+    const artists  = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.artist.artist_id))).size
+    const venues   = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.venue.venue_id))).size
+    return { sets, shows: 0, artists, venues, festivals }
+  }, [viewMode, billGroups, setsFiltered, festivalGroups])
+
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleCap = useCallback((key: CapFilter) => {
     setCapFilter(prev => prev === key ? 'all' : key)
@@ -807,19 +825,57 @@ export default function MyShowsClient({
               <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h2 className="text-lg md:text-xl font-bold text-foreground">Concert Timeline</h2>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
-                      <span style={{ color: TEAL }}>{stats.total}</span>
-                      <span className="text-muted-foreground"> shows</span>
-                    </span>
-                    <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
-                      <span style={{ color: TEAL }}>{stats.artists}</span>
-                      <span className="text-muted-foreground"> artists</span>
-                    </span>
-                    <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
-                      <span style={{ color: TEAL }}>{stats.venues}</span>
-                      <span className="text-muted-foreground"> venues</span>
-                    </span>
+                  <div className="flex items-center gap-2 text-xs flex-wrap">
+                    {viewMode === 'shows' && <>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: TEAL }}>{dynamicStats.sets}</span>
+                        <span className="text-muted-foreground"> sets</span>
+                      </span>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: TEAL }}>{dynamicStats.shows}</span>
+                        <span className="text-muted-foreground"> shows</span>
+                      </span>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: TEAL }}>{dynamicStats.artists}</span>
+                        <span className="text-muted-foreground"> artists</span>
+                      </span>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: TEAL }}>{dynamicStats.venues}</span>
+                        <span className="text-muted-foreground"> venues</span>
+                      </span>
+                    </>}
+                    {viewMode === 'sets' && <>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: TEAL }}>{dynamicStats.sets}</span>
+                        <span className="text-muted-foreground"> sets</span>
+                      </span>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: TEAL }}>{dynamicStats.artists}</span>
+                        <span className="text-muted-foreground"> artists</span>
+                      </span>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: TEAL }}>{dynamicStats.venues}</span>
+                        <span className="text-muted-foreground"> venues</span>
+                      </span>
+                    </>}
+                    {viewMode === 'festivals' && <>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: TEAL }}>{dynamicStats.sets}</span>
+                        <span className="text-muted-foreground"> sets</span>
+                      </span>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: TEAL }}>{dynamicStats.festivals}</span>
+                        <span className="text-muted-foreground"> festivals</span>
+                      </span>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: TEAL }}>{dynamicStats.artists}</span>
+                        <span className="text-muted-foreground"> artists</span>
+                      </span>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: TEAL }}>{dynamicStats.venues}</span>
+                        <span className="text-muted-foreground"> venues</span>
+                      </span>
+                    </>}
                   </div>
                   {anyFilterActive && (
                     <button onClick={clearAll}
