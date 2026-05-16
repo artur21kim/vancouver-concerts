@@ -1168,13 +1168,16 @@ export default function MyShowsClient({
                           <Pie data={donutData} cx="50%" cy="50%"
                             innerRadius={38} outerRadius={62} paddingAngle={2} dataKey="value" stroke="none"
                             onClick={(d: any) => handleCap(d.key as CapFilter)} style={{ cursor: 'pointer' }}
-                            label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
+                            label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }: any) => {
                               if (midAngle == null || percent == null || percent < 0.05) return null
                               const RADIAN = Math.PI / 180
+                              const r = (innerRadius + outerRadius) * 0.5
+                              const x = cx + r * Math.cos(-midAngle * RADIAN)
+                              const y = cy + r * Math.sin(-midAngle * RADIAN)
                               const labels = ['S','M','L','XL','?']
                               return (
                                 <text x={x} y={y} fill="rgba(255,255,255,0.95)" textAnchor="middle" dominantBaseline="central"
-                                  fontSize={11} fontWeight={700} style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)', pointerEvents: 'none' }}>
+                                  fontSize={11} fontWeight={700} style={{ pointerEvents: 'none' }}>
                                   {labels[index] ?? ''}
                                 </text>
                               )
