@@ -223,7 +223,7 @@ function ArtistYearBars({ artists, max, onNavigate }: {
 
   return (
     <div className="w-full space-y-1.5">
-      {artists.map((artist, idx) => {
+      {artists.map((artist) => {
         const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
         const years = Object.keys(artist.showsByYear).sort()
         // Build one sub-segment per individual show, grouped by year
@@ -244,12 +244,8 @@ function ArtistYearBars({ artists, max, onNavigate }: {
 
         return (
           <div key={artist.name} className="flex items-center gap-2 py-0.5">
-            {/* Rank */}
-            <div className="w-7 flex-shrink-0 text-right">
-              <span className="text-xs font-semibold tabular-nums" style={{ color: TEAL }}>#{idx + 1}</span>
-            </div>
             {/* Name column */}
-            <div className="w-28 md:w-36 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
+            <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
               <button onClick={() => onNavigate(artist.name)}
                 className="text-xs text-primary hover:opacity-80 hover:underline truncate text-right"
                 title={artist.name}>{artist.name}</button>
@@ -359,11 +355,7 @@ function VenueYearBars({ venues, max, onNavigate }: {
 
         return (
           <div key={venue.name} className="flex items-center gap-2 py-0.5">
-            {/* Rank */}
-            <div className="w-7 flex-shrink-0 text-right">
-              <span className="text-xs font-semibold tabular-nums" style={{ color: TEAL }}>#{idx + 1}</span>
-            </div>
-            <div className="w-28 md:w-36 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
+            <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
               <button onClick={() => onNavigate(venue.name)}
                 className="text-xs text-primary hover:opacity-80 hover:underline truncate text-right"
                 title={venue.name}>{venue.name}</button>
