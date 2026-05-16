@@ -1169,11 +1169,8 @@ export default function MyShowsClient({
                             innerRadius={38} outerRadius={62} paddingAngle={2} dataKey="value" stroke="none"
                             onClick={(d: any) => handleCap(d.key as CapFilter)} style={{ cursor: 'pointer' }}
                             label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
+                              if (midAngle == null || percent == null || percent < 0.05) return null
                               const RADIAN = Math.PI / 180
-                              const r = innerRadius + (outerRadius - innerRadius) * 0.5
-                              const x = cx + r * Math.cos(-midAngle * RADIAN)
-                              const y = cy + r * Math.sin(-midAngle * RADIAN)
-                              if (percent < 0.05) return null
                               const labels = ['S','M','L','XL','?']
                               return (
                                 <text x={x} y={y} fill="rgba(255,255,255,0.95)" textAnchor="middle" dominantBaseline="central"
