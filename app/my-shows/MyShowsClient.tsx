@@ -419,7 +419,6 @@ function VenueYearBars({ venues, max, onNavigate }: {
         )
       })}
 
-      })}
       <div className="flex items-center gap-3 pt-2 border-t border-border text-[10px] text-muted-foreground flex-wrap">
         {CAP_KEYS.filter(k => k !== 'unknown').map(key => (
           <span key={key} className="flex items-center gap-1">
