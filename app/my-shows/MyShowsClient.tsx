@@ -198,22 +198,14 @@ function MonthTip({ active, payload, label }: any) {
 }
 
 // ── Donut tooltip ─────────────────────────────────────────────────────────────
-function DonutTip({ active, payload, venueBreakdown }: any) {
+function DonutTip({ active, payload }: any) {
   if (!active || !payload?.length) return null
-  const entry  = payload[0]?.payload
-  const venues = venueBreakdown[entry?.key] ?? []
-  const total  = entry?.value ?? 0
+  const entry = payload[0]?.payload
+  if (!entry) return null
   return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2.5 text-xs shadow-lg pointer-events-none min-w-[180px]">
-      <p className="font-semibold text-foreground mb-1.5">{entry?.name}</p>
-      {venues.map((v: { name: string; count: number }) => (
-        <div key={v.name} className="flex items-center justify-between gap-4 mb-0.5">
-          <span className="text-muted-foreground truncate">{v.name}</span>
-          <span className="text-foreground font-medium tabular-nums flex-shrink-0">
-            {v.count} <span className="text-muted-foreground font-normal">({Math.round((v.count / total) * 100)}%)</span>
-          </span>
-        </div>
-      ))}
+    <div className="bg-card border border-border rounded-lg px-2.5 py-1.5 text-xs shadow-lg pointer-events-none">
+      <p className="font-semibold text-foreground">{entry.name}</p>
+      <p style={{ color: TEAL }} className="tabular-nums">{entry.value} shows</p>
     </div>
   )
 }
@@ -231,7 +223,7 @@ function ArtistYearBars({ artists, max, onNavigate }: {
 
   return (
     <div className="w-full space-y-1.5">
-      {artists.map(artist => {
+      {artists.map((artist, idx) => {
         const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
         const years = Object.keys(artist.showsByYear).sort()
         // Build one sub-segment per individual show, grouped by year
@@ -252,8 +244,12 @@ function ArtistYearBars({ artists, max, onNavigate }: {
 
         return (
           <div key={artist.name} className="flex items-center gap-2 py-0.5">
+            {/* Rank */}
+            <div className="w-7 flex-shrink-0 text-right">
+              <span className="text-xs font-semibold tabular-nums" style={{ color: TEAL }}>#{idx + 1}</span>
+            </div>
             {/* Name column */}
-            <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
+            <div className="w-28 md:w-36 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
               <button onClick={() => onNavigate(artist.name)}
                 className="text-xs text-primary hover:opacity-80 hover:underline truncate text-right"
                 title={artist.name}>{artist.name}</button>
@@ -349,12 +345,12 @@ function VenueYearBars({ venues, max, onNavigate }: {
 
   return (
     <div className="w-full space-y-1.5">
-      {venues.map(venue => {
+      {venues.map((venue, idx) => {
         const totalWidth = max > 0 ? (venue.total / max) * 100 : 0
         const yearSegments = Object.keys(venue.showsByYear).sort().flatMap(year => {
           const yearShows = venue.showsByYear[year]
-          return yearShows.map((show, idx) => ({
-            year, showIdx: idx, totalInYear: yearShows.length,
+          return yearShows.map((show, showIdx) => ({
+            year, showIdx, totalInYear: yearShows.length,
             artist: show.artist, capKey: show.capKey,
             color: CAP_BY_KEY[show.capKey]?.color ?? 'rgba(156,163,175,0.75)',
             widthPct: (1 / venue.total) * 100,
@@ -363,7 +359,11 @@ function VenueYearBars({ venues, max, onNavigate }: {
 
         return (
           <div key={venue.name} className="flex items-center gap-2 py-0.5">
-            <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
+            {/* Rank */}
+            <div className="w-7 flex-shrink-0 text-right">
+              <span className="text-xs font-semibold tabular-nums" style={{ color: TEAL }}>#{idx + 1}</span>
+            </div>
+            <div className="w-28 md:w-36 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
               <button onClick={() => onNavigate(venue.name)}
                 className="text-xs text-primary hover:opacity-80 hover:underline truncate text-right"
                 title={venue.name}>{venue.name}</button>
@@ -390,12 +390,10 @@ function VenueYearBars({ venues, max, onNavigate }: {
                         }}
                         onMouseLeave={() => setTooltip(null)}
                       >
-                        {seg.showIdx === 0 && (
-                          <span className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
-                            style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
-                            {seg.year}
-                          </span>
-                        )}
+                        <span className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
+                          style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
+                          {seg.year}
+                        </span>
                       </div>
                     )
                   })}
@@ -663,7 +661,11 @@ export default function MyShowsClient({
       venueByCap[capKey][vid].count++
     }
     const donut = CAP_KEYS
-      .map(key => ({ name: CAP_BY_KEY[key].legendLabel, key, value: counts[key] ?? 0, color: CAP_BY_KEY[key].color }))
+      .map(key => ({
+        name: CAP_BY_KEY[key].legendLabel,
+        shortName: CAP_BY_KEY[key].legendLabel.split(' ')[0], // "Small", "Medium", etc.
+        key, value: counts[key] ?? 0, color: CAP_BY_KEY[key].color
+      }))
       .filter(d => d.value > 0)
     const breakdown: Record<string, { name: string; count: number }[]> = {}
     for (const [k, venues] of Object.entries(venueByCap)) {
@@ -825,7 +827,11 @@ export default function MyShowsClient({
       <main className="min-h-screen bg-background py-6 md:py-8 px-4">
         <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
 
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground">My Shows</h1>
+          <h1 className="text-3xl md:text-4xl font-bold text-foreground">
+            My Shows
+            {selectedYear && <span className="text-muted-foreground font-normal"> · {selectedYear}</span>}
+            {!selectedYear && capFilter !== 'all' && <span className="text-muted-foreground font-normal"> · {CAP_BY_KEY[capFilter]?.legendLabel}</span>}
+          </h1>
 
           {/* ── Unadded CTA ── */}
           {!unaddedDismissed && unaddedArtists.length > 0 && (
@@ -1188,18 +1194,23 @@ export default function MyShowsClient({
                                 opacity={capFilter === 'all' || capFilter === entry.key ? 1 : 0.25} />
                             ))}
                           </Pie>
-                          <Tooltip content={<DonutTip venueBreakdown={venueBreakdown} />} />
+                          <Tooltip content={<DonutTip />} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
                     <div className="flex-1 space-y-1.5 mt-1">
                       {donutData.map(entry => {
+                        const total = donutData.reduce((s, d) => s + d.value, 0)
+                        const pct   = total > 0 ? Math.round((entry.value / total) * 100) : 0
                         const isActive = capFilter === 'all' || capFilter === entry.key
                         return (
                           <button key={entry.key} onClick={() => handleCap(entry.key as CapFilter)}
                             className={`w-full flex items-center gap-2 text-left transition-opacity ${isActive ? '' : 'opacity-35'}`}>
                             <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: entry.color }} />
-                            <span className="text-[11px] text-foreground flex-1 truncate">{entry.name}</span>
+                            <span className="text-[11px] text-foreground flex-1 truncate">{entry.shortName ?? entry.name}:</span>
+                            <span className="text-[11px] tabular-nums flex-shrink-0" style={{ color: TEAL }}>
+                              {entry.value} ({pct}%)
+                            </span>
                           </button>
                         )
                       })}
@@ -1273,50 +1284,63 @@ export default function MyShowsClient({
                     })
                     return (
                       <div key={group.key} className={future ? 'bg-amber-500/5' : ''}>
-                        {/* Collapsed header row — full width clickable */}
-                        <div
-                          className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer select-none"
-                          onClick={toggleExpand}
-                        >
-                          {/* Rank + chevron */}
-                          <div className="flex-shrink-0 w-8 flex flex-col items-center"
-                            onClick={e => { e.stopPropagation(); removeShow(group.headliner.show_id) }}>
+                        {/* Collapsed header — full width clickable */}
+                        <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer select-none" onClick={toggleExpand}>
+                          {/* Heart */}
+                          <div className="flex-shrink-0" onClick={e => { e.stopPropagation(); removeShow(group.headliner.show_id) }}>
                             <button disabled={removingSet.has(group.headliner.show_id)} className="focus:outline-none disabled:opacity-50">
                               {removingSet.has(group.headliner.show_id)
                                 ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" />
                                 : <HeartIcon size={5} />}
                             </button>
                           </div>
+                          {/* Rank + chevron */}
+                          <div className="w-10 flex-shrink-0 text-right">
+                            <span className="text-sm font-bold tabular-nums" style={{ color: TEAL }}>#{idx + 1}</span>
+                            <span className="text-[10px] text-muted-foreground ml-0.5">{isExpanded ? '▴' : '▾'}</span>
+                          </div>
                           {/* Date */}
                           <div className="w-24 flex-shrink-0">
                             <p className="text-sm text-foreground whitespace-nowrap">{fmtDate(group.date)}</p>
                             {future && <span className="text-[9px] font-semibold text-amber-400">upcoming</span>}
                           </div>
-                          {/* Rank # */}
-                          <div className="flex-shrink-0 w-9 text-right">
-                            <span className="text-xs font-semibold tabular-nums" style={{ color: TEAL }}>#{idx + 1}</span>
-                            <span className="text-[10px] text-muted-foreground ml-0.5">{isExpanded ? '▴' : '▾'}</span>
-                          </div>
-                          {/* Headliner + inline openers */}
+                          {/* Headliner + inline openers + venue row 2 */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-sm font-medium text-primary">{group.headliner.artist.artist_name}</span>
-                              {group.headliner.artist.spotify_artist_id && <SpotifyLink artistId={group.headliner.artist.spotify_artist_id} />}
-                              {group.headliner.setlist_url && <SetlistLink url={group.headliner.setlist_url} />}
+                              {/* Headliner — click opens Spotify */}
+                              {group.headliner.artist.spotify_artist_id ? (
+                                <a href={`https://open.spotify.com/artist/${group.headliner.artist.spotify_artist_id}`}
+                                  target="_blank" rel="noopener noreferrer"
+                                  onClick={e => e.stopPropagation()}
+                                  className="text-sm font-medium text-primary hover:opacity-80 hover:underline">
+                                  {group.headliner.artist.artist_name}
+                                </a>
+                              ) : (
+                                <span className="text-sm font-medium text-primary">{group.headliner.artist.artist_name}</span>
+                              )}
+                              {group.headliner.setlist_url && (
+                                <span onClick={e => e.stopPropagation()}><SetlistLink url={group.headliner.setlist_url} /></span>
+                              )}
                               {supporters.length > 0 && (
                                 <>
-                                  <span className="text-[11px] text-muted-foreground/40 mx-0.5">·</span>
+                                  <span className="text-[11px] text-muted-foreground/40">·</span>
                                   {supporters.slice(0, 3).map((s, i) => (
-                                    <span key={s.show_id} className="text-[11px] text-muted-foreground">
+                                    <span key={s.show_id} className="text-[13px] text-muted-foreground">
                                       {i > 0 && <span className="mx-0.5 opacity-40">·</span>}
-                                      {s.artist.artist_name}
+                                      {s.artist.spotify_artist_id ? (
+                                        <a href={`https://open.spotify.com/artist/${s.artist.spotify_artist_id}`}
+                                          target="_blank" rel="noopener noreferrer"
+                                          onClick={e => e.stopPropagation()}
+                                          className="hover:text-primary hover:underline transition-colors">
+                                          {s.artist.artist_name}
+                                        </a>
+                                      ) : s.artist.artist_name}
                                     </span>
                                   ))}
                                   {supporters.length > 3 && <span className="text-[11px] text-muted-foreground/50">+{supporters.length - 3}</span>}
                                 </>
                               )}
                             </div>
-                            {/* Venue on row 2 */}
                             <div className="flex items-center gap-1.5 mt-0.5">
                               <span className="text-[13px] text-muted-foreground">{group.venue_name}</span>
                               <CapacityBadge category={group.capacity_category} />
@@ -1324,31 +1348,33 @@ export default function MyShowsClient({
                           </div>
                         </div>
 
-                        {/* Expanded — nested Sets-style rows */}
+                        {/* Expanded — nested Sets-style rows, no venue (already in header) */}
                         {isExpanded && (
                           <div className="border-t border-border/40 bg-background/50 divide-y divide-border/30">
                             {group.shows.map((show, showIdx) => (
-                              <div key={show.show_id} className="hidden md:grid items-center pl-8" style={{ gridTemplateColumns: '40px 120px 1fr' }}>
-                                <div className="px-3 py-3 flex items-center">
+                              <div key={show.show_id} className="hidden md:grid items-center pl-12" style={{ gridTemplateColumns: '40px 120px 1fr' }}>
+                                <div className="px-3 py-2.5 flex items-center">
                                   <button onClick={e => { e.stopPropagation(); removeShow(show.show_id) }} disabled={removingSet.has(show.show_id)} className="focus:outline-none disabled:opacity-50">
                                     {removingSet.has(show.show_id) ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={4} />}
                                   </button>
                                 </div>
-                                <div className="px-3 py-3">
+                                <div className="px-3 py-2.5">
                                   <p className="text-sm text-foreground whitespace-nowrap">{fmtDate(show.date)}</p>
                                   {showIdx === 0 && <span className="text-[9px] text-primary/60 font-medium">headliner</span>}
                                 </div>
-                                <div className="px-3 py-3 min-w-0">
-                                  <div className="flex items-center gap-1.5 mb-0.5">
-                                    <button onClick={e => { e.stopPropagation(); router.push(`/browse?artist_id=${show.artist.artist_id}`) }}
-                                      className="text-sm font-medium text-primary hover:opacity-80 hover:underline">{show.artist.artist_name}</button>
-                                    {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
-                                    {show.setlist_url && <SetlistLink url={show.setlist_url} />}
-                                  </div>
+                                <div className="px-3 py-2.5 min-w-0">
                                   <div className="flex items-center gap-1.5">
-                                    <button onClick={e => { e.stopPropagation(); router.push(`/browse?venue_id=${show.venue.venue_id}`) }}
-                                      className="text-[13px] text-muted-foreground hover:text-primary hover:underline">{show.venue.venue_name}</button>
-                                    <CapacityBadge category={show.venue.capacity_category} />
+                                    {show.artist.spotify_artist_id ? (
+                                      <a href={`https://open.spotify.com/artist/${show.artist.spotify_artist_id}`}
+                                        target="_blank" rel="noopener noreferrer"
+                                        onClick={e => e.stopPropagation()}
+                                        className="text-sm font-medium text-primary hover:opacity-80 hover:underline">
+                                        {show.artist.artist_name}
+                                      </a>
+                                    ) : (
+                                      <span className="text-sm font-medium text-primary">{show.artist.artist_name}</span>
+                                    )}
+                                    {show.setlist_url && <span onClick={e => e.stopPropagation()}><SetlistLink url={show.setlist_url} /></span>}
                                   </div>
                                 </div>
                               </div>
