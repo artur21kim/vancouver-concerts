@@ -331,7 +331,102 @@ function ArtistYearBars({ artists, max, onNavigate }: {
             {CAP_BY_KEY[key].legendLabel}
           </span>
         ))}
-        <span className="text-muted-foreground/50">· each segment = 1 show · color = venue size</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Venue year-segmented bars ─────────────────────────────────────────────────
+function VenueYearBars({ venues, max, onNavigate }: {
+  venues: {
+    name: string; total: number
+    byCapacity: Record<string, number>
+    showsByYear: Record<string, { artist: string; capKey: CapFilter }[]>
+  }[]
+  max: number; onNavigate: (name: string) => void
+}) {
+  const [tooltip, setTooltip] = useState<{ venue: string; year: string; artist: string; capKey: CapFilter; x: number } | null>(null)
+
+  return (
+    <div className="w-full space-y-1.5">
+      {venues.map(venue => {
+        const totalWidth = max > 0 ? (venue.total / max) * 100 : 0
+        const yearSegments = Object.keys(venue.showsByYear).sort().flatMap(year => {
+          const yearShows = venue.showsByYear[year]
+          return yearShows.map((show, idx) => ({
+            year, showIdx: idx, totalInYear: yearShows.length,
+            artist: show.artist, capKey: show.capKey,
+            color: CAP_BY_KEY[show.capKey]?.color ?? 'rgba(156,163,175,0.75)',
+            widthPct: (1 / venue.total) * 100,
+          }))
+        })
+
+        return (
+          <div key={venue.name} className="flex items-center gap-2 py-0.5">
+            <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
+              <button onClick={() => onNavigate(venue.name)}
+                className="text-xs text-primary hover:opacity-80 hover:underline truncate text-right"
+                title={venue.name}>{venue.name}</button>
+            </div>
+            <div className="flex-1 relative">
+              <div className="h-5 bg-muted/40 rounded-full overflow-hidden flex">
+                <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
+                  {yearSegments.map((seg, i) => {
+                    const isFirst = i === 0, isLast = i === yearSegments.length - 1
+                    const isYearBoundary = i > 0 && yearSegments[i - 1].year !== seg.year
+                    return (
+                      <div
+                        key={`${seg.year}-${seg.showIdx}`}
+                        className="h-full flex items-center justify-center overflow-hidden cursor-default"
+                        style={{
+                          width: `${seg.widthPct}%`,
+                          backgroundColor: seg.color,
+                          borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
+                          borderRight: !isLast ? `1px solid rgba(0,0,0,${isYearBoundary ? 0.3 : 0.12})` : undefined,
+                        }}
+                        onMouseEnter={e => {
+                          const rect = (e.currentTarget as HTMLElement).closest('.flex-1')!.getBoundingClientRect()
+                          setTooltip({ venue: venue.name, year: seg.year, artist: seg.artist, capKey: seg.capKey, x: e.clientX - rect.left })
+                        }}
+                        onMouseLeave={() => setTooltip(null)}
+                      >
+                        {seg.showIdx === 0 && (
+                          <span className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
+                            style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
+                            {seg.year}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              {tooltip?.venue === venue.name && (
+                <div className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px]"
+                  style={{ left: Math.min(tooltip.x, 220), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}>
+                  <p className="font-semibold text-foreground">{venue.name} · {tooltip.year}</p>
+                  <p className="text-muted-foreground mt-0.5">{tooltip.artist}</p>
+                  <p className="mt-0.5" style={{ color: CAP_BY_KEY[tooltip.capKey]?.color ?? TEAL }}>
+                    {CAP_BY_KEY[tooltip.capKey]?.legendLabel ?? ''}
+                  </p>
+                </div>
+              )}
+            </div>
+            <span className="text-xs tabular-nums flex-shrink-0 w-16 text-right" style={{ color: TEAL }}>
+              {venue.total} {venue.total === 1 ? 'show' : 'shows'}
+            </span>
+          </div>
+        )
+      })}
+
+      })}
+      <div className="flex items-center gap-3 pt-2 border-t border-border text-[10px] text-muted-foreground flex-wrap">
+        {CAP_KEYS.filter(k => k !== 'unknown').map(key => (
+          <span key={key} className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CAP_BY_KEY[key].color }} />
+            {CAP_BY_KEY[key].legendLabel}
+          </span>
+        ))}
       </div>
     </div>
   )
@@ -358,7 +453,9 @@ export default function MyShowsClient({
   const [pageInput, setPageInput]               = useState('1')
   const [selectedYear, setSelectedYear]         = useState<string | null>(null)
   const [capFilter, setCapFilter]               = useState<CapFilter>('all')
+  const [chartSection, setChartSection]         = useState<'artists' | 'venues'>('artists')
   const [showAllArtists, setShowAllArtists]     = useState(false)
+  const [showAllVenues, setShowAllVenues]       = useState(false)
   const [expandedBills, setExpandedBills]       = useState<Set<string>>(new Set())
 
   // Unadded CTA
@@ -531,6 +628,28 @@ export default function MyShowsClient({
 
   const maxArtistShows = topArtists[0]?.total ?? 1
 
+  const topVenues = useMemo(() => {
+    const src = viewMode === 'festivals' ? yearFiltered.filter(isFestivalShow) : yearFiltered
+    const map: Record<number, {
+      name: string; total: number
+      byCapacity: Record<string, number>
+      showsByYear: Record<string, { artist: string; capKey: CapFilter }[]>
+    }> = {}
+    for (const s of src) {
+      const id     = s.venue.venue_id
+      const capKey = getCapMeta(s.venue.capacity_category).key as CapFilter
+      const year   = s.date.split('-')[0]
+      if (!map[id]) map[id] = { name: s.venue.venue_name, total: 0, byCapacity: {}, showsByYear: {} }
+      map[id].total++
+      map[id].byCapacity[capKey] = (map[id].byCapacity[capKey] ?? 0) + 1
+      if (!map[id].showsByYear[year]) map[id].showsByYear[year] = []
+      map[id].showsByYear[year].push({ artist: s.artist.artist_name, capKey })
+    }
+    return Object.values(map).sort((a, b) => b.total - a.total)
+  }, [yearFiltered, viewMode])
+
+  const maxVenueShows = topVenues[0]?.total ?? 1
+
   // ── Donut ─────────────────────────────────────────────────────────────────
   const { donutData, venueBreakdown } = useMemo(() => {
     const src = viewMode === 'festivals' ? yearFiltered.filter(isFestivalShow) : yearFiltered
@@ -554,7 +673,6 @@ export default function MyShowsClient({
     return { donutData: donut, venueBreakdown: breakdown }
   }, [yearFiltered, viewMode])
 
-  const donutTotal = donutData.reduce((s, d) => s + d.value, 0)
 
   // ── Bill groups ───────────────────────────────────────────────────────────
   const billGroups = useMemo(() => {
@@ -944,26 +1062,26 @@ export default function MyShowsClient({
                     <button
                       onClick={() => prevYear && setSelectedYear(prevYear)}
                       disabled={!prevYear}
-                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
-                      style={{ background: 'rgba(94,234,212,0.15)', color: '#5eead4', border: '1px solid rgba(94,234,212,0.3)' }}
-                      onMouseEnter={e => { if (prevYear) (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.25)' }}
-                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.15)'}
+                      className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+                      style={{ background: 'rgba(94,234,212,0.12)', color: '#5eead4', border: '1px solid rgba(94,234,212,0.25)' }}
+                      onMouseEnter={e => { if (prevYear) (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.22)' }}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.12)'}
                     >
                       ‹ {prevYear ?? ''}
                     </button>
                     <span
-                      className="px-4 py-1.5 rounded-full text-sm font-semibold tabular-nums"
-                      style={{ background: 'rgba(13,148,136,0.25)', color: '#0d9488', border: '1px solid rgba(13,148,136,0.5)' }}
+                      className="px-3 py-1 rounded-full text-xs font-semibold tabular-nums"
+                      style={{ background: 'rgba(13,148,136,0.2)', color: '#0d9488', border: '1px solid rgba(13,148,136,0.4)' }}
                     >
                       {selectedYear}
                     </span>
                     <button
                       onClick={() => nextYear && setSelectedYear(nextYear)}
                       disabled={!nextYear}
-                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
-                      style={{ background: 'rgba(94,234,212,0.15)', color: '#5eead4', border: '1px solid rgba(94,234,212,0.3)' }}
-                      onMouseEnter={e => { if (nextYear) (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.25)' }}
-                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.15)'}
+                      className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+                      style={{ background: 'rgba(94,234,212,0.12)', color: '#5eead4', border: '1px solid rgba(94,234,212,0.25)' }}
+                      onMouseEnter={e => { if (nextYear) (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.22)' }}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.12)'}
                     >
                       {nextYear ?? ''} ›
                     </button>
@@ -978,49 +1096,94 @@ export default function MyShowsClient({
             </div>
           )}
 
-          {/* ── Top Artists (65%) + Donut (35%) ── */}
+          {/* ── Top Artists / Venues (65%) + Donut (35%) ── */}
           {shows.length > 0 && (
             <div className="flex gap-4">
-              {/* Top Artists */}
+              {/* Left panel — Artists or Venues */}
               <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                   <h2 className="text-lg font-bold text-foreground">
-                    Top Artists
+                    {chartSection === 'artists' ? 'Top Artists' : 'Top Venues'}
                     {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                   </h2>
+                  {/* Artists / Venues toggle */}
+                  <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
+                    {(['artists', 'venues'] as const).map((s, i) => (
+                      <button key={s} onClick={() => setChartSection(s)}
+                        className={`px-2.5 py-1 capitalize transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                          chartSection === s ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
+                        }`}>
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                {topArtists.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">No shows{selectedYear ? ` in ${selectedYear}` : ''}.</p>
+                {chartSection === 'artists' ? (
+                  topArtists.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic">No shows{selectedYear ? ` in ${selectedYear}` : ''}.</p>
+                  ) : (
+                    <>
+                      <ArtistYearBars
+                        artists={topArtists.slice(0, showAllArtists ? undefined : 10)}
+                        max={maxArtistShows}
+                        onNavigate={(name) => router.push(`/browse?artist=${encodeURIComponent(name)}`)}
+                      />
+                      {topArtists.length > 10 && (
+                        <button onClick={() => setShowAllArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
+                          {showAllArtists ? '← Show less' : `View all ${topArtists.length} artists →`}
+                        </button>
+                      )}
+                    </>
+                  )
                 ) : (
-                  <>
-                    <ArtistYearBars
-                      artists={topArtists.slice(0, showAllArtists ? undefined : 10)}
-                      max={maxArtistShows}
-                      onNavigate={(name) => router.push(`/browse?artist=${encodeURIComponent(name)}`)}
-                    />
-                    {topArtists.length > 10 && (
-                      <button onClick={() => setShowAllArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
-                        {showAllArtists ? '← Show less' : `View all ${topArtists.length} artists →`}
-                      </button>
-                    )}
-                  </>
+                  topVenues.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic">No shows{selectedYear ? ` in ${selectedYear}` : ''}.</p>
+                  ) : (
+                    <>
+                      <VenueYearBars
+                        venues={topVenues.slice(0, showAllVenues ? undefined : 10)}
+                        max={maxVenueShows}
+                        onNavigate={(name) => router.push(`/browse?venue=${encodeURIComponent(name)}`)}
+                      />
+                      {topVenues.length > 10 && (
+                        <button onClick={() => setShowAllVenues(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
+                          {showAllVenues ? '← Show less' : `View all ${topVenues.length} venues →`}
+                        </button>
+                      )}
+                    </>
+                  )
                 )}
               </div>
 
-              {/* Donut — compact */}
-              <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 w-64 flex-shrink-0 hidden md:flex flex-col">
+              {/* Donut — redesigned with letter labels */}
+              <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 w-56 flex-shrink-0 hidden md:flex flex-col">
                 <h2 className="text-base font-bold text-foreground mb-3">Venues by Size</h2>
                 {donutData.length === 0 ? (
                   <p className="text-sm text-muted-foreground italic">No data</p>
                 ) : (
                   <>
-                    <div style={{ height: 140 }}>
+                    <div className="relative" style={{ height: 148 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie data={donutData} cx="50%" cy="50%"
-                            innerRadius={40} outerRadius={65} paddingAngle={2} dataKey="value" stroke="none"
-                            onClick={(d: any) => handleCap(d.key as CapFilter)} style={{ cursor: 'pointer' }}>
+                            innerRadius={38} outerRadius={62} paddingAngle={2} dataKey="value" stroke="none"
+                            onClick={(d: any) => handleCap(d.key as CapFilter)} style={{ cursor: 'pointer' }}
+                            label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
+                              const RADIAN = Math.PI / 180
+                              const r = innerRadius + (outerRadius - innerRadius) * 0.5
+                              const x = cx + r * Math.cos(-midAngle * RADIAN)
+                              const y = cy + r * Math.sin(-midAngle * RADIAN)
+                              if (percent < 0.05) return null
+                              const labels = ['S','M','L','XL','?']
+                              return (
+                                <text x={x} y={y} fill="rgba(255,255,255,0.95)" textAnchor="middle" dominantBaseline="central"
+                                  fontSize={11} fontWeight={700} style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)', pointerEvents: 'none' }}>
+                                  {labels[index] ?? ''}
+                                </text>
+                              )
+                            }}
+                            labelLine={false}>
                             {donutData.map(entry => (
                               <Cell key={entry.key} fill={entry.color}
                                 opacity={capFilter === 'all' || capFilter === entry.key ? 1 : 0.25} />
@@ -1030,17 +1193,14 @@ export default function MyShowsClient({
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="flex-1 space-y-1.5 mt-2">
+                    <div className="flex-1 space-y-1.5 mt-1">
                       {donutData.map(entry => {
-                        const pct      = Math.round((entry.value / donutTotal) * 100)
                         const isActive = capFilter === 'all' || capFilter === entry.key
                         return (
                           <button key={entry.key} onClick={() => handleCap(entry.key as CapFilter)}
-                            className={`w-full flex items-center gap-1.5 text-left transition-opacity ${isActive ? '' : 'opacity-35'}`}>
+                            className={`w-full flex items-center gap-2 text-left transition-opacity ${isActive ? '' : 'opacity-35'}`}>
                             <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: entry.color }} />
-                            <span className="text-[10px] text-foreground flex-1 truncate">{entry.name}</span>
-                            <span className="text-[10px] tabular-nums flex-shrink-0" style={{ color: TEAL }}>{entry.value}</span>
-                            <span className="text-[10px] text-muted-foreground tabular-nums flex-shrink-0 w-7 text-right">{pct}%</span>
+                            <span className="text-[11px] text-foreground flex-1 truncate">{entry.name}</span>
                           </button>
                         )
                       })}
@@ -1105,48 +1265,97 @@ export default function MyShowsClient({
                 <div className="divide-y divide-border">
                   {billGroups.length === 0 ? (
                     <div className="text-center py-10 text-muted-foreground">No shows match this filter.</div>
-                  ) : billGroups.map(group => {
+                  ) : billGroups.map((group, idx) => {
                     const supporters = group.shows.slice(1)
                     const future = isFuture(group.date)
+                    const isExpanded = expandedBills.has(group.key)
+                    const toggleExpand = () => setExpandedBills(prev => {
+                      const n = new Set(prev); n.has(group.key) ? n.delete(group.key) : n.add(group.key); return n
+                    })
                     return (
-                      <div key={group.key} className={`flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors ${future ? 'bg-amber-500/5' : ''}`}>
-                        <button onClick={() => removeShow(group.headliner.show_id)} disabled={removingSet.has(group.headliner.show_id)} className="focus:outline-none disabled:opacity-50 flex-shrink-0">
-                          {removingSet.has(group.headliner.show_id) ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={5} />}
-                        </button>
-                        {/* Date */}
-                        <div className="w-24 flex-shrink-0">
-                          <p className="text-sm text-foreground whitespace-nowrap">{fmtDate(group.date)}</p>
-                          {future && <span className="text-[9px] font-semibold text-amber-400">upcoming</span>}
-                        </div>
-                        {/* Artist + openers stacked */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            {group.headliner.artist.spotify_artist_id ? (
-                              <SpotifyLink artistId={group.headliner.artist.spotify_artist_id} name={group.headliner.artist.artist_name} />
-                            ) : (
-                              <span className="text-sm font-medium text-foreground">{group.headliner.artist.artist_name}</span>
-                            )}
-                            {group.headliner.setlist_url && <SetlistLink url={group.headliner.setlist_url} />}
+                      <div key={group.key} className={future ? 'bg-amber-500/5' : ''}>
+                        {/* Collapsed header row — full width clickable */}
+                        <div
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer select-none"
+                          onClick={toggleExpand}
+                        >
+                          {/* Rank + chevron */}
+                          <div className="flex-shrink-0 w-8 flex flex-col items-center"
+                            onClick={e => { e.stopPropagation(); removeShow(group.headliner.show_id) }}>
+                            <button disabled={removingSet.has(group.headliner.show_id)} className="focus:outline-none disabled:opacity-50">
+                              {removingSet.has(group.headliner.show_id)
+                                ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" />
+                                : <HeartIcon size={5} />}
+                            </button>
                           </div>
-                          {supporters.length > 0 && (
-                            <div className="flex items-center gap-1 flex-wrap mt-0.5">
-                              {supporters.slice(0, 3).map((s, i) => (
-                                <span key={s.show_id} className="text-[11px] text-muted-foreground">
-                                  {i > 0 && <span className="mx-0.5 opacity-40">·</span>}
-                                  {s.artist.spotify_artist_id ? (
-                                    <a href={`https://open.spotify.com/artist/${s.artist.spotify_artist_id}`} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">{s.artist.artist_name}</a>
-                                  ) : s.artist.artist_name}
-                                </span>
-                              ))}
-                              {supporters.length > 3 && <span className="text-[11px] text-muted-foreground/50">+ {supporters.length - 3} more</span>}
+                          {/* Date */}
+                          <div className="w-24 flex-shrink-0">
+                            <p className="text-sm text-foreground whitespace-nowrap">{fmtDate(group.date)}</p>
+                            {future && <span className="text-[9px] font-semibold text-amber-400">upcoming</span>}
+                          </div>
+                          {/* Rank # */}
+                          <div className="flex-shrink-0 w-9 text-right">
+                            <span className="text-xs font-semibold tabular-nums" style={{ color: TEAL }}>#{idx + 1}</span>
+                            <span className="text-[10px] text-muted-foreground ml-0.5">{isExpanded ? '▴' : '▾'}</span>
+                          </div>
+                          {/* Headliner + inline openers */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-sm font-medium text-primary">{group.headliner.artist.artist_name}</span>
+                              {group.headliner.artist.spotify_artist_id && <SpotifyLink artistId={group.headliner.artist.spotify_artist_id} />}
+                              {group.headliner.setlist_url && <SetlistLink url={group.headliner.setlist_url} />}
+                              {supporters.length > 0 && (
+                                <>
+                                  <span className="text-[11px] text-muted-foreground/40 mx-0.5">·</span>
+                                  {supporters.slice(0, 3).map((s, i) => (
+                                    <span key={s.show_id} className="text-[11px] text-muted-foreground">
+                                      {i > 0 && <span className="mx-0.5 opacity-40">·</span>}
+                                      {s.artist.artist_name}
+                                    </span>
+                                  ))}
+                                  {supporters.length > 3 && <span className="text-[11px] text-muted-foreground/50">+{supporters.length - 3}</span>}
+                                </>
+                              )}
                             </div>
-                          )}
+                            {/* Venue on row 2 */}
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[13px] text-muted-foreground">{group.venue_name}</span>
+                              <CapacityBadge category={group.capacity_category} />
+                            </div>
+                          </div>
                         </div>
-                        {/* Venue + badge — row 1 right */}
-                        <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
-                          <span className="text-sm text-muted-foreground">{group.venue_name}</span>
-                          <CapacityBadge category={group.capacity_category} />
-                        </div>
+
+                        {/* Expanded — nested Sets-style rows */}
+                        {isExpanded && (
+                          <div className="border-t border-border/40 bg-background/50 divide-y divide-border/30">
+                            {group.shows.map((show, showIdx) => (
+                              <div key={show.show_id} className="hidden md:grid items-center pl-8" style={{ gridTemplateColumns: '40px 120px 1fr' }}>
+                                <div className="px-3 py-3 flex items-center">
+                                  <button onClick={e => { e.stopPropagation(); removeShow(show.show_id) }} disabled={removingSet.has(show.show_id)} className="focus:outline-none disabled:opacity-50">
+                                    {removingSet.has(show.show_id) ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={4} />}
+                                  </button>
+                                </div>
+                                <div className="px-3 py-3">
+                                  <p className="text-sm text-foreground whitespace-nowrap">{fmtDate(show.date)}</p>
+                                  {showIdx === 0 && <span className="text-[9px] text-primary/60 font-medium">headliner</span>}
+                                </div>
+                                <div className="px-3 py-3 min-w-0">
+                                  <div className="flex items-center gap-1.5 mb-0.5">
+                                    <button onClick={e => { e.stopPropagation(); router.push(`/browse?artist_id=${show.artist.artist_id}`) }}
+                                      className="text-sm font-medium text-primary hover:opacity-80 hover:underline">{show.artist.artist_name}</button>
+                                    {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
+                                    {show.setlist_url && <SetlistLink url={show.setlist_url} />}
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <button onClick={e => { e.stopPropagation(); router.push(`/browse?venue_id=${show.venue.venue_id}`) }}
+                                      className="text-[13px] text-muted-foreground hover:text-primary hover:underline">{show.venue.venue_name}</button>
+                                    <CapacityBadge category={show.venue.capacity_category} />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
