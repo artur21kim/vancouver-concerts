@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 type AuthModalProps = {
     isOpen: boolean
     onClose: () => void
-    returnPath?: string // path to return to after OAuth login, e.g. '/discover'
+    returnPath?: string
 }
 
 export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProps) {
@@ -27,27 +27,14 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
 
         try {
             if (isSignUp) {
-                const { data, error } = await supabase.auth.signUp({
+                const { error } = await supabase.auth.signUp({
                     email,
                     password,
                     options: {
                         data: { username },
                     },
                 })
-
                 if (error) throw error
-
-                if (data.user) {
-                    const { error: profileError } = await supabase
-                        .from('user_profiles')
-                        .upsert(
-                            { user_id: data.user.id, username },
-                            { onConflict: 'user_id', ignoreDuplicates: true }
-                        )
-
-                    if (profileError) throw profileError
-                }
-
                 alert('Check your email to confirm your account!')
                 onClose()
             } else {
@@ -55,7 +42,6 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
                     email,
                     password,
                 })
-
                 if (error) throw error
                 onClose()
             }
@@ -69,7 +55,6 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
     const handleGoogleLogin = async () => {
         setLoading(true)
         setError(null)
-
         try {
             const next = returnPath ?? window.location.pathname
             const { error } = await supabase.auth.signInWithOAuth({
@@ -78,7 +63,6 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
                     redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
                 },
             })
-
             if (error) throw error
         } catch (err: any) {
             setError(err.message)
@@ -89,27 +73,19 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
-                {/* Header */}
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-2xl font-bold text-gray-900">
                         {isSignUp ? 'Create Account' : 'Sign In'}
                     </h2>
-                    <button
-                        onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 text-2xl"
-                    >
-                        ×
-                    </button>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
                 </div>
 
-                {/* Error Message */}
                 {error && (
                     <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
                         <p className="text-red-600 text-sm">{error}</p>
                     </div>
                 )}
 
-                {/* OAuth Buttons */}
                 <div className="space-y-3 mb-6">
                     <button
                         onClick={handleGoogleLogin}
@@ -126,7 +102,6 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
                     </button>
                 </div>
 
-                {/* Divider */}
                 <div className="relative mb-6">
                     <div className="absolute inset-0 flex items-center">
                         <div className="w-full border-t border-gray-300"></div>
@@ -136,7 +111,6 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
                     </div>
                 </div>
 
-                {/* Email Form */}
                 <form onSubmit={handleEmailAuth} className="space-y-4">
                     {isSignUp && (
                         <div>
@@ -151,7 +125,6 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
                             />
                         </div>
                     )}
-
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                         <input
@@ -163,7 +136,6 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
                             placeholder="you@example.com"
                         />
                     </div>
-
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
                         <input
@@ -176,7 +148,6 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
                             placeholder="••••••••"
                         />
                     </div>
-
                     <button
                         type="submit"
                         disabled={loading}
@@ -186,14 +157,13 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
                     </button>
                 </form>
 
-                {/* Toggle Sign In/Sign Up */}
                 <div className="mt-4 text-center text-sm">
                     <span className="text-gray-600">
                         {isSignUp ? 'Already have an account?' : "Don't have an account?"}
                     </span>
                     {' '}
                     <button
-                        onClick={() => { setIsSignUp(!isSignUp); setError(null); }}
+                        onClick={() => { setIsSignUp(!isSignUp); setError(null) }}
                         className="text-blue-600 hover:text-blue-700 font-medium"
                     >
                         {isSignUp ? 'Sign In' : 'Sign Up'}
