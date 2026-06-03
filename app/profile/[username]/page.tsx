@@ -34,6 +34,7 @@ type FullProfile = {
   is_own_profile: boolean
   friendship_status: 'accepted' | 'pending' | null
   request_direction: 'incoming' | 'outgoing' | null
+  request_id: string | null
   confirmed_shows: number
   first_show_year: number | null
   last_show_year: number | null
@@ -302,7 +303,6 @@ export default function ProfilePage() {
   }, [fetchProfile])
 
   // ─── Friendship actions ────────────────────────────────────────────────────
-  // TODO: verify these RPC names match what was deployed in S1 (SCRUM-34)
 
   const handleAddFriend = async (targetUserId: string) => {
     setActionLoading(true)
@@ -319,13 +319,13 @@ export default function ProfilePage() {
   }
 
   const handleRespond = async (
-    requesterUserId: string,
+    requestId: string,
     action: 'accept' | 'reject'
   ) => {
     setActionLoading(true)
     await supabase.rpc('respond_to_friend_request', {
-      requester_id: requesterUserId,
-      action,
+      request_id: requestId,
+      new_status: action === 'accept' ? 'accepted' : 'rejected',
     })
     await fetchProfile()
     setActionLoading(false)
@@ -482,14 +482,14 @@ export default function ProfilePage() {
                       p.request_direction === 'incoming' && (
                         <>
                           <button
-                            onClick={() => handleRespond(p.user_id, 'accept')}
+                            onClick={() => handleRespond(p.request_id!, 'accept')}
                             disabled={actionLoading}
                             className="px-4 py-2 bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors"
                           >
                             Accept
                           </button>
                           <button
-                            onClick={() => handleRespond(p.user_id, 'reject')}
+                            onClick={() => handleRespond(p.request_id!, 'reject')}
                             disabled={actionLoading}
                             className="px-3 py-2 border border-white/10 hover:bg-white/5 text-muted text-sm rounded-xl transition-colors disabled:opacity-50"
                           >
