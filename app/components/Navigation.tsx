@@ -4,6 +4,8 @@ import { usePathname } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
 import AuthButton from './AuthButton'
+import { useAuth } from '@/app/providers/AuthProvider'
+import { createClient } from '@/lib/supabase/client'
 
 const DISCOVER_PATHS = [
   '/discover',
@@ -36,14 +38,17 @@ const NAV_LINKS = [
   { label: 'Discover', path: '/discover' },
   { label: 'Browse', path: '/browse' },
   { label: 'My Shows', path: '/my-shows' },
+  { label: 'Friends', path: '/friends' },
 ]
 
 export default function Navigation() {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
+  const { user } = useAuth()
   const [mounted, setMounted] = useState(false)
   const [currentPath, setCurrentPath] = useState(pathname)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [pendingCount, setPendingCount] = useState(0)
 
   useEffect(() => { setMounted(true) }, [])
   useEffect(() => { setCurrentPath(pathname) }, [pathname])
@@ -55,6 +60,18 @@ export default function Navigation() {
 
   // Close menu on route change
   useEffect(() => { setMenuOpen(false) }, [currentPath])
+
+  // Fetch pending friend request count
+  useEffect(() => {
+    if (!user) {
+      setPendingCount(0)
+      return
+    }
+    const supabase = createClient()
+    supabase.rpc('get_pending_requests').then(({ data }) => {
+      setPendingCount(data?.length ?? 0)
+    })
+  }, [user, currentPath])
 
   const isDiscoverActive = DISCOVER_PATHS.includes(currentPath)
   const breadcrumbs = PAST_FLOW_BREADCRUMBS[currentPath] ?? null
@@ -114,8 +131,17 @@ export default function Navigation() {
             {/* Desktop links */}
             <div className="hidden md:flex items-center gap-6">
               {NAV_LINKS.map(({ label, path }) => (
-                <a key={path} href={path} className={navLinkClass(isLinkActive(path))}>
+                <a
+                  key={path}
+                  href={path}
+                  className={`relative ${navLinkClass(isLinkActive(path))}`}
+                >
                   {label}
+                  {path === '/friends' && pendingCount > 0 && (
+                    <span className="absolute -top-1.5 -right-4 min-w-[16px] h-4 bg-destructive text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+                      {pendingCount > 9 ? '9+' : pendingCount}
+                    </span>
+                  )}
                 </a>
               ))}
             </div>
@@ -166,10 +192,17 @@ export default function Navigation() {
             <a
               key={path}
               href={path}
-              className={mobileLinkClass(isLinkActive(path))}
+              className={`relative ${mobileLinkClass(isLinkActive(path))}`}
               onClick={() => setMenuOpen(false)}
             >
-              {label}
+              <span className="flex items-center gap-2">
+                {label}
+                {path === '/friends' && pendingCount > 0 && (
+                  <span className="min-w-[18px] h-[18px] bg-destructive text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+                    {pendingCount > 9 ? '9+' : pendingCount}
+                  </span>
+                )}
+              </span>
             </a>
           ))}
         </div>
