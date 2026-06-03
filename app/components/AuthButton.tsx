@@ -92,7 +92,7 @@ export default function AuthButton() {
                     <button
                         onClick={() => {
                             setShowUserMenu(false)
-                            // TODO: Navigate to profile page
+                            if (username) router.push(`/profile/${username}`)
                         }}
                         className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted"
                     >
@@ -106,6 +106,15 @@ export default function AuthButton() {
                         className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted"
                     >
                         My Shows
+                    </button>
+                    <button
+                        onClick={() => {
+                            setShowUserMenu(false)
+                            router.push('/settings')
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted"
+                    >
+                        Settings
                     </button>
                     <div className="border-t border-border"></div>
                     <button
