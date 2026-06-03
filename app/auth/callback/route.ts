@@ -15,6 +15,16 @@ export async function GET(request: Request) {
         const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
         if (!error && data.user) {
+            // Populate avatar from Google OAuth metadata (only if not already set)
+            const avatarUrl = data.user.user_metadata?.avatar_url ?? null
+            if (avatarUrl) {
+                await supabase
+                    .from('user_profiles')
+                    .update({ avatar_url: avatarUrl })
+                    .eq('user_id', data.user.id)
+                    .is('avatar_url', null)
+            }
+
             // Check if user profile exists
             const { data: profile } = await supabase
                 .from('user_profiles')
