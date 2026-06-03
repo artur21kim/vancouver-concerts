@@ -35,6 +35,20 @@ export async function GET(request: Request) {
 
     const tokenData = await tokenResponse.json();
 
+    // Fetch Spotify profile for avatar (works with any valid token — no extra scope needed)
+    let spotifyAvatarUrl: string | null = null;
+    try {
+      const meRes = await fetch('https://api.spotify.com/v1/me', {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` }
+      });
+      if (meRes.ok) {
+        const me = await meRes.json();
+        spotifyAvatarUrl = me.images?.[0]?.url ?? null;
+      }
+    } catch (e) {
+      console.error('⚠️ Could not fetch Spotify profile image:', e);
+    }
+
     // Initialize Supabase client
     const supabase = await createClient();
 
@@ -87,6 +101,15 @@ export async function GET(request: Request) {
 
     if (profileError) {
       console.error('❌ Error updating user profile:', profileError);
+    }
+
+    // Set avatar from Spotify if user doesn't already have one
+    if (spotifyAvatarUrl) {
+      await supabase
+        .from('user_profiles')
+        .update({ avatar_url: spotifyAvatarUrl })
+        .eq('user_id', user.id)
+        .is('avatar_url', null);
     }
 
     // Read back the scope that was saved before the OAuth redirect
