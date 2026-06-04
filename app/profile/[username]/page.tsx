@@ -180,7 +180,7 @@ function ComparisonModal({
                 You &amp; {profile.username}
               </p>
               {!loading && (
-                <p className="text-xs text-muted">
+                <p className="text-xs text-muted-foreground">
                   {artists.length} shared artist{artists.length !== 1 ? 's' : ''}
                 </p>
               )}
@@ -204,15 +204,15 @@ function ComparisonModal({
           ) : artists.length === 0 ? (
             <div className="text-center py-10 px-6">
               <p className="text-2xl mb-2">🎵</p>
-              <p className="text-muted text-sm">No shared artists yet — attend some shows together!</p>
+              <p className="text-muted-foreground text-sm">No shared artists yet — attend some shows together!</p>
             </div>
           ) : (
             <div>
               <div className="flex items-center gap-2 px-5 pb-1">
                 <span className="w-6 shrink-0" />
-                <span className="flex-1 text-xs text-muted">Artist</span>
-                <span className="w-10 text-right text-xs text-muted">You</span>
-                <span className="w-14 text-right text-xs text-muted">{profile.username}</span>
+                <span className="flex-1 text-xs text-muted-foreground">Artist</span>
+                <span className="w-10 text-right text-xs text-muted-foreground">You</span>
+                <span className="w-14 text-right text-xs text-muted-foreground">{profile.username}</span>
               </div>
               {artists.map((a, i) => (
                 <div
@@ -225,10 +225,10 @@ function ComparisonModal({
                   <span className="flex-1 text-sm text-primary truncate">
                     {a.artist_name}
                   </span>
-                  <span className="w-10 text-right text-xs text-muted tabular-nums">
+                  <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">
                     {a.my_show_count}
                   </span>
-                  <span className="w-14 text-right text-xs text-muted tabular-nums">
+                  <span className="w-14 text-right text-xs text-muted-foreground tabular-nums">
                     {a.their_show_count}
                   </span>
                 </div>
@@ -427,15 +427,15 @@ export default function ProfilePage() {
                       {p.bio}
                     </p>
                   )}
-                  <div className="flex items-center gap-1.5 mt-2 text-sm text-muted flex-wrap">
+                  <div className="flex items-center gap-1.5 mt-2 text-sm flex-wrap">
                     <span className="font-semibold text-primary">
                       {p.confirmed_shows}
                     </span>
-                    <span>show{p.confirmed_shows !== 1 ? 's' : ''}</span>
+                    <span className="text-muted-foreground">show{p.confirmed_shows !== 1 ? 's' : ''}</span>
                     {yearRange && (
                       <>
-                        <span className="text-white/20">·</span>
-                        <span>{yearRange}</span>
+                        <span className="text-white/30">·</span>
+                        <span className="text-muted-foreground">{yearRange}</span>
                       </>
                     )}
                   </div>
@@ -525,7 +525,7 @@ export default function ProfilePage() {
               <h2 className="text-sm font-semibold text-primary">Top Artists</h2>
             </div>
             {!p.top_artists || p.top_artists.length === 0 ? (
-              <p className="text-sm text-muted px-5 py-6">No confirmed shows yet.</p>
+              <p className="text-sm text-muted-foreground px-5 py-6">No confirmed shows yet.</p>
             ) : (
               p.top_artists.map((artist, i) => (
                 <div
@@ -553,7 +553,7 @@ export default function ProfilePage() {
               <h2 className="text-sm font-semibold text-primary">Top Venues</h2>
             </div>
             {!p.top_venues || p.top_venues.length === 0 ? (
-              <p className="text-sm text-muted px-5 py-6">No confirmed shows yet.</p>
+              <p className="text-sm text-muted-foreground px-5 py-6">No confirmed shows yet.</p>
             ) : (
               p.top_venues.map((venue, i) => {
                 const capKey = venue.capacity_category?.toLowerCase() ?? 'unknown'
