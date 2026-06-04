@@ -438,12 +438,26 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-background">
       <Navigation />
 
-      <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
 
         {/* ── Header card ─────────────────────────────────────────────────── */}
         <div className="bg-card border border-white/10 rounded-2xl p-6">
           <div className="flex items-start gap-5 flex-wrap sm:flex-nowrap">
-            <AvatarDisplay username={p.username} avatarUrl={p.avatar_url} sizePx={80} />
+
+            {/* Left column: avatar always, QR below on mobile */}
+            <div className="shrink-0 flex flex-col items-center gap-3">
+              <AvatarDisplay username={p.username} avatarUrl={p.avatar_url} sizePx={80} />
+              {p.is_own_profile && (
+                <div className="sm:hidden bg-white rounded-xl p-1.5">
+                  <QRCodeSVG
+                    value={`https://grooveprint.app/profile/${username}`}
+                    size={72}
+                    bgColor="#ffffff"
+                    fgColor="#0f172a"
+                  />
+                </div>
+              )}
+            </div>
 
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-4 flex-wrap">
