@@ -602,10 +602,24 @@ export default function ProfilePage() {
         {p.is_own_profile && (
           <div className="bg-card border border-white/10 rounded-2xl p-6">
             <h2 className="text-sm font-semibold text-primary mb-4">Share Your Profile</h2>
-            <div className="flex items-center gap-6 flex-wrap">
 
-              {/* URL + copy */}
-              <div className="flex-1 min-w-0">
+            {/* Mobile: QR stacked above URL. Desktop: QR left, URL right */}
+            <div className="flex flex-col sm:flex-row items-start gap-4">
+
+              {/* QR code — visual anchor, leads on desktop */}
+              <div className="shrink-0">
+                <div className="bg-white rounded-xl p-2 inline-block">
+                  <QRCodeSVG
+                    value={`https://grooveprint.app/profile/${username}`}
+                    size={88}
+                    bgColor="#ffffff"
+                    fgColor="#0f172a"
+                  />
+                </div>
+              </div>
+
+              {/* URL + copy — fills remaining space, vertically centred with QR */}
+              <div className="flex-1 min-w-0 w-full sm:w-auto sm:self-center">
                 <p className="text-xs text-muted-foreground mb-2">Profile link</p>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 bg-background border border-border rounded-xl px-3 py-2.5 text-sm text-foreground font-mono truncate min-w-0">
@@ -620,18 +634,6 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* QR code — aligned with the URL box */}
-              <div className="shrink-0 flex flex-col">
-                <p className="text-xs text-muted-foreground mb-2">QR code</p>
-                <div className="bg-white rounded-xl p-2 inline-block">
-                  <QRCodeSVG
-                    value={`https://grooveprint.app/profile/${username}`}
-                    size={88}
-                    bgColor="#ffffff"
-                    fgColor="#0f172a"
-                  />
-                </div>
-              </div>
             </div>
           </div>
         )}
