@@ -34,7 +34,7 @@ type FullProfile = {
   is_own_profile: boolean
   friendship_status: 'accepted' | 'pending' | null
   request_direction: 'incoming' | 'outgoing' | null
-  request_id: string | null
+  request_id: number | null           // bigint from user_friends.id
   confirmed_shows: number
   first_show_year: number | null
   last_show_year: number | null
@@ -152,7 +152,6 @@ function ComparisonModal({
     fetchShared()
   }, [profile.user_id])
 
-  // Close on backdrop click
   const handleBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) onClose()
   }
@@ -209,7 +208,6 @@ function ComparisonModal({
             </div>
           ) : (
             <div>
-              {/* Column labels */}
               <div className="flex items-center gap-2 px-5 pb-1">
                 <span className="w-6 shrink-0" />
                 <span className="flex-1 text-xs text-muted">Artist</span>
@@ -269,7 +267,6 @@ export default function ProfilePage() {
   const supabase = createClient()
 
   const fetchProfile = useCallback(async () => {
-    // get_user_profile returns json (single object), not SETOF
     const { data, error } = await supabase.rpc('get_user_profile', {
       target_username: username,
     })
@@ -285,7 +282,6 @@ export default function ProfilePage() {
   useEffect(() => {
     fetchProfile()
 
-    // Fetch viewer's own profile info for comparison modal header
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
       supabase
@@ -319,7 +315,7 @@ export default function ProfilePage() {
   }
 
   const handleRespond = async (
-    requestId: string,
+    requestId: number,
     action: 'accept' | 'reject'
   ) => {
     setActionLoading(true)
@@ -460,7 +456,7 @@ export default function ProfilePage() {
                       </button>
                     )}
 
-                    {/* Pending — outgoing (we sent it) */}
+                    {/* Pending — outgoing */}
                     {p.friendship_status === 'pending' &&
                       p.request_direction === 'outgoing' && (
                         <>
@@ -477,9 +473,10 @@ export default function ProfilePage() {
                         </>
                       )}
 
-                    {/* Pending — incoming (they sent it to us) */}
+                    {/* Pending — incoming */}
                     {p.friendship_status === 'pending' &&
-                      p.request_direction === 'incoming' && (
+                      p.request_direction === 'incoming' &&
+                      p.request_id !== null && (
                         <>
                           <button
                             onClick={() => handleRespond(p.request_id!, 'accept')}
@@ -519,7 +516,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* ── Two-column grid: Top Artists + Top Venues ────────────────────── */}
+        {/* ── Top Artists + Top Venues ─────────────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
           {/* Top Artists */}
@@ -586,7 +583,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* ── Spotify stats card (own profile or when show_spotify_stats is on) ── */}
+        {/* ── Spotify stats card ────────────────────────────────────────────── */}
         {showSpotifyCard && (
           <div className="bg-card border border-white/10 rounded-2xl px-5 py-4 flex items-center gap-3">
             <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" fill="#1DB954">
@@ -605,13 +602,13 @@ export default function ProfilePage() {
         {p.is_own_profile && (
           <div className="bg-card border border-white/10 rounded-2xl p-6">
             <h2 className="text-sm font-semibold text-primary mb-4">Share Your Profile</h2>
-            <div className="flex items-start gap-6 flex-wrap">
+            <div className="flex items-center gap-6 flex-wrap">
 
               {/* URL + copy */}
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted mb-2">Profile link</p>
+                <p className="text-xs text-muted-foreground mb-2">Profile link</p>
                 <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-background border border-white/10 rounded-xl px-3 py-2.5 text-sm text-muted font-mono truncate min-w-0">
+                  <div className="flex-1 bg-background border border-border rounded-xl px-3 py-2.5 text-sm text-foreground font-mono truncate min-w-0">
                     grooveprint.app/profile/{username}
                   </div>
                   <button
@@ -623,9 +620,9 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* QR code */}
-              <div className="shrink-0">
-                <p className="text-xs text-muted mb-2">QR code</p>
+              {/* QR code — aligned with the URL box */}
+              <div className="shrink-0 flex flex-col">
+                <p className="text-xs text-muted-foreground mb-2">QR code</p>
                 <div className="bg-white rounded-xl p-2 inline-block">
                   <QRCodeSVG
                     value={`https://grooveprint.app/profile/${username}`}
