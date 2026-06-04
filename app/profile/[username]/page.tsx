@@ -11,6 +11,7 @@ import { QRCodeSVG } from 'qrcode.react'
 type TopArtist = {
   artist_id: number
   artist_name: string
+  spotify_artist_id: string | null
   show_count: number
 }
 
@@ -18,6 +19,7 @@ type TopVenue = {
   venue_id: number
   venue_name: string
   capacity_category: string | null
+  capacity: number | null
   show_count: number
 }
 
@@ -34,10 +36,15 @@ type FullProfile = {
   is_own_profile: boolean
   friendship_status: 'accepted' | 'pending' | null
   request_direction: 'incoming' | 'outgoing' | null
-  request_id: number | null           // bigint from user_friends.id
+  request_id: number | null
   confirmed_shows: number
+  unique_artists: number
+  unique_venues: number
+  festival_count: number
   first_show_year: number | null
   last_show_year: number | null
+  spotify_song_count: number | null
+  spotify_artist_count: number | null
   top_artists: TopArtist[]
   top_venues: TopVenue[]
 }
@@ -57,19 +64,48 @@ type SharedArtist = {
   their_show_count: number
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Capacity helpers ─────────────────────────────────────────────────────────
 
-// Capacity badge colors: inline styles required — Tailwind JIT purges dynamic class names
-const CAPACITY_STYLES: Record<string, { bg: string; text: string }> = {
-  small:   { bg: 'rgba(139,92,246,0.15)', text: '#a78bfa' },
-  medium:  { bg: 'rgba(58,143,189,0.15)', text: '#3A8FBD' },
-  large:   { bg: 'rgba(234,88,12,0.15)',  text: '#f97316' },
-  xlarge:  { bg: 'rgba(225,29,72,0.15)',  text: '#fb7185' },
-  unknown: { bg: 'rgba(156,163,175,0.10)', text: '#9ca3af' },
+function getCapacityKey(category: string | null): string {
+  if (!category) return 'unknown'
+  const c = category.toLowerCase()
+  if (c.includes('x-large') || c.includes('10k')) return 'xlarge'
+  if (c.includes('large'))  return 'large'
+  if (c.includes('medium')) return 'medium'
+  if (c.includes('small'))  return 'small'
+  return 'unknown'
+}
+
+// Inline styles required — Tailwind JIT purges dynamic class names
+const CAPACITY_STYLES: Record<string, { bg: string; text: string; letter: string }> = {
+  small:   { bg: 'rgba(139,92,246,0.15)',  text: '#a78bfa', letter: 'S'  },
+  medium:  { bg: 'rgba(58,143,189,0.15)',  text: '#3A8FBD', letter: 'M'  },
+  large:   { bg: 'rgba(234,88,12,0.15)',   text: '#f97316', letter: 'L'  },
+  xlarge:  { bg: 'rgba(225,29,72,0.15)',   text: '#fb7185', letter: 'XL' },
+  unknown: { bg: 'rgba(156,163,175,0.10)', text: '#9ca3af', letter: '?'  },
 }
 
 function isRestricted(p: ProfileData): p is RestrictedProfile {
   return 'visibility' in p
+}
+
+// ─── Spotify icon ─────────────────────────────────────────────────────────────
+
+function SpotifyLink({ artistId }: { artistId: string }) {
+  return (
+    <a
+      href={`https://open.spotify.com/artist/${artistId}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Open in Spotify"
+      onClick={e => e.stopPropagation()}
+      className="flex-shrink-0 hover:opacity-70 transition-opacity"
+    >
+      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="#1DB954">
+        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+      </svg>
+    </a>
+  )
 }
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
@@ -167,7 +203,7 @@ function ComparisonModal({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="flex" style={{ gap: -8 }}>
+            <div className="flex">
               <div style={{ zIndex: 1 }}>
                 <AvatarDisplay username={viewerUsername} avatarUrl={viewerAvatarUrl} sizePx={32} />
               </div>
@@ -188,7 +224,7 @@ function ComparisonModal({
           </div>
           <button
             onClick={onClose}
-            className="text-muted hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-white/5 text-sm"
+            className="text-muted-foreground hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-white/5 text-sm"
             aria-label="Close"
           >
             ✕
@@ -270,7 +306,6 @@ export default function ProfilePage() {
     const { data, error } = await supabase.rpc('get_user_profile', {
       target_username: username,
     })
-
     if (error || data === null) {
       setNotFound(true)
     } else {
@@ -281,7 +316,6 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetchProfile()
-
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
       supabase
@@ -314,10 +348,7 @@ export default function ProfilePage() {
     setActionLoading(false)
   }
 
-  const handleRespond = async (
-    requestId: number,
-    action: 'accept' | 'reject'
-  ) => {
+  const handleRespond = async (requestId: number, action: 'accept' | 'reject') => {
     setActionLoading(true)
     await supabase.rpc('respond_to_friend_request', {
       request_id: requestId,
@@ -355,7 +386,7 @@ export default function ProfilePage() {
         <div className="max-w-2xl mx-auto px-4 py-20 text-center">
           <p className="text-4xl mb-4">👤</p>
           <h1 className="text-xl font-semibold text-primary mb-2">User not found</h1>
-          <p className="text-sm text-muted">
+          <p className="text-sm text-muted-foreground">
             No Grooveprint user exists with the username{' '}
             <span className="font-mono text-primary">@{username}</span>.
           </p>
@@ -377,7 +408,7 @@ export default function ProfilePage() {
             <p className="text-3xl">
               {profile.visibility === 'private' ? '🔒' : '👥'}
             </p>
-            <p className="text-sm text-muted max-w-xs">
+            <p className="text-sm text-muted-foreground max-w-xs">
               {profile.visibility === 'private'
                 ? 'This profile is private.'
                 : `Add ${profile.username} as a friend to view their profile.`}
@@ -401,7 +432,7 @@ export default function ProfilePage() {
   const showSpotifyCard =
     p.show_spotify_stats &&
     p.spotify_connected &&
-    p.spotify_matched_shows != null
+    (p.spotify_song_count != null && p.spotify_song_count > 0)
 
   return (
     <div className="min-h-screen bg-background">
@@ -423,19 +454,34 @@ export default function ProfilePage() {
                     @{p.username}
                   </h1>
                   {p.bio && (
-                    <p className="text-sm text-muted mt-1 max-w-sm leading-relaxed">
+                    <p className="text-sm text-muted-foreground mt-1 max-w-sm leading-relaxed">
                       {p.bio}
                     </p>
                   )}
+
+                  {/* Stats summary: X shows · Y artists · Z venues · N festivals */}
                   <div className="flex items-center gap-1.5 mt-2 text-sm flex-wrap">
-                    <span className="font-semibold text-primary">
-                      {p.confirmed_shows}
-                    </span>
-                    <span className="text-muted-foreground">show{p.confirmed_shows !== 1 ? 's' : ''}</span>
+                    <span className="font-semibold text-primary">{p.confirmed_shows}</span>
+                    <span className="text-muted-foreground">shows</span>
+                    <span className="text-white/30">·</span>
+                    <span className="font-semibold text-primary">{p.unique_artists}</span>
+                    <span className="text-muted-foreground">artists</span>
+                    <span className="text-white/30">·</span>
+                    <span className="font-semibold text-primary">{p.unique_venues}</span>
+                    <span className="text-muted-foreground">venues</span>
+                    {p.festival_count > 0 && (
+                      <>
+                        <span className="text-white/30">·</span>
+                        <span className="font-semibold text-primary">{p.festival_count}</span>
+                        <span className="text-muted-foreground">
+                          {p.festival_count === 1 ? 'festival' : 'festivals'}
+                        </span>
+                      </>
+                    )}
                     {yearRange && (
                       <>
                         <span className="text-white/30">·</span>
-                        <span className="text-muted-foreground">{yearRange}</span>
+                        <span className="text-primary font-medium">{yearRange}</span>
                       </>
                     )}
                   </div>
@@ -445,7 +491,6 @@ export default function ProfilePage() {
                 {!p.is_own_profile && (
                   <div className="flex items-center gap-2 flex-wrap shrink-0">
 
-                    {/* No relationship */}
                     {p.friendship_status === null && (
                       <button
                         onClick={() => handleAddFriend(p.user_id)}
@@ -456,24 +501,21 @@ export default function ProfilePage() {
                       </button>
                     )}
 
-                    {/* Pending — outgoing */}
-                    {p.friendship_status === 'pending' &&
-                      p.request_direction === 'outgoing' && (
-                        <>
-                          <span className="px-4 py-2 bg-white/5 text-muted text-sm font-medium rounded-xl">
-                            Request Sent
-                          </span>
-                          <button
-                            onClick={() => handleCancelRequest(p.user_id)}
-                            disabled={actionLoading}
-                            className="px-3 py-2 border border-white/10 hover:bg-white/5 text-muted text-sm rounded-xl transition-colors disabled:opacity-50"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      )}
+                    {p.friendship_status === 'pending' && p.request_direction === 'outgoing' && (
+                      <>
+                        <span className="px-4 py-2 bg-white/5 text-muted-foreground text-sm font-medium rounded-xl">
+                          Request Sent
+                        </span>
+                        <button
+                          onClick={() => handleCancelRequest(p.user_id)}
+                          disabled={actionLoading}
+                          className="px-3 py-2 border border-white/10 hover:bg-white/5 text-muted-foreground text-sm rounded-xl transition-colors disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    )}
 
-                    {/* Pending — incoming */}
                     {p.friendship_status === 'pending' &&
                       p.request_direction === 'incoming' &&
                       p.request_id !== null && (
@@ -488,14 +530,13 @@ export default function ProfilePage() {
                           <button
                             onClick={() => handleRespond(p.request_id!, 'reject')}
                             disabled={actionLoading}
-                            className="px-3 py-2 border border-white/10 hover:bg-white/5 text-muted text-sm rounded-xl transition-colors disabled:opacity-50"
+                            className="px-3 py-2 border border-white/10 hover:bg-white/5 text-muted-foreground text-sm rounded-xl transition-colors disabled:opacity-50"
                           >
                             Reject
                           </button>
                         </>
                       )}
 
-                    {/* Accepted */}
                     {p.friendship_status === 'accepted' && (
                       <>
                         <span className="px-4 py-2 bg-teal-500/10 text-teal-400 text-sm font-medium rounded-xl border border-teal-500/20">
@@ -538,8 +579,11 @@ export default function ProfilePage() {
                   <span className="flex-1 text-sm text-primary truncate">
                     {artist.artist_name}
                   </span>
-                  <span className="text-xs text-muted shrink-0 tabular-nums">
-                    {artist.show_count} show{artist.show_count !== 1 ? 's' : ''}
+                  {artist.spotify_artist_id && (
+                    <SpotifyLink artistId={artist.spotify_artist_id} />
+                  )}
+                  <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                    {artist.show_count} {artist.show_count === 1 ? 'show' : 'shows'}
                   </span>
                   <span className="text-white/20 text-xs">›</span>
                 </div>
@@ -556,8 +600,12 @@ export default function ProfilePage() {
               <p className="text-sm text-muted-foreground px-5 py-6">No confirmed shows yet.</p>
             ) : (
               p.top_venues.map((venue, i) => {
-                const capKey = venue.capacity_category?.toLowerCase() ?? 'unknown'
-                const capStyle = CAPACITY_STYLES[capKey] ?? CAPACITY_STYLES.unknown
+                const capKey = getCapacityKey(venue.capacity_category)
+                const capStyle = CAPACITY_STYLES[capKey]
+                const capLabel = venue.capacity
+                  ? `${capStyle.letter} · ${venue.capacity.toLocaleString()}`
+                  : capStyle.letter
+
                 return (
                   <div
                     key={venue.venue_id}
@@ -571,9 +619,9 @@ export default function ProfilePage() {
                     </span>
                     <span
                       style={{ backgroundColor: capStyle.bg, color: capStyle.text }}
-                      className="text-xs font-medium px-2 py-0.5 rounded-full capitalize shrink-0"
+                      className="text-xs font-medium px-2 py-0.5 rounded-full shrink-0 tabular-nums"
                     >
-                      {venue.capacity_category ?? 'Unknown'}
+                      {capLabel}
                     </span>
                     <span className="text-white/20 text-xs">›</span>
                   </div>
@@ -589,12 +637,25 @@ export default function ProfilePage() {
             <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" fill="#1DB954">
               <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
             </svg>
-            <span className="text-sm text-muted">
-              <span className="font-semibold text-primary">
-                {p.spotify_matched_shows}
-              </span>{' '}
-              matched shows via Spotify
-            </span>
+            <div className="flex items-center gap-3 text-sm flex-wrap">
+              <span>
+                <span className="font-semibold text-primary">
+                  {p.spotify_song_count?.toLocaleString()}
+                </span>
+                <span className="text-muted-foreground ml-1">songs</span>
+              </span>
+              {p.spotify_artist_count != null && p.spotify_artist_count > 0 && (
+                <>
+                  <span className="text-white/20">·</span>
+                  <span>
+                    <span className="font-semibold text-primary">
+                      {p.spotify_artist_count.toLocaleString()}
+                    </span>
+                    <span className="text-muted-foreground ml-1">artists</span>
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         )}
 
