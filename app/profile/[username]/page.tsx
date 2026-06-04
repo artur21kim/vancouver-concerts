@@ -45,7 +45,7 @@ type FullProfile = {
 type RestrictedProfile = {
   username: string
   avatar_url: string | null
-  visibility: 'private' | 'friends_only'
+  visibility: 'private' | 'friends'
 }
 
 type ProfileData = FullProfile | RestrictedProfile
