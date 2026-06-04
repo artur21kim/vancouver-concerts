@@ -509,8 +509,35 @@ export default function ProfilePage() {
                   )}
                 </div>
 
-                {/* Friendship action buttons */}
-                {!p.is_own_profile && (
+                {/* Right panel — QR share (own profile) or friendship buttons (others) */}
+                {p.is_own_profile ? (
+                  <div className="shrink-0 flex flex-col items-center gap-2">
+                    {/* Desktop: QR code + Copy Link */}
+                    <div className="hidden sm:flex flex-col items-center gap-2">
+                      <div className="bg-white rounded-xl p-1.5 inline-block">
+                        <QRCodeSVG
+                          value={`https://grooveprint.app/profile/${username}`}
+                          size={72}
+                          bgColor="#ffffff"
+                          fgColor="#0f172a"
+                        />
+                      </div>
+                      <button
+                        onClick={handleCopy}
+                        className="w-full px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 text-xs font-medium rounded-xl transition-colors border border-teal-500/20"
+                      >
+                        {copied ? 'Copied!' : 'Copy Link'}
+                      </button>
+                    </div>
+                    {/* Mobile: Copy Link button only — QR not useful on own device */}
+                    <button
+                      onClick={handleCopy}
+                      className="sm:hidden px-4 py-2 bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 text-sm font-medium rounded-xl transition-colors border border-teal-500/20"
+                    >
+                      {copied ? 'Copied!' : 'Copy Link'}
+                    </button>
+                  </div>
+                ) : (
                   <div className="flex items-center gap-2 flex-wrap shrink-0">
 
                     {p.friendship_status === null && (
@@ -660,45 +687,6 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* ── Share section (own profile only) ─────────────────────────────── */}
-        {p.is_own_profile && (
-          <div className="bg-card border border-white/10 rounded-2xl p-6">
-            <h2 className="text-sm font-semibold text-primary mb-4">Share Your Profile</h2>
-
-            {/* Mobile: QR stacked above URL. Desktop: QR left, URL right */}
-            <div className="flex flex-col sm:flex-row items-start gap-4">
-
-              {/* QR code — visual anchor, leads on desktop */}
-              <div className="shrink-0">
-                <div className="bg-white rounded-xl p-2 inline-block">
-                  <QRCodeSVG
-                    value={`https://grooveprint.app/profile/${username}`}
-                    size={88}
-                    bgColor="#ffffff"
-                    fgColor="#0f172a"
-                  />
-                </div>
-              </div>
-
-              {/* URL + copy — fills remaining space, vertically centred with QR */}
-              <div className="flex-1 min-w-0 w-full sm:w-auto sm:self-center">
-                <p className="text-xs text-muted-foreground mb-2">Profile link</p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-background border border-border rounded-xl px-3 py-2.5 text-sm text-foreground font-mono truncate min-w-0">
-                    grooveprint.app/profile/{username}
-                  </div>
-                  <button
-                    onClick={handleCopy}
-                    className="px-4 py-2.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 text-sm font-medium rounded-xl transition-colors border border-teal-500/20 shrink-0"
-                  >
-                    {copied ? 'Copied!' : 'Copy'}
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── Comparison modal ───────────────────────────────────────────────── */}
