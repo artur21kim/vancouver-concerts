@@ -60,6 +60,7 @@ type ProfileData = FullProfile | RestrictedProfile
 type SharedArtist = {
   artist_id: number
   artist_name: string
+  spotify_artist_id: string | null
   my_show_count: number
   their_show_count: number
 }
@@ -179,10 +180,8 @@ function ComparisonModal({
 
   useEffect(() => {
     async function fetchShared() {
-      const { data: { user } } = await supabase.auth.getUser()
       const { data, error } = await supabase.rpc('get_shared_artists', {
         friend_user_id: profile.user_id,
-        viewer_user_id: user?.id ?? null,
       })
       if (!error && data) setArtists(data as SharedArtist[])
       setLoading(false)
