@@ -245,10 +245,10 @@ function ComparisonModal({
             </div>
           ) : (
             <div>
-              <div className="flex items-center gap-2 px-5 pb-1">
+              <div className="flex items-center gap-2 px-5 pb-2">
                 <span className="w-6 shrink-0" />
                 <span className="flex-1 text-xs text-muted-foreground">Artist</span>
-                <span className="w-10 text-right text-xs text-muted-foreground">You</span>
+                <span className="w-10 text-right text-xs font-medium text-primary">You</span>
                 <span className="w-14 text-right text-xs text-muted-foreground">{profile.username}</span>
               </div>
               {artists.map((a, i) => (
@@ -259,13 +259,18 @@ function ComparisonModal({
                   <span className="text-xs font-bold text-teal-400 w-6 shrink-0">
                     #{i + 1}
                   </span>
-                  <span className="flex-1 text-sm text-primary truncate">
-                    {a.artist_name}
-                  </span>
-                  <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <span className="text-sm text-primary truncate">
+                      {a.artist_name}
+                    </span>
+                    {a.spotify_artist_id && (
+                      <SpotifyLink artistId={a.spotify_artist_id} />
+                    )}
+                  </div>
+                  <span className="w-10 text-right text-sm font-semibold tabular-nums text-primary">
                     {a.my_show_count}
                   </span>
-                  <span className="w-14 text-right text-xs text-muted-foreground tabular-nums">
+                  <span className="w-14 text-right text-sm tabular-nums text-muted-foreground">
                     {a.their_show_count}
                   </span>
                 </div>
