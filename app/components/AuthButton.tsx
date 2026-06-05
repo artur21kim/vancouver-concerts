@@ -13,28 +13,35 @@ export default function AuthButton() {
     const [showAuthModal, setShowAuthModal] = useState(false)
     const [showUserMenu, setShowUserMenu] = useState(false)
     const [username, setUsername] = useState<string | null>(null)
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+    const [imgError, setImgError] = useState(false)
     const supabase = createClient()
 
     useEffect(() => {
-        const fetchUsername = async () => {
+        const fetchProfile = async () => {
             if (!user) {
                 setUsername(null)
+                setAvatarUrl(null)
                 return
             }
 
             const { data } = await supabase
                 .from('user_profiles')
-                .select('username')
+                .select('username, avatar_url')
                 .eq('user_id', user.id)
                 .single()
 
             if (data) {
                 setUsername(data.username)
+                setAvatarUrl(data.avatar_url ?? null)
             }
         }
 
-        fetchUsername()
+        fetchProfile()
     }, [user, supabase])
+
+    // Reset image error state whenever the URL changes (e.g. after avatar refresh)
+    useEffect(() => { setImgError(false) }, [avatarUrl])
 
     const handleSignOut = async () => {
         await supabase.auth.signOut()
@@ -66,6 +73,7 @@ export default function AuthButton() {
     }
 
     const displayName = username || user.email
+    const showAvatar = avatarUrl && !imgError
 
     return (
         <div className="relative">
@@ -73,9 +81,18 @@ export default function AuthButton() {
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center gap-2 px-2 md:px-4 py-2 bg-muted hover:opacity-80 rounded-md"
             >
-                <div className="w-7 h-7 md:w-8 md:h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-semibold text-xs md:text-sm">
-                    {username ? username[0].toUpperCase() : (user.email?.[0]?.toUpperCase() ?? '?')}
-                </div>
+                {showAvatar ? (
+                    <img
+                        src={avatarUrl}
+                        alt={username ?? 'avatar'}
+                        onError={() => setImgError(true)}
+                        className="w-7 h-7 md:w-8 md:h-8 rounded-full object-cover flex-shrink-0"
+                    />
+                ) : (
+                    <div className="w-7 h-7 md:w-8 md:h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-semibold text-xs md:text-sm flex-shrink-0">
+                        {username ? username[0].toUpperCase() : (user.email?.[0]?.toUpperCase() ?? '?')}
+                    </div>
+                )}
                 <span className="text-foreground font-medium hidden md:block">
                     {displayName}
                 </span>
