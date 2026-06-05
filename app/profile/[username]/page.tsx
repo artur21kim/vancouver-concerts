@@ -65,6 +65,23 @@ type SharedArtist = {
   their_show_count: number
 }
 
+type SharedShow = {
+  show_id: number
+  date: string
+  artist_name: string
+  venue_name: string
+  capacity_category: string | null
+  setlist_url: string | null
+}
+
+type SharedBill = {
+  key: string
+  date: string
+  venue_name: string
+  capacity_category: string | null
+  artists: { show_id: number; artist_name: string; setlist_url: string | null }[]
+}
+
 // ─── Capacity helpers ─────────────────────────────────────────────────────────
 
 function getCapacityKey(category: string | null): string {
@@ -88,6 +105,36 @@ const CAPACITY_STYLES: Record<string, { bg: string; text: string; letter: string
 
 function isRestricted(p: ProfileData): p is RestrictedProfile {
   return 'visibility' in p
+}
+
+// ─── Shared bill grouping ─────────────────────────────────────────────────────
+
+function buildSharedBills(shows: SharedShow[]): SharedBill[] {
+  const map = new Map<string, SharedBill>()
+  for (const show of shows) {
+    const key = `${show.date}__${show.venue_name}`
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        date: show.date,
+        venue_name: show.venue_name,
+        capacity_category: show.capacity_category,
+        artists: [],
+      })
+    }
+    map.get(key)!.artists.push({
+      show_id: show.show_id,
+      artist_name: show.artist_name,
+      setlist_url: show.setlist_url,
+    })
+  }
+  return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date))
+}
+
+function fmtDate(dateStr: string) {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
+    year: 'numeric', month: 'short', day: 'numeric',
+  })
 }
 
 // ─── Spotify icon ─────────────────────────────────────────────────────────────
@@ -174,9 +221,11 @@ function ComparisonModal({
   viewerAvatarUrl: string | null
   onClose: () => void
 }) {
-  const [artists, setArtists] = useState<SharedArtist[]>([])
+  const [artists, setArtists]         = useState<SharedArtist[]>([])
   const [spotifyStats, setSpotifyStats] = useState<{ shared_songs: number; shared_artists: number } | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [sharedShows, setSharedShows] = useState<SharedShow[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [activeTab, setActiveTab]     = useState<'artists' | 'shows'>('artists')
   const supabase = createClient()
 
   useEffect(() => {
@@ -184,12 +233,16 @@ function ComparisonModal({
       const { data: { user } } = await supabase.auth.getUser()
       const viewerId = user?.id ?? null
 
-      const [artistsResult, spotifyResult] = await Promise.all([
+      const [artistsResult, spotifyResult, showsResult] = await Promise.all([
         supabase.rpc('get_shared_artists', {
           friend_user_id: profile.user_id,
           viewer_user_id: viewerId,
         }),
         supabase.rpc('get_shared_spotify_stats', {
+          friend_user_id: profile.user_id,
+          viewer_user_id: viewerId,
+        }),
+        supabase.rpc('get_shared_shows', {
           friend_user_id: profile.user_id,
           viewer_user_id: viewerId,
         }),
@@ -204,10 +257,16 @@ function ComparisonModal({
           setSpotifyStats(stats)
         }
       }
+      if (!showsResult.error && showsResult.data) {
+        setSharedShows(showsResult.data as SharedShow[])
+      }
       setLoading(false)
     }
     fetchShared()
-  }, [profile.user_id])
+  }, [profile.user_id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Derived — group shared shows into bills (same date + venue)
+  const sharedBills = buildSharedBills(sharedShows)
 
   const handleBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) onClose()
@@ -258,6 +317,9 @@ function ComparisonModal({
               {!loading && (
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {artists.length} shared artist{artists.length !== 1 ? 's' : ''}
+                  {sharedBills.length > 0 && (
+                    <> · {sharedBills.length} {sharedBills.length === 1 ? 'show' : 'shows'} in common</>
+                  )}
                 </p>
               )}
             </div>
@@ -271,50 +333,142 @@ function ComparisonModal({
           </button>
         </div>
 
+        {/* Tab bar */}
+        <div className="flex flex-shrink-0 border-b border-white/10">
+          {(['artists', 'shows'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-2.5 text-xs font-semibold capitalize transition-colors border-b-2 -mb-px ${
+                activeTab === tab
+                  ? 'text-primary border-primary'
+                  : 'text-muted-foreground border-transparent hover:text-foreground'
+              }`}
+            >
+              {tab === 'artists'
+                ? `Artists${!loading ? ` (${artists.length})` : ''}`
+                : `Shows${!loading && sharedBills.length > 0 ? ` (${sharedBills.length})` : ''}`
+              }
+            </button>
+          ))}
+        </div>
+
         {/* Body */}
         <div className="overflow-y-auto flex-1 py-3">
           {loading ? (
             <div className="flex justify-center py-10">
               <div className="w-5 h-5 border-2 border-teal-400 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : artists.length === 0 ? (
-            <div className="text-center py-10 px-6">
-              <p className="text-2xl mb-2">🎵</p>
-              <p className="text-muted-foreground text-sm">No shared artists yet — attend some shows together!</p>
-            </div>
-          ) : (
-            <div>
-              <div className="flex items-center gap-2 px-5 pb-2">
-                <span className="w-6 shrink-0" />
-                <span className="flex-1 text-xs text-muted-foreground">Artist</span>
-                <span className="w-10 text-center text-xs font-medium text-primary">You</span>
-                <span className="w-14 text-center text-xs text-muted-foreground">{profile.username}</span>
+          ) : activeTab === 'artists' ? (
+
+            /* ── Artists tab ── */
+            artists.length === 0 ? (
+              <div className="text-center py-10 px-6">
+                <p className="text-2xl mb-2">🎵</p>
+                <p className="text-muted-foreground text-sm">No shared artists yet — attend some shows together!</p>
               </div>
-              {artists.map((a, i) => (
-                <div
-                  key={a.artist_id}
-                  className="flex items-center gap-2 px-5 py-2.5 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors"
-                >
-                  <span className="text-xs font-bold text-teal-400 w-6 shrink-0">
-                    #{i + 1}
-                  </span>
-                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                    <span className="text-sm text-primary truncate">
-                      {a.artist_name}
-                    </span>
-                    {a.spotify_artist_id && (
-                      <SpotifyLink artistId={a.spotify_artist_id} />
-                    )}
-                  </div>
-                  <span className="w-10 text-center text-sm font-semibold tabular-nums text-primary">
-                    {a.my_show_count}
-                  </span>
-                  <span className="w-14 text-center text-sm tabular-nums text-muted-foreground">
-                    {a.their_show_count}
-                  </span>
+            ) : (
+              <div>
+                <div className="flex items-center gap-2 px-5 pb-2">
+                  <span className="w-6 shrink-0" />
+                  <span className="flex-1 text-xs text-muted-foreground">Artist</span>
+                  <span className="w-10 text-center text-xs font-medium text-primary">You</span>
+                  <span className="w-14 text-center text-xs text-muted-foreground">{profile.username}</span>
                 </div>
-              ))}
-            </div>
+                {artists.map((a, i) => (
+                  <div
+                    key={a.artist_id}
+                    className="flex items-center gap-2 px-5 py-2.5 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors"
+                  >
+                    <span className="text-xs font-bold text-teal-400 w-6 shrink-0">
+                      #{i + 1}
+                    </span>
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <span className="text-sm text-primary truncate">
+                        {a.artist_name}
+                      </span>
+                      {a.spotify_artist_id && (
+                        <SpotifyLink artistId={a.spotify_artist_id} />
+                      )}
+                    </div>
+                    <span className="w-10 text-center text-sm font-semibold tabular-nums text-primary">
+                      {a.my_show_count}
+                    </span>
+                    <span className="w-14 text-center text-sm tabular-nums text-muted-foreground">
+                      {a.their_show_count}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )
+
+          ) : (
+
+            /* ── Shows tab ── */
+            sharedBills.length === 0 ? (
+              <div className="text-center py-10 px-6">
+                <p className="text-2xl mb-2">🎸</p>
+                <p className="text-muted-foreground text-sm">No shows in common yet.</p>
+                <p className="text-muted-foreground text-xs mt-2 leading-relaxed">
+                  This counts shows you've both added to My Shows — not just shared artists.
+                </p>
+              </div>
+            ) : (
+              <div>
+                {sharedBills.map(bill => {
+                  const capKey = getCapacityKey(bill.capacity_category)
+                  const capStyle = CAPACITY_STYLES[capKey]
+                  return (
+                    <div key={bill.key} className="border-b border-white/5 last:border-0">
+                      {/* Bill header — date · venue · capacity */}
+                      <div className="flex items-center gap-2 px-5 py-2 bg-white/[0.03]">
+                        <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap flex-shrink-0">
+                          {fmtDate(bill.date)}
+                        </span>
+                        <span className="text-white/20 flex-shrink-0">·</span>
+                        <span className="text-xs text-primary truncate">{bill.venue_name}</span>
+                        {capStyle.letter !== '?' && (
+                          <span
+                            style={{ backgroundColor: capStyle.bg, color: capStyle.text }}
+                            className="text-[9px] font-bold px-1.5 py-px rounded-full flex-shrink-0"
+                          >
+                            {capStyle.letter}
+                          </span>
+                        )}
+                      </div>
+                      {/* Artists on this bill */}
+                      {bill.artists.map(artist => (
+                        <div
+                          key={artist.show_id}
+                          className="flex items-center gap-2.5 px-5 py-2 hover:bg-white/5 transition-colors"
+                        >
+                          <span className="text-white/25 text-xs flex-shrink-0">›</span>
+                          <span className="text-sm text-foreground flex-1 truncate">
+                            {artist.artist_name}
+                          </span>
+                          {artist.setlist_url && (
+                            <a
+                              href={artist.setlist_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="View setlist"
+                              onClick={e => e.stopPropagation()}
+                              className="flex-shrink-0 hover:opacity-70 transition-opacity"
+                            >
+                              <img
+                                src="https://www.setlist.fm/favicon.ico"
+                                alt="setlist.fm"
+                                className="w-3 h-3 dark:invert"
+                              />
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            )
           )}
         </div>
       </div>
@@ -357,7 +511,7 @@ export default function ProfilePage() {
       setProfile(data as ProfileData)
     }
     setPageLoading(false)
-  }, [username])
+  }, [username]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchProfile()
@@ -375,7 +529,7 @@ export default function ProfilePage() {
           }
         })
     })
-  }, [fetchProfile])
+  }, [fetchProfile]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Friendship actions ────────────────────────────────────────────────────
 
@@ -518,7 +672,7 @@ export default function ProfilePage() {
                     </p>
                   )}
 
-                  {/* Stats summary: X shows · Y artists · Z venues · N festivals */}
+                  {/* Stats summary */}
                   <div className="flex items-center gap-1.5 mt-2 text-sm flex-wrap">
                     <span className="font-semibold text-primary">{p.confirmed_shows}</span>
                     <span className="text-muted-foreground">shows</span>
@@ -545,7 +699,7 @@ export default function ProfilePage() {
                     )}
                   </div>
 
-                  {/* Spotify library summary — separated from concert stats */}
+                  {/* Spotify library summary */}
                   {showSpotifyCard && (
                     <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/10 text-sm flex-wrap">
                       <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="#1DB954">
@@ -568,10 +722,9 @@ export default function ProfilePage() {
                   )}
                 </div>
 
-                {/* Right panel — QR share (own profile) or friendship buttons (others) */}
+                {/* Right panel — QR share (own) or friendship buttons (others) */}
                 {p.is_own_profile ? (
                   <div className="shrink-0 flex flex-col items-center gap-2">
-                    {/* Desktop: QR code + Copy Link */}
                     <div className="hidden sm:flex flex-col items-center gap-2">
                       <div className="bg-white rounded-xl p-1.5 inline-block">
                         <QRCodeSVG
@@ -588,7 +741,6 @@ export default function ProfilePage() {
                         {copied ? 'Copied!' : 'Copy Link'}
                       </button>
                     </div>
-                    {/* Mobile: Copy Link button only — QR not useful on own device */}
                     <button
                       onClick={handleCopy}
                       className="sm:hidden px-4 py-2 bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 text-sm font-medium rounded-xl transition-colors border border-teal-500/20"
