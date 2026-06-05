@@ -50,6 +50,11 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Avatar refresh state
+  const [avatarRefreshing, setAvatarRefreshing] = useState(false)
+  const [avatarRefreshStatus, setAvatarRefreshStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [avatarRefreshMsg, setAvatarRefreshMsg] = useState('')
+
   // Auth guard
   useEffect(() => {
     if (!authLoading && !user) router.replace('/')
@@ -104,6 +109,31 @@ export default function SettingsPage() {
     } else {
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
+    }
+  }
+
+  const handleRefreshAvatar = async () => {
+    setAvatarRefreshing(true)
+    setAvatarRefreshStatus('idle')
+    setAvatarRefreshMsg('')
+
+    try {
+      const res = await fetch('/api/user/refresh-spotify-avatar', { method: 'POST' })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setAvatarRefreshStatus('error')
+        setAvatarRefreshMsg(data.error || 'Failed to refresh avatar.')
+      } else {
+        setAvatarRefreshStatus('success')
+        setAvatarRefreshMsg('Avatar updated! Refresh the page to see it.')
+        setTimeout(() => setAvatarRefreshStatus('idle'), 4000)
+      }
+    } catch {
+      setAvatarRefreshStatus('error')
+      setAvatarRefreshMsg('Network error. Please try again.')
+    } finally {
+      setAvatarRefreshing(false)
     }
   }
 
@@ -191,6 +221,7 @@ export default function SettingsPage() {
                     <h2 className="text-base font-semibold text-foreground">Spotify</h2>
                   </div>
 
+                  {/* Show Spotify stats toggle */}
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground">
@@ -214,6 +245,35 @@ export default function SettingsPage() {
                         }`}
                       />
                     </button>
+                  </div>
+
+                  {/* Avatar refresh */}
+                  <div className="border-t border-border">
+                    <div className="flex items-center justify-between gap-4 pt-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">Profile picture</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Sync your avatar from Spotify
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleRefreshAvatar}
+                        disabled={avatarRefreshing}
+                        className="px-3 py-1.5 bg-primary/10 border border-primary/20 text-primary text-xs font-semibold rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-50 flex items-center gap-1.5 flex-shrink-0"
+                      >
+                        {avatarRefreshing && (
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current" />
+                        )}
+                        {avatarRefreshing ? 'Refreshing…' : 'Refresh from Spotify'}
+                      </button>
+                    </div>
+                    {avatarRefreshStatus !== 'idle' && (
+                      <p className={`mt-1.5 text-xs font-medium ${
+                        avatarRefreshStatus === 'success' ? 'text-green-500' : 'text-destructive'
+                      }`}>
+                        {avatarRefreshMsg}
+                      </p>
+                    )}
                   </div>
                 </section>
               )}
