@@ -41,6 +41,20 @@ const NAV_LINKS = [
   { label: 'Friends', path: '/friends' },
 ]
 
+// Handles both static breadcrumb paths and dynamic /profile/[username]/shows
+function getBreadcrumbs(path: string): { label: string; path: string }[] | null {
+  if (PAST_FLOW_BREADCRUMBS[path]) return PAST_FLOW_BREADCRUMBS[path]
+  const showsMatch = path.match(/^\/profile\/([^/]+)\/shows$/)
+  if (showsMatch) {
+    const u = showsMatch[1]
+    return [
+      { label: `@${u}`, path: `/profile/${u}` },
+      { label: 'Shows', path },
+    ]
+  }
+  return null
+}
+
 export default function Navigation() {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
@@ -74,7 +88,7 @@ export default function Navigation() {
   }, [user, currentPath])
 
   const isDiscoverActive = DISCOVER_PATHS.includes(currentPath)
-  const breadcrumbs = PAST_FLOW_BREADCRUMBS[currentPath] ?? null
+  const breadcrumbs = getBreadcrumbs(currentPath)
 
   const isLinkActive = (path: string) =>
     path === '/discover' ? isDiscoverActive : currentPath === path
@@ -162,7 +176,7 @@ export default function Navigation() {
           </div>
         </div>
 
-        {/* Breadcrumb row — shown on both mobile and desktop when applicable */}
+        {/* Breadcrumb row */}
         {breadcrumbs && (
           <div className="flex items-center gap-1.5 pb-2 text-xs md:-ml-4">
             {breadcrumbs.map((crumb, i) => {
