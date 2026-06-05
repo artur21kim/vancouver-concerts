@@ -16,9 +16,11 @@ function SpotifyProcessingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const matchScope = searchParams.get('match_scope') || 'past';
+  const fromDate = searchParams.get('from_date') || null;
 
   const [status, setStatus] = useState<SpotifyStatus | null>(null);
   const [error, setError] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     startProcessing();
@@ -57,6 +59,24 @@ function SpotifyProcessingContent() {
     return () => clearInterval(pollInterval);
   };
 
+  const handleRetry = async () => {
+    setResetting(true);
+    try {
+      const res = await fetch('/api/spotify/reset', { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Reset failed');
+      }
+      // Re-initiate OAuth with the same scope the user originally chose
+      const params = new URLSearchParams({ match_scope: matchScope });
+      if (fromDate) params.set('from_date', fromDate);
+      router.push(`/api/auth/spotify?${params.toString()}`);
+    } catch (err) {
+      setResetting(false);
+      setError(err instanceof Error ? err.message : 'Reset failed. Please try again.');
+    }
+  };
+
   if (error) {
     return (
       <>
@@ -66,13 +86,29 @@ function SpotifyProcessingContent() {
             <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-6 md:p-8 text-center">
               <div className="text-4xl md:text-6xl mb-4">❌</div>
               <h2 className="text-xl md:text-2xl font-bold text-destructive mb-2">Processing Failed</h2>
-              <p className="text-destructive/80 mb-6">{error}</p>
-              <button
-                onClick={() => router.push('/discover')}
-                className="px-6 py-3 bg-destructive text-white font-semibold rounded-lg hover:bg-destructive/90 transition"
-              >
-                Return to Discover
-              </button>
+              <p className="text-destructive/80 mb-6">
+                {error === 'Authentication failed (403). Please reconnect Spotify.'
+                  ? 'Spotify connection failed — this sometimes happens if your access was added recently. Click Try Again to reconnect.'
+                  : error}
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={handleRetry}
+                  disabled={resetting}
+                  className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {resetting && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
+                  )}
+                  {resetting ? 'Resetting...' : 'Try Again'}
+                </button>
+                <button
+                  onClick={() => router.push('/discover')}
+                  className="px-6 py-3 bg-card border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition"
+                >
+                  Return to Discover
+                </button>
+              </div>
             </div>
           </div>
         </div>
