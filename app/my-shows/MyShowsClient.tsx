@@ -226,8 +226,6 @@ function ArtistYearBars({ artists, max, onNavigate }: {
       {artists.map((artist) => {
         const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
         const years = Object.keys(artist.showsByYear).sort()
-        // Build one sub-segment per individual show, grouped by year
-        // Each show gets equal width within the year's total bar share
         const yearSegments = years.flatMap(year => {
           const yearShows = artist.showsByYear[year]
           return yearShows.map((show, idx) => ({
@@ -237,14 +235,12 @@ function ArtistYearBars({ artists, max, onNavigate }: {
             venue: show.venue,
             capKey: show.capKey,
             color: CAP_BY_KEY[show.capKey]?.color ?? 'rgba(156,163,175,0.75)',
-            // width = 1 show / total shows (each show = equal slice of total bar)
             widthPct: (1 / artist.total) * 100,
           }))
         })
 
         return (
           <div key={artist.name} className="flex items-center gap-2 py-0.5">
-            {/* Name column */}
             <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
               <button onClick={() => onNavigate(artist.name)}
                 className="text-xs text-primary hover:opacity-80 hover:underline truncate text-right"
@@ -252,15 +248,11 @@ function ArtistYearBars({ artists, max, onNavigate }: {
               {artist.spotifyId && <SpotifyLink artistId={artist.spotifyId} />}
             </div>
 
-            {/* Year-segmented bar */}
             <div className="flex-1 relative">
               <div className="h-5 bg-muted/40 rounded-full overflow-hidden flex">
                 <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
                   {yearSegments.map((seg, i) => {
                     const isFirst = i === 0, isLast = i === yearSegments.length - 1
-                    // Show year label on every slice
-                    const showLabel = true
-                    // Thin divider between slices; slightly thicker between different years
                     const isYearBoundary = i > 0 && yearSegments[i - 1].year !== seg.year
                     return (
                       <div
@@ -278,21 +270,18 @@ function ArtistYearBars({ artists, max, onNavigate }: {
                         }}
                         onMouseLeave={() => setTooltip(null)}
                       >
-                        {showLabel && (
-                          <span
-                            className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
-                            style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}
-                          >
-                            {seg.year}
-                          </span>
-                        )}
+                        <span
+                          className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
+                          style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}
+                        >
+                          {seg.year}
+                        </span>
                       </div>
                     )
                   })}
                 </div>
               </div>
 
-              {/* Tooltip */}
               {tooltip?.artist === artist.name && (
                 <div
                   className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px]"
@@ -307,7 +296,6 @@ function ArtistYearBars({ artists, max, onNavigate }: {
               )}
             </div>
 
-            {/* Count */}
             <span className="text-xs tabular-nums flex-shrink-0 w-16 text-right" style={{ color: TEAL }}>
               {artist.total} {artist.total === 1 ? 'show' : 'shows'}
             </span>
@@ -315,7 +303,6 @@ function ArtistYearBars({ artists, max, onNavigate }: {
         )
       })}
 
-      {/* Legend */}
       <div className="flex items-center gap-3 pt-2 border-t border-border text-[10px] text-muted-foreground flex-wrap">
         {CAP_KEYS.filter(k => k !== 'unknown').map(key => (
           <span key={key} className="flex items-center gap-1">
@@ -341,7 +328,7 @@ function VenueYearBars({ venues, max, onNavigate }: {
 
   return (
     <div className="w-full space-y-1.5">
-      {venues.map((venue, idx) => {
+      {venues.map((venue) => {
         const totalWidth = max > 0 ? (venue.total / max) * 100 : 0
         const yearSegments = Object.keys(venue.showsByYear).sort().flatMap(year => {
           const yearShows = venue.showsByYear[year]
@@ -425,9 +412,13 @@ function VenueYearBars({ venues, max, onNavigate }: {
 export default function MyShowsClient({
   shows: initialShows,
   spotifySongs,
+  readOnly = false,
+  username,
 }: {
   shows: Show[]
   spotifySongs: { added_at: string }[]
+  readOnly?: boolean
+  username?: string
 }) {
   const router  = useRouter()
   const supabase = createClient()
@@ -447,7 +438,7 @@ export default function MyShowsClient({
   const [showAllVenues, setShowAllVenues]       = useState(false)
   const [expandedBills, setExpandedBills]       = useState<Set<string>>(new Set())
 
-  // Unadded CTA
+  // Unadded CTA — own profile only
   const [unaddedArtists, setUnaddedArtists]         = useState<UnaddedArtist[]>([])
   const [unaddedDismissed, setUnaddedDismissed]     = useState(false)
   const [unaddedExpanded, setUnaddedExpanded]       = useState(false)
@@ -458,8 +449,9 @@ export default function MyShowsClient({
   const hasSpotify = spotifySongs.length > 0
   const anyFilterActive = selectedYear !== null || capFilter !== 'all'
 
-  // ── Unadded check ─────────────────────────────────────────────────────────
+  // ── Unadded check — skipped entirely in read-only mode ────────────────────
   const checkUnaddedArtists = useCallback(async () => {
+    if (readOnly) return
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -484,7 +476,7 @@ export default function MyShowsClient({
       }
       setUnaddedArtists(unadded)
     } catch (e) { console.error('Error checking unadded:', e) }
-  }, [shows, supabase])
+  }, [shows, supabase, readOnly])
 
   useEffect(() => { checkUnaddedArtists() }, [])
   useEffect(() => { if (sessionShowsModified) { checkUnaddedArtists(); setSessionShowsModified(false) } }, [sessionShowsModified])
@@ -532,11 +524,9 @@ export default function MyShowsClient({
     if (viewMode === 'festivals') {
       src = shows.filter(isFestivalShow)
     } else if (viewMode === 'shows') {
-      // one entry per bill (date+venue)
       const groups = buildBillGroups(shows.filter(s => !isFestivalShow(s)))
       src = groups
     } else {
-      // sets: each individual show
       src = shows
     }
 
@@ -655,7 +645,7 @@ export default function MyShowsClient({
     const donut = CAP_KEYS
       .map(key => ({
         name: CAP_BY_KEY[key].legendLabel,
-        shortName: CAP_BY_KEY[key].legendLabel.split(' ')[0], // "Small", "Medium", etc.
+        shortName: CAP_BY_KEY[key].legendLabel.split(' ')[0],
         key, value: counts[key] ?? 0, color: CAP_BY_KEY[key].color
       }))
       .filter(d => d.value > 0)
@@ -665,7 +655,6 @@ export default function MyShowsClient({
     }
     return { donutData: donut, venueBreakdown: breakdown }
   }, [yearFiltered, viewMode])
-
 
   // ── Bill groups ───────────────────────────────────────────────────────────
   const billGroups = useMemo(() => {
@@ -712,7 +701,7 @@ export default function MyShowsClient({
   const totalPages   = Math.ceil(setsFiltered.length / PER_PAGE)
   const currentShows = setsFiltered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
-  // ── Dynamic stats counter (filter/view-mode aware) ────────────────────────
+  // ── Dynamic stats counter ─────────────────────────────────────────────────
   const dynamicStats = useMemo(() => {
     if (viewMode === 'shows') {
       const sets   = billGroups.reduce((n, g) => n + g.shows.length, 0)
@@ -727,7 +716,6 @@ export default function MyShowsClient({
       const venues  = new Set(setsFiltered.map(s => s.venue.venue_id)).size
       return { sets, shows: 0, artists, venues, festivals: 0 }
     }
-    // festivals
     const sets     = festivalGroups.reduce((n, g) => n + g.shows.length, 0)
     const festivals = festivalGroups.length
     const artists  = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.artist.artist_id))).size
@@ -752,6 +740,7 @@ export default function MyShowsClient({
   }, [])
 
   const removeShow = async (id: number) => {
+    if (readOnly) return
     setRemovingSet(prev => new Set(prev).add(id))
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -777,6 +766,7 @@ export default function MyShowsClient({
   const sortArrow = (f: SortField) => sortField === f ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
 
   const addUnaddedAll = async () => {
+    if (readOnly) return
     if (!unaddedArtists.length) return
     setAddingUnadded(true)
     try {
@@ -820,13 +810,13 @@ export default function MyShowsClient({
         <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
 
           <h1 className="text-3xl md:text-4xl font-bold text-foreground">
-            My Shows
+            {readOnly ? `${username}'s Shows` : 'My Shows'}
             {selectedYear && <span className="text-muted-foreground font-normal"> · {selectedYear}</span>}
             {!selectedYear && capFilter !== 'all' && <span className="text-muted-foreground font-normal"> · {CAP_BY_KEY[capFilter]?.legendLabel}</span>}
           </h1>
 
-          {/* ── Unadded CTA ── */}
-          {!unaddedDismissed && unaddedArtists.length > 0 && (
+          {/* ── Unadded CTA — own profile only ── */}
+          {!readOnly && !unaddedDismissed && unaddedArtists.length > 0 && (
             <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
@@ -864,10 +854,9 @@ export default function MyShowsClient({
             </div>
           )}
 
-          {/* ── Concert Timeline (full width) ── */}
+          {/* ── Concert Timeline ── */}
           {yearTimelineData.length > 0 && (
             <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5">
-              {/* Header with toggle top-right */}
               <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h2 className="text-lg md:text-xl font-bold text-foreground">Concert Timeline</h2>
@@ -937,7 +926,6 @@ export default function MyShowsClient({
                   )}
                 </div>
 
-                {/* Shows/Sets/Festivals toggle — top right of timeline */}
                 <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium flex-shrink-0">
                   {(['shows', 'sets', 'festivals'] as ViewMode[]).map((m, i) => (
                     <button key={m} onClick={() => setViewMode(m)}
@@ -948,7 +936,6 @@ export default function MyShowsClient({
                 </div>
               </div>
 
-              {/* Timeline legend */}
               <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1.5">
                   <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#0d9488' }} />
@@ -973,7 +960,6 @@ export default function MyShowsClient({
                 )}
               </div>
 
-              {/* Chart */}
               <div style={{ height: 180 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   {selectedYear ? (
@@ -1093,17 +1079,15 @@ export default function MyShowsClient({
             </div>
           )}
 
-          {/* ── Top Artists / Venues (65%) + Donut (35%) ── */}
+          {/* ── Top Artists / Venues + Donut ── */}
           {shows.length > 0 && (
             <div className="flex gap-4">
-              {/* Left panel — Artists or Venues */}
               <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                   <h2 className="text-lg font-bold text-foreground">
                     {chartSection === 'artists' ? 'Top Artists' : 'Top Venues'}
                     {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                   </h2>
-                  {/* Artists / Venues toggle */}
                   <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                     {(['artists', 'venues'] as const).map((s, i) => (
                       <button key={s} onClick={() => setChartSection(s)}
@@ -1153,7 +1137,7 @@ export default function MyShowsClient({
                 )}
               </div>
 
-              {/* Donut — redesigned with letter labels */}
+              {/* Donut */}
               <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 w-56 flex-shrink-0 hidden md:flex flex-col">
                 <h2 className="text-base font-bold text-foreground mb-3">Venues by Size</h2>
                 {donutData.length === 0 ? (
@@ -1219,11 +1203,15 @@ export default function MyShowsClient({
           {/* ── Show list ── */}
           {shows.length === 0 ? (
             <div className="bg-card rounded-lg shadow border border-border p-12 text-center">
-              <p className="text-muted-foreground text-lg mb-4">No shows added yet.</p>
-              <button onClick={() => router.push('/browse')}
-                className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:opacity-90 font-medium">
-                Browse Shows
-              </button>
+              <p className="text-muted-foreground text-lg mb-4">
+                {readOnly ? `${username} hasn't added any shows yet.` : 'No shows added yet.'}
+              </p>
+              {!readOnly && (
+                <button onClick={() => router.push('/browse')}
+                  className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:opacity-90 font-medium">
+                  Browse Shows
+                </button>
+              )}
             </div>
           ) : (
             <div className="bg-card rounded-lg shadow border border-border overflow-hidden">
@@ -1276,16 +1264,17 @@ export default function MyShowsClient({
                     })
                     return (
                       <div key={group.key} className={future ? 'bg-amber-500/5' : ''}>
-                        {/* Collapsed header — full width clickable */}
                         <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer select-none" onClick={toggleExpand}>
-                          {/* Heart */}
-                          <div className="flex-shrink-0" onClick={e => { e.stopPropagation(); removeShow(group.headliner.show_id) }}>
-                            <button disabled={removingSet.has(group.headliner.show_id)} className="focus:outline-none disabled:opacity-50">
-                              {removingSet.has(group.headliner.show_id)
-                                ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" />
-                                : <HeartIcon size={5} />}
-                            </button>
-                          </div>
+                          {/* Heart — own profile only */}
+                          {!readOnly && (
+                            <div className="flex-shrink-0" onClick={e => { e.stopPropagation(); removeShow(group.headliner.show_id) }}>
+                              <button disabled={removingSet.has(group.headliner.show_id)} className="focus:outline-none disabled:opacity-50">
+                                {removingSet.has(group.headliner.show_id)
+                                  ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" />
+                                  : <HeartIcon size={5} />}
+                              </button>
+                            </div>
+                          )}
                           {/* Rank + chevron */}
                           <div className="w-10 flex-shrink-0 text-right">
                             <span className="text-sm font-bold tabular-nums" style={{ color: TEAL }}>#{idx + 1}</span>
@@ -1296,10 +1285,9 @@ export default function MyShowsClient({
                             <p className="text-sm text-foreground whitespace-nowrap">{fmtDate(group.date)}</p>
                             {future && <span className="text-[9px] font-semibold text-amber-400">upcoming</span>}
                           </div>
-                          {/* Headliner + inline openers + venue row 2 */}
+                          {/* Headliner + supporters + venue */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              {/* Headliner — click opens Spotify */}
                               {group.headliner.artist.spotify_artist_id ? (
                                 <a href={`https://open.spotify.com/artist/${group.headliner.artist.spotify_artist_id}`}
                                   target="_blank" rel="noopener noreferrer"
@@ -1340,16 +1328,19 @@ export default function MyShowsClient({
                           </div>
                         </div>
 
-                        {/* Expanded — nested Sets-style rows, no venue (already in header) */}
+                        {/* Expanded desktop rows */}
                         {isExpanded && (
                           <div className="border-t border-border/40 bg-background/50 divide-y divide-border/30">
                             {group.shows.map((show, showIdx) => (
-                              <div key={show.show_id} className="hidden md:grid items-center pl-12" style={{ gridTemplateColumns: '40px 120px 1fr' }}>
-                                <div className="px-3 py-2.5 flex items-center">
-                                  <button onClick={e => { e.stopPropagation(); removeShow(show.show_id) }} disabled={removingSet.has(show.show_id)} className="focus:outline-none disabled:opacity-50">
-                                    {removingSet.has(show.show_id) ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={4} />}
-                                  </button>
-                                </div>
+                              <div key={show.show_id} className="hidden md:grid items-center pl-12"
+                                style={{ gridTemplateColumns: readOnly ? '120px 1fr' : '40px 120px 1fr' }}>
+                                {!readOnly && (
+                                  <div className="px-3 py-2.5 flex items-center">
+                                    <button onClick={e => { e.stopPropagation(); removeShow(show.show_id) }} disabled={removingSet.has(show.show_id)} className="focus:outline-none disabled:opacity-50">
+                                      {removingSet.has(show.show_id) ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={4} />}
+                                    </button>
+                                  </div>
+                                )}
                                 <div className="px-3 py-2.5">
                                   <p className="text-sm text-foreground whitespace-nowrap">{fmtDate(show.date)}</p>
                                   {showIdx === 0 && <span className="text-[9px] text-primary/60 font-medium">headliner</span>}
@@ -1407,9 +1398,11 @@ export default function MyShowsClient({
                           <div className="border-t border-border/40 bg-background/50 divide-y divide-border/30">
                             {group.shows.map(show => (
                               <div key={show.show_id} className="flex items-center gap-3 px-4 py-2 pl-8">
-                                <button onClick={() => removeShow(show.show_id)} disabled={removingSet.has(show.show_id)} className="focus:outline-none disabled:opacity-50 flex-shrink-0">
-                                  {removingSet.has(show.show_id) ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={4} />}
-                                </button>
+                                {!readOnly && (
+                                  <button onClick={() => removeShow(show.show_id)} disabled={removingSet.has(show.show_id)} className="focus:outline-none disabled:opacity-50 flex-shrink-0">
+                                    {removingSet.has(show.show_id) ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={4} />}
+                                  </button>
+                                )}
                                 <span className="text-xs text-muted-foreground/60 w-20 flex-shrink-0 tabular-nums">{fmtDate(show.date)}</span>
                                 <div className="flex-1 min-w-0 flex items-center gap-1.5">
                                   {show.artist.spotify_artist_id ? <SpotifyLink artistId={show.artist.spotify_artist_id} name={show.artist.artist_name} /> : <span className="text-xs text-foreground">{show.artist.artist_name}</span>}
@@ -1430,8 +1423,10 @@ export default function MyShowsClient({
                 <>
                   {setsSubView === 'card' && (
                     <>
-                      <div className="hidden md:grid bg-muted border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider" style={{ gridTemplateColumns: '40px 120px 1fr' }}>
-                        <div className="px-3 py-3" />
+                      {/* Desktop header */}
+                      <div className="hidden md:grid bg-muted border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider"
+                        style={{ gridTemplateColumns: readOnly ? '120px 1fr' : '40px 120px 1fr' }}>
+                        {!readOnly && <div className="px-3 py-3" />}
                         <button className="px-3 py-3 text-left hover:text-foreground" onClick={() => handleSort('date')}>Date{sortArrow('date')}</button>
                         <div className="px-3 py-3 flex gap-3">
                           <button className="hover:text-foreground" onClick={() => handleSort('artist')}>Artist{sortArrow('artist')}</button>
@@ -1439,10 +1434,12 @@ export default function MyShowsClient({
                           <button className="hover:text-foreground" onClick={() => handleSort('venue')}>Venue{sortArrow('venue')}</button>
                         </div>
                       </div>
-                      <div className="md:hidden grid bg-muted border-b border-border px-3 py-2" style={{ gridTemplateColumns: '28px 80px 1fr' }}>
-                        <div />
-                        <button className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground" onClick={() => handleSort('date')}>Date{sortArrow('date')}</button>
-                        <div className="flex gap-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      {/* Mobile header */}
+                      <div className="md:hidden grid bg-muted border-b border-border px-3 py-2"
+                        style={{ gridTemplateColumns: readOnly ? '80px 1fr' : '28px 80px 1fr' }}>
+                        {!readOnly && <div />}
+                        <button className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground" onClick={() => handleSort('date')}>Date{sortArrow('date')}</button>
+                        <div className="flex gap-2 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                           <button className="hover:text-foreground" onClick={() => handleSort('artist')}>Artist{sortArrow('artist')}</button>
                           <span className="text-muted-foreground/30">/</span>
                           <button className="hover:text-foreground" onClick={() => handleSort('venue')}>Venue{sortArrow('venue')}</button>
@@ -1456,12 +1453,16 @@ export default function MyShowsClient({
                           const future   = isFuture(show.date)
                           return (
                             <div key={show.show_id} className={`hover:bg-muted/30 transition-colors ${future ? 'bg-amber-500/5' : ''}`}>
-                              <div className="hidden md:grid items-center" style={{ gridTemplateColumns: '40px 120px 1fr' }}>
-                                <div className="px-3 py-3.5 flex items-center">
-                                  <button onClick={() => removeShow(show.show_id)} disabled={removing} className="focus:outline-none disabled:opacity-50">
-                                    {removing ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={5} />}
-                                  </button>
-                                </div>
+                              {/* Desktop row */}
+                              <div className="hidden md:grid items-center"
+                                style={{ gridTemplateColumns: readOnly ? '120px 1fr' : '40px 120px 1fr' }}>
+                                {!readOnly && (
+                                  <div className="px-3 py-3.5 flex items-center">
+                                    <button onClick={() => removeShow(show.show_id)} disabled={removing} className="focus:outline-none disabled:opacity-50">
+                                      {removing ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={5} />}
+                                    </button>
+                                  </div>
+                                )}
                                 <div className="px-3 py-3.5">
                                   <p className="text-sm text-foreground whitespace-nowrap">{fmtDate(show.date)}</p>
                                   {future && <span className="text-[9px] font-semibold text-amber-400">upcoming</span>}
@@ -1478,10 +1479,14 @@ export default function MyShowsClient({
                                   </div>
                                 </div>
                               </div>
-                              <div className="md:hidden grid items-center px-3 py-2.5" style={{ gridTemplateColumns: '28px 80px 1fr' }}>
-                                <button onClick={() => removeShow(show.show_id)} disabled={removing} className="focus:outline-none disabled:opacity-50">
-                                  {removing ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={4} />}
-                                </button>
+                              {/* Mobile row */}
+                              <div className="md:hidden grid items-center px-3 py-2.5"
+                                style={{ gridTemplateColumns: readOnly ? '80px 1fr' : '28px 80px 1fr' }}>
+                                {!readOnly && (
+                                  <button onClick={() => removeShow(show.show_id)} disabled={removing} className="focus:outline-none disabled:opacity-50">
+                                    {removing ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={4} />}
+                                  </button>
+                                )}
                                 <div>
                                   <p className="text-[11px] text-foreground whitespace-nowrap">{fmtDate(show.date)}</p>
                                   {future && <span className="text-[9px] font-semibold text-amber-400">upcoming</span>}
@@ -1509,7 +1514,7 @@ export default function MyShowsClient({
                       <table className="w-full text-sm">
                         <thead className="bg-muted border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                           <tr>
-                            <th className="px-3 py-3 w-10" />
+                            {!readOnly && <th className="px-3 py-3 w-10" />}
                             <th className="px-3 py-3 text-left cursor-pointer hover:text-foreground whitespace-nowrap" onClick={() => handleSort('date')}>Date{sortArrow('date')}</th>
                             <th className="px-3 py-3 text-left cursor-pointer hover:text-foreground" onClick={() => handleSort('artist')}>Artist{sortArrow('artist')}</th>
                             <th className="px-3 py-3 text-left cursor-pointer hover:text-foreground" onClick={() => handleSort('venue')}>Venue{sortArrow('venue')}</th>
@@ -1518,17 +1523,19 @@ export default function MyShowsClient({
                         </thead>
                         <tbody className="divide-y divide-border">
                           {setsFiltered.length === 0 ? (
-                            <tr><td colSpan={5} className="text-center py-10 text-muted-foreground">No shows match this filter.</td></tr>
+                            <tr><td colSpan={readOnly ? 4 : 5} className="text-center py-10 text-muted-foreground">No shows match this filter.</td></tr>
                           ) : currentShows.map(show => {
                             const removing = removingSet.has(show.show_id)
                             const future   = isFuture(show.date)
                             return (
                               <tr key={show.show_id} className={`hover:bg-muted/30 transition-colors ${future ? 'bg-amber-500/5' : ''}`}>
-                                <td className="px-3 py-3">
-                                  <button onClick={() => removeShow(show.show_id)} disabled={removing} className="focus:outline-none disabled:opacity-50">
-                                    {removing ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={5} />}
-                                  </button>
-                                </td>
+                                {!readOnly && (
+                                  <td className="px-3 py-3">
+                                    <button onClick={() => removeShow(show.show_id)} disabled={removing} className="focus:outline-none disabled:opacity-50">
+                                      {removing ? <div className="w-4 h-4 border-2 border-muted-foreground border-t-destructive rounded-full animate-spin" /> : <HeartIcon size={5} />}
+                                    </button>
+                                  </td>
+                                )}
                                 <td className="px-3 py-3 whitespace-nowrap text-foreground">
                                   {fmtDate(show.date)}
                                   {future && <span className="ml-1.5 text-[9px] font-semibold text-amber-400 bg-amber-400/15 px-1 py-px rounded">upcoming</span>}
