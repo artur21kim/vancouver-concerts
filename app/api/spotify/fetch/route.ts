@@ -200,6 +200,7 @@ export async function POST(request: Request) {
         artist_name: artist.name,
         added_at: item.added_at,
         spotify_album_id: track.album?.id ?? null,
+        spotify_album_name: track.album?.name ?? null,
         spotify_album_release_date: track.album?.release_date ?? null,
       }));
     });

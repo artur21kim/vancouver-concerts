@@ -98,6 +98,7 @@ export async function POST(request: Request) {
         .from('user_spotify_songs')
         .update({
           spotify_album_id: track.album?.id ?? null,
+          spotify_album_name: track.album?.name ?? null,
           spotify_album_release_date: track.album?.release_date ?? null,
         })
         .eq('user_id', user.id)
