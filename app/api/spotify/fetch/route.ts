@@ -188,7 +188,8 @@ export async function POST(request: Request) {
 
     const transformStartTime = Date.now();
 
-    // Transform songs for database
+    // SCRUM-59: Transform songs for database — capture album_id and release_date
+    // from the liked-tracks response (album is included at no extra API cost)
     const songsToInsert = songsInChunk.flatMap(item => {
       const track = item.track;
       return track.artists.map((artist: any) => ({
@@ -197,7 +198,9 @@ export async function POST(request: Request) {
         spotify_artist_id: artist.id,
         track_name: track.name,
         artist_name: artist.name,
-        added_at: item.added_at
+        added_at: item.added_at,
+        spotify_album_id: track.album?.id ?? null,
+        spotify_album_release_date: track.album?.release_date ?? null,
       }));
     });
 
@@ -266,6 +269,28 @@ export async function POST(request: Request) {
       .from('user_spotify_tokens')
       .update(updateData)
       .eq('user_id', user.id);
+
+    // SCRUM-57: Derive and store spotify_first_year on fetch completion (new users).
+    // Existing users were backfilled via the ALTER TABLE migration SQL.
+    // Uses the oldest added_at across all songs now in the DB for this user.
+    if (isComplete) {
+      const { data: earliest } = await supabase
+        .from('user_spotify_songs')
+        .select('added_at')
+        .eq('user_id', user.id)
+        .not('added_at', 'is', null)
+        .order('added_at', { ascending: true })
+        .limit(1)
+        .single();
+      if (earliest?.added_at) {
+        const firstYear = new Date(earliest.added_at).getFullYear();
+        await supabase
+          .from('user_profiles')
+          .update({ spotify_first_year: firstYear })
+          .eq('user_id', user.id);
+        console.log(`📅 spotify_first_year = ${firstYear} for user ${user.id}`);
+      }
+    }
 
     console.log(`✅ Progress: ${newSongsFetched} songs fetched${isComplete ? ' - COMPLETE' : ''}`);
 
