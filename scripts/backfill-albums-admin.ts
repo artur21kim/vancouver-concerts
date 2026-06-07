@@ -75,7 +75,7 @@ async function backfillUser(
   let updated = 0
 
   while (url) {
-    const res = await fetch(url, {
+    const res: Response = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
 
