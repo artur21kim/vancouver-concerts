@@ -1,9 +1,13 @@
 /**
- * Grooveprint — Admin album backfill script (Client Credentials)
+ * Grooveprint — Admin album backfill script
  *
- * Uses Spotify's Client Credentials flow to fetch public catalog metadata
- * (album_id, album_name, release_date) for all track IDs that still have
- * null album data — no user tokens or allowlist access required.
+ * Uses the admin user's stored Spotify refresh token to fetch public catalog
+ * metadata (album_id, album_name, release_date) for all track IDs that still
+ * have null album data across all users.
+ *
+ * /v1/tracks is catalog data — the metadata returned is identical regardless
+ * of whose token is used. We use the admin account since it's confirmed active
+ * on the allowlist. Client Credentials is blocked in Dev Mode for this endpoint.
  *
  * Run from the project root:
  *   npx tsx --env-file=.env.local scripts/backfill-albums-admin.ts
@@ -19,10 +23,13 @@ import { createClient } from '@supabase/supabase-js'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const SUPABASE_URL         = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const SPOTIFY_CLIENT_ID    = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID!
+const SUPABASE_URL          = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SUPABASE_SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const SPOTIFY_CLIENT_ID     = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID!
 const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET!
+
+// Admin user ID — confirmed active on the Spotify allowlist
+const ADMIN_USER_ID = '2ca674d2-97c7-4d06-bfc7-7bf2b4011c13'
 
 const BATCH_SIZE = 50   // Spotify /v1/tracks max IDs per request
 const DELAY_MS   = 400  // Between Spotify API calls
@@ -31,9 +38,19 @@ const DELAY_MS   = 400  // Between Spotify API calls
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-// ── Spotify Client Credentials token ─────────────────────────────────────────
+// ── Spotify token using admin user's stored refresh token ─────────────────────
 
-async function getClientCredentialsToken(): Promise<string> {
+async function getAdminUserToken(): Promise<string> {
+  const { data: tokenData, error } = await supabase
+    .from('user_spotify_tokens')
+    .select('refresh_token')
+    .eq('user_id', ADMIN_USER_ID)
+    .single()
+
+  if (error || !tokenData?.refresh_token) {
+    throw new Error('Admin user token not found in database')
+  }
+
   const res = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',
     headers: {
@@ -42,11 +59,14 @@ async function getClientCredentialsToken(): Promise<string> {
         `${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`
       ).toString('base64')}`,
     },
-    body: new URLSearchParams({ grant_type: 'client_credentials' }),
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: tokenData.refresh_token,
+    }),
   })
 
   if (!res.ok) {
-    throw new Error(`Client Credentials request failed (${res.status}): ${await res.text()}`)
+    throw new Error(`Token refresh failed (${res.status}): ${await res.text()}`)
   }
 
   const data = await res.json()
@@ -56,7 +76,7 @@ async function getClientCredentialsToken(): Promise<string> {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('🎵 Grooveprint — Album backfill admin script (Client Credentials)')
+  console.log('🎵 Grooveprint — Album backfill admin script (admin user token)')
   console.log('─'.repeat(60))
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
@@ -64,9 +84,9 @@ async function main() {
     process.exit(1)
   }
 
-  // Get app-level token — no user allowlist restrictions apply
-  console.log('Getting Spotify Client Credentials token...')
-  const accessToken = await getClientCredentialsToken()
+  // Get access token using admin user's stored refresh token
+  console.log('Getting Spotify access token via admin user refresh token...')
+  const accessToken = await getAdminUserToken()
   console.log('✅ Token obtained\n')
 
   // Fetch all unique track IDs still needing album data across ALL users
@@ -98,7 +118,7 @@ async function main() {
     const batchNum = Math.floor(i / BATCH_SIZE) + 1
 
     const res: Response = await fetch(
-      `https://api.spotify.com/v1/tracks?ids=${batch.join(',')}`,
+      `https://api.spotify.com/v1/tracks?ids=${batch.join(',')}&market=CA`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     )
 
