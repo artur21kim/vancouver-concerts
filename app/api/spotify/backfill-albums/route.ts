@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-// Maximum unique tracks per call — 10 Spotify batches of 50, matches fetch route pattern.
-// Users with larger libraries call this route multiple times; remaining_tracks tells them when done.
-const MAX_TRACKS_PER_CALL = 500
+// 3 Spotify batches of 50 per call — conservative limit for Dev Mode rate limits.
+// The /v1/tracks endpoint rate-limits more aggressively than /v1/me/tracks in Dev Mode.
+// Users with large libraries call this route multiple times; remaining_tracks shows progress.
+const MAX_TRACKS_PER_CALL = 150
 
 export async function POST() {
   try {
@@ -116,7 +117,8 @@ export async function POST() {
       })
 
       if (!res.ok) {
-        console.error(`❌ Spotify /v1/tracks error (${res.status}) at batch offset ${i}`)
+        const errBody = await res.text().catch(() => '')
+        console.error(`❌ Spotify /v1/tracks error (${res.status}) at batch offset ${i}: ${errBody}`)
         continue
       }
 
@@ -139,12 +141,16 @@ export async function POST() {
           .eq('user_id', user.id)
           .eq('spotify_track_id', track.id)
 
-        if (!updateError) updatedTracks++
+        if (!updateError) {
+          updatedTracks++
+        } else {
+          console.error(`❌ Supabase update failed for track ${track.id}:`, updateError.message)
+        }
       }
 
-      // Rate limiting: 400ms between Spotify API calls
+      // Rate limiting: 1000ms between Spotify API calls (conservative for Dev Mode)
       if (i + BATCH_SIZE < toProcess.length) {
-        await new Promise(resolve => setTimeout(resolve, 400))
+        await new Promise(resolve => setTimeout(resolve, 1000))
       }
     }
 
