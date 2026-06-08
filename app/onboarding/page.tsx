@@ -147,6 +147,13 @@ export default function OnboardingPage() {
                             </div>
                         )}
 
+                        <p className="text-xs text-muted-foreground text-center">
+                            By creating an account you agree to our{' '}
+                            <a href="/terms" className="underline hover:text-foreground transition-colors">Terms of Service</a>
+                            {' '}and{' '}
+                            <a href="/privacy" className="underline hover:text-foreground transition-colors">Privacy Policy</a>.
+                        </p>
+
                         <button
                             type="submit"
                             disabled={loading}
