@@ -7,6 +7,7 @@ export const metadata: Metadata = {
 
 interface Source {
   name: string
+  domain: string
   category: string
   description: string
   licence?: string
@@ -18,6 +19,7 @@ interface Source {
 const sources: Source[] = [
   {
     name: 'setlist.fm',
+    domain: 'setlist.fm',
     category: 'Concert Data',
     description:
       'Concert and setlist data used to power show matching, discovery, and history features across all supported cities.',
@@ -28,6 +30,7 @@ const sources: Source[] = [
   },
   {
     name: 'Spotify',
+    domain: 'spotify.com',
     category: 'Music Library',
     description:
       'Liked songs and artist data accessed via the Spotify Web API when you connect your Spotify account. Used exclusively for matching your music library against our concert database.',
@@ -35,6 +38,7 @@ const sources: Source[] = [
   },
   {
     name: 'Google OAuth',
+    domain: 'google.com',
     category: 'Authentication',
     description:
       'Sign-in via Google. When you authenticate with Google, we receive your email address to create and manage your Grooveprint account.',
@@ -42,6 +46,7 @@ const sources: Source[] = [
   },
   {
     name: 'Supabase',
+    domain: 'supabase.com',
     category: 'Database & Auth Infrastructure',
     description:
       'Database hosting and authentication infrastructure. Your personal data — including concert history, Spotify library data, and account information — is stored on Supabase servers located in the United States.',
@@ -49,6 +54,7 @@ const sources: Source[] = [
   },
   {
     name: 'Vercel',
+    domain: 'vercel.com',
     category: 'Web Infrastructure',
     description:
       'Hosting and delivery infrastructure for the Grooveprint web application. Vercel processes network request data including IP addresses and performance metrics as part of serving the Service.',
@@ -76,7 +82,15 @@ export default function DataSourcesPage() {
               className="rounded-lg border border-border bg-card p-5"
             >
               <div className="flex items-start justify-between gap-4 mb-2">
-                <div>
+                <div className="flex items-center gap-2.5">
+                  {/* Brand favicon via Google's favicon service */}
+                  <img
+                    src={`https://www.google.com/s2/favicons?domain=${source.domain}&sz=32`}
+                    width={16}
+                    height={16}
+                    alt=""
+                    className="rounded-sm flex-shrink-0"
+                  />
                   <a
                     href={source.url}
                     target="_blank"
@@ -85,7 +99,7 @@ export default function DataSourcesPage() {
                   >
                     {source.name}
                   </a>
-                  <span className="ml-2 text-xs text-muted-foreground">{source.category}</span>
+                  <span className="text-xs text-muted-foreground">{source.category}</span>
                 </div>
                 {source.licence && (
                   <a
@@ -98,9 +112,11 @@ export default function DataSourcesPage() {
                   </a>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">{source.description}</p>
+              <p className="text-sm text-muted-foreground leading-relaxed pl-[26px]">
+                {source.description}
+              </p>
               {source.note && (
-                <p className="mt-2 text-xs text-muted-foreground opacity-75 leading-relaxed">
+                <p className="mt-2 text-xs text-muted-foreground opacity-75 leading-relaxed pl-[26px]">
                   {source.note}
                 </p>
               )}
