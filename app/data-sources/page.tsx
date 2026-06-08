@@ -49,7 +49,7 @@ const sources: Source[] = [
     domain: 'supabase.com',
     category: 'Database & Auth Infrastructure',
     description:
-      'Database hosting and authentication infrastructure. Your personal data — including concert history, Spotify library data, and account information — is stored on Supabase servers located in the United States.',
+      'Database hosting and authentication infrastructure. Your personal data (concert history, Spotify library data, account information) is stored on Supabase servers located in the United States.',
     url: 'https://supabase.com',
   },
   {
