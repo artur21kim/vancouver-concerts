@@ -148,6 +148,16 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
                             placeholder="••••••••"
                         />
                     </div>
+
+                    {isSignUp && (
+                        <p className="text-xs text-gray-500 text-center">
+                            By creating an account you agree to our{' '}
+                            <a href="/terms" className="underline hover:text-gray-700 transition-colors">Terms of Service</a>
+                            {' '}and{' '}
+                            <a href="/privacy" className="underline hover:text-gray-700 transition-colors">Privacy Policy</a>.
+                        </p>
+                    )}
+
                     <button
                         type="submit"
                         disabled={loading}
