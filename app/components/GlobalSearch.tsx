@@ -123,7 +123,7 @@ export default function GlobalSearch({
     setIsOpen(false)
     setQuery('')
     setArtists([]); setVenues([])
-    router.push(type === 'artist' ? `/browse?artist_id=${id}` : `/browse?venue_id=${id}`)
+    router.push(type === 'artist' ? `/browse?artist_id=${id}&decade=all` : `/browse?venue_id=${id}&decade=all`)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -191,7 +191,7 @@ export default function GlobalSearch({
           {/* Artists section */}
           {artistCount > 0 && (
             <div>
-              <p className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/60 border-b border-border">
+              <p className="px-3 py-1.5 text-[10px] font-semibold text-primary uppercase tracking-wider bg-muted/60 border-b border-border">
                 Artists
               </p>
               {artists.slice(0, MAX_PER_SECTION).map((a, i) => (
@@ -217,7 +217,7 @@ export default function GlobalSearch({
           {/* Venues section */}
           {venues.slice(0, MAX_PER_SECTION).length > 0 && (
             <div className={artistCount > 0 ? 'border-t border-border' : ''}>
-              <p className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/60 border-b border-border">
+              <p className="px-3 py-1.5 text-[10px] font-semibold text-primary uppercase tracking-wider bg-muted/60 border-b border-border">
                 Venues
               </p>
               {venues.slice(0, MAX_PER_SECTION).map((v, i) => {
