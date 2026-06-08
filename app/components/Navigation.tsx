@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
 import AuthButton from './AuthButton'
+import GlobalSearch from './GlobalSearch'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { createClient } from '@/lib/supabase/client'
 
@@ -41,7 +42,6 @@ const NAV_LINKS = [
   { label: 'Friends', path: '/friends' },
 ]
 
-// Handles both static breadcrumb paths and dynamic /profile/[username]/shows
 function getBreadcrumbs(path: string): { label: string; path: string }[] | null {
   if (PAST_FLOW_BREADCRUMBS[path]) return PAST_FLOW_BREADCRUMBS[path]
   const showsMatch = path.match(/^\/profile\/([^/]+)\/shows$/)
@@ -59,10 +59,11 @@ export default function Navigation() {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
   const { user } = useAuth()
-  const [mounted, setMounted] = useState(false)
-  const [currentPath, setCurrentPath] = useState(pathname)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [pendingCount, setPendingCount] = useState(0)
+  const [mounted, setMounted]               = useState(false)
+  const [currentPath, setCurrentPath]       = useState(pathname)
+  const [menuOpen, setMenuOpen]             = useState(false)
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
+  const [pendingCount, setPendingCount]     = useState(0)
 
   useEffect(() => { setMounted(true) }, [])
   useEffect(() => { setCurrentPath(pathname) }, [pathname])
@@ -72,15 +73,15 @@ export default function Navigation() {
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
-  // Close menu on route change
-  useEffect(() => { setMenuOpen(false) }, [currentPath])
+  // Close both menus on route change
+  useEffect(() => {
+    setMenuOpen(false)
+    setMobileSearchOpen(false)
+  }, [currentPath])
 
   // Fetch pending friend request count
   useEffect(() => {
-    if (!user) {
-      setPendingCount(0)
-      return
-    }
+    if (!user) { setPendingCount(0); return }
     const supabase = createClient()
     supabase.rpc('get_pending_requests').then(({ data }) => {
       setPendingCount(data?.length ?? 0)
@@ -111,73 +112,118 @@ export default function Navigation() {
     <nav className="sticky top-0 z-50 bg-background border-b border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-4">
 
-        {/* Main nav row */}
-        <div className="flex items-center justify-between h-16">
-          <div className="flex items-center">
-            {/* Hamburger — mobile only, left of title */}
+        {/* ── Main nav row ── */}
+        {mobileSearchOpen ? (
+
+          // Mobile: search expanded — full width input replaces nav row
+          <div className="flex items-center h-16 gap-2">
+            <GlobalSearch autoFocus className="flex-1" />
             <button
-              onClick={() => setMenuOpen(prev => !prev)}
-              className="md:hidden p-2 -ml-2 mr-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              aria-label="Toggle menu"
-              aria-expanded={menuOpen}
+              onClick={() => setMobileSearchOpen(false)}
+              className="p-2 flex-shrink-0 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              aria-label="Close search"
             >
-              {menuOpen ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                  <line x1="3" y1="18" x2="21" y2="18" />
-                </svg>
-              )}
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
             </button>
+          </div>
 
-            <a
-              href="/"
-              className="text-xl md:text-2xl font-bold text-foreground hover:text-muted-foreground md:-ml-4 mr-4 md:mr-6 shrink-0"
-            >
-              Grooveprint
-            </a>
+        ) : (
 
-            {/* Desktop links */}
-            <div className="hidden md:flex items-center gap-6">
-              {NAV_LINKS.map(({ label, path }) => (
-                <a
-                  key={path}
-                  href={path}
-                  className={`relative ${navLinkClass(isLinkActive(path))}`}
+          // Normal nav row
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center">
+              {/* Hamburger — mobile only */}
+              <button
+                onClick={() => setMenuOpen(prev => !prev)}
+                className="md:hidden p-2 -ml-2 mr-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                aria-label="Toggle menu"
+                aria-expanded={menuOpen}
+              >
+                {menuOpen ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="3" y1="6" x2="21" y2="6" />
+                    <line x1="3" y1="12" x2="21" y2="12" />
+                    <line x1="3" y1="18" x2="21" y2="18" />
+                  </svg>
+                )}
+              </button>
+
+              <a
+                href="/"
+                className="text-xl md:text-2xl font-bold text-foreground hover:text-muted-foreground md:-ml-4 mr-4 md:mr-6 shrink-0"
+              >
+                Grooveprint
+              </a>
+
+              {/* Desktop nav links */}
+              <div className="hidden md:flex items-center gap-6">
+                {NAV_LINKS.map(({ label, path }) => (
+                  <a
+                    key={path}
+                    href={path}
+                    className={`relative ${navLinkClass(isLinkActive(path))}`}
+                  >
+                    {label}
+                    {path === '/friends' && pendingCount > 0 && (
+                      <span className="absolute -top-1.5 -right-4 min-w-[16px] h-4 bg-destructive text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+                        {pendingCount > 9 ? '9+' : pendingCount}
+                      </span>
+                    )}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* Right side: search + theme toggle + auth */}
+            <div className="flex items-center gap-2 -mr-2 md:-mr-4">
+
+              {/* Search bar — desktop only */}
+              <div className="hidden md:block">
+                <GlobalSearch className="w-44 lg:w-56" />
+              </div>
+
+              {/* Search icon — mobile only */}
+              <button
+                onClick={() => { setMobileSearchOpen(true); setMenuOpen(false) }}
+                className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                aria-label="Search"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </button>
+
+              {/* Theme toggle */}
+              {mounted && (
+                <button
+                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                  className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  aria-label="Toggle theme"
                 >
-                  {label}
-                  {path === '/friends' && pendingCount > 0 && (
-                    <span className="absolute -top-1.5 -right-4 min-w-[16px] h-4 bg-destructive text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
-                      {pendingCount > 9 ? '9+' : pendingCount}
-                    </span>
-                  )}
-                </a>
-              ))}
+                  {theme === 'dark' ? '☀️' : '🌙'}
+                </button>
+              )}
+              <AuthButton />
             </div>
           </div>
 
-          {/* Right side: theme toggle + sign in */}
-          <div className="flex items-center gap-2 -mr-2 md:-mr-4">
-            {mounted && (
-              <button
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                aria-label="Toggle theme"
-              >
-                {theme === 'dark' ? '☀️' : '🌙'}
-              </button>
-            )}
-            <AuthButton />
-          </div>
-        </div>
+        )}
 
-        {/* Breadcrumb row */}
-        {breadcrumbs && (
+        {/* Breadcrumb row — hidden when mobile search is open */}
+        {!mobileSearchOpen && breadcrumbs && (
           <div className="flex items-center gap-1.5 pb-2 text-xs md:-ml-4">
             {breadcrumbs.map((crumb, i) => {
               const isLast = i === breadcrumbs.length - 1
@@ -199,8 +245,8 @@ export default function Navigation() {
 
       </div>
 
-      {/* Mobile dropdown menu */}
-      {menuOpen && (
+      {/* Mobile dropdown menu — hidden when search is open */}
+      {!mobileSearchOpen && menuOpen && (
         <div className="md:hidden border-t border-border bg-background py-2">
           {NAV_LINKS.map(({ label, path }) => (
             <a
