@@ -55,6 +55,11 @@ export default function SettingsPage() {
   const [avatarRefreshStatus, setAvatarRefreshStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [avatarRefreshMsg, setAvatarRefreshMsg] = useState('')
 
+  // Delete account state
+  const [deleteInput, setDeleteInput] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   // Auth guard
   useEffect(() => {
     if (!authLoading && !user) router.replace('/')
@@ -134,6 +139,26 @@ export default function SettingsPage() {
       setAvatarRefreshMsg('Network error. Please try again.')
     } finally {
       setAvatarRefreshing(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!settings || deleteInput !== settings.username) return
+    setDeleting(true)
+    setDeleteError(null)
+
+    try {
+      const res = await fetch('/api/user/delete-account', { method: 'POST' })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to delete account.')
+      }
+      // Sign out client-side — auth identity is already gone server-side
+      await supabase.auth.signOut()
+      router.push('/')
+    } catch (err: any) {
+      setDeleteError(err.message)
+      setDeleting(false)
     }
   }
 
@@ -297,6 +322,59 @@ export default function SettingsPage() {
                   <span className="text-sm text-destructive">{error}</span>
                 )}
               </div>
+
+              {/* ── Danger Zone ── */}
+              <section className="bg-card rounded-lg shadow border border-destructive/30 p-5 space-y-4">
+                <h2 className="text-base font-semibold text-destructive">Danger Zone</h2>
+
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Delete Account</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      Permanently deletes your account, concert history, Spotify library data,
+                      friend connections, and all associated information. This action is
+                      irreversible and cannot be undone.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs text-muted-foreground">
+                      Type{' '}
+                      <span className="font-mono font-semibold text-foreground">
+                        {settings?.username}
+                      </span>{' '}
+                      to confirm
+                    </label>
+                    <input
+                      type="text"
+                      value={deleteInput}
+                      onChange={e => {
+                        setDeleteInput(e.target.value)
+                        setDeleteError(null)
+                      }}
+                      placeholder={settings?.username ?? ''}
+                      disabled={deleting}
+                      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-destructive/50 transition-colors disabled:opacity-50"
+                    />
+                  </div>
+
+                  {deleteError && (
+                    <p className="text-xs text-destructive">{deleteError}</p>
+                  )}
+
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={!settings || deleteInput !== settings.username || deleting}
+                    className="px-4 py-2 bg-destructive text-white text-sm font-semibold rounded-lg hover:bg-destructive/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {deleting && (
+                      <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-current" />
+                    )}
+                    {deleting ? 'Deleting account…' : 'Delete My Account'}
+                  </button>
+                </div>
+              </section>
+
             </>
           )}
         </div>
