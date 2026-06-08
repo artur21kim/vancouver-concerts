@@ -35,8 +35,9 @@ export async function GET(request: Request) {
 
     const tokenData = await tokenResponse.json();
 
-    // Fetch Spotify profile for avatar (works with any valid token — no extra scope needed)
+    // Fetch Spotify profile for avatar + user ID (works with any valid token — no extra scope needed)
     let spotifyAvatarUrl: string | null = null;
+    let spotifyUserId: string | null = null;
     try {
       const meRes = await fetch('https://api.spotify.com/v1/me', {
         headers: { Authorization: `Bearer ${tokenData.access_token}` }
@@ -44,9 +45,10 @@ export async function GET(request: Request) {
       if (meRes.ok) {
         const me = await meRes.json();
         spotifyAvatarUrl = me.images?.[0]?.url ?? null;
+        spotifyUserId = me.id ?? null;
       }
     } catch (e) {
-      console.error('⚠️ Could not fetch Spotify profile image:', e);
+      console.error('⚠️ Could not fetch Spotify profile:', e);
     }
 
     // Initialize Supabase client
@@ -90,11 +92,12 @@ export async function GET(request: Request) {
       throw new Error('Failed to save Spotify token');
     }
 
-    // Update user profile to mark Spotify as connected
+    // Update user profile to mark Spotify as connected; capture spotify_user_id if available
     const { error: profileError } = await supabase
       .from('user_profiles')
       .update({
         spotify_connected: true,
+        ...(spotifyUserId ? { spotify_user_id: spotifyUserId } : {}),
         updated_at: new Date().toISOString()
       })
       .eq('user_id', user.id);

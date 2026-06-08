@@ -89,10 +89,16 @@ export async function POST() {
       )
     }
 
-    // Update unconditionally — allows overriding Google avatar, not just filling null
+    // Update unconditionally — allows overriding Google avatar, not just filling null.
+    // Also captures spotify_user_id opportunistically while /v1/me is already in hand
+    // (backfills users who connected before SCRUM-64 was deployed).
     const { error: updateError } = await supabase
       .from('user_profiles')
-      .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
+      .update({
+        avatar_url: avatarUrl,
+        ...(me.id ? { spotify_user_id: me.id } : {}),
+        updated_at: new Date().toISOString(),
+      })
       .eq('user_id', user.id)
 
     if (updateError) {
