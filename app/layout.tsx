@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/components/ThemeProvider'
 import { Analytics } from '@vercel/analytics/next'
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
+import Footer from './components/Footer'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -24,7 +25,10 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           <AuthProvider>
-            {children}
+            <div className="flex flex-col min-h-screen">
+              {children}
+              <Footer />
+            </div>
           </AuthProvider>
         </ThemeProvider>
         <Analytics />
