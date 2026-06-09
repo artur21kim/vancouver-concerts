@@ -1,29 +1,35 @@
 #!/usr/bin/env python3
 """
-Grooveprint — Show Refresh Script  v3
+Grooveprint — Show Refresh Script  v4
 scripts/refresh_shows.py
 
 Ingests a raw Octoparse setlist.fm export into Supabase.
 Uses setlist_url as the deduplication key — existing shows are never overwritten.
 
 Venue resolution chain:
-  1. Exact match → dim_venue.venue_name
-  2. Exact match → dim_venue.other_names  (historical renames — auto-indexed)
-  3. Exact match → venue_aliases table     (setlist.fm naming discrepancies)
-  4. Fuzzy match  → blocked in live; SQL suggestion printed in dry-run and live
-  5. No match     → auto-create as new venue
+  1. Exact match → dim_venue.venue_name / other_names (historical names)
+  2. Exact match → venue_aliases table
+  3. Fuzzy match  → interactive review (live) or blocked with SQL (--no-interactive)
+  4. No match     → auto-create
 
-Artist resolution chain (same pattern, no city dimension):
+Artist resolution chain (no city dimension):
   1. Exact match → dim_artist.artist_name
-  2. Exact match → artist_aliases table    (setlist.fm naming discrepancies)
-  3. Fuzzy match  → blocked; SQL suggestion printed
-  4. No match     → auto-create as new artist (review_status = 'unverified')
+  2. Exact match → artist_aliases table
+  3. Fuzzy match  → interactive review or blocked
+  4. No match     → auto-create (review_status = 'unverified')
+
+Interactive review keys (live runs, per fuzzy suggestion):
+  A  Alias     — same entity; writes alias to DB immediately
+  N  New       — different entity; auto-creates this run
+  S  Skip      — hold the show for later
+  K  Keep all  — treat all remaining suggestions as New (no more prompts)
 
 Usage:
     pip install requests python-dotenv openpyxl
 
-    python scripts/refresh_shows.py --input exports/yvr_2026-06-09.csv --dry-run
     python scripts/refresh_shows.py --input exports/yvr_2026-06-09.csv
+    python scripts/refresh_shows.py --input exports/yvr_2026-06-09.csv --dry-run
+    python scripts/refresh_shows.py --input exports/yvr_2026-06-09.csv --no-interactive
 
 Required .env:
     SUPABASE_URL=https://your-project.supabase.co
@@ -53,9 +59,9 @@ SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 DEFAULT_CITY = os.getenv("REFRESH_CITY", "Vancouver")
 
-BATCH_SIZE            = 500
-VENUE_FUZZY_THRESHOLD  = 0.82   # on normalised names
-ARTIST_FUZZY_THRESHOLD = 0.85   # stricter — wrong artist link corrupts Spotify matching
+BATCH_SIZE             = 500
+VENUE_FUZZY_THRESHOLD  = 0.82
+ARTIST_FUZZY_THRESHOLD = 0.85   # stricter — wrong link corrupts Spotify matching
 
 MONTH_MAP = {
     "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4,  "MAY": 5,  "JUN": 6,
@@ -85,7 +91,6 @@ def sb_get_page(table: str, params: dict) -> list:
 
 
 def sb_get_all(table: str, params: dict, page_size: int = 1000) -> list:
-    """Paginate through all rows — needed for fact_shows (36k+ rows)."""
     all_rows: list = []
     offset = 0
     while True:
@@ -98,7 +103,6 @@ def sb_get_all(table: str, params: dict, page_size: int = 1000) -> list:
 
 
 def sb_insert(table: str, records: list, *, return_rows: bool = False) -> list:
-    """Batch INSERT with ON CONFLICT DO NOTHING (idempotent on unique keys)."""
     if not records:
         return []
     url = f"{SUPABASE_URL}/rest/v1/{table}"
@@ -123,7 +127,6 @@ def sb_insert(table: str, records: list, *, return_rows: bool = False) -> list:
 
 
 def get_max_id(table: str, id_col: str) -> int:
-    """Return MAX(id_col) from table, or 0 if the table is empty."""
     rows = sb_get_page(table, {"select": id_col, "order": f"{id_col}.desc", "limit": "1"})
     if rows and rows[0].get(id_col) is not None:
         return int(rows[0][id_col])
@@ -131,7 +134,7 @@ def get_max_id(table: str, id_col: str) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Normalisation helpers (for fuzzy matching only — never used for DB writes)
+# Normalisation helpers (fuzzy matching only — never used for DB writes)
 # ---------------------------------------------------------------------------
 
 _VENUE_SUFFIXES = (
@@ -143,16 +146,6 @@ _VENUE_SUFFIXES = (
 
 
 def normalize_venue(name: str) -> str:
-    """
-    Strip leading 'The ', punctuation, and common venue-type suffixes.
-
-    'The Orpheum'          → 'orpheum'
-    'Orpheum Theatre'      → 'orpheum'      ← exact match ✓
-    'BC Place Stadium'     → 'bc place'
-    'BC Place'             → 'bc place'     ← exact match ✓
-    'W.I.S.E. Hall'        → 'wise'
-    'Wise Hall'            → 'wise'         ← exact match ✓
-    """
     s = name.lower().strip()
     s = re.sub(r"[^a-z0-9 ]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
@@ -170,16 +163,7 @@ def normalize_venue(name: str) -> str:
 
 
 def normalize_artist(name: str) -> str:
-    """
-    Strip leading 'The ' and punctuation for artist comparison.
-    Intentionally simpler than venue normalisation — no suffix stripping.
-
-    'The Smashing Pumpkins' → 'smashing pumpkins'
-    'Smashing Pumpkins'     → 'smashing pumpkins'   ← exact match ✓
-    'AC/DC'                 → 'acdc'
-    'AC DC'                 → 'ac dc'               ← close match
-    'Guns N\' Roses'        → 'guns n roses'
-    """
+    """Simpler than venue — strip 'The ' and punctuation only, no suffix stripping."""
     s = name.lower().strip()
     s = re.sub(r"[^a-z0-9 ]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
@@ -188,52 +172,20 @@ def normalize_artist(name: str) -> str:
     return s
 
 
-def _fuzzy_search(
-    norm: str,
-    id_map: dict[str, int],
-    name_map: dict[str, str],
-    threshold: float,
-) -> Optional[tuple[str, int, float]]:
-    """
-    Shared fuzzy lookup used by both venue and artist matchers.
-    Returns (canonical_display_name, id, score) or None.
-    Step 1: normalised exact match → 1.0
-    Step 2: difflib on normalised forms, must exceed threshold
-    """
-    if not norm:
-        return None
-    best_score = 0.0
-    best_key: Optional[str] = None
-    for key in id_map:
-        norm_key = norm.__class__(key)   # key is already lowercase
-        if norm == normalize_venue(norm_key) or norm == normalize_artist(norm_key):
-            # handled below via explicit normaliser call
-            pass
-        score = difflib.SequenceMatcher(None, norm, norm_key).ratio()
-        if score > best_score:
-            best_score = score
-            best_key = key
-    if best_key and best_score >= threshold:
-        return (name_map[best_key], id_map[best_key], best_score)
-    return None
-
-
 def find_fuzzy_venue_match(
     name: str, id_map: dict[str, int], name_map: dict[str, str],
 ) -> Optional[tuple[str, int, float]]:
     norm = normalize_venue(name)
     if not norm:
         return None
-    best_score = 0.0
-    best_key: Optional[str] = None
+    best_score, best_key = 0.0, None
     for key in id_map:
         nk = normalize_venue(key)
         if norm == nk:
             return (name_map[key], id_map[key], 1.0)
         s = difflib.SequenceMatcher(None, norm, nk).ratio()
         if s > best_score:
-            best_score = s
-            best_key = key
+            best_score, best_key = s, key
     if best_key and best_score >= VENUE_FUZZY_THRESHOLD:
         return (name_map[best_key], id_map[best_key], best_score)
     return None
@@ -245,16 +197,14 @@ def find_fuzzy_artist_match(
     norm = normalize_artist(name)
     if not norm:
         return None
-    best_score = 0.0
-    best_key: Optional[str] = None
+    best_score, best_key = 0.0, None
     for key in id_map:
         nk = normalize_artist(key)
         if norm == nk:
             return (name_map[key], id_map[key], 1.0)
         s = difflib.SequenceMatcher(None, norm, nk).ratio()
         if s > best_score:
-            best_score = s
-            best_key = key
+            best_score, best_key = s, key
     if best_key and best_score >= ARTIST_FUZZY_THRESHOLD:
         return (name_map[best_key], id_map[best_key], best_score)
     return None
@@ -277,12 +227,7 @@ def parse_date(month_str: str, day_str: str, year_str: str) -> Optional[str]:
 
 
 def extract_venue_info(venue_full: str) -> tuple[str, str]:
-    """
-    Extract (venue_name, city) from a setlist.fm location string.
-
-    'Lucky Bar, Victoria, BC, Canada'  → ('Lucky Bar', 'Victoria')
-    'Commodore Ballroom, Vancouver, …' → ('Commodore Ballroom', 'Vancouver')
-    """
+    """Returns (venue_name, city) from a setlist.fm location string."""
     venue_full = (venue_full or "").strip()
     if not venue_full:
         return "", ""
@@ -297,13 +242,6 @@ def extract_venue_info(venue_full: str) -> tuple[str, str]:
 
 
 def parse_row(row: dict, city: str = DEFAULT_CITY) -> Optional[dict]:
-    """
-    Parse one Octoparse row. Returns None if invalid.
-
-    details2 patterns:
-      "Tour: <name>" → details4 = tour name, details6 = full venue string
-      "Venue: <str>" → details4 = full venue string, details6 = empty
-    """
     setlist_url = (row.get("Field") or "").strip()
     if not setlist_url or "setlist.fm" not in setlist_url:
         return None
@@ -386,11 +324,6 @@ def load_existing_urls() -> set[str]:
 
 
 def load_existing_artists() -> tuple[dict[str, int], dict[str, str]]:
-    """
-    Returns:
-        id_map   {name_lower → artist_id}
-        name_map {name_lower → canonical_display_name}
-    """
     print("  Existing artists …", end=" ", flush=True)
     rows = sb_get_all("dim_artist", {"select": "artist_id,artist_name"})
     id_map:   dict[str, int] = {}
@@ -405,10 +338,7 @@ def load_existing_artists() -> tuple[dict[str, int], dict[str, str]]:
 
 
 def load_existing_venues() -> tuple[dict[str, int], dict[str, str]]:
-    """
-    Returns id_map and name_map. Indexes venue_name and other_names (historical names).
-    Historical names resolve silently — e.g. 'GM Place' → Rogers Arena.
-    """
+    """Indexes venue_name and other_names (historical names resolve silently)."""
     print("  Existing venues …", end=" ", flush=True)
     rows = sb_get_all("dim_venue", {"select": "venue_id,venue_name,other_names"})
     id_map:   dict[str, int] = {}
@@ -430,10 +360,6 @@ def load_existing_venues() -> tuple[dict[str, int], dict[str, str]]:
 
 
 def load_artist_aliases() -> dict[str, int]:
-    """
-    Returns {setlist_name.lower() → artist_id}.
-    No city filter — artist names are global.
-    """
     print("  Artist aliases …", end=" ", flush=True)
     try:
         rows = sb_get_page("artist_aliases", {"select": "setlist_name,artist_id"})
@@ -449,7 +375,6 @@ def load_artist_aliases() -> dict[str, int]:
 
 
 def load_venue_aliases(city: str) -> dict[str, int]:
-    """Returns {setlist_name.lower() → venue_id} for the given city."""
     print("  Venue aliases …", end=" ", flush=True)
     try:
         rows = sb_get_page("venue_aliases", {
@@ -486,7 +411,6 @@ def create_and_resolve(
             if name and rid:
                 id_map[name] = rid
                 created += 1
-    # Re-fetch any not returned (conflict edge case)
     missing = [r[name_key] for r in records if r[name_key].lower() not in id_map]
     for name in missing:
         rows = sb_get_page(table, {"select": f"{id_key},{name_key}", f"{name_key}": f"ilike.{name}"})
@@ -497,19 +421,124 @@ def create_and_resolve(
 
 
 # ---------------------------------------------------------------------------
+# Interactive alias review
+# ---------------------------------------------------------------------------
+
+def interactive_alias_review(
+    fuzzy_suggestions: dict,       # {input_name: (canonical, id, score)} — mutated in place
+    shows_list: list[dict],        # all shows being considered (to show context)
+    show_match_key: str,           # 'artist_name' or 'venue_name'
+    context_key: str,              # opposite key for show context ('venue_name' or 'artist_name')
+    table: str,                    # 'artist_aliases' or 'venue_aliases'
+    id_col: str,                   # 'artist_id' or 'venue_id'
+    alias_map: dict[str, int],     # in-memory alias dict — updated on Alias decision
+    genuinely_new: dict,           # mutated on New decision
+    label: str,                    # 'Artist' or 'Venue'
+    city: Optional[str] = None,    # venue_aliases only
+) -> None:
+    """
+    Interactive review for each fuzzy suggestion. Prompts user for each:
+
+      A  Alias    — same entity; writes to alias table immediately
+      N  New      — different entity; auto-creates this run
+      S  Skip     — hold the show (can re-run later after manual check)
+      K  Keep all — treat all remaining suggestions as New (no more prompts)
+
+    Mutates fuzzy_suggestions and genuinely_new in place.
+    Writes confirmed aliases to DB immediately so they persist for future runs.
+    """
+    if not fuzzy_suggestions:
+        return
+
+    total = len(fuzzy_suggestions)
+    print(f"\n{'─' * 64}")
+    print(f"⚠️  {label} alias review — {total} to verify")
+    print(f"    A = same entity (alias)  |  N = different (new)  |  S = skip  |  K = keep all as new")
+    print(f"{'─' * 64}")
+
+    for i, input_name in enumerate(list(fuzzy_suggestions.keys())):
+        if input_name not in fuzzy_suggestions:
+            continue   # already resolved by K
+
+        canonical, rid, score = fuzzy_suggestions[input_name]
+        score_s = "exact (normalised)" if score == 1.0 else f"{score:.0%} similarity"
+
+        # Show context: the blocked shows for this name
+        blocked = [s for s in shows_list if s[show_match_key] == input_name]
+
+        print(f"\n{i+1}/{total}  '{input_name}'  →  '{canonical}'  [{score_s}]")
+        for show in blocked[:3]:
+            context = show.get(context_key, "")
+            print(f"       {show['date']}  {'@ ' + context if context else ''}")
+        if len(blocked) > 3:
+            print(f"       … {len(blocked) - 3} more show(s)")
+
+        while True:
+            try:
+                choice = input("  [A]lias / [N]ew / [S]kip / [K]eep all as new: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("\n  Interrupted — remaining suggestions held.")
+                return
+
+            if choice in ("a", "alias"):
+                # Write alias to DB immediately
+                record = {"setlist_name": input_name, id_col: rid}
+                if city:
+                    record["city"] = city
+                try:
+                    sb_insert(table, [record])
+                    alias_map[input_name.lower()] = rid   # update in-memory map
+                    del fuzzy_suggestions[input_name]
+                    print(f"  ✅  Alias saved: '{input_name}' → '{canonical}'")
+                except Exception as e:
+                    print(f"  ⚠️   Could not save alias ({e}) — treating as Skip")
+                break
+
+            elif choice in ("n", "new"):
+                del fuzzy_suggestions[input_name]
+                if city is None:
+                    genuinely_new[input_name] = None   # artist
+                else:
+                    city_for_new = blocked[0]["city"] if blocked else city
+                    genuinely_new[input_name] = city_for_new   # venue
+                print(f"  →  Will create '{input_name}' as new {label.lower()} this run")
+                break
+
+            elif choice in ("s", "skip"):
+                print(f"  →  '{input_name}' held — show(s) will not be inserted this run")
+                break
+
+            elif choice in ("k", "keep"):
+                # Resolve all remaining as New
+                remaining = list(fuzzy_suggestions.keys())
+                for name in remaining:
+                    can, rid2, _ = fuzzy_suggestions.pop(name)
+                    if city is None:
+                        genuinely_new[name] = None
+                    else:
+                        b = next((s for s in shows_list if s[show_match_key] == name), None)
+                        genuinely_new[name] = b["city"] if b else city
+                print(f"  →  All {len(remaining)} remaining marked as new {label.lower()}(s)")
+                return
+
+            else:
+                print("  Please enter A, N, S, or K")
+
+
+# ---------------------------------------------------------------------------
 # Reporting helpers
 # ---------------------------------------------------------------------------
 
 def _print_alias_report(
-    suggestions: dict,       # {input_name: (canonical_name, id, score)}
-    shows_list: list[dict],  # to count blocked shows per suggestion
-    show_match_key: str,     # 'artist_name' or 'venue_name'
-    table: str,              # 'artist_aliases' or 'venue_aliases'
-    id_col: str,             # 'artist_id' or 'venue_id'
+    suggestions: dict,
+    shows_list: list[dict],
+    show_match_key: str,
+    table: str,
+    id_col: str,
     header: str,
-    city: Optional[str] = None,   # venue_aliases only; None for artist_aliases
+    city: Optional[str] = None,
 ) -> None:
-    """Generic alias report for both artists and venues."""
+    """Non-interactive alias report (dry-run or --no-interactive)."""
     if not suggestions:
         return
 
@@ -526,23 +555,26 @@ def _print_alias_report(
 
     print(f"\n  SQL — verify each line, then run in Supabase SQL editor:")
     if city:
-        # venue_aliases — includes city column
         print(f"  INSERT INTO {table} (setlist_name, city, {id_col}) VALUES")
         lines = [
-            f"    ('{name.replace(chr(39), chr(39)*2)}', '{city}', {rid})"
-            for name, (_, rid, _) in suggestions.items()
-            if blocked_by_name.get(name, 0) > 0
+            f"    ('{n.replace(chr(39), chr(39)*2)}', '{city}', {rid})"
+            for n, (_, rid, _) in suggestions.items() if blocked_by_name.get(n, 0) > 0
         ]
     else:
-        # artist_aliases — no city column
         print(f"  INSERT INTO {table} (setlist_name, {id_col}) VALUES")
         lines = [
-            f"    ('{name.replace(chr(39), chr(39)*2)}', {rid})"
-            for name, (_, rid, _) in suggestions.items()
-            if blocked_by_name.get(name, 0) > 0
+            f"    ('{n.replace(chr(39), chr(39)*2)}', {rid})"
+            for n, (_, rid, _) in suggestions.items() if blocked_by_name.get(n, 0) > 0
         ]
     print(",\n".join(lines) + "\n  ON CONFLICT DO NOTHING;")
     print(f"  Then re-run the script to insert the held shows.")
+
+
+def _n_blocked(to_insert, fuzzy_artist, fuzzy_venue) -> int:
+    return sum(
+        1 for s in to_insert
+        if s["artist_name"] in fuzzy_artist or s["venue_name"] in fuzzy_venue
+    )
 
 
 def _summary(
@@ -551,14 +583,12 @@ def _summary(
     fuzzy_artist_suggestions, fuzzy_venue_suggestions,
     inserted, fuzzy_blocked, dry_run,
 ) -> None:
-    n_artist_blocked = sum(1 for s in to_insert if s["artist_name"] in fuzzy_artist_suggestions)
-    n_venue_blocked  = sum(1 for s in to_insert if s["venue_name"]  in fuzzy_venue_suggestions)
-    n_blocked        = sum(1 for s in to_insert
-                          if s["artist_name"] in fuzzy_artist_suggestions
-                          or s["venue_name"]  in fuzzy_venue_suggestions)
-    n_ready          = len(to_insert) - n_blocked
-    note             = " (no DB writes)" if dry_run else ""
-    verb             = "Ready to insert" if dry_run else "Inserted      "
+    nb            = _n_blocked(to_insert, fuzzy_artist_suggestions, fuzzy_venue_suggestions)
+    n_artist_b    = sum(1 for s in to_insert if s["artist_name"] in fuzzy_artist_suggestions)
+    n_venue_b     = sum(1 for s in to_insert if s["venue_name"]  in fuzzy_venue_suggestions)
+    n_ready       = len(to_insert) - nb
+    note          = " (no DB writes)" if dry_run else ""
+    verb          = "Ready to insert" if dry_run else "Inserted      "
 
     print("\n" + "=" * 64)
     print(f"Summary{note}")
@@ -567,25 +597,23 @@ def _summary(
     print(f"  Duplicates skipped: {len(duplicates):>8,}")
     print(f"  Parse errors:       {len(error_rows):>8,}")
     print(f"  {verb}:     {(n_ready if dry_run else inserted):>8,}  shows")
-    if n_blocked:
-        print(f"  Alias-blocked:      {n_blocked:>8,}  shows  (add aliases, re-run)")
-        if n_artist_blocked:
-            print(f"    of which artist:  {n_artist_blocked:>8,}")
-        if n_venue_blocked:
-            print(f"    of which venue:   {n_venue_blocked:>8,}")
+    if nb:
+        print(f"  Alias-blocked:      {nb:>8,}  shows  (add aliases, re-run)")
+        if n_artist_b: print(f"    ↳ artist:         {n_artist_b:>8,}")
+        if n_venue_b:  print(f"    ↳ venue:          {n_venue_b:>8,}")
     print(f"  New artists:        {len(genuinely_new_artists):>8,}")
     print(f"  New venues:         {len(genuinely_new_venues):>8,}")
     if fuzzy_artist_suggestions:
-        print(f"  Artist aliases needed:{len(fuzzy_artist_suggestions):>6,}")
+        print(f"  Artist aliases:     {len(fuzzy_artist_suggestions):>8,}  still pending")
     if fuzzy_venue_suggestions:
-        print(f"  Venue aliases needed: {len(fuzzy_venue_suggestions):>6,}")
+        print(f"  Venue aliases:      {len(fuzzy_venue_suggestions):>8,}  still pending")
     if dry_run:
         if n_ready > 0:
             print(f"\n  {n_ready:,} shows ready — run without --dry-run to apply.")
-        if n_blocked:
-            print(f"  {n_blocked} more shows once aliases are added.")
+        if nb:
+            print(f"  {nb} more shows once aliases are resolved.")
     elif fuzzy_blocked:
-        print(f"\n  {len(fuzzy_blocked)} held shows — add aliases and re-run.")
+        print(f"\n  {len(fuzzy_blocked)} held shows — re-run to review and insert them.")
     print("=" * 64)
 
 
@@ -597,17 +625,27 @@ def main() -> None:
     ap = argparse.ArgumentParser(
         description="Ingest raw Octoparse setlist.fm export into Grooveprint Supabase.",
     )
-    ap.add_argument("--input",   required=True, help="Path to .csv, .tsv, or .xlsx")
-    ap.add_argument("--dry-run", action="store_true", help="Report without writing to DB")
-    ap.add_argument("--city",    default=DEFAULT_CITY, help=f"Target city (default: {DEFAULT_CITY})")
+    ap.add_argument("--input",          required=True, help="Path to .csv, .tsv, or .xlsx")
+    ap.add_argument("--dry-run",        action="store_true", help="Report without writing to DB")
+    ap.add_argument("--no-interactive", action="store_true",
+                    help="Skip interactive review; block and print SQL instead (for automation)")
+    ap.add_argument("--city",           default=DEFAULT_CITY,
+                    help=f"Target city for alias lookups (default: {DEFAULT_CITY})")
     args = ap.parse_args()
 
+    interactive = (
+        not args.dry_run
+        and not args.no_interactive
+        and sys.stdin.isatty()
+    )
+
     print("=" * 64)
-    print("Grooveprint — Show Refresh  v3")
+    print("Grooveprint — Show Refresh  v4")
     print(f"Started:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Input:    {args.input}")
     print(f"City:     {args.city}")
-    print(f"Mode:     {'DRY RUN (no DB writes)' if args.dry_run else 'LIVE'}")
+    mode = "DRY RUN" if args.dry_run else ("LIVE + interactive review" if interactive else "LIVE (non-interactive)")
+    print(f"Mode:     {mode}")
     print("=" * 64)
 
     # ── 1. Load & parse ──────────────────────────────────────────────────────
@@ -616,8 +654,8 @@ def main() -> None:
     print(f"  {len(raw_rows):,} raw rows read")
 
     print("\nParsing rows…")
-    parsed:    list[dict]    = []
-    error_rows: list[tuple]  = []
+    parsed:    list[dict]   = []
+    error_rows: list[tuple] = []
     for idx, raw in enumerate(raw_rows):
         show = parse_row(raw, city=args.city)
         if show:
@@ -645,55 +683,49 @@ def main() -> None:
 
     # ── 3. Classify ──────────────────────────────────────────────────────────
     print("\nClassifying…")
-    duplicates:              list[dict]       = []
-    to_insert:               list[dict]       = []
-    genuinely_new_artists:   dict[str, None]  = {}   # auto-create
-    genuinely_new_venues:    dict[str, str]   = {}   # name → city, auto-create
-    fuzzy_artist_suggestions: dict[str, tuple] = {}  # block + suggest
-    fuzzy_venue_suggestions:  dict[str, tuple] = {}  # block + suggest
+    duplicates:               list[dict]        = []
+    to_insert:                list[dict]        = []
+    genuinely_new_artists:    dict[str, None]   = {}
+    genuinely_new_venues:     dict[str, str]    = {}
+    fuzzy_artist_suggestions: dict[str, tuple]  = {}
+    fuzzy_venue_suggestions:  dict[str, tuple]  = {}
 
     for show in parsed:
         if show["setlist_url"] in existing_urls:
             duplicates.append(show)
             continue
 
-        # ── Artist classification ──
-        akey     = show["artist_name"].lower()
+        akey       = show["artist_name"].lower()
         a_resolved = akey in existing_artists or akey in artist_aliases
         if not a_resolved and show["artist_name"] not in fuzzy_artist_suggestions \
                           and show["artist_name"] not in genuinely_new_artists:
-            suggestion = find_fuzzy_artist_match(show["artist_name"], existing_artists, artist_name_map)
-            if suggestion:
-                fuzzy_artist_suggestions[show["artist_name"]] = suggestion
+            s = find_fuzzy_artist_match(show["artist_name"], existing_artists, artist_name_map)
+            if s:
+                fuzzy_artist_suggestions[show["artist_name"]] = s
             else:
                 genuinely_new_artists[show["artist_name"]] = None
 
-        # ── Venue classification ──
-        vkey     = show["venue_name"].lower()
+        vkey       = show["venue_name"].lower()
         v_resolved = vkey in existing_venues or vkey in venue_aliases
         if not v_resolved and show["venue_name"] not in fuzzy_venue_suggestions \
                           and show["venue_name"] not in genuinely_new_venues:
-            suggestion = find_fuzzy_venue_match(show["venue_name"], existing_venues, venue_name_map)
-            if suggestion:
-                fuzzy_venue_suggestions[show["venue_name"]] = suggestion
+            s = find_fuzzy_venue_match(show["venue_name"], existing_venues, venue_name_map)
+            if s:
+                fuzzy_venue_suggestions[show["venue_name"]] = s
             else:
                 genuinely_new_venues[show["venue_name"]] = show["city"]
 
         to_insert.append(show)
 
-    n_blocked = sum(
-        1 for s in to_insert
-        if s["artist_name"] in fuzzy_artist_suggestions
-        or s["venue_name"]  in fuzzy_venue_suggestions
-    )
+    nb = _n_blocked(to_insert, fuzzy_artist_suggestions, fuzzy_venue_suggestions)
     print(
         f"  {len(duplicates):,} duplicates  |  {len(to_insert):,} new  "
         f"|  {len(genuinely_new_artists):,} new artists  "
         f"|  {len(genuinely_new_venues):,} new venues  "
-        f"|  {n_blocked} alias-blocked"
+        f"|  {nb} alias-blocked"
     )
 
-    # ── Preview ───────────────────────────────────────────────────────────────
+    # ── 4. Preview ────────────────────────────────────────────────────────────
     MAX = 20
     if to_insert:
         print(f"\nNew shows (first {min(MAX, len(to_insert))} of {len(to_insert):,}):")
@@ -718,21 +750,21 @@ def main() -> None:
         for name in list(genuinely_new_venues)[:MAX]:
             print(f"  + {name}")
 
-    _print_alias_report(
-        fuzzy_artist_suggestions, to_insert, "artist_name",
-        "artist_aliases", "artist_id",
-        header="⚠️  Potential artist aliases — verify and add to artist_aliases",
-        city=None,
-    )
-    _print_alias_report(
-        fuzzy_venue_suggestions, to_insert, "venue_name",
-        "venue_aliases", "venue_id",
-        header="⚠️  Potential venue aliases — verify and add to venue_aliases",
-        city=args.city,
-    )
-
-    # ── Dry-run exit ──────────────────────────────────────────────────────────
+    # ── 5. Alias resolution ───────────────────────────────────────────────────
     if args.dry_run:
+        # Non-interactive: print SQL suggestions
+        _print_alias_report(
+            fuzzy_artist_suggestions, to_insert, "artist_name",
+            "artist_aliases", "artist_id",
+            header="⚠️  Potential artist aliases",
+            city=None,
+        )
+        _print_alias_report(
+            fuzzy_venue_suggestions, to_insert, "venue_name",
+            "venue_aliases", "venue_id",
+            header="⚠️  Potential venue aliases",
+            city=args.city,
+        )
         _summary(
             parsed, duplicates, to_insert, error_rows,
             genuinely_new_artists, genuinely_new_venues,
@@ -741,7 +773,41 @@ def main() -> None:
         )
         return
 
-    n_ready = len(to_insert) - n_blocked
+    if interactive and (fuzzy_artist_suggestions or fuzzy_venue_suggestions):
+        # Interactive review — mutates fuzzy_*_suggestions and genuinely_new_* in place
+        interactive_alias_review(
+            fuzzy_artist_suggestions, to_insert,
+            "artist_name", "venue_name",
+            "artist_aliases", "artist_id",
+            artist_aliases, genuinely_new_artists,
+            label="Artist", city=None,
+        )
+        interactive_alias_review(
+            fuzzy_venue_suggestions, to_insert,
+            "venue_name", "artist_name",
+            "venue_aliases", "venue_id",
+            venue_aliases, genuinely_new_venues,
+            label="Venue", city=args.city,
+        )
+    elif fuzzy_artist_suggestions or fuzzy_venue_suggestions:
+        # Non-interactive live run: print SQL and block
+        _print_alias_report(
+            fuzzy_artist_suggestions, to_insert, "artist_name",
+            "artist_aliases", "artist_id",
+            header="⚠️  Potential artist aliases — add to artist_aliases and re-run",
+            city=None,
+        )
+        _print_alias_report(
+            fuzzy_venue_suggestions, to_insert, "venue_name",
+            "venue_aliases", "venue_id",
+            header="⚠️  Potential venue aliases — add to venue_aliases and re-run",
+            city=args.city,
+        )
+
+    # Recalculate after interactive decisions
+    nb      = _n_blocked(to_insert, fuzzy_artist_suggestions, fuzzy_venue_suggestions)
+    n_ready = len(to_insert) - nb
+
     if n_ready == 0:
         print("\nNothing ready to insert.")
         _summary(
@@ -752,7 +818,7 @@ def main() -> None:
         )
         return
 
-    # ── 4. Apply ──────────────────────────────────────────────────────────────
+    # ── 6. Apply ──────────────────────────────────────────────────────────────
     print("\nApplying changes…")
 
     if genuinely_new_artists:
@@ -780,7 +846,6 @@ def main() -> None:
     fuzzy_blocked: list[dict] = []
 
     for show in to_insert:
-        # Block shows where either artist or venue has a fuzzy suggestion but no alias
         if show["artist_name"] in fuzzy_artist_suggestions \
                 or show["venue_name"] in fuzzy_venue_suggestions:
             fuzzy_blocked.append(show)
@@ -808,13 +873,12 @@ def main() -> None:
         show_records.append(record)
 
     if unresolved:
-        print(f"  ⚠️  {len(unresolved)} show(s) skipped — ID unresolved after creation:")
+        print(f"  ⚠️  {len(unresolved)} show(s) skipped — ID unresolved:")
         for s in unresolved[:5]:
             print(f"     {s['date']}  {s['artist_name']}  @  {s['venue_name']}")
 
     inserted = 0
     if show_records:
-        # fact_shows has no auto-increment sequence — assign IDs explicitly
         next_show_id = get_max_id("fact_shows", "show_id") + 1
         for idx, record in enumerate(show_records):
             record["show_id"] = next_show_id + idx
@@ -825,18 +889,7 @@ def main() -> None:
         print(f"✅  {inserted:,} inserted")
 
     if fuzzy_blocked:
-        _print_alias_report(
-            fuzzy_artist_suggestions, fuzzy_blocked, "artist_name",
-            "artist_aliases", "artist_id",
-            header="⚠️  Artist-blocked shows — add aliases and re-run",
-            city=None,
-        )
-        _print_alias_report(
-            fuzzy_venue_suggestions, fuzzy_blocked, "venue_name",
-            "venue_aliases", "venue_id",
-            header="⚠️  Venue-blocked shows — add aliases and re-run",
-            city=args.city,
-        )
+        print(f"\n  {len(fuzzy_blocked)} show(s) still held — re-run to review them.")
 
     _summary(
         parsed, duplicates, to_insert, error_rows,
