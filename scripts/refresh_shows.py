@@ -101,7 +101,14 @@ def sb_insert(table: str, records: list, *, return_rows: bool = False) -> list:
         else "return=minimal,resolution=ignore-duplicates"
     )
     resp = requests.post(url, headers=_headers(prefer), json=records)
-    resp.raise_for_status()
+    if not resp.ok:
+        try:
+            detail = resp.json()
+        except Exception:
+            detail = resp.text[:500]
+        raise requests.exceptions.HTTPError(
+            f"{resp.status_code} on {table}: {detail}", response=resp
+        )
     if not return_rows:
         return []
     result = resp.json()
@@ -615,7 +622,7 @@ def main() -> None:
     if new_artist_names:
         print(f"  Creating {len(new_artist_names)} artist(s)…", end=" ", flush=True)
         new_artist_count = create_and_resolve(
-            "dim_artist", [{"artist_name": n} for n in new_artist_names],
+            "dim_artist", [{"artist_name": n, "review_status": "unverified"} for n in new_artist_names],
             "artist_name", "artist_id", existing_artists,
         )
         print(f"✅  {new_artist_count} created")
