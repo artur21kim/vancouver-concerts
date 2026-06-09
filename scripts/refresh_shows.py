@@ -814,6 +814,10 @@ def main() -> None:
 
     inserted = 0
     if show_records:
+        # fact_shows has no auto-increment sequence — assign IDs explicitly
+        next_show_id = get_max_id("fact_shows", "show_id") + 1
+        for idx, record in enumerate(show_records):
+            record["show_id"] = next_show_id + idx
         print(f"  Inserting {len(show_records):,} shows…", end=" ", flush=True)
         for i in range(0, len(show_records), BATCH_SIZE):
             sb_insert("fact_shows", show_records[i: i + BATCH_SIZE])
