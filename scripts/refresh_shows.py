@@ -198,16 +198,29 @@ def parse_date(month_str: str, day_str: str, year_str: str) -> Optional[str]:
         return None
 
 
-def extract_venue_name(venue_full: str) -> str:
+def extract_venue_info(venue_full: str) -> tuple[str, str]:
+    """
+    Extract (venue_name, city) from a setlist.fm venue string.
+
+    'Lucky Bar, Victoria, BC, Canada'                   → ('Lucky Bar', 'Victoria')
+    'Commodore Ballroom, Vancouver, BC, Canada'         → ('Commodore Ballroom', 'Vancouver')
+    'Bully\'s Studios Inc, New Westminster, BC, Canada' → ('Bully\'s Studios Inc', 'New Westminster')
+    'The Globe, Nanaimo, BC, Canada'                    → ('The Globe', 'Nanaimo')
+
+    Format: "Venue Name[, ...], City, Province, Country"
+    City is always the 3rd-from-last comma-separated part.
+    """
     venue_full = (venue_full or "").strip()
     if not venue_full:
-        return ""
+        return "", ""
     parts = [p.strip() for p in venue_full.split(", ")]
     if len(parts) > 3:
-        return ", ".join(parts[:-3])
-    if len(parts) >= 2:
-        return parts[0]
-    return venue_full
+        return ", ".join(parts[:-3]), parts[-3]
+    if len(parts) == 3:
+        return parts[0], parts[0]   # ambiguous — name only, no city
+    if len(parts) == 2:
+        return parts[0], ""
+    return venue_full, ""
 
 
 def parse_row(row: dict, city: str = DEFAULT_CITY) -> Optional[dict]:
@@ -234,7 +247,9 @@ def parse_row(row: dict, city: str = DEFAULT_CITY) -> Optional[dict]:
         venue_full = details4
     else:
         venue_full = details6 or details4
-    venue_name = extract_venue_name(venue_full)
+    venue_name, venue_city = extract_venue_info(venue_full)
+    if not venue_city:
+        venue_city = city   # fallback to --city flag if city can't be extracted
     if not venue_name:
         return None
     return {
@@ -243,7 +258,7 @@ def parse_row(row: dict, city: str = DEFAULT_CITY) -> Optional[dict]:
         "artist_name": artist_name,
         "venue_name":  venue_name,
         "show_type":   "music",
-        "city":        city,
+        "city":        venue_city,   # actual city from venue string, not --city flag
     }
 
 
