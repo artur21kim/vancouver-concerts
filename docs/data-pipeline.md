@@ -1,6 +1,6 @@
 # Grooveprint Data Pipeline
 
-**Last updated:** June 2026  
+**Last updated:** June 9, 2026  
 **Maintainer:** Artur Kim  
 **Primary data source:** [setlist.fm](https://www.setlist.fm) (CC BY-NC-SA 4.0)
 
@@ -104,6 +104,8 @@ Configure your Octoparse task to target `https://www.setlist.fm/search?query=van
 
 **Export format:** CSV (UTF-8) or XLSX. Save as UTF-8 to avoid encoding issues with special characters (e.g., Scandinavian artist names).
 
+**File naming convention:** Save exports as `exports/{AIRPORT_CODE}_{YYYY-MM-DD}.csv` — e.g. `exports/yvr_2026-06-09.csv`. Airport codes: `yvr` = Vancouver, `sea` = Seattle, `yyz` = Toronto, `yul` = Montreal, `aus` = Austin, `bna` = Nashville, `lax` = LA, `jfk` = NYC.
+
 **Scrape window:** Overlap by 2–3 weeks with the previous scrape. The dedup script handles duplicates automatically.
 
 ---
@@ -113,7 +115,7 @@ Configure your Octoparse task to target `https://www.setlist.fm/search?query=van
 Always run `--dry-run` first to see what will change without writing anything:
 
 ```bash
-python scripts/refresh_shows.py --input exports/raw_dec2026.csv --dry-run
+python scripts/refresh_shows.py --input exports/yvr_2026-06-09.csv --dry-run
 ```
 
 Sample output:
@@ -121,7 +123,7 @@ Sample output:
 ================================================================
 Grooveprint — Show Refresh
 Started:  2026-06-09 14:32:01
-Input:    exports/raw_dec2026.csv
+Input:    exports/yvr_2026-06-09.csv
 City:     Vancouver
 Mode:     DRY RUN (no DB writes)
 ================================================================
@@ -153,22 +155,60 @@ New artists (7):
 New venues (2):
   + The Key
   + Hollywood Theatre
+
+Fuzzy suggestions — artist (would prompt in live run):
+  'Aversions'  →  'Aversion'  [94%]
 ```
 
-Review the preview. If new artists or venues look wrong (encoding issues, scraped garbage), fix the CSV before applying.
+Review the preview. If new artists or venues look wrong (encoding issues, scraped garbage, unexpected fuzzy matches), fix the CSV or resolve aliases in the live run before applying.
 
 ---
 
 ### Step 3: Apply
 
 ```bash
-python scripts/refresh_shows.py --input exports/raw_dec2026.csv
+python scripts/refresh_shows.py --input exports/yvr_2026-06-09.csv
 ```
 
 The script will:
 1. Create any new `dim_artist` rows (artist_name only; spotify fields left null for manual enrichment later)
 2. Create any new `dim_venue` rows (venue_name + city + status='Open'; capacity and TM fields left null)
 3. Insert new `fact_shows` rows with `show_type='music'` as the default
+
+**Alias review (interactive, fires automatically)**
+
+When the script finds a near-match for a venue or artist that isn't an exact match or known alias, it pauses before applying changes:
+
+```
+⚠️  Artist alias review — 2 to verify
+    A = same entity (alias)  |  N = different (new)  |  S = skip  |  K = keep all as new
+────────────────────────────────────────────────────────────────
+1/2  'Aversions'  →  'Aversion'  [94% similarity]
+       2026-05-23  @ Rickshaw Theatre
+  [A]lias / [N]ew / [S]kip / [K]eep all as new:
+```
+
+| Key | Action |
+|---|---|
+| `A` Alias | Same entity — writes alias to DB immediately; show inserts this run |
+| `N` New | Different entity — auto-creates as new artist/venue this run |
+| `S` Skip | Uncertain — holds this show for the next run |
+| `K` Keep all | Batch-decides all remaining as New without further prompts |
+
+The date and context (venue for artist reviews, artist for venue reviews) are shown to help with the decision. Use dry-run output and setlist.fm to research ambiguous cases before running live.
+
+**If you exit mid-review (Ctrl+C):**
+- Any `A` aliases already chosen are durably written to the DB — they auto-resolve next run (no review needed)
+- Unreviewed shows are simply deferred — no data is lost or corrupted
+- The apply phase uses `ON CONFLICT DO NOTHING`, so reruns are always safe
+
+**Non-interactive mode** (for future automation):
+
+```bash
+python scripts/refresh_shows.py --input exports/yvr_2026-06-09.csv --no-interactive
+```
+
+Fuzzy suggestions are reported in the summary but don't block execution. Intended for scheduled jobs — not recommended for manual runs where alias decisions improve data quality.
 
 **show_type exceptions** — set manually in Supabase or via SQL after import:
 - Comedy shows: `UPDATE fact_shows SET show_type = 'comedy' WHERE ...`
@@ -261,6 +301,29 @@ One row per physical venue.
 
 > **Capacity** is manually populated. It powers venue-size filtering and chart colors throughout the app. For city expansion, aim to populate capacity for the top 50–100 venues — it's optional but significantly improves the UX for power users. Unknown capacity shows as the grey `?` badge and is still fully functional.
 
+### `venue_aliases`
+
+Maps setlist.fm venue name variants (per city) to canonical `dim_venue` rows. Written interactively during `refresh_shows.py` runs when fuzzy suggestions are resolved as `A` (Alias).
+
+| Column | Type | Description |
+|---|---|---|
+| `setlist_name` | `text` | Venue name as it appears on setlist.fm |
+| `city` | `text` | City — part of composite PK for city expansion safety |
+| `venue_id` | `int` | FK → `dim_venue` |
+| `created_at` | `timestamptz` | — |
+
+**Primary key:** `(setlist_name, city)`
+
+### `artist_aliases`
+
+Maps setlist.fm artist name variants to canonical `dim_artist` rows. Artists are global — no city dimension.
+
+| Column | Type | Description |
+|---|---|---|
+| `setlist_name` | `text` | Artist name as it appears on setlist.fm (PK) |
+| `artist_id` | `int` | FK → `dim_artist` |
+| `created_at` | `timestamptz` | — |
+
 ---
 
 ## Deduplication Strategy
@@ -273,6 +336,25 @@ One row per physical venue.
 - **Overlapping scrape windows are safe** — scrape generously rather than trying to track exact cutoff dates
 
 **What doesn't change on refresh:** artist_name and venue_name in existing fact_shows rows are never updated. If setlist.fm renames an artist, the historical rows keep the old name. This is intentional — it preserves the data as it existed at scrape time.
+
+### Venue & Artist Resolution Chain
+
+Before creating a new `dim_venue` or `dim_artist` row, the script resolves names in priority order:
+
+**Venue** (fuzzy threshold: 82%)
+1. Exact match → `dim_venue.venue_name`
+2. Exact match → `dim_venue.other_names` (comma-separated historical names, e.g. "GM Place" resolves to Rogers Arena silently)
+3. Exact match → `venue_aliases` table (setlist.fm naming discrepancies, scoped per city)
+4. Fuzzy match → interactive A/N/S/K review (or reported in non-interactive mode)
+5. No match → auto-create (`status='Open'`, city extracted from venue string)
+
+**Artist** (fuzzy threshold: 85% — stricter to protect Spotify matching)
+1. Exact match → `dim_artist.artist_name`
+2. Exact match → `artist_aliases` table
+3. Fuzzy match → interactive A/N/S/K review (or reported in non-interactive mode)
+4. No match → auto-create (`review_status='unverified'`)
+
+Artist fuzzy threshold is stricter than venue because a wrong link corrupts the Spotify library matching pipeline.
 
 ---
 
@@ -289,7 +371,7 @@ Seattle and Toronto are the natural first expansion cities — strong concert cu
 ### Adding a New City
 
 1. **Octoparse:** duplicate the Vancouver task, change the search query to the new city (e.g., `seattle, wa, united states`)
-2. **Run refresh:** `python scripts/refresh_shows.py --input exports/seattle_raw.csv --city Seattle`
+2. **Run refresh:** `python scripts/refresh_shows.py --input exports/sea_2026-06-09.csv` — city is extracted automatically from the venue string (e.g., "Showbox, Seattle, WA, United States"), so no `--city` flag is required
 3. **dim_venue enrichment:** for each new venue, manually populate `capacity`, `tm_venue_id`, and `latitude/longitude` (the top 50–100 venues by show count cover the majority of traffic)
 4. **TM enrichment:** add `tm_venue_id` values to `dim_venue`, then run `tm_enrichment.py`
 5. **App config:** city filter/selector UI will need to be updated to expose the new city (tracked under the City Expansion epic)
