@@ -263,19 +263,24 @@ def parse_date(month_str: str, day_str: str, year_str: str) -> Optional[str]:
         return None
 
 
-def extract_venue_info(venue_full: str) -> tuple[str, str]:
-    """Returns (venue_name, city) from a setlist.fm location string."""
+def extract_venue_info(venue_full: str) -> tuple[str, str, str, str]:
+    """
+    Returns (venue_name, city, state, country) from a setlist.fm location string.
+    Expected format: 'Venue Name, City, StateCode, Country'
+    e.g. 'The Crocodile, Seattle, WA, United States'
+         'Commodore Ballroom, Vancouver, BC, Canada'
+    """
     venue_full = (venue_full or "").strip()
     if not venue_full:
-        return "", ""
+        return "", "", "", ""
     parts = [p.strip() for p in venue_full.split(", ")]
     if len(parts) > 3:
-        return ", ".join(parts[:-3]), parts[-3]
+        return ", ".join(parts[:-3]), parts[-3], parts[-2], parts[-1]
     if len(parts) == 3:
-        return parts[0], parts[0]
+        return parts[0], parts[1], parts[2], ""
     if len(parts) == 2:
-        return parts[0], ""
-    return venue_full, ""
+        return parts[0], parts[1], "", ""
+    return venue_full, "", "", ""
 
 
 def parse_row(row: dict, city: str = DEFAULT_CITY) -> Optional[dict]:
@@ -292,7 +297,7 @@ def parse_row(row: dict, city: str = DEFAULT_CITY) -> Optional[dict]:
     details4 = (row.get("details4") or "").strip()
     details6 = (row.get("details6") or "").strip()
     venue_full = details4 if "Venue:" in details2 else (details6 or details4)
-    venue_name, venue_city = extract_venue_info(venue_full)
+    venue_name, venue_city, venue_state, venue_country = extract_venue_info(venue_full)
     if not venue_city:
         venue_city = city
     if not venue_name:
@@ -304,6 +309,8 @@ def parse_row(row: dict, city: str = DEFAULT_CITY) -> Optional[dict]:
         "venue_name":  venue_name,
         "show_type":   "music",
         "city":        venue_city,
+        "state":       venue_state,
+        "country":     venue_country,
     }
 
 
@@ -536,8 +543,12 @@ def interactive_alias_review(
                 if city is None:
                     genuinely_new[input_name] = None   # artist
                 else:
-                    city_for_new = blocked[0]["city"] if blocked else city
-                    genuinely_new[input_name] = city_for_new   # venue
+                    b = blocked[0] if blocked else None
+                    genuinely_new[input_name] = {
+                        "city":    b["city"]              if b else city,
+                        "state":   b.get("state",   "")   if b else "",
+                        "country": b.get("country", "")   if b else "",
+                    }
                 print(f"  →  Will create '{input_name}' as new {label.lower()} this run")
                 break
 
@@ -554,7 +565,11 @@ def interactive_alias_review(
                         genuinely_new[name] = None
                     else:
                         b = next((s for s in shows_list if s[show_match_key] == name), None)
-                        genuinely_new[name] = b["city"] if b else city
+                        genuinely_new[name] = {
+                            "city":    b["city"]              if b else city,
+                            "state":   b.get("state",   "")   if b else "",
+                            "country": b.get("country", "")   if b else "",
+                        }
                 print(f"  →  All {len(remaining)} remaining marked as new {label.lower()}(s)")
                 return
 
@@ -1042,7 +1057,7 @@ def main() -> None:
     duplicates:               list[dict]        = []
     to_insert:                list[dict]        = []
     genuinely_new_artists:    dict[str, None]   = {}
-    genuinely_new_venues:     dict[str, str]    = {}
+    genuinely_new_venues:     dict[str, dict]   = {}
     fuzzy_artist_suggestions: dict[str, tuple]  = {}
     fuzzy_venue_suggestions:  dict[str, tuple]  = {}
 
@@ -1069,7 +1084,11 @@ def main() -> None:
             if s:
                 fuzzy_venue_suggestions[show["venue_name"]] = s
             else:
-                genuinely_new_venues[show["venue_name"]] = show["city"]
+                genuinely_new_venues[show["venue_name"]] = {
+                        "city":    show["city"],
+                        "state":   show.get("state", ""),
+                        "country": show.get("country", ""),
+                    }
 
         to_insert.append(show)
 
@@ -1194,8 +1213,15 @@ def main() -> None:
         print(f"  Creating {len(genuinely_new_venues)} venue(s)…", end=" ", flush=True)
         next_id = get_max_id("dim_venue", "venue_id") + 1
         records = [
-            {"venue_id": next_id + i, "venue_name": n, "city": c, "status": "Open"}
-            for i, (n, c) in enumerate(genuinely_new_venues.items())
+            {
+                "venue_id":  next_id + i,
+                "venue_name": n,
+                "city":      v["city"],
+                "state":     v["state"]   or None,
+                "country":   v["country"] or None,
+                "status":    "Open",
+            }
+            for i, (n, v) in enumerate(genuinely_new_venues.items())
         ]
         count = create_and_resolve("dim_venue", records, "venue_name", "venue_id", existing_venues)
         print(f"✅  {count} created")
