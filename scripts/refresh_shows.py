@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Grooveprint — Show Refresh Script  v4
+Grooveprint — Show Refresh Script  v5
 scripts/refresh_shows.py
 
 Ingests a raw Octoparse setlist.fm export into Supabase.
@@ -24,6 +24,14 @@ Interactive review keys (live runs, per fuzzy suggestion):
   S  Skip      — hold the show for later
   K  Keep all  — treat all remaining suggestions as New (no more prompts)
 
+Venue-change reconciliation (SCRUM-68, post-insert pass):
+  When setlist.fm corrects a venue on an existing show the URL changes, so our
+  dedup key misses it and a new row is inserted.  After each live insert run,
+  the script scans for (artist_id, date) collisions and prompts:
+  A  Auto-reassign all user_shows + delete stale fact_shows rows
+  S  Skip all  (leaves both rows; warns when user_shows are affected)
+  1  Review pair-by-pair
+
 Usage:
     pip install requests python-dotenv openpyxl
 
@@ -46,6 +54,7 @@ import io
 import os
 import re
 import sys
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -124,6 +133,34 @@ def sb_insert(table: str, records: list, *, return_rows: bool = False) -> list:
         return []
     result = resp.json()
     return result if isinstance(result, list) else ([result] if result else [])
+
+
+def sb_update(table: str, eq_filters: dict, data: dict) -> None:
+    """PATCH rows matching eq_filters (values pre-formatted for PostgREST, e.g. 'eq.5')."""
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    resp = requests.patch(url, headers=_headers("return=minimal"), params=eq_filters, json=data)
+    if not resp.ok:
+        try:
+            detail = resp.json()
+        except Exception:
+            detail = resp.text[:500]
+        raise requests.exceptions.HTTPError(
+            f"{resp.status_code} on PATCH {table}: {detail}", response=resp
+        )
+
+
+def sb_delete(table: str, eq_filters: dict) -> None:
+    """DELETE rows matching eq_filters."""
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    resp = requests.delete(url, headers=_headers("return=minimal"), params=eq_filters)
+    if not resp.ok:
+        try:
+            detail = resp.json()
+        except Exception:
+            detail = resp.text[:500]
+        raise requests.exceptions.HTTPError(
+            f"{resp.status_code} on DELETE {table}: {detail}", response=resp
+        )
 
 
 def get_max_id(table: str, id_col: str) -> int:
@@ -618,6 +655,324 @@ def _summary(
 
 
 # ---------------------------------------------------------------------------
+# Venue-change detection & reconciliation  (SCRUM-68)
+# ---------------------------------------------------------------------------
+#
+# setlist.fm sometimes corrects a venue on an existing show after it has been
+# scraped.  Because our dedup key is setlist_url (which changes with the
+# correction), the script inserts a new fact_shows row instead of updating
+# the old one, leaving a stale duplicate.
+#
+# This section runs a post-insert reconciliation pass after every live run:
+#   1. For each newly inserted show, query fact_shows for rows sharing the
+#      same (artist_id, date) but a different venue_id.
+#   2. Count user_shows references on each stale row (ON DELETE CASCADE risk).
+#   3. Present pairs interactively — bulk or pair-by-pair.
+#   4. A → UPDATE user_shows show_id, then DELETE old fact_shows row.
+#   5. S → leave both rows, log a warning if user_shows are affected.
+#
+# Failure-safety: steps are sequential, not a DB transaction.
+#   - UPDATE fails  → abort; nothing changed; old row intact.
+#   - UPDATE ok, DELETE fails → user_shows correctly point to new show;
+#     stale fact_shows row remains but is unreferenced (harmless).
+
+def _build_reverse_maps(
+    existing_artists: dict[str, int],
+    artist_name_map:  dict[str, str],
+    existing_venues:  dict[str, int],
+    venue_name_map:   dict[str, str],
+) -> tuple[dict[int, str], dict[int, str]]:
+    """Invert the name→id maps so IDs can be displayed as names."""
+    artist_id_to_name: dict[int, str] = {}
+    for key, aid in existing_artists.items():
+        if key in artist_name_map:
+            artist_id_to_name.setdefault(aid, artist_name_map[key])
+
+    venue_id_to_name: dict[int, str] = {}
+    for key, vid in existing_venues.items():
+        if key in venue_name_map:
+            venue_id_to_name.setdefault(vid, venue_name_map[key])
+
+    return artist_id_to_name, venue_id_to_name
+
+
+def detect_venue_changes(
+    show_records:      list[dict],
+    venue_id_to_name:  dict[int, str],
+    artist_id_to_name: dict[int, str],
+) -> list[dict]:
+    """
+    For each newly inserted show, find pre-existing fact_shows rows that share
+    the same (artist_id, date) but have a different venue_id — indicating that
+    setlist.fm corrected the venue after our last scrape.
+
+    Queries are batched by artist_id + date to minimise API round-trips.
+
+    Returns a list of pair dicts (unsorted):
+        old_show_id, new_show_id, artist_id, date,
+        old_venue_id, new_venue_id, old_venue_name, new_venue_name,
+        artist_name, old_url
+    """
+    if not show_records:
+        return []
+
+    new_show_ids: set[int] = {r["show_id"] for r in show_records}
+
+    # (artist_id, date) → new show record
+    new_by_key: dict[tuple, dict] = {}
+    for r in show_records:
+        new_by_key[(r["artist_id"], r["date"])] = r
+
+    # Fetch existing fact_shows for the same artists + dates (batched).
+    # Filtering on both columns client-side keeps the query simple and
+    # avoids complex multi-column IN clauses that PostgREST doesn't support.
+    unique_artist_ids = list({r["artist_id"] for r in show_records})
+    unique_dates      = list({r["date"]      for r in show_records})
+
+    all_existing: list[dict] = []
+    ID_BATCH = 50    # keep URLs short
+    for i in range(0, len(unique_artist_ids), ID_BATCH):
+        ids_str   = ",".join(str(x) for x in unique_artist_ids[i: i + ID_BATCH])
+        dates_str = ",".join(f'"{d}"' for d in unique_dates)
+        rows = sb_get_all(
+            "fact_shows",
+            {
+                "select":    "show_id,artist_id,date,venue_id,setlist_url",
+                "artist_id": f"in.({ids_str})",
+                "date":      f"in.({dates_str})",
+            },
+        )
+        all_existing.extend(rows)
+
+    # Group by (artist_id, date); find pairs where new and old differ by venue
+    by_key: dict[tuple, list] = defaultdict(list)
+    for row in all_existing:
+        by_key[(row["artist_id"], row["date"])].append(row)
+
+    pairs: list[dict] = []
+    for key, rows_for_key in by_key.items():
+        if key not in new_by_key:
+            continue
+        new_r = new_by_key[key]
+        for old_r in rows_for_key:
+            if old_r["show_id"] in new_show_ids:
+                continue   # skip the rows we just inserted
+            if old_r["venue_id"] == new_r["venue_id"]:
+                continue   # same venue — not a venue-change scenario
+            pairs.append({
+                "old_show_id":    old_r["show_id"],
+                "new_show_id":    new_r["show_id"],
+                "artist_id":      new_r["artist_id"],
+                "date":           new_r["date"],
+                "old_venue_id":   old_r["venue_id"],
+                "new_venue_id":   new_r["venue_id"],
+                "old_venue_name": venue_id_to_name.get(
+                    old_r["venue_id"], f"venue_id={old_r['venue_id']}"),
+                "new_venue_name": venue_id_to_name.get(
+                    new_r["venue_id"], f"venue_id={new_r['venue_id']}"),
+                "artist_name":    artist_id_to_name.get(
+                    new_r["artist_id"], f"artist_id={new_r['artist_id']}"),
+                "old_url":        old_r.get("setlist_url") or "",
+            })
+
+    return pairs
+
+
+def _reconcile_pair(pair: dict) -> bool:
+    """
+    Execute the two-step reconciliation for one stale-row pair:
+      1. UPDATE user_shows SET show_id = new WHERE show_id = old
+      2. DELETE FROM fact_shows WHERE show_id = old
+
+    Steps are done in order. If UPDATE fails, DELETE is aborted so the old
+    row stays intact. If UPDATE succeeds but DELETE fails, user_shows are
+    already correct; the stale fact_shows row remains unreferenced (harmless).
+
+    Returns True if both steps succeeded.
+    """
+    old_id = pair["old_show_id"]
+    new_id = pair["new_show_id"]
+
+    if pair.get("user_shows_count", 0) > 0:
+        print(
+            f"  Reassigning {pair['user_shows_count']} user_shows row(s): "
+            f"show_id {old_id} → {new_id} … ",
+            end="", flush=True,
+        )
+        try:
+            sb_update("user_shows", {"show_id": f"eq.{old_id}"}, {"show_id": new_id})
+            print("✅")
+        except Exception as ex:
+            print(f"❌  UPDATE failed: {ex}")
+            print(f"  ⚠️  Aborting delete — stale row show_id={old_id} left intact.")
+            print(f"  ⚠️  If this is a unique-constraint error, the affected user(s)")
+            print(f"       already have show_id={new_id} in their history.  Manual cleanup:")
+            print(f"       DELETE FROM user_shows WHERE show_id = {old_id};")
+            print(f"       DELETE FROM fact_shows  WHERE show_id = {old_id};")
+            return False
+
+    print(
+        f"  Deleting stale fact_shows row: show_id={old_id} "
+        f"({pair['artist_name']}, {pair['date']}, {pair['old_venue_name']}) … ",
+        end="", flush=True,
+    )
+    try:
+        sb_delete("fact_shows", {"show_id": f"eq.{old_id}"})
+        print("✅")
+        return True
+    except Exception as ex:
+        print(f"❌  DELETE failed: {ex}")
+        if pair.get("user_shows_count", 0) > 0:
+            print(
+                f"  ⚠️  user_shows already reassigned — stale fact_shows row "
+                f"show_id={old_id} remains but is no longer referenced."
+            )
+        return False
+
+
+def _reconcile_individually(pairs: list[dict]) -> None:
+    """Review and act on each pair one at a time: A=reconcile, S=skip."""
+    total = len(pairs)
+    print(f"\n{'─' * 64}")
+    for i, p in enumerate(pairs):
+        impact = (
+            f"{p['user_shows_count']} user_shows row(s) affected"
+            if p["user_shows_count"] else "no user_shows affected"
+        )
+        print(f"\n{i + 1}/{total}  {p['artist_name']}  {p['date']}")
+        print(f"       Old venue: {p['old_venue_name']}  (show_id={p['old_show_id']}, {impact})")
+        print(f"       New venue: {p['new_venue_name']}  (show_id={p['new_show_id']})")
+
+        while True:
+            try:
+                choice = input("  [A]uto-reconcile / [S]kip: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("\n  Interrupted — remaining pairs skipped.")
+                return
+
+            if choice in ("a", "auto"):
+                _reconcile_pair(p)
+                break
+            elif choice in ("s", "skip"):
+                print(f"  →  Skipped — both rows remain.")
+                if p["user_shows_count"] > 0:
+                    print(
+                        f"  ⚠️  Manual cleanup needed: show_id={p['old_show_id']} "
+                        f"still referenced by {p['user_shows_count']} user_shows row(s)."
+                    )
+                break
+            else:
+                print("  Please enter A or S")
+
+
+def reconcile_venue_changes(
+    pairs:       list[dict],
+    interactive: bool,
+) -> None:
+    """
+    Post-insert reconciliation pass for detected venue-change pairs.
+
+    Each pair is an (old_show, new_show) where same artist+date but different
+    venue — indicating setlist.fm corrected the venue between scrapes.
+
+    Interactive (default):
+      A  — reassign all user_shows + delete all stale fact_shows rows (bulk)
+      S  — skip all (leaves both rows; warns when user_shows are affected)
+      1  — review pair-by-pair
+
+    Non-interactive (--no-interactive):
+      Logs all pairs and skips — operator must reconcile on the next
+      interactive run or manually in the Supabase SQL editor.
+    """
+    if not pairs:
+        return
+
+    # Enrich pairs with user_shows counts, then sort critical cases first
+    print("\nChecking user_shows references …", end=" ", flush=True)
+    for p in pairs:
+        rows = sb_get_all(
+            "user_shows",
+            {"show_id": f"eq.{p['old_show_id']}", "select": "user_id"},
+        )
+        p["user_shows_count"] = len(rows)
+    pairs.sort(key=lambda x: -x["user_shows_count"])
+    print("done")
+
+    print(f"\n{'─' * 64}")
+    print(f"⚠️  Possible venue changes detected — {len(pairs)} pair(s) to review")
+    print(f"{'─' * 64}")
+    for p in pairs:
+        impact = (
+            f"[{p['user_shows_count']} user_shows affected]"
+            if p["user_shows_count"] else "[0 user_shows]"
+        )
+        print(
+            f"  {p['artist_name']:<30}  {p['date']}  "
+            f"{p['old_venue_name']}  →  {p['new_venue_name']}  {impact}"
+        )
+
+    if not interactive:
+        print(
+            f"\n  Non-interactive mode — all {len(pairs)} pair(s) skipped."
+            f"\n  ⚠️  Both old and new fact_shows rows remain — manual cleanup needed."
+        )
+        for p in pairs:
+            print(
+                f"     old show_id={p['old_show_id']}  new show_id={p['new_show_id']}"
+                f"  ({p['artist_name']}, {p['date']})"
+            )
+        print(
+            f"\n  Re-run interactively or execute in Supabase SQL editor:"
+        )
+        for p in pairs:
+            print(
+                f"  -- {p['artist_name']} {p['date']}: "
+                f"{p['old_venue_name']} → {p['new_venue_name']}"
+            )
+            if p["user_shows_count"] > 0:
+                print(
+                    f"  UPDATE user_shows SET show_id = {p['new_show_id']}"
+                    f" WHERE show_id = {p['old_show_id']};"
+                )
+            print(f"  DELETE FROM fact_shows WHERE show_id = {p['old_show_id']};")
+        return
+
+    # Interactive — bulk prompt
+    print(f"\n  [A]uto-reassign all user_shows + delete all stale rows")
+    print(f"  [S]kip all  (leaves both rows; warns on user_shows impact)")
+    print(f"  [1]  Review pair-by-pair")
+    while True:
+        try:
+            choice = input("\n  Your choice [A / S / 1]: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print("\n  Interrupted — all pairs skipped.")
+            return
+
+        if choice in ("a", "auto"):
+            print()
+            ok = sum(1 for p in pairs if _reconcile_pair(p))
+            print(f"\n✅  Reconciled {ok}/{len(pairs)} pair(s).")
+            return
+
+        elif choice in ("s", "skip"):
+            print(f"  →  All {len(pairs)} pair(s) skipped — both rows remain.")
+            for p in pairs:
+                if p["user_shows_count"] > 0:
+                    print(
+                        f"  ⚠️  Manual cleanup needed: show_id={p['old_show_id']}"
+                        f" still referenced by {p['user_shows_count']} user_shows row(s)."
+                    )
+            return
+
+        elif choice in ("1", "individual"):
+            _reconcile_individually(pairs)
+            return
+
+        else:
+            print("  Please enter A, S, or 1")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -640,7 +995,7 @@ def main() -> None:
     )
 
     print("=" * 64)
-    print("Grooveprint — Show Refresh  v4")
+    print("Grooveprint — Show Refresh  v5")
     print(f"Started:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Input:    {args.input}")
     print(f"City:     {args.city}")
@@ -683,6 +1038,7 @@ def main() -> None:
 
     # ── 3. Classify ──────────────────────────────────────────────────────────
     print("\nClassifying…")
+
     duplicates:               list[dict]        = []
     to_insert:                list[dict]        = []
     genuinely_new_artists:    dict[str, None]   = {}
@@ -770,6 +1126,9 @@ def main() -> None:
             genuinely_new_artists, genuinely_new_venues,
             fuzzy_artist_suggestions, fuzzy_venue_suggestions,
             inserted=0, fuzzy_blocked=[], dry_run=True,
+        )
+        print(
+            "\n  📝  Venue-change detection runs after a live insert (not in --dry-run mode)."
         )
         return
 
@@ -890,6 +1249,22 @@ def main() -> None:
 
     if fuzzy_blocked:
         print(f"\n  {len(fuzzy_blocked)} show(s) still held — re-run to review them.")
+
+    # ── 7. Venue-change detection & reconciliation ────────────────────────────
+    if show_records:
+        print("\nScanning for venue changes …", end=" ", flush=True)
+        artist_id_to_name, venue_id_to_name = _build_reverse_maps(
+            existing_artists, artist_name_map,
+            existing_venues,  venue_name_map,
+        )
+        venue_pairs = detect_venue_changes(
+            show_records, venue_id_to_name, artist_id_to_name,
+        )
+        if not venue_pairs:
+            print("none found.")
+        else:
+            print(f"{len(venue_pairs)} pair(s) found.")
+            reconcile_venue_changes(venue_pairs, interactive=interactive)
 
     _summary(
         parsed, duplicates, to_insert, error_rows,
