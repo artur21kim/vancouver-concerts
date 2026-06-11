@@ -337,6 +337,7 @@ def parse_row(
         venue_country = country
     if not venue_name:
         return None
+    tour_name = (row.get("tour_name") or "").strip() or None
     return {
         "setlist_url": setlist_url,
         "date":        date,
@@ -346,6 +347,7 @@ def parse_row(
         "city":        venue_city,
         "state":       venue_state,
         "country":     venue_country,
+        "tour_name":   tour_name,
     }
 
 
@@ -1322,6 +1324,8 @@ def main() -> None:
         }
         if show.get("festival_name"):
             record["festival_name"] = show["festival_name"]
+        if show.get("tour_name"):
+            record["tour_name"] = show["tour_name"]
         show_records.append(record)
 
     if unresolved:

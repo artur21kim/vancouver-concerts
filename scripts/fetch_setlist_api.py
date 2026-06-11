@@ -82,7 +82,7 @@ MONTH_ABBR = {
 }
 
 # Output columns must match what parse_row() in refresh_shows.py reads
-CSV_COLUMNS = ["Field", "month", "day", "Year", "details", "details2", "details4"]
+CSV_COLUMNS = ["Field", "month", "day", "Year", "details", "details2", "details4", "tour_name"]
 
 
 # ---------------------------------------------------------------------------
@@ -242,13 +242,14 @@ def setlist_to_row(setlist: dict) -> dict | None:
     Map one API setlist object → CSV row dict.
 
     Column mapping (must match refresh_shows.py parse_row()):
-      Field    ← setlist URL          (dedup key — setlist_url in fact_shows)
-      month    ← 3-letter abbreviation (JAN … DEC)
-      day      ← day of month
-      Year     ← 4-digit year
-      details  ← artist name
-      details2 ← literal "Venue:"     (triggers venue-branch in parse_row)
-      details4 ← "Venue, City, State, Country"
+      Field     ← setlist URL          (dedup key — setlist_url in fact_shows)
+      month     ← 3-letter abbreviation (JAN … DEC)
+      day       ← day of month
+      Year      ← 4-digit year
+      details   ← artist name
+      details2  ← literal "Venue:"     (triggers venue-branch in parse_row)
+      details4  ← "Venue, City, State, Country"
+      tour_name ← tour name from API (empty string if not on a named tour)
     """
     url = (setlist.get("url") or "").strip()
     if not url:
@@ -267,13 +268,14 @@ def setlist_to_row(setlist: dict) -> dict | None:
         return None
 
     return {
-        "Field":    url,
-        "month":    month,
-        "day":      day,
-        "Year":     year,
-        "details":  artist_name,
-        "details2": "Venue:",
-        "details4": venue_str,
+        "Field":     url,
+        "month":     month,
+        "day":       day,
+        "Year":      year,
+        "details":   artist_name,
+        "details2":  "Venue:",
+        "details4":  venue_str,
+        "tour_name": (setlist.get("tour") or {}).get("name", ""),
     }
 
 
