@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Grooveprint — Show Refresh Script  v5
+Grooveprint — Show Refresh Script  v6
 scripts/refresh_shows.py
 
 Ingests a raw Octoparse setlist.fm export into Supabase.
@@ -211,12 +211,32 @@ def normalize_artist(name: str) -> str:
 
 def find_fuzzy_venue_match(
     name: str, id_map: dict[str, int], name_map: dict[str, str],
+    city: Optional[str] = None,
+    location_map: Optional[dict[str, tuple]] = None,
+    state: Optional[str] = None,
+    country: Optional[str] = None,
 ) -> Optional[tuple[str, int, float]]:
+    """Fuzzy-match a venue name against existing venues.
+
+    When city/state/country and location_map are provided, candidates are
+    restricted to venues in the same location before scoring.  This prevents
+    cross-city false positives (e.g. 'Royal Room, Seattle' matching
+    'The Royal, Vancouver') and cross-state false positives
+    (e.g. Vancouver WA vs Vancouver BC).
+    """
     norm = normalize_venue(name)
     if not norm:
         return None
     best_score, best_key = 0.0, None
     for key in id_map:
+        if city and location_map:
+            loc = location_map.get(key, ("", "", ""))
+            if loc[0].lower() != city.lower():
+                continue
+            if state and loc[1].lower() != state.lower():
+                continue
+            if country and loc[2].lower() != country.lower():
+                continue
         nk = normalize_venue(key)
         if norm == nk:
             return (name_map[key], id_map[key], 1.0)
@@ -264,26 +284,37 @@ def parse_date(month_str: str, day_str: str, year_str: str) -> Optional[str]:
 
 
 def extract_venue_info(venue_full: str) -> tuple[str, str, str, str]:
-    """
-    Returns (venue_name, city, state, country) from a setlist.fm location string.
-    Expected format: 'Venue Name, City, StateCode, Country'
-    e.g. 'The Crocodile, Seattle, WA, United States'
-         'Commodore Ballroom, Vancouver, BC, Canada'
+    """Returns (venue_name, city, state, country) from a setlist.fm location string.
+
+    API format: "Venue Name, City, State, Country"  (4 parts)
+    Octoparse:  "Venue Name, City, State, Country"  (same)
+    Older/short:"Venue Name, City"                  (2 parts, no state/country)
     """
     venue_full = (venue_full or "").strip()
     if not venue_full:
         return "", "", "", ""
     parts = [p.strip() for p in venue_full.split(", ")]
-    if len(parts) > 3:
-        return ", ".join(parts[:-3]), parts[-3], parts[-2], parts[-1]
+    if len(parts) >= 4:
+        # "Name, City, State, Country" — name may contain commas
+        country = parts[-1]
+        state   = parts[-2]
+        city    = parts[-3]
+        name    = ", ".join(parts[:-3])
+        return name, city, state, country
     if len(parts) == 3:
-        return parts[0], parts[1], parts[2], ""
+        # "Name, City, Country" — no state
+        return parts[0], parts[1], "", parts[2]
     if len(parts) == 2:
         return parts[0], parts[1], "", ""
     return venue_full, "", "", ""
 
 
-def parse_row(row: dict, city: str = DEFAULT_CITY) -> Optional[dict]:
+def parse_row(
+    row: dict,
+    city: str    = "",
+    state: str   = "",
+    country: str = "",
+) -> Optional[dict]:
     setlist_url = (row.get("Field") or "").strip()
     if not setlist_url or "setlist.fm" not in setlist_url:
         return None
@@ -300,6 +331,10 @@ def parse_row(row: dict, city: str = DEFAULT_CITY) -> Optional[dict]:
     venue_name, venue_city, venue_state, venue_country = extract_venue_info(venue_full)
     if not venue_city:
         venue_city = city
+    if not venue_state:
+        venue_state = state
+    if not venue_country:
+        venue_country = country
     if not venue_name:
         return None
     return {
@@ -381,26 +416,33 @@ def load_existing_artists() -> tuple[dict[str, int], dict[str, str]]:
     return id_map, name_map
 
 
-def load_existing_venues() -> tuple[dict[str, int], dict[str, str]]:
-    """Indexes venue_name and other_names (historical names resolve silently)."""
+def load_existing_venues() -> tuple[dict[str, int], dict[str, str], dict[str, tuple]]:
+    """Indexes venue_name and other_names (historical names resolve silently).
+    Also returns location_map (key → (city, state, country)) used to scope
+    fuzzy matching to the same city/state/country, preventing cross-city and
+    cross-state false-positive alias suggestions (e.g. Vancouver WA vs BC)."""
     print("  Existing venues …", end=" ", flush=True)
-    rows = sb_get_all("dim_venue", {"select": "venue_id,venue_name,other_names"})
-    id_map:   dict[str, int] = {}
-    name_map: dict[str, str] = {}
+    rows = sb_get_all("dim_venue", {"select": "venue_id,venue_name,other_names,city,state,country"})
+    id_map:       dict[str, int]   = {}
+    name_map:     dict[str, str]   = {}
+    location_map: dict[str, tuple] = {}
     for r in rows:
         if not r.get("venue_name"):
             continue
         canonical = r["venue_name"]
         vid       = r["venue_id"]
-        id_map[canonical.lower()]   = vid
-        name_map[canonical.lower()] = canonical
+        vloc      = (r.get("city") or "", r.get("state") or "", r.get("country") or "")
+        id_map[canonical.lower()]       = vid
+        name_map[canonical.lower()]     = canonical
+        location_map[canonical.lower()] = vloc
         for alt in (r.get("other_names") or "").split(","):
             alt = alt.strip()
             if len(alt) >= 4:
-                id_map[alt.lower()]   = vid
-                name_map[alt.lower()] = canonical
+                id_map[alt.lower()]       = vid
+                name_map[alt.lower()]     = canonical
+                location_map[alt.lower()] = vloc
     print(f"{len(id_map):,}  ({len(rows):,} venues + other_names)")
-    return id_map, name_map
+    return id_map, name_map, location_map
 
 
 def load_artist_aliases() -> dict[str, int]:
@@ -418,12 +460,14 @@ def load_artist_aliases() -> dict[str, int]:
         return {}
 
 
-def load_venue_aliases(city: str) -> dict[str, int]:
+def load_venue_aliases(city: str, state: str, country: str) -> dict[str, int]:
     print("  Venue aliases …", end=" ", flush=True)
     try:
         rows = sb_get_page("venue_aliases", {
-            "select": "setlist_name,venue_id",
-            "city":   f"eq.{city}",
+            "select":  "setlist_name,venue_id",
+            "city":    f"eq.{city}",
+            "state":   f"eq.{state}",
+            "country": f"eq.{country}",
         })
         result = {
             r["setlist_name"].lower(): r["venue_id"]
@@ -479,6 +523,9 @@ def interactive_alias_review(
     genuinely_new: dict,           # mutated on New decision
     label: str,                    # 'Artist' or 'Venue'
     city: Optional[str] = None,    # venue_aliases only
+    state: Optional[str] = None,   # venue_aliases only
+    country: Optional[str] = None, # venue_aliases only
+    venue_location_map: Optional[dict[str, tuple]] = None,  # shows matched venue's location
 ) -> None:
     """
     Interactive review for each fuzzy suggestion. Prompts user for each:
@@ -506,11 +553,13 @@ def interactive_alias_review(
 
         canonical, rid, score = fuzzy_suggestions[input_name]
         score_s = "exact (normalised)" if score == 1.0 else f"{score:.0%} similarity"
+        loc     = venue_location_map.get(canonical.lower(), ("", "", "")) if venue_location_map else ("", "", "")
+        loc_label = f" [{loc[0]}, {loc[1]}]" if (loc[0] or loc[1]) else ""
 
         # Show context: the blocked shows for this name
         blocked = [s for s in shows_list if s[show_match_key] == input_name]
 
-        print(f"\n{i+1}/{total}  '{input_name}'  →  '{canonical}'  [{score_s}]")
+        print(f"\n{i+1}/{total}  '{input_name}'  →  '{canonical}'{loc_label}  [{score_s}]")
         for show in blocked[:3]:
             context = show.get(context_key, "")
             print(f"       {show['date']}  {'@ ' + context if context else ''}")
@@ -528,7 +577,9 @@ def interactive_alias_review(
                 # Write alias to DB immediately
                 record = {"setlist_name": input_name, id_col: rid}
                 if city:
-                    record["city"] = city
+                    record["city"]    = city
+                    record["state"]   = state or ""
+                    record["country"] = country or ""
                 try:
                     sb_insert(table, [record])
                     alias_map[input_name.lower()] = rid   # update in-memory map
@@ -543,11 +594,11 @@ def interactive_alias_review(
                 if city is None:
                     genuinely_new[input_name] = None   # artist
                 else:
-                    b = blocked[0] if blocked else None
+                    src = blocked[0] if blocked else {}
                     genuinely_new[input_name] = {
-                        "city":    b["city"]              if b else city,
-                        "state":   b.get("state",   "")   if b else "",
-                        "country": b.get("country", "")   if b else "",
+                        "city":    src.get("city", city),
+                        "state":   src.get("state", state or ""),
+                        "country": src.get("country", country or ""),
                     }
                 print(f"  →  Will create '{input_name}' as new {label.lower()} this run")
                 break
@@ -566,9 +617,9 @@ def interactive_alias_review(
                     else:
                         b = next((s for s in shows_list if s[show_match_key] == name), None)
                         genuinely_new[name] = {
-                            "city":    b["city"]              if b else city,
-                            "state":   b.get("state",   "")   if b else "",
-                            "country": b.get("country", "")   if b else "",
+                            "city":    b["city"]    if b else city,
+                            "state":   b["state"]   if b else (state or ""),
+                            "country": b["country"] if b else (country or ""),
                         }
                 print(f"  →  All {len(remaining)} remaining marked as new {label.lower()}(s)")
                 return
@@ -589,6 +640,9 @@ def _print_alias_report(
     id_col: str,
     header: str,
     city: Optional[str] = None,
+    state: Optional[str] = None,
+    country: Optional[str] = None,
+    venue_location_map: Optional[dict[str, tuple]] = None,
 ) -> None:
     """Non-interactive alias report (dry-run or --no-interactive)."""
     if not suggestions:
@@ -601,15 +655,17 @@ def _print_alias_report(
 
     print(f"\n{header} ({len(suggestions)}):")
     for input_name, (canonical, rid, score) in suggestions.items():
-        n       = blocked_by_name.get(input_name, 0)
-        score_s = "exact (normalised)" if score == 1.0 else f"{score:.0%} similarity"
-        print(f"  '{input_name}'  →  '{canonical}'  [{score_s}, {n} show(s)]")
+        n         = blocked_by_name.get(input_name, 0)
+        score_s   = "exact (normalised)" if score == 1.0 else f"{score:.0%} similarity"
+        loc       = venue_location_map.get(canonical.lower(), ("", "", "")) if venue_location_map else ("", "", "")
+        loc_label = f" [{loc[0]}, {loc[1]}]" if (loc[0] or loc[1]) else ""
+        print(f"  '{input_name}'  →  '{canonical}'{loc_label}  [{score_s}, {n} show(s)]")
 
     print(f"\n  SQL — verify each line, then run in Supabase SQL editor:")
     if city:
-        print(f"  INSERT INTO {table} (setlist_name, city, {id_col}) VALUES")
+        print(f"  INSERT INTO {table} (setlist_name, city, state, country, {id_col}) VALUES")
         lines = [
-            f"    ('{n.replace(chr(39), chr(39)*2)}', '{city}', {rid})"
+            f"    ('{n.replace(chr(39), chr(39)*2)}', '{city}', '{state or ''}', '{country or ''}', {rid})"
             for n, (_, rid, _) in suggestions.items() if blocked_by_name.get(n, 0) > 0
         ]
     else:
@@ -999,8 +1055,12 @@ def main() -> None:
     ap.add_argument("--dry-run",        action="store_true", help="Report without writing to DB")
     ap.add_argument("--no-interactive", action="store_true",
                     help="Skip interactive review; block and print SQL instead (for automation)")
-    ap.add_argument("--city",           default=DEFAULT_CITY,
-                    help=f"Target city for alias lookups (default: {DEFAULT_CITY})")
+    ap.add_argument("--city",           required=True,
+                    help="Target city (e.g. Vancouver, Seattle)")
+    ap.add_argument("--state",          required=True,
+                    help="State/province code (e.g. BC, WA, ON)")
+    ap.add_argument("--country",        required=True,
+                    help="Full country name (e.g. Canada, 'United States')")
     args = ap.parse_args()
 
     interactive = (
@@ -1010,10 +1070,10 @@ def main() -> None:
     )
 
     print("=" * 64)
-    print("Grooveprint — Show Refresh  v5")
+    print("Grooveprint — Show Refresh  v6")
     print(f"Started:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Input:    {args.input}")
-    print(f"City:     {args.city}")
+    print(f"Location: {args.city}, {args.state}, {args.country}")
     mode = "DRY RUN" if args.dry_run else ("LIVE + interactive review" if interactive else "LIVE (non-interactive)")
     print(f"Mode:     {mode}")
     print("=" * 64)
@@ -1027,7 +1087,7 @@ def main() -> None:
     parsed:    list[dict]   = []
     error_rows: list[tuple] = []
     for idx, raw in enumerate(raw_rows):
-        show = parse_row(raw, city=args.city)
+        show = parse_row(raw, city=args.city, state=args.state, country=args.country)
         if show:
             parsed.append(show)
         else:
@@ -1045,11 +1105,11 @@ def main() -> None:
 
     # ── 2. Snapshot DB state ─────────────────────────────────────────────────
     print("\nLoading Supabase snapshot…")
-    existing_urls                      = load_existing_urls()
-    existing_artists, artist_name_map  = load_existing_artists()
-    existing_venues,  venue_name_map   = load_existing_venues()
-    artist_aliases                     = load_artist_aliases()
-    venue_aliases                      = load_venue_aliases(args.city)
+    existing_urls                                        = load_existing_urls()
+    existing_artists, artist_name_map                   = load_existing_artists()
+    existing_venues,  venue_name_map, venue_location_map = load_existing_venues()
+    artist_aliases                                       = load_artist_aliases()
+    venue_aliases                                        = load_venue_aliases(args.city, args.state, args.country)
 
     # ── 3. Classify ──────────────────────────────────────────────────────────
     print("\nClassifying…")
@@ -1057,7 +1117,7 @@ def main() -> None:
     duplicates:               list[dict]        = []
     to_insert:                list[dict]        = []
     genuinely_new_artists:    dict[str, None]   = {}
-    genuinely_new_venues:     dict[str, dict]   = {}
+    genuinely_new_venues:     dict[str, dict]  = {}
     fuzzy_artist_suggestions: dict[str, tuple]  = {}
     fuzzy_venue_suggestions:  dict[str, tuple]  = {}
 
@@ -1080,15 +1140,19 @@ def main() -> None:
         v_resolved = vkey in existing_venues or vkey in venue_aliases
         if not v_resolved and show["venue_name"] not in fuzzy_venue_suggestions \
                           and show["venue_name"] not in genuinely_new_venues:
-            s = find_fuzzy_venue_match(show["venue_name"], existing_venues, venue_name_map)
+            s = find_fuzzy_venue_match(
+                show["venue_name"], existing_venues, venue_name_map,
+                show["city"], venue_location_map,
+                show.get("state"), show.get("country"),
+            )
             if s:
                 fuzzy_venue_suggestions[show["venue_name"]] = s
             else:
                 genuinely_new_venues[show["venue_name"]] = {
-                        "city":    show["city"],
-                        "state":   show.get("state", ""),
-                        "country": show.get("country", ""),
-                    }
+                    "city":    show["city"],
+                    "state":   show.get("state", ""),
+                    "country": show.get("country", ""),
+                }
 
         to_insert.append(show)
 
@@ -1138,7 +1202,8 @@ def main() -> None:
             fuzzy_venue_suggestions, to_insert, "venue_name",
             "venue_aliases", "venue_id",
             header="⚠️  Potential venue aliases",
-            city=args.city,
+            city=args.city, state=args.state, country=args.country,
+            venue_location_map=venue_location_map,
         )
         _summary(
             parsed, duplicates, to_insert, error_rows,
@@ -1165,7 +1230,8 @@ def main() -> None:
             "venue_name", "artist_name",
             "venue_aliases", "venue_id",
             venue_aliases, genuinely_new_venues,
-            label="Venue", city=args.city,
+            label="Venue", city=args.city, state=args.state, country=args.country,
+            venue_location_map=venue_location_map,
         )
     elif fuzzy_artist_suggestions or fuzzy_venue_suggestions:
         # Non-interactive live run: print SQL and block
@@ -1179,7 +1245,8 @@ def main() -> None:
             fuzzy_venue_suggestions, to_insert, "venue_name",
             "venue_aliases", "venue_id",
             header="⚠️  Potential venue aliases — add to venue_aliases and re-run",
-            city=args.city,
+            city=args.city, state=args.state, country=args.country,
+            venue_location_map=venue_location_map,
         )
 
     # Recalculate after interactive decisions
@@ -1214,14 +1281,14 @@ def main() -> None:
         next_id = get_max_id("dim_venue", "venue_id") + 1
         records = [
             {
-                "venue_id":  next_id + i,
+                "venue_id":   next_id + i,
                 "venue_name": n,
-                "city":      v["city"],
-                "state":     v["state"]   or None,
-                "country":   v["country"] or None,
-                "status":    "Open",
+                "city":       loc.get("city", ""),
+                "state":      loc.get("state", ""),
+                "country":    loc.get("country", ""),
+                "status":     "Open",
             }
-            for i, (n, v) in enumerate(genuinely_new_venues.items())
+            for i, (n, loc) in enumerate(genuinely_new_venues.items())
         ]
         count = create_and_resolve("dim_venue", records, "venue_name", "venue_id", existing_venues)
         print(f"✅  {count} created")
