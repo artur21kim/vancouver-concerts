@@ -1,6 +1,5 @@
 'use client'
 
-import Navigation from '../components/Navigation'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -56,8 +55,8 @@ const CAP_META: Record<string, {
   color: string; badgeBg: string; badgeText: string
 }> = {
   'small (<500)':      { key: 'small',   shortLabel: 'S',  legendLabel: 'Small (<500)',      color: 'rgba(139,92,246,0.85)',  badgeBg: 'bg-purple-500/20', badgeText: 'text-purple-300'  },
-  'medium (500-1.5k)': { key: 'medium',  shortLabel: 'M',  legendLabel: 'Medium (500–1.5K)', color: 'rgba(58,143,189,0.85)',  badgeBg: 'bg-blue-500/20',   badgeText: 'text-[#3A8FBD]'  },
-  'large (1.5k-10k)':  { key: 'large',   shortLabel: 'L',  legendLabel: 'Large (1.5K–10K)',  color: 'rgba(234,88,12,0.85)',   badgeBg: 'bg-orange-500/20', badgeText: 'text-orange-400' },
+  'medium (500-1.5k)': { key: 'medium',  shortLabel: 'M',  legendLabel: 'Medium (500\u20131.5K)', color: 'rgba(58,143,189,0.85)',  badgeBg: 'bg-blue-500/20',   badgeText: 'text-[#3A8FBD]'  },
+  'large (1.5k-10k)':  { key: 'large',   shortLabel: 'L',  legendLabel: 'Large (1.5K\u201310K)',  color: 'rgba(234,88,12,0.85)',   badgeBg: 'bg-orange-500/20', badgeText: 'text-orange-400' },
   'x-large (10k+)':    { key: 'xlarge',  shortLabel: 'XL', legendLabel: 'X-Large (10K+)',    color: 'rgba(225,29,72,0.85)',   badgeBg: 'bg-rose-500/20',   badgeText: 'text-rose-400'   },
   'unknown':           { key: 'unknown', shortLabel: '?',  legendLabel: 'Unknown',           color: 'rgba(156,163,175,0.75)', badgeBg: 'bg-gray-500/20',   badgeText: 'text-gray-400'   },
 }
@@ -182,16 +181,15 @@ function YearTip({ active, payload, label, viewMode }: any) {
   )
 }
 
+// SCRUM-78: removed `future` display from MonthTip — orange line removed from charts
 function MonthTip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
-  const shows  = payload.find((p: any) => p.dataKey === 'shows')?.value  ?? 0
-  const future = payload.find((p: any) => p.dataKey === 'future')?.value ?? 0
-  const songs  = payload.find((p: any) => p.dataKey === 'songs')?.value
+  const shows = payload.find((p: any) => p.dataKey === 'shows')?.value ?? 0
+  const songs = payload.find((p: any) => p.dataKey === 'songs')?.value
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
       <p className="font-semibold text-foreground mb-0.5">{label}</p>
-      {shows  > 0 && <p className="text-primary">{shows} {shows === 1 ? 'show' : 'shows'}</p>}
-      {future > 0 && <p className="text-amber-400">{future} upcoming</p>}
+      {shows > 0 && <p className="text-primary">{shows} {shows === 1 ? 'show' : 'shows'}</p>}
       {songs != null && songs > 0 && <p style={{ color: SPOTIFY_GREEN }}>{songs} songs added</p>}
     </div>
   )
@@ -287,7 +285,7 @@ function ArtistYearBars({ artists, max, onNavigate }: {
                   className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px]"
                   style={{ left: Math.min(tooltip.x, 220), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}
                 >
-                  <p className="font-semibold text-foreground">{artist.name} · {tooltip.year}</p>
+                  <p className="font-semibold text-foreground">{artist.name} \u00b7 {tooltip.year}</p>
                   {tooltip.venue && <p className="text-muted-foreground mt-0.5">{tooltip.venue}</p>}
                   <p className="mt-0.5" style={{ color: CAP_BY_KEY[tooltip.capKey]?.color ?? TEAL }}>
                     {CAP_BY_KEY[tooltip.capKey]?.legendLabel ?? ''}
@@ -381,7 +379,7 @@ function VenueYearBars({ venues, max, onNavigate }: {
               {tooltip?.venue === venue.name && (
                 <div className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px]"
                   style={{ left: Math.min(tooltip.x, 220), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}>
-                  <p className="font-semibold text-foreground">{venue.name} · {tooltip.year}</p>
+                  <p className="font-semibold text-foreground">{venue.name} \u00b7 {tooltip.year}</p>
                   <p className="text-muted-foreground mt-0.5">{tooltip.artist}</p>
                   <p className="mt-0.5" style={{ color: CAP_BY_KEY[tooltip.capKey]?.color ?? TEAL }}>
                     {CAP_BY_KEY[tooltip.capKey]?.legendLabel ?? ''}
@@ -449,7 +447,7 @@ export default function MyShowsClient({
   const hasSpotify = spotifySongs.length > 0
   const anyFilterActive = selectedYear !== null || capFilter !== 'all'
 
-  // ── Unadded check — skipped entirely in read-only mode ────────────────────
+  // ── Unadded check ────────────────────────────────────────────────────────
   const checkUnaddedArtists = useCallback(async () => {
     if (readOnly) return
     try {
@@ -517,7 +515,8 @@ export default function MyShowsClient({
     return shows.filter(s => s.date.split('-')[0] === selectedYear)
   }, [shows, selectedYear])
 
-  // ── Timeline data — respects view mode ───────────────────────────────────
+  // SCRUM-78: yearTimelineData — counts all shows per year (no future/past split).
+  // Orange upcoming Area series removed; teal line now represents full "My Shows" count.
   const yearTimelineData = useMemo(() => {
     let src: (Show | BillGroup)[]
 
@@ -530,17 +529,15 @@ export default function MyShowsClient({
       src = shows
     }
 
-    const byYear: Record<string, { past: number; future: number }> = {}
+    const byYear: Record<string, number> = {}
     for (const item of src) {
       const date = 'date' in item ? item.date : (item as Show).date
       const y = date.split('-')[0]
-      if (!byYear[y]) byYear[y] = { past: 0, future: 0 }
-      if (isFuture(date)) byYear[y].future++
-      else                byYear[y].past++
+      byYear[y] = (byYear[y] ?? 0) + 1
     }
     return Object.entries(byYear)
       .sort(([a],[b]) => a.localeCompare(b))
-      .map(([year, c]) => ({ year, shows: c.past + c.future, past: c.past, future: c.future }))
+      .map(([year, count]) => ({ year, shows: count }))
   }, [shows, viewMode])
 
   const availableYears = useMemo(
@@ -548,22 +545,22 @@ export default function MyShowsClient({
     [yearTimelineData]
   )
 
+  // SCRUM-78: monthTimelineData — counts all shows per month (no future tracking).
   const monthTimelineData = useMemo(() => {
     if (!selectedYear) return []
     const src = viewMode === 'festivals'
       ? shows.filter(isFestivalShow).filter(s => s.date.split('-')[0] === selectedYear)
       : shows.filter(s => s.date.split('-')[0] === selectedYear)
-    const byMonth: Record<number, { past: number; future: number }> = {}
-    for (let m = 0; m < 12; m++) byMonth[m] = { past: 0, future: 0 }
+    const byMonth: Record<number, number> = {}
+    for (let m = 0; m < 12; m++) byMonth[m] = 0
     for (const s of src) {
       const m = parseInt(s.date.split('-')[1]) - 1
-      if (isFuture(s.date)) byMonth[m].future++
-      else                  byMonth[m].past++
+      byMonth[m]++
     }
     const songsByMonth = spotifyByYearMonth[selectedYear] ?? {}
     const hasSongs = Object.keys(songsByMonth).length > 0
     return Array.from({ length: 12 }, (_, m) => ({
-      month: MONTHS[m], shows: byMonth[m].past, future: byMonth[m].future,
+      month: MONTHS[m], shows: byMonth[m],
       ...(hasSpotify && hasSongs ? { songs: songsByMonth[m] ?? 0 } : {}),
     }))
   }, [shows, selectedYear, viewMode, spotifyByYearMonth, hasSpotify])
@@ -578,7 +575,7 @@ export default function MyShowsClient({
     : viewMode === 'festivals' ? 'Festivals per year'
     : 'Shows per year'
 
-  // ── Top artists (with venue + year data) ──────────────────────────────────
+  // ── Top artists ───────────────────────────────────────────────────────────
   const topArtists = useMemo(() => {
     const src = viewMode === 'festivals' ? yearFiltered.filter(isFestivalShow) : yearFiltered
     const map: Record<number, {
@@ -701,14 +698,14 @@ export default function MyShowsClient({
   const totalPages   = Math.ceil(setsFiltered.length / PER_PAGE)
   const currentShows = setsFiltered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
-  // ── Dynamic stats counter ─────────────────────────────────────────────────
+  // ── Dynamic stats ─────────────────────────────────────────────────────────
   const dynamicStats = useMemo(() => {
     if (viewMode === 'shows') {
-      const sets   = billGroups.reduce((n, g) => n + g.shows.length, 0)
-      const shows  = billGroups.length
+      const sets    = billGroups.reduce((n, g) => n + g.shows.length, 0)
+      const showsC  = billGroups.length
       const artists = new Set(billGroups.flatMap(g => g.shows.map(s => s.artist.artist_id))).size
       const venues  = new Set(billGroups.flatMap(g => g.shows.map(s => s.venue.venue_id))).size
-      return { sets, shows, artists, venues, festivals: 0 }
+      return { sets, shows: showsC, artists, venues, festivals: 0 }
     }
     if (viewMode === 'sets') {
       const sets    = setsFiltered.length
@@ -716,10 +713,10 @@ export default function MyShowsClient({
       const venues  = new Set(setsFiltered.map(s => s.venue.venue_id)).size
       return { sets, shows: 0, artists, venues, festivals: 0 }
     }
-    const sets     = festivalGroups.reduce((n, g) => n + g.shows.length, 0)
+    const sets      = festivalGroups.reduce((n, g) => n + g.shows.length, 0)
     const festivals = festivalGroups.length
-    const artists  = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.artist.artist_id))).size
-    const venues   = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.venue.venue_id))).size
+    const artists   = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.artist.artist_id))).size
+    const venues    = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.venue.venue_id))).size
     return { sets, shows: 0, artists, venues, festivals }
   }, [viewMode, billGroups, setsFiltered, festivalGroups])
 
@@ -763,7 +760,7 @@ export default function MyShowsClient({
     setPage(p); setPageInput(String(p))
   }
 
-  const sortArrow = (f: SortField) => sortField === f ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
+  const sortArrow = (f: SortField) => sortField === f ? (sortDir === 'asc' ? ' \u2191' : ' \u2193') : ''
 
   const addUnaddedAll = async () => {
     if (readOnly) return
@@ -805,17 +802,16 @@ export default function MyShowsClient({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      <Navigation />
       <main className="min-h-screen bg-background py-6 md:py-8 px-4">
         <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
 
           <h1 className="text-3xl md:text-4xl font-bold text-foreground">
             {readOnly ? `${username}'s Shows` : 'My Shows'}
-            {selectedYear && <span className="text-muted-foreground font-normal"> · {selectedYear}</span>}
-            {!selectedYear && capFilter !== 'all' && <span className="text-muted-foreground font-normal"> · {CAP_BY_KEY[capFilter]?.legendLabel}</span>}
+            {selectedYear && <span className="text-muted-foreground font-normal"> \u00b7 {selectedYear}</span>}
+            {!selectedYear && capFilter !== 'all' && <span className="text-muted-foreground font-normal"> \u00b7 {CAP_BY_KEY[capFilter]?.legendLabel}</span>}
           </h1>
 
-          {/* ── Unadded CTA — own profile only ── */}
+          {/* ── Unadded CTA ── */}
           {!readOnly && !unaddedDismissed && unaddedArtists.length > 0 && (
             <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3">
               <div className="flex items-start justify-between gap-3">
@@ -849,7 +845,7 @@ export default function MyShowsClient({
                     </button>
                   </div>
                 </div>
-                <button onClick={() => setUnaddedDismissed(true)} className="text-muted-foreground hover:text-foreground transition text-lg leading-none flex-shrink-0">×</button>
+                <button onClick={() => setUnaddedDismissed(true)} className="text-muted-foreground hover:text-foreground transition text-lg leading-none flex-shrink-0">\u00d7</button>
               </div>
             </div>
           )}
@@ -921,7 +917,7 @@ export default function MyShowsClient({
                   {selectedYear && (
                     <button onClick={() => { setSelectedYear(null); setCapFilter('all') }}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/20 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors">
-                      ← {selectedYear}
+                      \u2190 {selectedYear}
                     </button>
                   )}
                 </div>
@@ -936,17 +932,12 @@ export default function MyShowsClient({
                 </div>
               </div>
 
+              {/* SCRUM-78: Legend — removed Upcoming entry */}
               <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1.5">
                   <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#0d9488' }} />
                   {selectedYear ? (viewMode === 'sets' ? 'Sets' : viewMode === 'festivals' ? 'Festivals' : 'Shows') : timelineLegendLabel}
                 </span>
-                {stats.future.length > 0 && (
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#f59e0b' }} />
-                    Upcoming
-                  </span>
-                )}
                 {drilldownHasSpotify && (
                   <span className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded-sm inline-block" style={{ background: SPOTIFY_GREEN }} />
@@ -955,7 +946,7 @@ export default function MyShowsClient({
                 )}
                 {viewMode !== 'sets' && (
                   <span className="text-muted-foreground/50 text-[10px]">
-                    {viewMode === 'shows' ? '· Bills with multiple acts count as 1 show' : '· Festival shows only'}
+                    {viewMode === 'shows' ? '\u00b7 Bills with multiple acts count as 1 show' : '\u00b7 Festival shows only'}
                   </span>
                 )}
               </div>
@@ -976,16 +967,13 @@ export default function MyShowsClient({
                         <YAxis yAxisId="songs" orientation="right" tick={{ fill: SPOTIFY_GREEN, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
                       )}
                       <Tooltip content={<MonthTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                      {/* SCRUM-78: future Area removed — only teal shows area remains */}
                       <Area yAxisId="shows" type="monotone" dataKey="shows" stroke="#0d9488" strokeWidth={2} fill="url(#gradShows)"
                         dot={(p: any) => {
                           const { cx, cy, payload } = p
-                          if ((payload.shows ?? 0) + (payload.future ?? 0) === 0) return <g key={`e-${cx}`} />
+                          if ((payload.shows ?? 0) === 0) return <g key={`e-${cx}`} />
                           return <circle key={`s-${cx}`} cx={cx} cy={cy} r={3} fill="#0d9488" stroke="var(--background)" strokeWidth={1.5}/>
                         }} activeDot={{ r: 4, fill: '#0d9488' }} />
-                      {stats.future.length > 0 && (
-                        <Area yAxisId="shows" type="monotone" dataKey="future" stroke="#f59e0b" strokeWidth={2} fill="none"
-                          dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 4, fill: '#f59e0b' }} />
-                      )}
                       {drilldownHasSpotify && (
                         <Line yAxisId="songs" type="monotone" dataKey="songs" stroke={SPOTIFY_GREEN} strokeWidth={2}
                           dot={(p: any) => {
@@ -1000,13 +988,10 @@ export default function MyShowsClient({
                       onClick={(d: any) => { const y = d?.activeLabel; if (y) handleYearClick(y) }}
                       style={{ cursor: 'pointer' }}>
                       <defs>
+                        {/* SCRUM-78: gradFuture removed — only teal gradient remains */}
                         <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
                           <stop offset="95%" stopColor="#0d9488" stopOpacity={0.02}/>
-                        </linearGradient>
-                        <linearGradient id="gradFuture" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02}/>
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="year"
@@ -1027,10 +1012,7 @@ export default function MyShowsClient({
                           if (payload.year === lastYear && lastYear !== firstYear) return <circle key={`l-${cx}`} cx={cx} cy={cy} r={5} fill="#5eead4" stroke="var(--background)" strokeWidth={2}/>
                           return <circle key={`d-${cx}`} cx={cx} cy={cy} r={3} fill="#0d9488" fillOpacity={0.7}/>
                         }} activeDot={{ r: 5, fill: '#0d9488' }} />
-                      {stats.future.length > 0 && (
-                        <Area type="monotone" dataKey="future" stroke="#f59e0b" strokeWidth={2} fill="url(#gradFuture)"
-                          dot={{ r: 3, fill: '#f59e0b', fillOpacity: 0.8 }} activeDot={{ r: 5, fill: '#f59e0b' }} />
-                      )}
+                      {/* SCRUM-78: future Area removed */}
                     </AreaChart>
                   )}
                 </ResponsiveContainer>
@@ -1050,7 +1032,7 @@ export default function MyShowsClient({
                       onMouseEnter={e => { if (prevYear) (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.22)' }}
                       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.12)'}
                     >
-                      ‹ {prevYear ?? ''}
+                      \u2039 {prevYear ?? ''}
                     </button>
                     <span
                       className="px-3 py-1 rounded-full text-xs font-semibold tabular-nums"
@@ -1066,14 +1048,14 @@ export default function MyShowsClient({
                       onMouseEnter={e => { if (nextYear) (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.22)' }}
                       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.12)'}
                     >
-                      {nextYear ?? ''} ›
+                      {nextYear ?? ''} \u203a
                     </button>
                   </div>
                 )
               })() : (stats.firstShow || stats.lastShow) && (
                 <div className="flex items-start justify-between gap-2 mt-2 text-xs text-muted-foreground">
-                  {stats.firstShow && <span>First: <span className="text-foreground font-medium">{stats.firstShow.artist.artist_name}</span> · {fmtDate(stats.firstShow.date)}</span>}
-                  {stats.lastShow && lastYear !== firstYear && <span className="text-right flex-shrink-0">Last: <span className="text-foreground font-medium">{stats.lastShow.artist.artist_name}</span> · {fmtDate(stats.lastShow.date)}</span>}
+                  {stats.firstShow && <span>First: <span className="text-foreground font-medium">{stats.firstShow.artist.artist_name}</span> \u00b7 {fmtDate(stats.firstShow.date)}</span>}
+                  {stats.lastShow && lastYear !== firstYear && <span className="text-right flex-shrink-0">Last: <span className="text-foreground font-medium">{stats.lastShow.artist.artist_name}</span> \u00b7 {fmtDate(stats.lastShow.date)}</span>}
                 </div>
               )}
             </div>
@@ -1086,7 +1068,7 @@ export default function MyShowsClient({
                 <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                   <h2 className="text-lg font-bold text-foreground">
                     {chartSection === 'artists' ? 'Top Artists' : 'Top Venues'}
-                    {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
+                    {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">\u00b7 {selectedYear}</span>}
                   </h2>
                   <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                     {(['artists', 'venues'] as const).map((s, i) => (
@@ -1112,7 +1094,7 @@ export default function MyShowsClient({
                       />
                       {topArtists.length > 10 && (
                         <button onClick={() => setShowAllArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
-                          {showAllArtists ? '← Show less' : `View all ${topArtists.length} artists →`}
+                          {showAllArtists ? '\u2190 Show less' : `View all ${topArtists.length} artists \u2192`}
                         </button>
                       )}
                     </>
@@ -1129,7 +1111,7 @@ export default function MyShowsClient({
                       />
                       {topVenues.length > 10 && (
                         <button onClick={() => setShowAllVenues(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
-                          {showAllVenues ? '← Show less' : `View all ${topVenues.length} venues →`}
+                          {showAllVenues ? '\u2190 Show less' : `View all ${topVenues.length} venues \u2192`}
                         </button>
                       )}
                     </>
@@ -1150,17 +1132,19 @@ export default function MyShowsClient({
                           <Pie data={donutData} cx="50%" cy="50%"
                             innerRadius={38} outerRadius={62} paddingAngle={2} dataKey="value" stroke="none"
                             onClick={(d: any) => handleCap(d.key as CapFilter)} style={{ cursor: 'pointer' }}
-                            label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }: any) => {
+                            label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, key }: any) => {
+                              // SCRUM-74: use data entry's `key` field instead of positional `index`
+                              // to look up the correct short label regardless of bucket filtering
                               if (midAngle == null || percent == null || percent < 0.05) return null
                               const RADIAN = Math.PI / 180
                               const r = (innerRadius + outerRadius) * 0.5
                               const x = cx + r * Math.cos(-midAngle * RADIAN)
                               const y = cy + r * Math.sin(-midAngle * RADIAN)
-                              const labels = ['S','M','L','XL','?']
+                              const label = CAP_BY_KEY[key]?.shortLabel ?? '?'
                               return (
                                 <text x={x} y={y} fill="rgba(255,255,255,0.95)" textAnchor="middle" dominantBaseline="central"
                                   fontSize={11} fontWeight={700} style={{ pointerEvents: 'none' }}>
-                                  {labels[index] ?? ''}
+                                  {label}
                                 </text>
                               )
                             }}
@@ -1191,7 +1175,7 @@ export default function MyShowsClient({
                         )
                       })}
                       {capFilter !== 'all' && (
-                        <button onClick={() => handleCap('all')} className="text-[10px] text-primary hover:underline mt-1">Clear filter ×</button>
+                        <button onClick={() => handleCap('all')} className="text-[10px] text-primary hover:underline mt-1">Clear filter \u00d7</button>
                       )}
                     </div>
                   </>
@@ -1232,14 +1216,14 @@ export default function MyShowsClient({
                   {selectedYear && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs font-semibold">
                       {selectedYear}
-                      <button onClick={() => { setSelectedYear(null); setCapFilter('all') }} className="hover:opacity-70">×</button>
+                      <button onClick={() => { setSelectedYear(null); setCapFilter('all') }} className="hover:opacity-70">\u00d7</button>
                     </span>
                   )}
                   {capFilter !== 'all' && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
                       style={{ background: CAP_BY_KEY[capFilter]?.color + '33', color: CAP_BY_KEY[capFilter]?.color }}>
                       {CAP_BY_KEY[capFilter]?.legendLabel}
-                      <button onClick={() => handleCap('all')} className="hover:opacity-70">×</button>
+                      <button onClick={() => handleCap('all')} className="hover:opacity-70">\u00d7</button>
                     </span>
                   )}
                 </div>
@@ -1259,12 +1243,17 @@ export default function MyShowsClient({
                     const supporters = group.shows.slice(1)
                     const future = isFuture(group.date)
                     const isExpanded = expandedBills.has(group.key)
+                    // SCRUM-75: only show chevron and enable click when there are multiple acts on the bill
+                    const canExpand = group.shows.length > 1
                     const toggleExpand = () => setExpandedBills(prev => {
                       const n = new Set(prev); n.has(group.key) ? n.delete(group.key) : n.add(group.key); return n
                     })
                     return (
                       <div key={group.key} className={future ? 'bg-amber-500/5' : ''}>
-                        <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer select-none" onClick={toggleExpand}>
+                        <div
+                          className={`group/row flex items-center gap-3 px-4 py-3 transition-colors ${canExpand ? 'cursor-pointer hover:bg-muted/30' : ''}`}
+                          onClick={canExpand ? toggleExpand : undefined}
+                        >
                           {/* Heart — own profile only */}
                           {!readOnly && (
                             <div className="flex-shrink-0" onClick={e => { e.stopPropagation(); removeShow(group.headliner.show_id) }}>
@@ -1275,10 +1264,10 @@ export default function MyShowsClient({
                               </button>
                             </div>
                           )}
-                          {/* Rank + chevron */}
+                          {/* Rank + chevron — SCRUM-75: chevron hidden for single-act shows */}
                           <div className="w-10 flex-shrink-0 text-right">
                             <span className="text-sm font-bold tabular-nums" style={{ color: TEAL }}>#{idx + 1}</span>
-                            <span className="text-[10px] text-muted-foreground ml-0.5">{isExpanded ? '▴' : '▾'}</span>
+                            {canExpand && <span className="text-[10px] text-muted-foreground ml-0.5">{isExpanded ? '\u25b4' : '\u25be'}</span>}
                           </div>
                           {/* Date */}
                           <div className="w-24 flex-shrink-0">
@@ -1303,10 +1292,10 @@ export default function MyShowsClient({
                               )}
                               {supporters.length > 0 && (
                                 <>
-                                  <span className="text-[11px] text-muted-foreground/40">·</span>
+                                  <span className="text-[11px] text-muted-foreground/40">\u00b7</span>
                                   {supporters.slice(0, 3).map((s, i) => (
                                     <span key={s.show_id} className="text-[13px] text-muted-foreground">
-                                      {i > 0 && <span className="mx-0.5 opacity-40">·</span>}
+                                      {i > 0 && <span className="mx-0.5 opacity-40">\u00b7</span>}
                                       {s.artist.spotify_artist_id ? (
                                         <a href={`https://open.spotify.com/artist/${s.artist.spotify_artist_id}`}
                                           target="_blank" rel="noopener noreferrer"
@@ -1328,8 +1317,8 @@ export default function MyShowsClient({
                           </div>
                         </div>
 
-                        {/* Expanded desktop rows */}
-                        {isExpanded && (
+                        {/* Expanded desktop rows — SCRUM-75: only rendered when canExpand */}
+                        {isExpanded && canExpand && (
                           <div className="border-t border-border/40 bg-background/50 divide-y divide-border/30">
                             {group.shows.map((show, showIdx) => (
                               <div key={show.show_id} className="hidden md:grid items-center pl-12"
@@ -1388,11 +1377,11 @@ export default function MyShowsClient({
                             </div>
                             <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
                               <span style={{ color: TEAL }} className="font-medium">{group.shows.length} acts</span>
-                              <span>·</span><span>{group.venue_name}</span><span>·</span>
-                              <span>{group.date_from === group.date_to ? fmtDate(group.date_from) : `${fmtDate(group.date_from)} – ${fmtDate(group.date_to)}`}</span>
+                              <span>\u00b7</span><span>{group.venue_name}</span><span>\u00b7</span>
+                              <span>{group.date_from === group.date_to ? fmtDate(group.date_from) : `${fmtDate(group.date_from)} \u2013 ${fmtDate(group.date_to)}`}</span>
                             </div>
                           </div>
-                          <span className="text-muted-foreground text-[10px]">{isExpanded ? '▲' : '▼'}</span>
+                          <span className="text-muted-foreground text-[10px]">{isExpanded ? '\u25b2' : '\u25bc'}</span>
                         </div>
                         {isExpanded && (
                           <div className="border-t border-border/40 bg-background/50 divide-y divide-border/30">
@@ -1423,7 +1412,6 @@ export default function MyShowsClient({
                 <>
                   {setsSubView === 'card' && (
                     <>
-                      {/* Desktop header */}
                       <div className="hidden md:grid bg-muted border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider"
                         style={{ gridTemplateColumns: readOnly ? '120px 1fr' : '40px 120px 1fr' }}>
                         {!readOnly && <div className="px-3 py-3" />}
@@ -1434,7 +1422,6 @@ export default function MyShowsClient({
                           <button className="hover:text-foreground" onClick={() => handleSort('venue')}>Venue{sortArrow('venue')}</button>
                         </div>
                       </div>
-                      {/* Mobile header */}
                       <div className="md:hidden grid bg-muted border-b border-border px-3 py-2"
                         style={{ gridTemplateColumns: readOnly ? '80px 1fr' : '28px 80px 1fr' }}>
                         {!readOnly && <div />}
@@ -1453,7 +1440,6 @@ export default function MyShowsClient({
                           const future   = isFuture(show.date)
                           return (
                             <div key={show.show_id} className={`hover:bg-muted/30 transition-colors ${future ? 'bg-amber-500/5' : ''}`}>
-                              {/* Desktop row */}
                               <div className="hidden md:grid items-center"
                                 style={{ gridTemplateColumns: readOnly ? '120px 1fr' : '40px 120px 1fr' }}>
                                 {!readOnly && (
@@ -1479,7 +1465,6 @@ export default function MyShowsClient({
                                   </div>
                                 </div>
                               </div>
-                              {/* Mobile row */}
                               <div className="md:hidden grid items-center px-3 py-2.5"
                                 style={{ gridTemplateColumns: readOnly ? '80px 1fr' : '28px 80px 1fr' }}>
                                 {!readOnly && (
@@ -1554,7 +1539,7 @@ export default function MyShowsClient({
                                   </div>
                                 </td>
                                 <td className="px-3 py-3 text-muted-foreground">
-                                  {show.festival_name || <span className="text-muted-foreground/40">—</span>}
+                                  {show.festival_name || <span className="text-muted-foreground/40">\u2014</span>}
                                 </td>
                               </tr>
                             )

@@ -265,7 +265,6 @@ function ComparisonModal({
     fetchShared()
   }, [profile.user_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Derived — group shared shows into bills (same date + venue)
   const sharedBills = buildSharedBills(sharedShows)
 
   const handleBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -420,7 +419,6 @@ function ComparisonModal({
                   const capStyle = CAPACITY_STYLES[capKey]
                   return (
                     <div key={bill.key} className="border-b border-white/5 last:border-0">
-                      {/* Bill header — date · venue · capacity */}
                       <div className="flex items-center gap-2 px-5 py-2 bg-white/[0.03]">
                         <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap flex-shrink-0">
                           {fmtDate(bill.date)}
@@ -436,7 +434,6 @@ function ComparisonModal({
                           </span>
                         )}
                       </div>
-                      {/* Artists on this bill */}
                       {bill.artists.map(artist => (
                         <div
                           key={artist.show_id}
@@ -530,6 +527,17 @@ export default function ProfilePage() {
         })
     })
   }, [fetchProfile]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // SCRUM-76: Auto-open comparison modal when navigated to with ?compare=true
+  // Uses window.location.search directly to avoid Suspense requirement of useSearchParams.
+  useEffect(() => {
+    if (!profile || isRestricted(profile)) return
+    const p = profile as FullProfile
+    if (p.is_own_profile || p.friendship_status !== 'accepted') return
+    if (new URLSearchParams(window.location.search).get('compare') === 'true') {
+      setShowModal(true)
+    }
+  }, [profile])
 
   // ─── Friendship actions ────────────────────────────────────────────────────
 
@@ -859,7 +867,7 @@ export default function ProfilePage() {
             )}
           </div>
 
-          {/* Top Venues */}
+          {/* Top Venues — SCRUM-77: badge shows letter only, no capacity number */}
           <div className="bg-card border border-white/10 rounded-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-white/10">
               <h2 className="text-sm font-semibold text-primary">Top Venues</h2>
@@ -870,9 +878,8 @@ export default function ProfilePage() {
               p.top_venues.map((venue, i) => {
                 const capKey = getCapacityKey(venue.capacity_category)
                 const capStyle = CAPACITY_STYLES[capKey]
-                const capLabel = venue.capacity
-                  ? `${capStyle.letter} · ${venue.capacity.toLocaleString()}`
-                  : capStyle.letter
+                // SCRUM-77: letter only — capacity number removed from badge
+                const capLabel = capStyle.letter
 
                 return (
                   <div
@@ -886,12 +893,14 @@ export default function ProfilePage() {
                       <span className="text-sm text-primary truncate">
                         {venue.venue_name}
                       </span>
-                      <span
-                        style={{ backgroundColor: capStyle.bg, color: capStyle.text }}
-                        className="text-xs font-medium px-1.5 py-0.5 rounded-full shrink-0 tabular-nums"
-                      >
-                        {capLabel}
-                      </span>
+                      {capLabel !== '?' && (
+                        <span
+                          style={{ backgroundColor: capStyle.bg, color: capStyle.text }}
+                          className="text-[9px] font-bold px-1 py-0.5 rounded-full shrink-0"
+                        >
+                          {capLabel}
+                        </span>
+                      )}
                     </div>
                     <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
                       {venue.show_count} {venue.show_count === 1 ? 'show' : 'shows'}
