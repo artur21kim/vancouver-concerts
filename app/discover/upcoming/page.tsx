@@ -900,8 +900,18 @@ function UpcomingShowsContent() {
                     {/* Left panel */}
                     <div className="w-72 flex-shrink-0 border-r border-border flex flex-col bg-card">
                       <div className="px-3 py-2.5 border-b border-border bg-muted/40 flex items-center justify-between flex-shrink-0">
-                        <span className="text-xs font-semibold text-foreground">Upcoming Shows</span>
-                        <div className="text-xs text-muted-foreground tabular-nums">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs font-semibold text-foreground">Upcoming Shows</span>
+                          {filterText && (
+                            <button
+                              onClick={() => setFilterText('')}
+                              className="text-[10px] px-1.5 py-0.5 rounded border border-destructive text-destructive hover:bg-destructive/10 transition-colors whitespace-nowrap flex-shrink-0"
+                            >
+                              Clear ×
+                            </button>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground tabular-nums flex-shrink-0">
                           <span className="text-primary font-medium">{newShows.length}</span> new
                           {savedShows.length > 0 && <> · <span className="text-green-500 font-medium">{savedShows.length}</span> saved</>}
                           {skippedShows.length > 0 && <> · {skippedShows.length} skipped</>}
@@ -964,13 +974,13 @@ function UpcomingShowsContent() {
 
                     {/* Map */}
                     <div className="flex-1 min-w-0">
-                      <VenueMap shows={mapShows} height="100%" />
+                      <VenueMap shows={mapShows} height="100%" onArtistClick={(name) => setFilterText(name)} />
                     </div>
                   </div>
 
                   {/* Mobile: full-width map */}
                   <div className="md:hidden">
-                    <VenueMap shows={mapShows} height={480} />
+                    <VenueMap shows={mapShows} height={480} onArtistClick={(name) => setFilterText(name)} />
                   </div>
                 </>
               )}
