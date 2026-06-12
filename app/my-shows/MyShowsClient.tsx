@@ -7,6 +7,7 @@ import {
   ComposedChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   AreaChart, PieChart, Pie, Cell,
 } from 'recharts'
+import Navigation from '@/app/components/Navigation'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Show = {
@@ -55,8 +56,8 @@ const CAP_META: Record<string, {
   color: string; badgeBg: string; badgeText: string
 }> = {
   'small (<500)':      { key: 'small',   shortLabel: 'S',  legendLabel: 'Small (<500)',      color: 'rgba(139,92,246,0.85)',  badgeBg: 'bg-purple-500/20', badgeText: 'text-purple-300'  },
-  'medium (500-1.5k)': { key: 'medium',  shortLabel: 'M',  legendLabel: 'Medium (500\u20131.5K)', color: 'rgba(58,143,189,0.85)',  badgeBg: 'bg-blue-500/20',   badgeText: 'text-[#3A8FBD]'  },
-  'large (1.5k-10k)':  { key: 'large',   shortLabel: 'L',  legendLabel: 'Large (1.5K\u201310K)',  color: 'rgba(234,88,12,0.85)',   badgeBg: 'bg-orange-500/20', badgeText: 'text-orange-400' },
+  'medium (500-1.5k)': { key: 'medium',  shortLabel: 'M',  legendLabel: 'Medium (500–1.5K)', color: 'rgba(58,143,189,0.85)',  badgeBg: 'bg-blue-500/20',   badgeText: 'text-[#3A8FBD]'  },
+  'large (1.5k-10k)':  { key: 'large',   shortLabel: 'L',  legendLabel: 'Large (1.5K–10K)',  color: 'rgba(234,88,12,0.85)',   badgeBg: 'bg-orange-500/20', badgeText: 'text-orange-400' },
   'x-large (10k+)':    { key: 'xlarge',  shortLabel: 'XL', legendLabel: 'X-Large (10K+)',    color: 'rgba(225,29,72,0.85)',   badgeBg: 'bg-rose-500/20',   badgeText: 'text-rose-400'   },
   'unknown':           { key: 'unknown', shortLabel: '?',  legendLabel: 'Unknown',           color: 'rgba(156,163,175,0.75)', badgeBg: 'bg-gray-500/20',   badgeText: 'text-gray-400'   },
 }
@@ -285,7 +286,7 @@ function ArtistYearBars({ artists, max, onNavigate }: {
                   className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px]"
                   style={{ left: Math.min(tooltip.x, 220), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}
                 >
-                  <p className="font-semibold text-foreground">{artist.name} \u00b7 {tooltip.year}</p>
+                  <p className="font-semibold text-foreground">{artist.name} · {tooltip.year}</p>
                   {tooltip.venue && <p className="text-muted-foreground mt-0.5">{tooltip.venue}</p>}
                   <p className="mt-0.5" style={{ color: CAP_BY_KEY[tooltip.capKey]?.color ?? TEAL }}>
                     {CAP_BY_KEY[tooltip.capKey]?.legendLabel ?? ''}
@@ -379,7 +380,7 @@ function VenueYearBars({ venues, max, onNavigate }: {
               {tooltip?.venue === venue.name && (
                 <div className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px]"
                   style={{ left: Math.min(tooltip.x, 220), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}>
-                  <p className="font-semibold text-foreground">{venue.name} \u00b7 {tooltip.year}</p>
+                  <p className="font-semibold text-foreground">{venue.name} · {tooltip.year}</p>
                   <p className="text-muted-foreground mt-0.5">{tooltip.artist}</p>
                   <p className="mt-0.5" style={{ color: CAP_BY_KEY[tooltip.capKey]?.color ?? TEAL }}>
                     {CAP_BY_KEY[tooltip.capKey]?.legendLabel ?? ''}
@@ -802,13 +803,14 @@ export default function MyShowsClient({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
+      <Navigation />
       <main className="min-h-screen bg-background py-6 md:py-8 px-4">
         <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
 
           <h1 className="text-3xl md:text-4xl font-bold text-foreground">
             {readOnly ? `${username}'s Shows` : 'My Shows'}
-            {selectedYear && <span className="text-muted-foreground font-normal"> \u00b7 {selectedYear}</span>}
-            {!selectedYear && capFilter !== 'all' && <span className="text-muted-foreground font-normal"> \u00b7 {CAP_BY_KEY[capFilter]?.legendLabel}</span>}
+            {selectedYear && <span className="text-muted-foreground font-normal"> · {selectedYear}</span>}
+            {!selectedYear && capFilter !== 'all' && <span className="text-muted-foreground font-normal"> · {CAP_BY_KEY[capFilter]?.legendLabel}</span>}
           </h1>
 
           {/* ── Unadded CTA ── */}
@@ -845,7 +847,7 @@ export default function MyShowsClient({
                     </button>
                   </div>
                 </div>
-                <button onClick={() => setUnaddedDismissed(true)} className="text-muted-foreground hover:text-foreground transition text-lg leading-none flex-shrink-0">\u00d7</button>
+                <button onClick={() => setUnaddedDismissed(true)} className="text-muted-foreground hover:text-foreground transition text-lg leading-none flex-shrink-0">×</button>
               </div>
             </div>
           )}
@@ -917,7 +919,7 @@ export default function MyShowsClient({
                   {selectedYear && (
                     <button onClick={() => { setSelectedYear(null); setCapFilter('all') }}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/20 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors">
-                      \u2190 {selectedYear}
+                      ← {selectedYear}
                     </button>
                   )}
                 </div>
@@ -946,7 +948,7 @@ export default function MyShowsClient({
                 )}
                 {viewMode !== 'sets' && (
                   <span className="text-muted-foreground/50 text-[10px]">
-                    {viewMode === 'shows' ? '\u00b7 Bills with multiple acts count as 1 show' : '\u00b7 Festival shows only'}
+                    {viewMode === 'shows' ? '· Bills with multiple acts count as 1 show' : '· Festival shows only'}
                   </span>
                 )}
               </div>
@@ -1032,7 +1034,7 @@ export default function MyShowsClient({
                       onMouseEnter={e => { if (prevYear) (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.22)' }}
                       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.12)'}
                     >
-                      \u2039 {prevYear ?? ''}
+                      ‹ {prevYear ?? ''}
                     </button>
                     <span
                       className="px-3 py-1 rounded-full text-xs font-semibold tabular-nums"
@@ -1048,14 +1050,14 @@ export default function MyShowsClient({
                       onMouseEnter={e => { if (nextYear) (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.22)' }}
                       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.12)'}
                     >
-                      {nextYear ?? ''} \u203a
+                      {nextYear ?? ''} ›
                     </button>
                   </div>
                 )
               })() : (stats.firstShow || stats.lastShow) && (
                 <div className="flex items-start justify-between gap-2 mt-2 text-xs text-muted-foreground">
-                  {stats.firstShow && <span>First: <span className="text-foreground font-medium">{stats.firstShow.artist.artist_name}</span> \u00b7 {fmtDate(stats.firstShow.date)}</span>}
-                  {stats.lastShow && lastYear !== firstYear && <span className="text-right flex-shrink-0">Last: <span className="text-foreground font-medium">{stats.lastShow.artist.artist_name}</span> \u00b7 {fmtDate(stats.lastShow.date)}</span>}
+                  {stats.firstShow && <span>First: <span className="text-foreground font-medium">{stats.firstShow.artist.artist_name}</span> · {fmtDate(stats.firstShow.date)}</span>}
+                  {stats.lastShow && lastYear !== firstYear && <span className="text-right flex-shrink-0">Last: <span className="text-foreground font-medium">{stats.lastShow.artist.artist_name}</span> · {fmtDate(stats.lastShow.date)}</span>}
                 </div>
               )}
             </div>
@@ -1068,7 +1070,7 @@ export default function MyShowsClient({
                 <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                   <h2 className="text-lg font-bold text-foreground">
                     {chartSection === 'artists' ? 'Top Artists' : 'Top Venues'}
-                    {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">\u00b7 {selectedYear}</span>}
+                    {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                   </h2>
                   <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                     {(['artists', 'venues'] as const).map((s, i) => (
@@ -1094,7 +1096,7 @@ export default function MyShowsClient({
                       />
                       {topArtists.length > 10 && (
                         <button onClick={() => setShowAllArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
-                          {showAllArtists ? '\u2190 Show less' : `View all ${topArtists.length} artists \u2192`}
+                          {showAllArtists ? '← Show less' : `View all ${topArtists.length} artists \u2192`}
                         </button>
                       )}
                     </>
@@ -1111,7 +1113,7 @@ export default function MyShowsClient({
                       />
                       {topVenues.length > 10 && (
                         <button onClick={() => setShowAllVenues(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
-                          {showAllVenues ? '\u2190 Show less' : `View all ${topVenues.length} venues \u2192`}
+                          {showAllVenues ? '← Show less' : `View all ${topVenues.length} venues \u2192`}
                         </button>
                       )}
                     </>
@@ -1175,7 +1177,7 @@ export default function MyShowsClient({
                         )
                       })}
                       {capFilter !== 'all' && (
-                        <button onClick={() => handleCap('all')} className="text-[10px] text-primary hover:underline mt-1">Clear filter \u00d7</button>
+                        <button onClick={() => handleCap('all')} className="text-[10px] text-primary hover:underline mt-1">Clear filter ×</button>
                       )}
                     </div>
                   </>
@@ -1216,14 +1218,14 @@ export default function MyShowsClient({
                   {selectedYear && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs font-semibold">
                       {selectedYear}
-                      <button onClick={() => { setSelectedYear(null); setCapFilter('all') }} className="hover:opacity-70">\u00d7</button>
+                      <button onClick={() => { setSelectedYear(null); setCapFilter('all') }} className="hover:opacity-70">×</button>
                     </span>
                   )}
                   {capFilter !== 'all' && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
                       style={{ background: CAP_BY_KEY[capFilter]?.color + '33', color: CAP_BY_KEY[capFilter]?.color }}>
                       {CAP_BY_KEY[capFilter]?.legendLabel}
-                      <button onClick={() => handleCap('all')} className="hover:opacity-70">\u00d7</button>
+                      <button onClick={() => handleCap('all')} className="hover:opacity-70">×</button>
                     </span>
                   )}
                 </div>
@@ -1267,7 +1269,7 @@ export default function MyShowsClient({
                           {/* Rank + chevron — SCRUM-75: chevron hidden for single-act shows */}
                           <div className="w-10 flex-shrink-0 text-right">
                             <span className="text-sm font-bold tabular-nums" style={{ color: TEAL }}>#{idx + 1}</span>
-                            {canExpand && <span className="text-[10px] text-muted-foreground ml-0.5">{isExpanded ? '\u25b4' : '\u25be'}</span>}
+                            {canExpand && <span className="text-[10px] text-muted-foreground ml-0.5">{isExpanded ? '▴' : '▾'}</span>}
                           </div>
                           {/* Date */}
                           <div className="w-24 flex-shrink-0">
@@ -1292,10 +1294,10 @@ export default function MyShowsClient({
                               )}
                               {supporters.length > 0 && (
                                 <>
-                                  <span className="text-[11px] text-muted-foreground/40">\u00b7</span>
+                                  <span className="text-[11px] text-muted-foreground/40">·</span>
                                   {supporters.slice(0, 3).map((s, i) => (
                                     <span key={s.show_id} className="text-[13px] text-muted-foreground">
-                                      {i > 0 && <span className="mx-0.5 opacity-40">\u00b7</span>}
+                                      {i > 0 && <span className="mx-0.5 opacity-40">·</span>}
                                       {s.artist.spotify_artist_id ? (
                                         <a href={`https://open.spotify.com/artist/${s.artist.spotify_artist_id}`}
                                           target="_blank" rel="noopener noreferrer"
@@ -1377,11 +1379,11 @@ export default function MyShowsClient({
                             </div>
                             <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
                               <span style={{ color: TEAL }} className="font-medium">{group.shows.length} acts</span>
-                              <span>\u00b7</span><span>{group.venue_name}</span><span>\u00b7</span>
-                              <span>{group.date_from === group.date_to ? fmtDate(group.date_from) : `${fmtDate(group.date_from)} \u2013 ${fmtDate(group.date_to)}`}</span>
+                              <span>·</span><span>{group.venue_name}</span><span>·</span>
+                              <span>{group.date_from === group.date_to ? fmtDate(group.date_from) : `${fmtDate(group.date_from)} – ${fmtDate(group.date_to)}`}</span>
                             </div>
                           </div>
-                          <span className="text-muted-foreground text-[10px]">{isExpanded ? '\u25b2' : '\u25bc'}</span>
+                          <span className="text-muted-foreground text-[10px]">{isExpanded ? '▲' : '▼'}</span>
                         </div>
                         {isExpanded && (
                           <div className="border-t border-border/40 bg-background/50 divide-y divide-border/30">

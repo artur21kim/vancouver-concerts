@@ -331,13 +331,13 @@ export default function FriendsPage() {
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <a
                         href={`/profile/${friend.username}`}
-                        className="px-3 py-1 text-xs font-semibold rounded-md border border-border text-muted-foreground hover:text-foreground transition"
+                        className="px-3 py-1 text-xs font-semibold rounded-md bg-muted text-foreground hover:bg-muted/70 transition"
                       >
                         Profile
                       </a>
                       <a
                         href={`/profile/${friend.username}/shows`}
-                        className="px-3 py-1 text-xs font-semibold rounded-md border border-border text-muted-foreground hover:text-foreground transition"
+                        className="px-3 py-1 text-xs font-semibold rounded-md bg-muted text-foreground hover:bg-muted/70 transition"
                       >
                         Shows
                       </a>
