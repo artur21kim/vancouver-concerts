@@ -763,7 +763,7 @@ function UpcomingShowsContent() {
             {allShows.length > 0 && (
               <div className="mt-2.5 relative">
                 <svg
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none text-primary/60"
                   fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
                 >
                   <path strokeLinecap="round" strokeLinejoin="round"
@@ -774,7 +774,7 @@ function UpcomingShowsContent() {
                   value={filterText}
                   onChange={e => setFilterText(e.target.value)}
                   placeholder="Filter by artist or venue…"
-                  className="w-full pl-9 pr-8 py-2 text-sm bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring transition-colors"
+                  className="w-full pl-9 pr-8 py-2 text-sm bg-card border border-primary/30 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors shadow-sm"
                 />
                 {filterText && (
                   <button
