@@ -267,7 +267,7 @@ def run(dry_run: bool, limit: Optional[int], force: bool) -> None:
 
             if not dry_run:
                 db.from_("dim_artist").update(
-                    {"official_website_url": official_url}
+                    {"official_website_url": official_url, "musicbrainz_id": mbid}
                 ).eq("artist_id", artist_id).execute()
 
             stats["enriched"] += 1

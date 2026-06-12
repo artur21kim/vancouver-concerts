@@ -50,6 +50,16 @@ export async function GET(request: Request) {
 
     let shows: any[] = [];
 
+    // SCRUM-84: latitude + longitude added to dim_venue select for map view
+    const venueSelect = `
+      venue_id,
+      venue_name,
+      capacity,
+      capacity_category,
+      latitude,
+      longitude
+    `;
+
     if (scope === 'all') {
       const { data: allShows, error: showsError } = await supabase
         .from('fact_shows')
@@ -65,10 +75,7 @@ export async function GET(request: Request) {
             spotify_artist_id
           ),
           dim_venue!inner (
-            venue_id,
-            venue_name,
-            capacity,
-            capacity_category
+            ${venueSelect}
           )
         `)
         .gte('date', todayVancouver)
@@ -102,10 +109,7 @@ export async function GET(request: Request) {
             spotify_artist_id
           ),
           dim_venue!inner (
-            venue_id,
-            venue_name,
-            capacity,
-            capacity_category
+            ${venueSelect}
           )
         `)
         .in('artist_id', matchedArtistIds)
@@ -142,22 +146,24 @@ export async function GET(request: Request) {
 
     const transformedShows = shows.map((show: any) => {
       const artist = Array.isArray(show.dim_artist) ? show.dim_artist[0] : show.dim_artist;
-      const venue = Array.isArray(show.dim_venue) ? show.dim_venue[0] : show.dim_venue;
+      const venue  = Array.isArray(show.dim_venue)  ? show.dim_venue[0]  : show.dim_venue;
       const isSpotifyMatch = matchedArtistIdSet.has(artist.artist_id);
 
       return {
-        show_id: show.show_id,
-        date: show.date,
-        artist_id: artist.artist_id,
-        artist_name: artist.artist_name,
+        show_id:           show.show_id,
+        date:              show.date,
+        artist_id:         artist.artist_id,
+        artist_name:       artist.artist_name,
         spotify_artist_id: artistSpotifyIdMap[artist.artist_id] || artist.spotify_artist_id || null,
-        venue_id: venue.venue_id,
-        venue_name: venue.venue_name,
-        capacity: venue.capacity || null,
+        venue_id:          venue.venue_id,
+        venue_name:        venue.venue_name,
+        capacity:          venue.capacity          || null,
         capacity_category: venue.capacity_category || null,
-        ticketmaster_url: show.ticketmaster_url || null,
-        status: (reviewStatusMap[show.show_id] || 'pending') as 'pending' | 'added' | 'skipped',
-        is_spotify_match: isSpotifyMatch,
+        latitude:          venue.latitude          ?? null,
+        longitude:         venue.longitude         ?? null,
+        ticketmaster_url:  show.ticketmaster_url   || null,
+        status:            (reviewStatusMap[show.show_id] || 'pending') as 'pending' | 'added' | 'skipped',
+        is_spotify_match:  isSpotifyMatch,
       };
     });
 
@@ -173,13 +179,13 @@ export async function GET(request: Request) {
     const maxVancouverCount = Math.max(...(Object.values(artistShowCounts) as number[]), 1);
 
     const artistMatchScores = (matchedArtists || []).reduce((acc: any, artist: any) => {
-      const spotifyCount = artistSongCounts[artist.spotify_artist_id] || 0;
+      const spotifyCount   = artistSongCounts[artist.spotify_artist_id] || 0;
       const vancouverCount = artistShowCounts[artist.artist_id] || 0;
-      const spotifyScore = (spotifyCount / maxSpotifyCount) * 100;
+      const spotifyScore   = (spotifyCount   / maxSpotifyCount)   * 100;
       const vancouverScore = (vancouverCount / maxVancouverCount) * 100;
       acc[artist.artist_id] = {
-        match_score: (0.7 * spotifyScore) + (0.3 * vancouverScore),
-        spotify_song_count: spotifyCount,
+        match_score:          (0.7 * spotifyScore) + (0.3 * vancouverScore),
+        spotify_song_count:   spotifyCount,
         vancouver_show_count: vancouverCount,
       };
       return acc;
@@ -187,8 +193,8 @@ export async function GET(request: Request) {
 
     const showsWithScores = transformedShows.map(show => ({
       ...show,
-      match_score: artistMatchScores[show.artist_id]?.match_score || 0,
-      spotify_song_count: artistMatchScores[show.artist_id]?.spotify_song_count || 0,
+      match_score:          artistMatchScores[show.artist_id]?.match_score          || 0,
+      spotify_song_count:   artistMatchScores[show.artist_id]?.spotify_song_count   || 0,
       vancouver_show_count: artistMatchScores[show.artist_id]?.vancouver_show_count || 0,
     }));
 
@@ -198,8 +204,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       data: {
-        shows: showsWithScores,
-        total_shows: showsWithScores.length,
+        shows:           showsWithScores,
+        total_shows:     showsWithScores.length,
         matched_artists: matchedArtistIds.length,
         scope,
       }
@@ -208,7 +214,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('❌ Upcoming shows error:', error);
     return NextResponse.json({
-      error: 'Internal server error',
+      error:   'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }

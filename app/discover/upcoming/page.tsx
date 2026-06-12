@@ -3,8 +3,12 @@
 import { Suspense } from 'react';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import Navigation from '../../components/Navigation';
 import { createClient } from '@/lib/supabase/client';
+
+// SSR must be disabled for Leaflet — it accesses window on mount
+const VenueMap = dynamic(() => import('./VenueMap'), { ssr: false });
 
 type Show = {
   show_id: number;
@@ -16,6 +20,8 @@ type Show = {
   venue_name: string;
   capacity: number | null;
   capacity_category: string | null;
+  latitude: number | null;
+  longitude: number | null;
   ticketmaster_url: string | null;
   status: 'pending' | 'added' | 'skipped';
   match_score: number;
@@ -29,6 +35,7 @@ type SortDir = 'asc' | 'desc';
 type Scope = 'spotify' | 'all';
 type CapacityFilter = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown';
 type SwipeContext = 'new' | 'saved' | 'skipped';
+type ViewMode = 'list' | 'map';
 
 const CAPACITY_BUTTONS: {
   key: CapacityFilter;
@@ -487,6 +494,23 @@ function SpotifyHeaderIcon() {
   );
 }
 
+// ─── List/Map toggle icons ─────────────────────────────────────────────────────
+function ListIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+    </svg>
+  );
+}
+
+function MapIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+    </svg>
+  );
+}
+
 // ─── Main page ─────────────────────────────────────────────────────────────────
 function UpcomingShowsContent() {
   const router   = useRouter();
@@ -503,15 +527,14 @@ function UpcomingShowsContent() {
   const [bannerVisible, setBannerVisible]   = useState(false);
   const [swipeHintVisible, setSwipeHintVisible] = useState(false);
   const [pastNavLoading, setPastNavLoading] = useState(false);
-  // SCRUM-82: client-side artist/venue filter
   const [filterText, setFilterText]         = useState('');
+  const [viewMode, setViewMode]             = useState<ViewMode>('list');
 
   useEffect(() => {
     if (!localStorage.getItem('upcoming_banner_dismissed')) setBannerVisible(true);
     if (!localStorage.getItem('upcoming_swipe_hint_dismissed')) setSwipeHintVisible(true);
   }, []);
 
-  // Clear filter text whenever scope changes so stale text doesn't carry over
   useEffect(() => { fetchUpcomingShows(); setFilterText(''); }, [scope]);
 
   const fetchUpcomingShows = async () => {
@@ -575,7 +598,6 @@ function UpcomingShowsContent() {
     setSwipeHintVisible(false);
   };
 
-  // SCRUM-82: text filter applied before capacity filter and sort
   const filterByText = (shows: Show[]) => {
     if (!filterText.trim()) return shows;
     const q = filterText.toLowerCase();
@@ -603,6 +625,9 @@ function UpcomingShowsContent() {
   const skippedShows = process(allShows.filter(s => s.status === 'skipped'));
   const allReviewed  = allShows.length > 0 && allShows.filter(s => s.status === 'pending').length === 0;
 
+  // Map view: all shows (regardless of review status), filtered by capacity + text
+  const mapShows = filterByCapacity(filterByText(allShows));
+
   const newMatchedShows   = newShows.filter(s => s.is_spotify_match);
   const newUnmatchedShows = newShows.filter(s => !s.is_spotify_match);
 
@@ -627,7 +652,7 @@ function UpcomingShowsContent() {
           {/* ── Filter bar ── */}
           <div className="mb-5">
 
-            {/* Desktop: single flex row with ml-auto pushing stats right */}
+            {/* Desktop: single flex row */}
             <div className="hidden md:flex items-center gap-3">
 
               {/* Upcoming / Past */}
@@ -666,7 +691,7 @@ function UpcomingShowsContent() {
 
               <span className="text-border select-none text-lg">|</span>
 
-              {/* Venue size buttons — joined pill */}
+              {/* Venue size buttons */}
               <div className="flex rounded-lg border border-border overflow-hidden text-sm font-semibold">
                 {CAPACITY_BUTTONS.map((btn, i) => (
                   <button key={btn.key} onClick={() => setCapacityFilter(btn.key)} title={btn.tooltip}
@@ -680,6 +705,24 @@ function UpcomingShowsContent() {
                 ))}
               </div>
 
+              <span className="text-border select-none text-lg">|</span>
+
+              {/* List / Map toggle */}
+              <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`flex items-center gap-1.5 px-3 py-2.5 transition ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
+                >
+                  <ListIcon /> List
+                </button>
+                <button
+                  onClick={() => setViewMode('map')}
+                  className={`flex items-center gap-1.5 px-3 py-2.5 transition border-l border-border ${viewMode === 'map' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
+                >
+                  <MapIcon /> Map
+                </button>
+              </div>
+
               {/* Stats — pushed to far right */}
               <div className="ml-auto flex items-center gap-3 text-sm text-muted-foreground/70">
                 <span>New <span className="font-semibold text-primary/80 ml-0.5">{newShows.length}</span></span>
@@ -688,15 +731,13 @@ function UpcomingShowsContent() {
                 <span className="text-border">·</span>
                 <span>Skipped <span className="font-semibold ml-0.5">{skippedShows.length}</span></span>
               </div>
-
             </div>
 
             {/* Mobile: stacked rows */}
             <div className="flex flex-col gap-2.5 md:hidden">
 
-              {/* Row 1: both toggles side by side — compact sizing */}
+              {/* Row 1: Upcoming/Past + My Matches/All Shows */}
               <div className="flex items-center gap-2">
-                {/* Upcoming / Past */}
                 <div className="flex flex-1 rounded-lg border border-border overflow-hidden text-xs font-semibold">
                   <button className="flex-1 flex items-center justify-center gap-1 px-2.5 py-1.5 bg-primary text-primary-foreground" aria-current="page">
                     <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -715,8 +756,6 @@ function UpcomingShowsContent() {
                     Past
                   </button>
                 </div>
-
-                {/* My Matches / All Shows */}
                 <div className="flex flex-1 rounded-lg border border-border overflow-hidden text-xs font-medium">
                   <button onClick={() => setScope('spotify')}
                     className={`flex-1 px-2.5 py-1.5 transition ${scope === 'spotify' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
@@ -729,8 +768,26 @@ function UpcomingShowsContent() {
                 </div>
               </div>
 
-              {/* Row 2: venue pill + stats */}
+              {/* Row 2: List/Map toggle + venue pill + stats */}
               <div className="flex items-center gap-2">
+                {/* List/Map toggle — compact */}
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold flex-shrink-0">
+                  <button
+                    onClick={() => setViewMode('list')}
+                    title="List view"
+                    className={`px-2.5 py-1.5 flex items-center justify-center transition ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
+                  >
+                    <ListIcon />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('map')}
+                    title="Map view"
+                    className={`px-2.5 py-1.5 flex items-center justify-center transition border-l border-border ${viewMode === 'map' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
+                  >
+                    <MapIcon />
+                  </button>
+                </div>
+
                 <div className="flex flex-1 rounded-lg border border-border overflow-hidden text-xs font-semibold">
                   {CAPACITY_BUTTONS.map((btn, i) => (
                     <button
@@ -759,7 +816,7 @@ function UpcomingShowsContent() {
 
             </div>
 
-            {/* ── SCRUM-82: artist / venue filter search box ── */}
+            {/* Artist / venue text filter — shown in both list and map mode */}
             {allShows.length > 0 && (
               <div className="mt-2.5 relative">
                 <svg
@@ -789,11 +846,10 @@ function UpcomingShowsContent() {
                 )}
               </div>
             )}
-
           </div>
 
-          {/* ── Dismissible info banner ── */}
-          {bannerVisible && (
+          {/* ── Dismissible info banner (list mode only) ── */}
+          {bannerVisible && viewMode === 'list' && (
             <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 mb-4 flex items-start justify-between gap-4">
               <p className="text-sm text-foreground">
                 💡 Your matches update automatically — come back any time to see new upcoming shows based on your Spotify library.
@@ -803,8 +859,8 @@ function UpcomingShowsContent() {
             </div>
           )}
 
-          {/* ── Dismissible swipe hint — mobile only ── */}
-          {swipeHintVisible && (
+          {/* ── Dismissible swipe hint — mobile + list mode only ── */}
+          {swipeHintVisible && viewMode === 'list' && (
             <div className="md:hidden bg-muted/50 border border-border rounded-lg px-4 py-3 mb-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -847,8 +903,24 @@ function UpcomingShowsContent() {
             </div>
           )}
 
-          {/* ── Tables ── */}
-          {!loading && !error && (
+          {/* ── Map view ── */}
+          {!loading && !error && viewMode === 'map' && (
+            allShows.length === 0 ? (
+              <div className="bg-card rounded-lg shadow p-12 text-center">
+                <p className="text-muted-foreground text-lg mb-2">
+                  {scope === 'spotify'
+                    ? 'No upcoming Vancouver shows found for artists in your Spotify library.'
+                    : 'No upcoming Vancouver shows found.'}
+                </p>
+                <p className="text-muted-foreground text-sm">Check back soon — new shows are added regularly.</p>
+              </div>
+            ) : (
+              <VenueMap shows={mapShows} />
+            )
+          )}
+
+          {/* ── List view ── */}
+          {!loading && !error && viewMode === 'list' && (
             <>
               {allShows.length === 0 && (
                 <div className="bg-card rounded-lg shadow p-12 text-center">
