@@ -571,11 +571,13 @@ function UpcomingShowsContent() {
   const [swipeHintVisible, setSwipeHintVisible] = useState(false);
   const [pastNavLoading, setPastNavLoading] = useState(false);
   const [filterText, setFilterText]     = useState('');
-  const [viewMode, setViewMode]         = useState<ViewMode>('list');
+  const [viewMode, setViewMode]         = useState<ViewMode>('map');
 
   useEffect(() => {
     if (!localStorage.getItem('upcoming_banner_dismissed')) setBannerVisible(true);
     if (!localStorage.getItem('upcoming_swipe_hint_dismissed')) setSwipeHintVisible(true);
+    // Split layout is desktop-only — default mobile to list
+    if (window.innerWidth < 768) setViewMode('list');
   }, []);
 
   useEffect(() => { fetchUpcomingShows(); setFilterText(''); }, [scope]);
@@ -735,15 +737,15 @@ function UpcomingShowsContent() {
 
               <span className="text-border select-none text-lg">|</span>
 
-              {/* List / Map */}
+              {/* Map / List */}
               <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
-                <button onClick={() => setViewMode('list')}
-                  className={`flex items-center gap-1.5 px-4 py-2.5 transition ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                  <ListIcon /> List
-                </button>
                 <button onClick={() => setViewMode('map')}
-                  className={`flex items-center gap-1.5 px-4 py-2.5 transition border-l border-border ${viewMode === 'map' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                  className={`flex items-center gap-1.5 px-4 py-2.5 transition ${viewMode === 'map' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
                   <MapIcon /> Map
+                </button>
+                <button onClick={() => setViewMode('list')}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 transition border-l border-border ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                  <ListIcon /> List
                 </button>
               </div>
 
@@ -793,13 +795,13 @@ function UpcomingShowsContent() {
               {/* Row 2: List/Map + stats */}
               <div className="flex items-center gap-2">
                 <div className="flex rounded-lg border border-border overflow-hidden text-xs font-medium flex-shrink-0">
-                  <button onClick={() => setViewMode('list')} title="List view"
-                    className={`px-3 py-1.5 flex items-center gap-1 transition ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                    <ListIcon /> List
-                  </button>
                   <button onClick={() => setViewMode('map')} title="Map view"
-                    className={`px-3 py-1.5 flex items-center gap-1 transition border-l border-border ${viewMode === 'map' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                    className={`px-3 py-1.5 flex items-center gap-1 transition ${viewMode === 'map' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
                     <MapIcon /> Map
+                  </button>
+                  <button onClick={() => setViewMode('list')} title="List view"
+                    className={`px-3 py-1.5 flex items-center gap-1 transition border-l border-border ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                    <ListIcon /> List
                   </button>
                 </div>
                 <div className="flex-1 flex items-center justify-around text-xs text-muted-foreground/70">

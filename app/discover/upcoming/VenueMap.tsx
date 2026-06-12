@@ -11,6 +11,7 @@ type Show = {
   artist_name:       string
   venue_id:          number
   venue_name:        string
+  capacity:          number | null
   capacity_category: string | null
   latitude:          number | null
   longitude:         number | null
@@ -21,6 +22,7 @@ type Show = {
 type VenuePin = {
   venue_id:          number
   venue_name:        string
+  capacity:          number | null
   capacity_category: string | null
   latitude:          number
   longitude:         number
@@ -110,7 +112,7 @@ function VenuePopupContent({
             padding: '1px 5px', borderRadius: 3,
             flexShrink: 0, lineHeight: '14px',
           }}>
-            {capBadge.label}
+            {capBadge.label}{pin.capacity ? ` · ${pin.capacity.toLocaleString()}` : ''}
           </span>
         )}
       </div>
@@ -131,7 +133,7 @@ function VenuePopupContent({
           overflowY: expanded ? 'auto' : 'visible',
           scrollbarWidth: 'thin',
           scrollbarColor: `rgba(0,191,168,0.3) transparent`,
-          paddingRight: expanded ? 2 : 0,
+          paddingRight: expanded ? 8 : 0,
         } as React.CSSProperties}
       >
         {visible.map(show => (
@@ -220,6 +222,7 @@ export default function VenueMap({
         map.set(show.venue_id, {
           venue_id:          show.venue_id,
           venue_name:        show.venue_name,
+          capacity:          show.capacity,
           capacity_category: show.capacity_category,
           latitude:          show.latitude,
           longitude:         show.longitude,
