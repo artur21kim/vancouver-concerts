@@ -917,7 +917,7 @@ function UpcomingShowsContent() {
                           <>
                             {newShows.length > 0 && (
                               <div>
-                                <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b border-border sticky top-0">
+                                <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b border-border">
                                   New ({newShows.length})
                                 </div>
                                 {newShows.map(show => (
@@ -927,7 +927,7 @@ function UpcomingShowsContent() {
                             )}
                             {savedShows.length > 0 && (
                               <div>
-                                <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b border-border sticky top-0">
+                                <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b border-border">
                                   Saved ({savedShows.length})
                                 </div>
                                 {savedShows.map(show => (
@@ -937,7 +937,7 @@ function UpcomingShowsContent() {
                             )}
                             {skippedShows.length > 0 && (
                               <div>
-                                <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b border-border sticky top-0">
+                                <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b border-border">
                                   Skipped ({skippedShows.length})
                                 </div>
                                 {skippedShows.map(show => (
