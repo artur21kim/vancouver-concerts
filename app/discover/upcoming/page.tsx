@@ -7,7 +7,6 @@ import dynamic from 'next/dynamic';
 import Navigation from '../../components/Navigation';
 import { createClient } from '@/lib/supabase/client';
 
-// SSR must be disabled for Leaflet — it accesses window on mount
 const VenueMap = dynamic(() => import('./VenueMap'), { ssr: false });
 
 type Show = {
@@ -37,6 +36,7 @@ type CapacityFilter = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown
 type SwipeContext = 'new' | 'saved' | 'skipped';
 type ViewMode = 'list' | 'map';
 
+// Kept for capacity badge display on show rows — not used as a filter
 const CAPACITY_BUTTONS: {
   key: CapacityFilter;
   label: string;
@@ -78,6 +78,12 @@ function formatCapacityTooltip(category: string | null, capacity: number | null)
 function formatDate(dateStr: string) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
     year: 'numeric', month: 'short', day: 'numeric',
+  });
+}
+
+function fmtDateShort(dateStr: string): string {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric',
   });
 }
 
@@ -159,7 +165,7 @@ function getNoopLabel(action: SwipeAction) {
   return '';
 }
 
-// ─── Swipeable row ────────────────────────────────────────────────────────────
+// ─── Swipeable row (used in list view tables) ─────────────────────────────────
 function SwipeableRow({
   show, context, onSave, onSkip, highlightRow = false,
 }: {
@@ -239,12 +245,8 @@ function SwipeableRow({
     touchStartX.current = null; touchStartY.current = null; axisLocked.current = null;
   };
 
-  const handleDesktopHeart = () => {
-    if (context === 'new' || context === 'skipped') onSave(show);
-  };
-  const handleDesktopSkip = () => {
-    if (context === 'new' || context === 'saved') onSkip(show);
-  };
+  const handleDesktopHeart = () => { if (context === 'new' || context === 'skipped') onSave(show); };
+  const handleDesktopSkip  = () => { if (context === 'new' || context === 'saved')   onSkip(show); };
 
   const ticketIcon = show.ticketmaster_url
     ? (
@@ -262,7 +264,6 @@ function SwipeableRow({
       style={{ backgroundColor: rowBg }}
       onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
     >
-      {/* Desktop */}
       <td className="hidden md:table-cell px-4 py-4 w-16">
         <div className="flex items-center gap-2">
           <button onClick={handleDesktopHeart} title="Save show" className="focus:outline-none">
@@ -296,7 +297,6 @@ function SwipeableRow({
       </td>
       <td className="hidden md:table-cell px-4 py-4 w-24 text-center align-middle">{ticketIcon}</td>
 
-      {/* Mobile */}
       <td colSpan={3} className="md:hidden p-0 overflow-hidden">
         <div className="relative">
           {activeAction && !noopLabel && (
@@ -336,7 +336,69 @@ function SwipeableRow({
   );
 }
 
-// ─── Sortable table headers ───────────────────────────────────────────────────
+// ─── Condensed row for the split-view left panel (desktop map mode) ───────────
+function SplitShowRow({
+  show, onSave, onSkip,
+}: {
+  show: Show;
+  onSave: (show: Show) => void;
+  onSkip: (show: Show) => void;
+}) {
+  const isSaved   = show.status === 'added';
+  const isSkipped = show.status === 'skipped';
+  const capBtn    = getCapacityButton(show.capacity_category);
+  const capTooltip = formatCapacityTooltip(show.capacity_category, show.capacity);
+
+  return (
+    <div className={`flex items-center gap-2 px-3 py-2.5 border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors text-xs ${isSaved ? 'bg-green-500/5' : ''}`}>
+      {/* Save / Skip */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <button onClick={() => onSave(show)} title={isSaved ? 'Saved' : 'Save'} className="focus:outline-none">
+          <svg className={`w-4 h-4 transition-colors ${isSaved ? 'fill-destructive text-destructive' : 'fill-none text-muted-foreground hover:text-destructive'}`}
+            stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+          </svg>
+        </button>
+        <button onClick={() => onSkip(show)} title={isSkipped ? 'Skipped' : 'Skip'} className="focus:outline-none">
+          <svg className={`w-3.5 h-3.5 transition-colors ${isSkipped ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'}`}
+            stroke="currentColor" strokeWidth="2.5" fill="none" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Show info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1 mb-0.5">
+          <span className={`font-medium truncate ${show.is_spotify_match ? 'text-primary' : 'text-foreground'}`}>
+            {show.artist_name}
+          </span>
+          {show.spotify_artist_id && show.is_spotify_match && (
+            <SpotifyIcon artistId={show.spotify_artist_id} isMatch />
+          )}
+        </div>
+        <div className="flex items-center gap-1 text-muted-foreground">
+          <span className="flex-shrink-0 tabular-nums">{fmtDateShort(show.date)}</span>
+          <span className="text-muted-foreground/40">·</span>
+          <span className="truncate">{show.venue_name}</span>
+          {show.capacity_category && (
+            <span title={capTooltip} className={`shrink-0 text-[9px] font-semibold ${capBtn.textColor}`}>{capBtn.label}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Ticket icon */}
+      {show.ticketmaster_url && (
+        <a href={show.ticketmaster_url} target="_blank" rel="noopener noreferrer"
+          title="Buy tickets" className="flex-shrink-0 hover:opacity-70 transition-opacity">
+          <img src="https://www.ticketmaster.ca/favicon.ico" alt="TM" className="w-3.5 h-3.5" />
+        </a>
+      )}
+    </div>
+  );
+}
+
+// ─── Table headers ─────────────────────────────────────────────────────────────
 type TableSortProps = { sortBy: SortKey; sortDir: SortDir; onSort: (key: SortKey) => void; };
 
 function TableHeaders({ sortBy, sortDir, onSort }: TableSortProps) {
@@ -344,30 +406,24 @@ function TableHeaders({ sortBy, sortDir, onSort }: TableSortProps) {
     sortBy === key
       ? <span className="ml-0.5">{sortDir === 'asc' ? '↑' : '↓'}</span>
       : <span className="ml-0.5 text-muted-foreground/30">↕</span>;
-
   const thSort = 'text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:text-foreground transition-colors select-none';
 
   return (
     <thead className="bg-muted/60">
       <tr>
-        {/* Desktop */}
         <th className="hidden md:table-cell px-4 py-3 w-16" />
         <th className={`hidden md:table-cell px-4 py-3 w-36 text-left ${thSort}`} onClick={() => onSort('date')}>
           Date{arrow('date')}
         </th>
         <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          <span className={`${thSort}`} onClick={() => onSort('artist')}>Artist{arrow('artist')}</span>
+          <span className={thSort} onClick={() => onSort('artist')}>Artist{arrow('artist')}</span>
           <span className="mx-1.5 text-muted-foreground/30">/</span>
-          <span className={`${thSort}`} onClick={() => onSort('venue')}>Venue{arrow('venue')}</span>
+          <span className={thSort} onClick={() => onSort('venue')}>Venue{arrow('venue')}</span>
         </th>
         <th className="hidden md:table-cell px-4 py-3 w-24 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Tickets</th>
-
-        {/* Mobile */}
         <th colSpan={3} className="md:hidden p-0">
           <div className="flex items-center w-full py-2.5">
-            <div className={`pl-3 shrink-0 w-[85px] text-left ${thSort}`} onClick={() => onSort('date')}>
-              Date{arrow('date')}
-            </div>
+            <div className={`pl-3 shrink-0 w-[85px] text-left ${thSort}`} onClick={() => onSort('date')}>Date{arrow('date')}</div>
             <div className="flex-1 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide px-2">
               <span className={thSort} onClick={() => onSort('artist')}>Artist{arrow('artist')}</span>
               <span className="mx-1 text-muted-foreground/30">/</span>
@@ -382,16 +438,13 @@ function TableHeaders({ sortBy, sortDir, onSort }: TableSortProps) {
 }
 
 // ─── New Shows table ───────────────────────────────────────────────────────────
-function NewShowsTable({
-  title, shows, allReviewed, onSave, onSkip, onSaveAll, onSkipAll,
-  highlightHeader = false, onViewMyShows, onBrowse,
-  sortBy, sortDir, onSort,
+function NewShowsTable({ title, shows, allReviewed, onSave, onSkip, onSaveAll, onSkipAll,
+  highlightHeader = false, onViewMyShows, onBrowse, sortBy, sortDir, onSort,
 }: {
   title: string; shows: Show[]; allReviewed: boolean;
   onSave: (show: Show) => void; onSkip: (show: Show) => void;
   onSaveAll: () => void; onSkipAll: () => void;
-  highlightHeader?: boolean;
-  onViewMyShows: () => void; onBrowse: () => void;
+  highlightHeader?: boolean; onViewMyShows: () => void; onBrowse: () => void;
 } & TableSortProps) {
   return (
     <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
@@ -419,7 +472,7 @@ function NewShowsTable({
             <tr>
               <td colSpan={4} className="px-4 py-5">
                 <p className="text-foreground font-semibold text-sm mb-1">You're all set!</p>
-                <p className="text-muted-foreground text-xs mb-3">Saved shows will appear in My Shows. Check back soon for new upcoming shows.</p>
+                <p className="text-muted-foreground text-xs mb-3">Saved shows will appear in My Shows.</p>
                 <div className="flex gap-2">
                   <button onClick={onViewMyShows} className="px-4 py-1.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition">View My Shows</button>
                   <button onClick={onBrowse} className="px-4 py-1.5 bg-card border border-border text-foreground text-sm font-semibold rounded-lg hover:bg-muted transition">Browse All Shows</button>
@@ -434,8 +487,7 @@ function NewShowsTable({
 }
 
 // ─── Generic show table ────────────────────────────────────────────────────────
-function ShowTable({
-  title, shows, context, onSave, onSkip, onSaveAll, onSkipAll,
+function ShowTable({ title, shows, context, onSave, onSkip, onSaveAll, onSkipAll,
   showBulk = false, hideTitleBar = false, highlightMatches = false,
   highlightHeader = false, sortBy, sortDir, onSort,
 }: {
@@ -456,15 +508,8 @@ function ShowTable({
       </tbody>
     </table>
   );
-
   if (hideTitleBar) return tableContent;
-
-  const countColorClass = context === 'saved'
-    ? 'text-green-500/80'
-    : context === 'new'
-    ? 'text-primary/80'
-    : 'text-muted-foreground';
-
+  const countColorClass = context === 'saved' ? 'text-green-500/80' : context === 'new' ? 'text-primary/80' : 'text-muted-foreground';
   return (
     <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
       <div className={`flex items-center gap-3 px-4 py-3 border-b border-border ${highlightHeader ? 'bg-primary/5' : ''}`}>
@@ -494,7 +539,6 @@ function SpotifyHeaderIcon() {
   );
 }
 
-// ─── List/Map toggle icons ─────────────────────────────────────────────────────
 function ListIcon() {
   return (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -516,19 +560,18 @@ function UpcomingShowsContent() {
   const router   = useRouter();
   const supabase = createClient();
 
-  const [loading, setLoading]               = useState(true);
-  const [error, setError]                   = useState('');
-  const [allShows, setAllShows]             = useState<Show[]>([]);
-  const [sortBy, setSortBy]                 = useState<SortKey>('date');
-  const [sortDir, setSortDir]               = useState<SortDir>('asc');
-  const [scope, setScope]                   = useState<Scope>('spotify');
-  const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all');
-  const [skippedOpen, setSkippedOpen]       = useState(false);
-  const [bannerVisible, setBannerVisible]   = useState(false);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState('');
+  const [allShows, setAllShows]         = useState<Show[]>([]);
+  const [sortBy, setSortBy]             = useState<SortKey>('date');
+  const [sortDir, setSortDir]           = useState<SortDir>('asc');
+  const [scope, setScope]               = useState<Scope>('spotify');
+  const [skippedOpen, setSkippedOpen]   = useState(false);
+  const [bannerVisible, setBannerVisible] = useState(false);
   const [swipeHintVisible, setSwipeHintVisible] = useState(false);
   const [pastNavLoading, setPastNavLoading] = useState(false);
-  const [filterText, setFilterText]         = useState('');
-  const [viewMode, setViewMode]             = useState<ViewMode>('list');
+  const [filterText, setFilterText]     = useState('');
+  const [viewMode, setViewMode]         = useState<ViewMode>('list');
 
   useEffect(() => {
     if (!localStorage.getItem('upcoming_banner_dismissed')) setBannerVisible(true);
@@ -593,11 +636,6 @@ function UpcomingShowsContent() {
     finally { setPastNavLoading(false); }
   };
 
-  const dismissSwipeHint = () => {
-    localStorage.setItem('upcoming_swipe_hint_dismissed', 'true');
-    setSwipeHintVisible(false);
-  };
-
   const filterByText = (shows: Show[]) => {
     if (!filterText.trim()) return shows;
     const q = filterText.toLowerCase();
@@ -607,9 +645,6 @@ function UpcomingShowsContent() {
     );
   };
 
-  const filterByCapacity = (shows: Show[]) =>
-    capacityFilter === 'all' ? shows : shows.filter(s => getCapacityKey(s.capacity_category) === capacityFilter);
-
   const sortShows = (shows: Show[]) => [...shows].sort((a, b) => {
     let cmp = 0;
     if (sortBy === 'date')   cmp = new Date(a.date).getTime() - new Date(b.date).getTime();
@@ -618,20 +653,30 @@ function UpcomingShowsContent() {
     return sortDir === 'asc' ? cmp : -cmp;
   });
 
-  const process = (shows: Show[]) => sortShows(filterByCapacity(filterByText(shows)));
+  // Capacity filter removed — search box covers this use case
+  const process = (shows: Show[]) => sortShows(filterByText(shows));
 
   const newShows     = process(allShows.filter(s => s.status === 'pending'));
   const savedShows   = process(allShows.filter(s => s.status === 'added'));
   const skippedShows = process(allShows.filter(s => s.status === 'skipped'));
-  const allReviewed  = allShows.length > 0 && allShows.filter(s => s.status === 'pending').length === 0;
-
-  // Map view: all shows (regardless of review status), filtered by capacity + text
-  const mapShows = filterByCapacity(filterByText(allShows));
+  const allReviewed  = allShows.length > 0 && newShows.length === 0;
+  const mapShows     = filterByText(allShows);
 
   const newMatchedShows   = newShows.filter(s => s.is_spotify_match);
   const newUnmatchedShows = newShows.filter(s => !s.is_spotify_match);
 
   const tableProps: TableSortProps = { sortBy, sortDir, onSort: handleSort };
+
+  const EmptyState = () => (
+    <div className="bg-card rounded-lg shadow p-12 text-center">
+      <p className="text-muted-foreground text-lg mb-2">
+        {scope === 'spotify'
+          ? 'No upcoming Vancouver shows found for artists in your Spotify library.'
+          : 'No upcoming Vancouver shows found.'}
+      </p>
+      <p className="text-muted-foreground text-sm">Check back soon — new shows are added regularly.</p>
+    </div>
+  );
 
   return (
     <>
@@ -639,7 +684,6 @@ function UpcomingShowsContent() {
       <main className="min-h-screen bg-background py-8 px-4">
         <div className="max-w-7xl mx-auto">
 
-          {/* ── Title ── */}
           <div className="mb-5">
             <h1 className="text-4xl font-bold text-foreground mb-1">Discover</h1>
             <p className="text-muted-foreground text-sm">
@@ -652,8 +696,8 @@ function UpcomingShowsContent() {
           {/* ── Filter bar ── */}
           <div className="mb-5">
 
-            {/* Desktop: single flex row */}
-            <div className="hidden md:flex items-center gap-3">
+            {/* Desktop */}
+            <div className="hidden md:flex items-center gap-3 flex-wrap">
 
               {/* Upcoming / Past */}
               <div className="flex rounded-xl border border-border overflow-hidden">
@@ -691,39 +735,19 @@ function UpcomingShowsContent() {
 
               <span className="text-border select-none text-lg">|</span>
 
-              {/* Venue size buttons */}
-              <div className="flex rounded-lg border border-border overflow-hidden text-sm font-semibold">
-                {CAPACITY_BUTTONS.map((btn, i) => (
-                  <button key={btn.key} onClick={() => setCapacityFilter(btn.key)} title={btn.tooltip}
-                    className={`px-3 py-2.5 transition ${i > 0 ? 'border-l border-border' : ''} ${
-                      capacityFilter === btn.key
-                        ? 'bg-primary text-primary-foreground'
-                        : `bg-card ${btn.textColor} hover:bg-muted`
-                    }`}>
-                    {btn.label}
-                  </button>
-                ))}
-              </div>
-
-              <span className="text-border select-none text-lg">|</span>
-
-              {/* List / Map toggle */}
+              {/* List / Map */}
               <div className="flex rounded-lg border border-border overflow-hidden text-sm font-medium">
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`flex items-center gap-1.5 px-3 py-2.5 transition ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
-                >
+                <button onClick={() => setViewMode('list')}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 transition ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
                   <ListIcon /> List
                 </button>
-                <button
-                  onClick={() => setViewMode('map')}
-                  className={`flex items-center gap-1.5 px-3 py-2.5 transition border-l border-border ${viewMode === 'map' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
-                >
+                <button onClick={() => setViewMode('map')}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 transition border-l border-border ${viewMode === 'map' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
                   <MapIcon /> Map
                 </button>
               </div>
 
-              {/* Stats — pushed to far right */}
+              {/* Stats */}
               <div className="ml-auto flex items-center gap-3 text-sm text-muted-foreground/70">
                 <span>New <span className="font-semibold text-primary/80 ml-0.5">{newShows.length}</span></span>
                 <span className="text-border">·</span>
@@ -733,13 +757,11 @@ function UpcomingShowsContent() {
               </div>
             </div>
 
-            {/* Mobile: stacked rows */}
+            {/* Mobile */}
             <div className="flex flex-col gap-2.5 md:hidden">
-
-              {/* Row 1: Upcoming/Past + My Matches/All Shows */}
               <div className="flex items-center gap-2">
                 <div className="flex flex-1 rounded-lg border border-border overflow-hidden text-xs font-semibold">
-                  <button className="flex-1 flex items-center justify-center gap-1 px-2.5 py-1.5 bg-primary text-primary-foreground" aria-current="page">
+                  <button className="flex-1 flex items-center justify-center gap-1 px-2.5 py-1.5 bg-primary text-primary-foreground">
                     <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
@@ -768,42 +790,17 @@ function UpcomingShowsContent() {
                 </div>
               </div>
 
-              {/* Row 2: List/Map toggle + venue pill + stats */}
+              {/* Row 2: List/Map + stats */}
               <div className="flex items-center gap-2">
-                {/* List/Map toggle — compact */}
-                <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold flex-shrink-0">
-                  <button
-                    onClick={() => setViewMode('list')}
-                    title="List view"
-                    className={`px-2.5 py-1.5 flex items-center justify-center transition ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
-                  >
-                    <ListIcon />
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs font-medium flex-shrink-0">
+                  <button onClick={() => setViewMode('list')} title="List view"
+                    className={`px-3 py-1.5 flex items-center gap-1 transition ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                    <ListIcon /> List
                   </button>
-                  <button
-                    onClick={() => setViewMode('map')}
-                    title="Map view"
-                    className={`px-2.5 py-1.5 flex items-center justify-center transition border-l border-border ${viewMode === 'map' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
-                  >
-                    <MapIcon />
+                  <button onClick={() => setViewMode('map')} title="Map view"
+                    className={`px-3 py-1.5 flex items-center gap-1 transition border-l border-border ${viewMode === 'map' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                    <MapIcon /> Map
                   </button>
-                </div>
-
-                <div className="flex flex-1 rounded-lg border border-border overflow-hidden text-xs font-semibold">
-                  {CAPACITY_BUTTONS.map((btn, i) => (
-                    <button
-                      key={btn.key}
-                      onClick={() => setCapacityFilter(btn.key)}
-                      title={btn.tooltip}
-                      className={`flex-1 flex items-center justify-center py-1.5 transition ${
-                        i > 0 ? 'border-l border-border' : ''
-                      } ${
-                        capacityFilter === btn.key
-                          ? 'bg-primary text-primary-foreground'
-                          : `bg-card ${btn.textColor} hover:bg-muted`
-                      }`}>
-                      {btn.key === 'all' ? 'All' : btn.label}
-                    </button>
-                  ))}
                 </div>
                 <div className="flex-1 flex items-center justify-around text-xs text-muted-foreground/70">
                   <span>New <span className="font-semibold text-primary/80">{newShows.length}</span></span>
@@ -813,32 +810,22 @@ function UpcomingShowsContent() {
                   <span>Skipped <span className="font-semibold">{skippedShows.length}</span></span>
                 </div>
               </div>
-
             </div>
 
-            {/* Artist / venue text filter — shown in both list and map mode */}
+            {/* Text filter */}
             {allShows.length > 0 && (
               <div className="mt-2.5 relative">
-                <svg
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none text-primary/60"
-                  fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
-                >
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none text-primary/60"
+                  fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round"
                     d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                 </svg>
-                <input
-                  type="text"
-                  value={filterText}
-                  onChange={e => setFilterText(e.target.value)}
+                <input type="text" value={filterText} onChange={e => setFilterText(e.target.value)}
                   placeholder="Filter by artist or venue…"
-                  className="w-full pl-9 pr-8 py-2 text-sm bg-card border border-primary/30 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors shadow-sm"
-                />
+                  className="w-full pl-9 pr-8 py-2 text-sm bg-card border border-primary/30 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors shadow-sm" />
                 {filterText && (
-                  <button
-                    onClick={() => setFilterText('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    title="Clear filter"
-                  >
+                  <button onClick={() => setFilterText('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -848,18 +835,17 @@ function UpcomingShowsContent() {
             )}
           </div>
 
-          {/* ── Dismissible info banner (list mode only) ── */}
+          {/* Banner + swipe hint (list mode only) */}
           {bannerVisible && viewMode === 'list' && (
             <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 mb-4 flex items-start justify-between gap-4">
               <p className="text-sm text-foreground">
-                💡 Your matches update automatically — come back any time to see new upcoming shows based on your Spotify library.
+                💡 Your matches update automatically — come back any time to see new upcoming shows.
               </p>
               <button onClick={() => { localStorage.setItem('upcoming_banner_dismissed', 'true'); setBannerVisible(false); }}
-                className="text-muted-foreground hover:text-foreground transition shrink-0 text-lg leading-none" title="Close">×</button>
+                className="text-muted-foreground hover:text-foreground transition shrink-0 text-lg leading-none">×</button>
             </div>
           )}
 
-          {/* ── Dismissible swipe hint — mobile + list mode only ── */}
           {swipeHintVisible && viewMode === 'list' && (
             <div className="md:hidden bg-muted/50 border border-border rounded-lg px-4 py-3 mb-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-4">
@@ -877,12 +863,12 @@ function UpcomingShowsContent() {
                   </svg>
                 </div>
               </div>
-              <button onClick={dismissSwipeHint}
-                className="text-muted-foreground hover:text-foreground transition shrink-0 text-lg leading-none" title="Dismiss">×</button>
+              <button onClick={() => { localStorage.setItem('upcoming_swipe_hint_dismissed', 'true'); setSwipeHintVisible(false); }}
+                className="text-muted-foreground hover:text-foreground transition shrink-0 text-lg leading-none">×</button>
             </div>
           )}
 
-          {/* ── Loading ── */}
+          {/* Loading */}
           {loading && (
             <div className="flex items-center justify-center py-24">
               <div className="text-center">
@@ -894,44 +880,107 @@ function UpcomingShowsContent() {
             </div>
           )}
 
-          {/* ── Error ── */}
+          {/* Error */}
           {error && !loading && (
             <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-6">
               <h2 className="text-xl font-bold text-destructive mb-2">Error Loading Shows</h2>
               <p className="text-destructive/80">{error}</p>
-              <button onClick={fetchUpcomingShows} className="mt-4 px-4 py-2 bg-destructive text-white rounded-lg hover:bg-destructive/90">Try Again</button>
+              <button onClick={fetchUpcomingShows} className="mt-4 px-4 py-2 bg-destructive text-white rounded-lg">Try Again</button>
             </div>
           )}
 
           {/* ── Map view ── */}
           {!loading && !error && viewMode === 'map' && (
-            allShows.length === 0 ? (
-              <div className="bg-card rounded-lg shadow p-12 text-center">
-                <p className="text-muted-foreground text-lg mb-2">
-                  {scope === 'spotify'
-                    ? 'No upcoming Vancouver shows found for artists in your Spotify library.'
-                    : 'No upcoming Vancouver shows found.'}
-                </p>
-                <p className="text-muted-foreground text-sm">Check back soon — new shows are added regularly.</p>
-              </div>
-            ) : (
-              <VenueMap shows={mapShows} />
-            )
+            <>
+              {allShows.length === 0 ? <EmptyState /> : (
+                <>
+                  {/* Desktop: split layout — list panel left, map right */}
+                  <div className="hidden md:flex border border-border rounded-lg overflow-hidden mb-6" style={{ height: 640 }}>
+
+                    {/* Left panel */}
+                    <div className="w-72 flex-shrink-0 border-r border-border flex flex-col bg-card">
+                      <div className="px-3 py-2.5 border-b border-border bg-muted/40 flex items-center justify-between flex-shrink-0">
+                        <span className="text-xs font-semibold text-foreground">Upcoming Shows</span>
+                        <div className="text-xs text-muted-foreground tabular-nums">
+                          <span className="text-primary font-medium">{newShows.length}</span> new
+                          {savedShows.length > 0 && <> · <span className="text-green-500 font-medium">{savedShows.length}</span> saved</>}
+                          {skippedShows.length > 0 && <> · {skippedShows.length} skipped</>}
+                        </div>
+                      </div>
+
+                      <div className="flex-1 overflow-y-auto">
+                        {mapShows.length === 0 ? (
+                          <div className="flex items-center justify-center h-full text-muted-foreground text-sm px-4 text-center">
+                            No shows match your filters.
+                          </div>
+                        ) : (
+                          <>
+                            {newShows.length > 0 && (
+                              <div>
+                                <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b border-border sticky top-0">
+                                  New ({newShows.length})
+                                </div>
+                                {newShows.map(show => (
+                                  <SplitShowRow key={show.show_id} show={show} onSave={handleSave} onSkip={handleSkip} />
+                                ))}
+                              </div>
+                            )}
+                            {savedShows.length > 0 && (
+                              <div>
+                                <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b border-border sticky top-0">
+                                  Saved ({savedShows.length})
+                                </div>
+                                {savedShows.map(show => (
+                                  <SplitShowRow key={show.show_id} show={show} onSave={handleSave} onSkip={handleSkip} />
+                                ))}
+                              </div>
+                            )}
+                            {skippedShows.length > 0 && (
+                              <div>
+                                <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b border-border sticky top-0">
+                                  Skipped ({skippedShows.length})
+                                </div>
+                                {skippedShows.map(show => (
+                                  <SplitShowRow key={show.show_id} show={show} onSave={handleSave} onSkip={handleSkip} />
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Legend */}
+                      <div className="px-3 py-2.5 border-t border-border bg-muted/20 flex items-center gap-4 flex-shrink-0">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: '#00BFA8' }} />
+                          <span className="text-[10px] text-muted-foreground">Spotify match</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: 'rgba(156,163,175,0.8)' }} />
+                          <span className="text-[10px] text-muted-foreground">Other</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Map */}
+                    <div className="flex-1 min-w-0">
+                      <VenueMap shows={mapShows} height="100%" />
+                    </div>
+                  </div>
+
+                  {/* Mobile: full-width map */}
+                  <div className="md:hidden">
+                    <VenueMap shows={mapShows} height={480} />
+                  </div>
+                </>
+              )}
+            </>
           )}
 
           {/* ── List view ── */}
           {!loading && !error && viewMode === 'list' && (
             <>
-              {allShows.length === 0 && (
-                <div className="bg-card rounded-lg shadow p-12 text-center">
-                  <p className="text-muted-foreground text-lg mb-2">
-                    {scope === 'spotify'
-                      ? 'No upcoming Vancouver shows found for artists in your Spotify library.'
-                      : 'No upcoming Vancouver shows found.'}
-                  </p>
-                  <p className="text-muted-foreground text-sm">Check back soon — new shows are added regularly.</p>
-                </div>
-              )}
+              {allShows.length === 0 && <EmptyState />}
 
               {scope === 'spotify' && allShows.length > 0 && (
                 <NewShowsTable
@@ -963,20 +1012,16 @@ function UpcomingShowsContent() {
                       onSave={handleSave} onSkip={handleSkip}
                       onSaveAll={() => bulkUpdateStatus(newUnmatchedShows.map(s => s.show_id), 'added')}
                       onSkipAll={() => bulkUpdateStatus(newUnmatchedShows.map(s => s.show_id), 'skipped')}
-                      showBulk
-                      {...tableProps}
+                      showBulk {...tableProps}
                     />
                   )}
                 </>
               )}
 
               {savedShows.length > 0 && (
-                <ShowTable
-                  title="Saved" shows={savedShows} context="saved"
+                <ShowTable title="Saved" shows={savedShows} context="saved"
                   onSave={handleSave} onSkip={handleSkip}
-                  highlightMatches={scope === 'all'}
-                  {...tableProps}
-                />
+                  highlightMatches={scope === 'all'} {...tableProps} />
               )}
 
               {skippedShows.length > 0 && (
@@ -989,12 +1034,9 @@ function UpcomingShowsContent() {
                     <span className="text-muted-foreground text-sm">{skippedOpen ? '▼' : '▶'}</span>
                   </button>
                   {skippedOpen && (
-                    <ShowTable
-                      title="" shows={skippedShows} context="skipped"
+                    <ShowTable title="" shows={skippedShows} context="skipped"
                       onSave={handleSave} onSkip={handleSkip}
-                      hideTitleBar highlightMatches={scope === 'all'}
-                      {...tableProps}
-                    />
+                      hideTitleBar highlightMatches={scope === 'all'} {...tableProps} />
                   )}
                 </div>
               )}
@@ -1007,6 +1049,7 @@ function UpcomingShowsContent() {
               )}
             </>
           )}
+
         </div>
       </main>
     </>

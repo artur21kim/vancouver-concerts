@@ -4,7 +4,6 @@ import { useMemo } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 
-// Minimal Show shape needed by the map — must match the Show type in page.tsx
 type Show = {
   show_id: number
   date: string
@@ -37,7 +36,13 @@ function fmtDate(dateStr: string): string {
   })
 }
 
-export default function VenueMap({ shows }: { shows: Show[] }) {
+export default function VenueMap({
+  shows,
+  height = 500,
+}: {
+  shows: Show[]
+  height?: number | string
+}) {
   const venuePins = useMemo<VenuePin[]>(() => {
     const map = new Map<number, VenuePin>()
     for (const show of shows) {
@@ -56,7 +61,6 @@ export default function VenueMap({ shows }: { shows: Show[] }) {
       pin.shows.push(show)
       if (show.is_spotify_match) pin.hasSpotifyMatch = true
     }
-    // Sort shows within each pin by date ascending
     for (const pin of map.values()) {
       pin.shows.sort((a, b) => a.date.localeCompare(b.date))
     }
@@ -66,8 +70,8 @@ export default function VenueMap({ shows }: { shows: Show[] }) {
   if (venuePins.length === 0) {
     return (
       <div
-        className="flex items-center justify-center bg-card rounded-lg border border-border text-muted-foreground text-sm mb-6"
-        style={{ height: 500 }}
+        className="flex items-center justify-center bg-card rounded-lg border border-border text-muted-foreground text-sm"
+        style={{ height }}
       >
         No venues with location data match the current filters.
       </div>
@@ -75,19 +79,17 @@ export default function VenueMap({ shows }: { shows: Show[] }) {
   }
 
   return (
-    <div
-      className="rounded-lg overflow-hidden border border-border shadow-sm mb-6"
-      style={{ height: 500 }}
-    >
+    <div style={{ height, width: '100%' }}>
       <MapContainer
         center={VANCOUVER_CENTER}
         zoom={12}
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom
       >
+        {/* CartoDB Voyager — neutral, readable, works on both light and dark UIs */}
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         />
         {venuePins.map(pin => {
           const color   = pin.hasSpotifyMatch ? TEAL : GRAY
@@ -107,8 +109,6 @@ export default function VenueMap({ shows }: { shows: Show[] }) {
               }}
             >
               <Popup minWidth={210} maxWidth={280}>
-                {/* Inline styles throughout — Tailwind classes aren't guaranteed
-                    inside Leaflet's detached popup DOM node */}
                 <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', padding: '2px 0' }}>
                   <p style={{ fontWeight: 700, fontSize: 13, margin: '0 0 4px', color: '#0f172a' }}>
                     {pin.venue_name}
