@@ -10,15 +10,18 @@ that exceed the threshold as worth a dedicated fetch pass.
 One API request per candidate city (just page 1 — total is in the response).
 Respects the same daily cap as fetch_setlist_api.py via shared counter file.
 
+Covers both US and Canadian expansion cities.
+
 Usage:
     python scripts/find_secondary_cities.py
     python scripts/find_secondary_cities.py --threshold 500
     python scripts/find_secondary_cities.py --output exports/secondary_cities.csv
+    python scripts/find_secondary_cities.py --city "Toronto" --city "Montreal"
     python scripts/find_secondary_cities.py --city "New York" --city "Los Angeles"
 
 Output:
     Console table + CSV with columns:
-      primary_city, secondary_city, state, country_code, total_shows, fetch_recommended
+      primary_city, secondary_city, state, country_code, total_shows, fetch_recommended, note
 
 Required .env:
     SETLIST_API_KEY=your-api-key-from-setlist.fm/settings/api
@@ -45,12 +48,13 @@ PROGRESS_DIR  = Path("exports") / ".fetch_progress"
 # ---------------------------------------------------------------------------
 # Metro area definitions
 # Format: "Primary City" → list of (city_name, state_code, country_code, note)
-# state_code: 2-letter US state, or province (BC, ON, etc.), or "" for international
-# country_code: ISO 2-letter (US, CA, GB, etc.)
+# state_code: 2-letter US state, or province (BC, ON, etc.)
+# country_code: ISO 2-letter (US, CA)
 # note: why this city matters / key venues
 # ---------------------------------------------------------------------------
 
 METRO_AREAS: dict[str, list[tuple[str, str, str, str]]] = {
+    # ── US cities ─────────────────────────────────────────────────────────────
     "New York": [
         ("Brooklyn",        "NY", "US", "Independent borough, huge venue base"),
         ("Queens",          "NY", "US", "Flushing Meadows, Citi Field shows"),
@@ -155,7 +159,7 @@ METRO_AREAS: dict[str, list[tuple[str, str, str, str]]] = {
     ],
     "Las Vegas": [
         ("Henderson",       "NV", "US", "Dollar Loan Center arena"),
-        ("Paradise",        "NV", "US", "Many Strip venues logged as Paradise, NV"),
+        ("Paradise",        "NV", "US", "Many Strip venues logged as Paradise, NV — verify vs Las Vegas fetch"),
     ],
     "Phoenix": [
         ("Tempe",           "AZ", "US", "Marquee Theatre, Concrete Street"),
@@ -206,6 +210,51 @@ METRO_AREAS: dict[str, list[tuple[str, str, str, str]]] = {
         ("St. Petersburg",  "FL", "US", "Jannus Live, Mahaffey Theater"),
         ("Clearwater",      "FL", "US", "Ruth Eckerd Hall"),
         ("Sarasota",        "FL", "US", "Van Wezel Performing Arts"),
+    ],
+
+    # ── Canadian cities ───────────────────────────────────────────────────────
+    # Note: Hamilton is a primary city in the expansion plan — standalone fetch,
+    # not a Toronto secondary. It is not listed here.
+    "Toronto": [
+        ("Mississauga", "ON", "CA", "Larger suburban venues, Living Arts Centre"),
+        ("Brampton",    "ON", "CA", "Rose Theatre, growing market"),
+        ("Markham",     "ON", "CA", "Markham Theatre"),
+        ("Oakville",    "ON", "CA", "Oakville Centre"),
+        ("Vaughan",     "ON", "CA", "Canada's Wonderland amphitheatre"),
+    ],
+    "Montreal": [
+        ("Laval",       "QC", "CA", "Place Bell — major arena, distinct city on setlist.fm"),
+        ("Longueuil",   "QC", "CA", "South Shore venues"),
+        ("Brossard",    "QC", "CA", "Place Bell spillover area"),
+    ],
+    "Vancouver": [
+        # Note: verify which shows setlist.fm logs under Vancouver vs suburb
+        # given existing YVR scrape already covers some of this area
+        ("Burnaby",     "BC", "CA", "Deer Lake Park, Swangard Stadium"),
+        ("Surrey",      "BC", "CA", "Hard Rock Casino Vancouver"),
+        ("Richmond",    "BC", "CA", "River Rock Casino"),
+        ("Abbotsford",  "BC", "CA", "Abbotsford Centre arena"),
+        ("Langley",     "BC", "CA", "Cascades Casino, Willowbrook"),
+        ("Coquitlam",   "BC", "CA", "Place des Arts, Town Centre"),
+    ],
+    "Calgary": [
+        ("Red Deer",    "AB", "CA", "Distinct mid-Alberta market"),
+        ("Airdrie",     "AB", "CA", "Smaller suburban, probably low count"),
+    ],
+    "Ottawa": [
+        ("Gatineau",    "QC", "CA", "Quebec side of NCR — separate city on setlist.fm"),
+    ],
+    "Edmonton": [
+        ("St. Albert",    "AB", "CA", "Arden Theatre, probably low count"),
+        ("Sherwood Park", "AB", "CA", "Jubilee Auditorium area"),
+    ],
+    "Winnipeg":    [],  # Metro is compact — city fetch captures most shows
+    "Victoria":    [],  # Island geography, minimal secondary activity
+    "Quebec City": [
+        ("Levis",       "QC", "CA", "South shore, probably low count"),
+    ],
+    "Halifax": [
+        ("Dartmouth",   "NS", "CA", "Probably minimal but worth checking"),
     ],
 }
 
@@ -346,7 +395,10 @@ def main() -> None:
 
     for primary in targets:
         candidates = METRO_AREAS[primary]
-        print(f"\n── {primary} ({len(candidates)} candidates) " + "─" * (40 - len(primary)))
+        if not candidates:
+            print(f"\n── {primary} — no secondary candidates defined, skipping")
+            continue
+        print(f"\n── {primary} ({len(candidates)} candidates) " + "─" * max(0, 40 - len(primary)))
 
         for city, state, country, note in candidates:
             if 1440 - counter["count"] <= 0:
@@ -360,13 +412,13 @@ def main() -> None:
             print(f"  {city:<22} {str(total or '?'):>8} shows   {flag}")
 
             results.append({
-                "primary_city":    primary,
-                "secondary_city":  city,
-                "state":           state,
-                "country_code":    country,
-                "total_shows":     total if total is not None else "",
+                "primary_city":      primary,
+                "secondary_city":    city,
+                "state":             state,
+                "country_code":      country,
+                "total_shows":       total if total is not None else "",
                 "fetch_recommended": "yes" if recommended else "no",
-                "note":            note,
+                "note":              note,
             })
 
     # Write CSV
@@ -387,15 +439,17 @@ def main() -> None:
     print(f"Flagged for fetching: {len(recommended)}")
     print(f"\nRecommended secondary fetches:")
     for r in recommended:
-        print(f"  {r['primary_city']:<20} → {r['secondary_city']}, {r['state']}  ({r['total_shows']:,} shows)")
+        total_str = f"{r['total_shows']:,}" if isinstance(r["total_shows"], int) else str(r["total_shows"])
+        print(f"  {r['primary_city']:<20} → {r['secondary_city']}, {r['state']}  ({total_str} shows)")
     print(f"\nFull results: {output_path}")
     print(f"API requests used today: {counter['count']} / 1440")
     print("=" * 64)
 
-    print("\nNext step — add flagged cities to fetch pipeline:")
+    print("\nNext step — fetch flagged secondary cities:")
     print("  python scripts/fetch_setlist_api.py \\")
-    print("      --city <secondary_city> --state <state> --country US \\")
-    print("      --years <range> --output exports/<city>_api.csv")
+    print("      --city <secondary_city> --state <state> --country <US|CA> \\")
+    print("      --years <range> \\")
+    print("      --output exports/<parent>-<secondary>/<secondary>_<years>_api.csv")
 
 
 if __name__ == "__main__":
