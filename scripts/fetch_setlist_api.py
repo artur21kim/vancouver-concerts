@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Grooveprint — setlist.fm API Fetch Script  v1
+Grooveprint — setlist.fm API Fetch Script  v2
 scripts/fetch_setlist_api.py
 
 Fetches show data from the official setlist.fm API for a given city+year
@@ -20,6 +20,11 @@ Usage:
     # Multiple years (one combined output CSV):
     python scripts/fetch_setlist_api.py \
         --city Seattle --state WA --country US --years 2024 2025
+
+    # Long contiguous range (any shell — no brace expansion needed):
+    python scripts/fetch_setlist_api.py \
+        --city Tacoma --state WA --country US --year-range 1900 1992 \
+        --output exports/seattle-tacoma/tacoma_1900-1992_api.csv
 
     # Custom output path:
     python scripts/fetch_setlist_api.py \
@@ -420,6 +425,9 @@ def main() -> None:
     ap.add_argument("--year",    type=int,       help="Single year (shorthand for --years YEAR)")
     ap.add_argument("--years",   type=int, nargs="+", metavar="YEAR",
                     help="One or more years, e.g. --years 2024 2025")
+    ap.add_argument("--year-range", type=int, nargs=2, metavar=("START", "END"),
+                    help="Inclusive year range, e.g. --year-range 1900 1992 "
+                         "(use instead of --years for long spans — works in any shell)")
     ap.add_argument("--output",  default="",
                     help="Output CSV path (default: exports/{city}/{city}_{years}_api.csv)")
     ap.add_argument("--resume",  action="store_true",
@@ -431,12 +439,25 @@ def main() -> None:
         print("  Apply for a key at: https://www.setlist.fm/settings/api")
         sys.exit(1)
 
-    years = sorted(set((args.years or []) + ([args.year] if args.year else [])))
-    if not years:
-        print("ERROR: provide at least one year via --year YYYY or --years YYYY YYYY …")
+    if args.year_range and args.year_range[0] > args.year_range[1]:
+        print(f"ERROR: --year-range start ({args.year_range[0]}) must be <= end ({args.year_range[1]})")
         sys.exit(1)
 
-    year_slug   = "_".join(str(y) for y in years)
+    years = sorted(set(
+        (args.years or [])
+        + ([args.year] if args.year else [])
+        + (list(range(args.year_range[0], args.year_range[1] + 1)) if args.year_range else [])
+    ))
+    if not years:
+        print("ERROR: provide at least one year via --year YYYY, --years YYYY YYYY …, or --year-range START END")
+        sys.exit(1)
+
+    # Compact slug for long contiguous ranges (e.g. 1900-1992) to avoid unwieldy
+    # default filenames; explicit short lists (e.g. 2024 2025) keep the underscore form.
+    if len(years) > 2 and years == list(range(years[0], years[-1] + 1)):
+        year_slug = f"{years[0]}-{years[-1]}"
+    else:
+        year_slug = "_".join(str(y) for y in years)
     city_slug   = args.city.lower().replace(" ", "_")
 
     # Default: exports/{city_slug}/{city_slug}_{year_slug}_api.csv
@@ -452,7 +473,10 @@ def main() -> None:
     print("Grooveprint — setlist.fm API Fetch  v1")
     print(f"City:       {args.city}" + (f", {args.state}" if args.state else "") +
           f", {args.country}")
-    print(f"Year(s):    {', '.join(str(y) for y in years)}")
+    years_display = (f"{years[0]}-{years[-1]} ({len(years)} years)"
+                     if len(years) > 2 and years == list(range(years[0], years[-1] + 1))
+                     else ', '.join(str(y) for y in years))
+    print(f"Year(s):    {years_display}")
     print(f"Output:     {output_path}")
     print(f"Daily cap:  {remaining(counter):,} / {DAILY_CAP} requests remaining today")
     if args.resume:
