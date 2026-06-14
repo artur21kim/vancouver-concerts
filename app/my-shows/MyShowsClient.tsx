@@ -436,6 +436,7 @@ export default function MyShowsClient({
   const [showAllArtists, setShowAllArtists]     = useState(false)
   const [showAllVenues, setShowAllVenues]       = useState(false)
   const [expandedBills, setExpandedBills]       = useState<Set<string>>(new Set())
+  const [isPlaying, setIsPlaying]               = useState(false)
 
   // Unadded CTA — own profile only
   const [unaddedArtists, setUnaddedArtists]         = useState<UnaddedArtist[]>([])
@@ -545,6 +546,24 @@ export default function MyShowsClient({
     () => yearTimelineData.map(d => d.year),
     [yearTimelineData]
   )
+
+  // SCRUM-79: Slideshow — advance selectedYear through availableYears every 1500ms.
+  // Stops automatically at the last year (no loop).
+  useEffect(() => {
+    if (!isPlaying) return
+    const id = setInterval(() => {
+      setSelectedYear(prev => {
+        if (!prev) { setIsPlaying(false); return prev }
+        const idx = availableYears.indexOf(prev)
+        if (idx === -1 || idx >= availableYears.length - 1) {
+          setIsPlaying(false)
+          return prev
+        }
+        return availableYears[idx + 1]
+      })
+    }, 1500)
+    return () => clearInterval(id)
+  }, [isPlaying, availableYears])
 
   // SCRUM-78: monthTimelineData — counts all shows per month (no future tracking).
   const monthTimelineData = useMemo(() => {
@@ -728,11 +747,26 @@ export default function MyShowsClient({
   }, [])
 
   const handleYearClick = useCallback((year: string) => {
+    setIsPlaying(false)
     setSelectedYear(prev => prev === year ? null : year)
     setCapFilter('all'); setPage(1); setPageInput('1'); setShowAllArtists(false)
   }, [])
 
+  // SCRUM-79: Play/pause handler — starts slideshow from first year when entering play mode
+  const handlePlayPause = useCallback(() => {
+    if (isPlaying) {
+      setIsPlaying(false)
+    } else {
+      if (!selectedYear && availableYears.length > 0) {
+        setSelectedYear(availableYears[0])
+        setCapFilter('all'); setPage(1); setPageInput('1'); setShowAllArtists(false)
+      }
+      setIsPlaying(true)
+    }
+  }, [isPlaying, selectedYear, availableYears])
+
   const clearAll = useCallback(() => {
+    setIsPlaying(false)
     setSelectedYear(null); setCapFilter('all')
     setPage(1); setPageInput('1'); setShowAllArtists(false)
   }, [])
@@ -917,20 +951,44 @@ export default function MyShowsClient({
                     </button>
                   )}
                   {selectedYear && (
-                    <button onClick={() => { setSelectedYear(null); setCapFilter('all') }}
+                    <button onClick={() => { setIsPlaying(false); setSelectedYear(null); setCapFilter('all') }}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/20 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors">
                       ← {selectedYear}
                     </button>
                   )}
                 </div>
 
-                <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium flex-shrink-0">
-                  {(['shows', 'sets', 'festivals'] as ViewMode[]).map((m, i) => (
-                    <button key={m} onClick={() => setViewMode(m)}
-                      className={`px-3 py-1.5 capitalize transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
-                        viewMode === m ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
-                      }`}>{m}</button>
-                  ))}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* SCRUM-79: Play/pause — only available in the year-level all-time view */}
+                  {!selectedYear && yearTimelineData.length > 1 && (
+                    <button
+                      onClick={handlePlayPause}
+                      title={isPlaying ? 'Pause slideshow' : 'Play year slideshow'}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors border ${
+                        isPlaying
+                          ? 'border-primary bg-primary/20 text-primary'
+                          : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-primary'
+                      }`}
+                    >
+                      {isPlaying ? (
+                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                        </svg>
+                      ) : (
+                        <svg className="w-3 h-3 ml-px" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M8 5v14l11-7z"/>
+                        </svg>
+                      )}
+                    </button>
+                  )}
+                  <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
+                    {(['shows', 'sets', 'festivals'] as ViewMode[]).map((m, i) => (
+                      <button key={m} onClick={() => setViewMode(m)}
+                        className={`px-3 py-1.5 capitalize transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                          viewMode === m ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
+                        }`}>{m}</button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -1027,7 +1085,7 @@ export default function MyShowsClient({
                 return (
                   <div className="flex items-center justify-center gap-2 mt-3">
                     <button
-                      onClick={() => prevYear && setSelectedYear(prevYear)}
+                      onClick={() => { setIsPlaying(false); prevYear && setSelectedYear(prevYear) }}
                       disabled={!prevYear}
                       className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
                       style={{ background: 'rgba(94,234,212,0.12)', color: '#5eead4', border: '1px solid rgba(94,234,212,0.25)' }}
@@ -1043,7 +1101,7 @@ export default function MyShowsClient({
                       {selectedYear}
                     </span>
                     <button
-                      onClick={() => nextYear && setSelectedYear(nextYear)}
+                      onClick={() => { setIsPlaying(false); nextYear && setSelectedYear(nextYear) }}
                       disabled={!nextYear}
                       className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
                       style={{ background: 'rgba(94,234,212,0.12)', color: '#5eead4', border: '1px solid rgba(94,234,212,0.25)' }}
@@ -1218,7 +1276,7 @@ export default function MyShowsClient({
                   {selectedYear && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs font-semibold">
                       {selectedYear}
-                      <button onClick={() => { setSelectedYear(null); setCapFilter('all') }} className="hover:opacity-70">×</button>
+                      <button onClick={() => { setIsPlaying(false); setSelectedYear(null); setCapFilter('all') }} className="hover:opacity-70">×</button>
                     </span>
                   )}
                   {capFilter !== 'all' && (
