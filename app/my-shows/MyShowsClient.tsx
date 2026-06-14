@@ -959,6 +959,32 @@ export default function MyShowsClient({
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* SCRUM-79: Play/pause — only available in the year-level all-time view */}
+                  {!selectedYear && yearTimelineData.length > 1 && (
+                    <button
+                      onClick={handlePlayPause}
+                      title={isPlaying ? 'Pause slideshow' : 'Play year-by-year slideshow'}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all bg-primary text-primary-foreground shadow-sm hover:opacity-90 hover:shadow-md ${
+                        isPlaying ? 'ring-2 ring-primary/40 animate-pulse' : ''
+                      }`}
+                    >
+                      {isPlaying ? (
+                        <>
+                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                          </svg>
+                          Pause
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8 5v14l11-7z"/>
+                          </svg>
+                          Animate
+                        </>
+                      )}
+                    </button>
+                  )}
                   <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                     {(['shows', 'sets', 'festivals'] as ViewMode[]).map((m, i) => (
                       <button key={m} onClick={() => setViewMode(m)}
@@ -986,32 +1012,6 @@ export default function MyShowsClient({
                   <span className="text-muted-foreground/50 text-[10px]">
                     {viewMode === 'shows' ? '· Bills with multiple acts count as 1 show' : '· Festival shows only'}
                   </span>
-                )}
-                {/* SCRUM-79: Play/pause — only available in the year-level all-time view */}
-                {!selectedYear && yearTimelineData.length > 1 && (
-                  <button
-                    onClick={handlePlayPause}
-                    title={isPlaying ? 'Pause slideshow' : 'Play year-by-year slideshow'}
-                    className={`ml-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all bg-primary text-primary-foreground shadow-sm hover:opacity-90 hover:shadow-md ${
-                      isPlaying ? 'ring-2 ring-primary/40 animate-pulse' : ''
-                    }`}
-                  >
-                    {isPlaying ? (
-                      <>
-                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                        </svg>
-                        Pause
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M8 5v14l11-7z"/>
-                        </svg>
-                        Animate
-                      </>
-                    )}
-                  </button>
                 )}
               </div>
 
