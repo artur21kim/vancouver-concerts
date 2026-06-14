@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Grooveprint — setlist.fm API Fetch Script  v2
+Grooveprint — setlist.fm API Fetch Script  v3
 scripts/fetch_setlist_api.py
 
 Fetches show data from the official setlist.fm API for a given city+year
@@ -11,6 +11,16 @@ Rate limits (basic free key):
     2 requests/second  |  1,440 requests/day
     Script enforces a 0.55s inter-request delay and tracks the daily budget.
     When the daily cap is near, progress is saved so you can --resume tomorrow.
+
+Resuming large --year-range runs across multiple days:
+    Per-year progress (including a 0-result "confirmed empty" state) is kept
+    permanently once a year completes. Re-running the SAME command with
+    --resume added will:
+      - skip any year already finished (no re-fetching, no wasted requests)
+      - append new rows to the SAME --output file rather than overwriting it
+      - pick up the in-progress year exactly where it left off
+    This makes it safe to split a 100+ year pull across however many days
+    the daily cap requires — just re-add --resume each day.
 
 Usage:
     # Single year:
@@ -313,13 +323,17 @@ def fetch_year(
     prog       = load_progress(city_name, year) if resume else {"last_page": 0, "total_pages": None, "rows": 0}
     start_page = prog["last_page"] + 1
 
-    # Already done from a previous run
-    if prog.get("total_pages") and start_page > prog["total_pages"]:
+    # Already done from a previous run (total_pages is set once known — including 0
+    # for a confirmed-empty year — so `is not None` distinguishes "checked" from "unchecked")
+    if prog.get("total_pages") is not None and start_page > prog["total_pages"]:
         print(f"  {year}: already complete ({prog['rows']:,} rows) — skipping.")
         return 0, True
 
-    # Decide whether to write a fresh header or append to an existing file
-    is_append   = force_append or (resume and output_path.exists() and prog["last_page"] > 0)
+    # Decide whether to write a fresh header or append to an existing file.
+    # On --resume, if the output already has content (from this year's partial
+    # progress OR from earlier years in a multi-year run completed on a prior day),
+    # always append — never truncate.
+    is_append   = force_append or (resume and output_path.exists())
     file_mode   = "a" if is_append else "w"
     write_hdr   = not is_append
 
@@ -366,10 +380,12 @@ def fetch_year(
             setlists = data.get("setlist") or []
             total    = int(data.get("total") or 0)
 
-            # Derive total pages from first response
-            if prog.get("total_pages") is None and total > 0:
-                prog["total_pages"] = math.ceil(total / PAGE_SIZE)
-                print(f"{total:,} shows → {prog['total_pages']} pages  ", end="")
+            # Derive total pages from first response (0 = confirmed empty year,
+            # which is a valid "done" state for the skip check above)
+            if prog.get("total_pages") is None:
+                prog["total_pages"] = math.ceil(total / PAGE_SIZE) if total > 0 else 0
+                if total > 0:
+                    print(f"{total:,} shows → {prog['total_pages']} pages  ", end="")
 
             # Write rows
             page_rows = 0
@@ -395,7 +411,7 @@ def fetch_year(
                 completed = True
                 break
 
-            if prog.get("total_pages") and page >= prog["total_pages"]:
+            if prog.get("total_pages") is not None and page >= prog["total_pages"]:
                 print(f"  [{year}] All {prog['total_pages']} pages fetched.")
                 completed = True
                 break
@@ -403,8 +419,10 @@ def fetch_year(
             page += 1
             time.sleep(REQUEST_DELAY)
 
-    if completed:
-        clear_progress(city_name, year)
+    # Note: progress files are intentionally NOT cleared on completion. A completed
+    # year's saved state (last_page == total_pages) is what lets a later --resume
+    # (e.g. continuing a large --year-range tomorrow) recognize it's already done
+    # and skip it, rather than re-fetching it and re-appending duplicate rows.
 
     return rows_written, completed
 
