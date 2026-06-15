@@ -170,7 +170,7 @@ function SetlistLink({ url }: { url: string }) {
   )
 }
 
-// ── Spotify icon SVG (inline, used in the view toggle and Spotify tab) ────────
+// ── Spotify icon SVG ──────────────────────────────────────────────────────────
 function SpotifyIcon({ className = 'w-3 h-3', fill = SPOTIFY_GREEN }: { className?: string; fill?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill={fill}>
@@ -180,7 +180,6 @@ function SpotifyIcon({ className = 'w-3 h-3', fill = SPOTIFY_GREEN }: { classNam
 }
 
 // ── Timeline tooltips ─────────────────────────────────────────────────────────
-// SCRUM-80: YearTip updated — Spotify mode shows 'songs' label
 function YearTip({ active, payload, label, viewMode }: any) {
   if (!active || !payload?.length) return null
   const val = payload.find((p: any) => p.dataKey === 'shows')?.value
@@ -196,8 +195,6 @@ function YearTip({ active, payload, label, viewMode }: any) {
   )
 }
 
-// SCRUM-80: MonthTip updated — Spotify mode labels primary series as 'songs added';
-// non-Spotify modes label the overlay series as 'matched songs' (contextual, not raw total)
 function MonthTip({ active, payload, label, viewMode }: any) {
   if (!active || !payload?.length) return null
   const shows = payload.find((p: any) => p.dataKey === 'shows')?.value ?? 0
@@ -436,7 +433,6 @@ export default function MyShowsClient({
   username,
 }: {
   shows: Show[]
-  // SCRUM-80: extended to include per-song fields for contextual matching and Spotify tab expansion
   spotifySongs: { added_at: string; spotify_artist_id: string | null; artist_name: string; track_name: string; spotify_album_name: string | null; spotify_album_release_date: string | null; spotify_track_id: string | null }[]
   readOnly?: boolean
   username?: string
@@ -519,7 +515,7 @@ export default function MyShowsClient({
     }
   }, [shows])
 
-  // ── Raw Spotify songs per year/month (used in Spotify tab and as fallback) ─
+  // ── Raw Spotify songs per year/month ──────────────────────────────────────
   const spotifyByYearMonth = useMemo(() => {
     const result: Record<string, Record<number, number>> = {}
     for (const s of spotifySongs) {
@@ -533,21 +529,16 @@ export default function MyShowsClient({
   }, [spotifySongs])
 
   // SCRUM-80: Artist-contextual Spotify songs per year/month.
-  // For each month, counts songs in spotifySongs where spotify_artist_id matches
-  // an artist from shows attended within a ±1 month window around that month.
-  // This surfaces pre-show research and post-show listening behaviour.
   const artistContextualByYearMonth = useMemo(() => {
     if (!hasSpotify) return {} as Record<string, Record<number, number>>
 
-    // Build map: (year-month key) → Set of spotify_artist_ids from attended shows
     const showArtistsByKey: Record<string, Set<string>> = {}
     for (const show of shows) {
       if (!show.artist.spotify_artist_id) continue
       const [yearStr, monthStr] = show.date.split('-')
       const year  = parseInt(yearStr)
-      const month = parseInt(monthStr) - 1 // 0-based
+      const month = parseInt(monthStr) - 1
 
-      // Expand into ±1 month window
       for (let delta = -1; delta <= 1; delta++) {
         let m = month + delta
         let y = year
@@ -559,7 +550,6 @@ export default function MyShowsClient({
       }
     }
 
-    // Count Spotify songs whose artist falls in the window for that month
     const result: Record<string, Record<number, number>> = {}
     for (const song of spotifySongs) {
       if (!song.spotify_artist_id) continue
@@ -576,33 +566,34 @@ export default function MyShowsClient({
     return result
   }, [shows, spotifySongs, hasSpotify])
 
-  // SCRUM-80: Top Spotify artists by liked-song count (respects selectedYear filter).
-  // Each artist entry includes a songs array for expandable rows in the Spotify tab.
-  // Songs sorted by added_at desc (most recently liked first).
+  // SCRUM-80 / SCRUM-88: Top Spotify artists by liked-song count (respects selectedYear filter).
+  // Songs are grouped by album for expandable rows in the Spotify tab.
+  // Albums sorted by release year desc; songs within each album sorted by added_at desc.
   const topSpotifyArtists = useMemo(() => {
     if (!hasSpotify) return [] as {
-      name: string; count: number; spotifyId: string
-      songs: { track_name: string; album_name: string | null; release_year: string | null; track_id: string | null; added_at: string }[]
+      name: string; count: number; spotifyId: string; hasAlbumData: boolean
+      albums: { name: string | null; year: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
     }[]
     const src = selectedYear
       ? spotifySongs.filter(s => new Date(s.added_at).getFullYear() === parseInt(selectedYear))
       : spotifySongs
-    const map: Record<string, {
+    // Accumulate raw song list per artist first
+    const raw: Record<string, {
       name: string; count: number; spotifyId: string
-      songs: { track_name: string; album_name: string | null; release_year: string | null; track_id: string | null; added_at: string }[]
+      songList: { track_name: string; album_name: string | null; release_year: string | null; track_id: string | null; added_at: string }[]
     }> = {}
     for (const song of src) {
       if (!song.spotify_artist_id) continue
-      if (!map[song.spotify_artist_id]) {
-        map[song.spotify_artist_id] = {
+      if (!raw[song.spotify_artist_id]) {
+        raw[song.spotify_artist_id] = {
           name: song.artist_name,
           count: 0,
           spotifyId: song.spotify_artist_id,
-          songs: [],
+          songList: [],
         }
       }
-      map[song.spotify_artist_id].count++
-      map[song.spotify_artist_id].songs.push({
+      raw[song.spotify_artist_id].count++
+      raw[song.spotify_artist_id].songList.push({
         track_name:   song.track_name,
         album_name:   song.spotify_album_name ?? null,
         release_year: song.spotify_album_release_date ? song.spotify_album_release_date.substring(0, 4) : null,
@@ -610,13 +601,30 @@ export default function MyShowsClient({
         added_at:     song.added_at,
       })
     }
-    return Object.values(map)
+    return Object.values(raw)
       .sort((a, b) => b.count - a.count)
       .slice(0, 50)
-      .map(artist => ({
-        ...artist,
-        songs: [...artist.songs].sort((a, b) => b.added_at.localeCompare(a.added_at)),
-      }))
+      .map(artist => {
+        const sorted = [...artist.songList].sort((a, b) => b.added_at.localeCompare(a.added_at))
+        const hasAlbumData = sorted.some(s => s.album_name)
+        // Group by album
+        const albumMap: Record<string, { name: string | null; year: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }> = {}
+        for (const song of sorted) {
+          const key = song.album_name ?? '__null__'
+          if (!albumMap[key]) albumMap[key] = { name: song.album_name, year: song.release_year, songs: [] }
+          albumMap[key].songs.push({ track_name: song.track_name, track_id: song.track_id, added_at: song.added_at })
+        }
+        // Sort albums: year desc (newest first), null-named albums last
+        const albums = Object.values(albumMap).sort((a, b) => {
+          if (a.name === null) return 1
+          if (b.name === null) return -1
+          if (!a.year && !b.year) return 0
+          if (!a.year) return 1
+          if (!b.year) return -1
+          return parseInt(b.year) - parseInt(a.year)
+        })
+        return { name: artist.name, count: artist.count, spotifyId: artist.spotifyId, hasAlbumData, albums }
+      })
   }, [spotifySongs, hasSpotify, selectedYear])
 
   const firstSpotifyYear = useMemo(() => Object.keys(spotifyByYearMonth).sort()[0] ?? null, [spotifyByYearMonth])
@@ -627,8 +635,7 @@ export default function MyShowsClient({
     return shows.filter(s => s.date.split('-')[0] === selectedYear)
   }, [shows, selectedYear])
 
-  // SCRUM-80: yearTimelineData — Spotify mode returns raw songs-per-year.
-  // Non-Spotify modes return show/set/festival counts as before (orange future series removed in SCRUM-78).
+  // SCRUM-80: yearTimelineData
   const yearTimelineData = useMemo(() => {
     if (viewMode === 'spotify') {
       const byYear: Record<string, number> = {}
@@ -666,7 +673,7 @@ export default function MyShowsClient({
     [yearTimelineData]
   )
 
-  // SCRUM-79: Slideshow — advance selectedYear through availableYears every 1500ms.
+  // SCRUM-79: Slideshow
   useEffect(() => {
     if (!isPlaying) return
     const id = setInterval(() => {
@@ -683,8 +690,7 @@ export default function MyShowsClient({
     return () => clearInterval(id)
   }, [isPlaying, availableYears])
 
-  // SCRUM-80: monthTimelineData — Spotify mode returns raw songs-per-month.
-  // Non-Spotify modes use artist-contextual matched count for the overlay series.
+  // SCRUM-80: monthTimelineData
   const monthTimelineData = useMemo(() => {
     if (!selectedYear) return []
 
@@ -706,7 +712,6 @@ export default function MyShowsClient({
       byMonth[m]++
     }
 
-    // SCRUM-80: overlay series = contextual matched songs (artist within ±1 month window)
     const contextualByMonth = artistContextualByYearMonth[selectedYear] ?? {}
     const hasContextual = Object.keys(contextualByMonth).length > 0
 
@@ -720,16 +725,12 @@ export default function MyShowsClient({
   const firstYear = stats.firstShow?.date.split('-')[0]
   const lastYear  = stats.lastShow?.date.split('-')[0]
 
-  // SCRUM-80: drilldownHasSpotify — gates on contextual count for non-Spotify modes
-  // (so the overlay only appears when there are actually matched songs for the year).
-  // Always false in Spotify mode (Spotify tab shows its own content, not an overlay).
   const drilldownHasSpotify = selectedYear
     ? hasSpotify &&
       viewMode !== 'spotify' &&
       Object.keys(artistContextualByYearMonth[selectedYear] ?? {}).length > 0
     : false
 
-  // SCRUM-80: chart line color — switches to Spotify green in Spotify mode
   const chartLineColor = viewMode === 'spotify' ? SPOTIFY_GREEN : TEAL
 
   const timelineLegendLabel = viewMode === 'spotify' ? 'Songs added per year'
@@ -860,7 +861,7 @@ export default function MyShowsClient({
   const totalPages   = Math.ceil(setsFiltered.length / PER_PAGE)
   const currentShows = setsFiltered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
-  // SCRUM-80: dynamicStats — Spotify mode shows songs + artist counts
+  // SCRUM-80: dynamicStats
   const dynamicStats = useMemo(() => {
     if (viewMode === 'spotify') {
       const src = selectedYear
@@ -1096,7 +1097,6 @@ export default function MyShowsClient({
                         <span className="text-muted-foreground"> venues</span>
                       </span>
                     </>}
-                    {/* SCRUM-80: Spotify tab stat badges */}
                     {viewMode === 'spotify' && <>
                       <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
                         <span style={{ color: SPOTIFY_GREEN }}>{dynamicStats.sets.toLocaleString()}</span>
@@ -1123,7 +1123,6 @@ export default function MyShowsClient({
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {/* Play/pause — only in year-level all-time view */}
                   {!selectedYear && yearTimelineData.length > 1 && (
                     <button
                       onClick={handlePlayPause}
@@ -1150,7 +1149,6 @@ export default function MyShowsClient({
                     </button>
                   )}
 
-                  {/* SCRUM-80: view mode toggle — Spotify tab added, visible when hasSpotify */}
                   <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                     {(['shows', 'sets', 'festivals'] as ViewMode[]).map((m, i) => (
                       <button key={m} onClick={() => setViewMode(m)}
@@ -1173,8 +1171,6 @@ export default function MyShowsClient({
                 </div>
               </div>
 
-              {/* SCRUM-80: Legend — chartLineColor switches to green in Spotify mode;
-                  overlay label renamed to 'Matched artist songs' */}
               <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1.5">
                   <span className="w-3 h-3 rounded-sm inline-block" style={{ background: chartLineColor }} />
@@ -1195,7 +1191,6 @@ export default function MyShowsClient({
                 )}
               </div>
 
-              {/* SCRUM-80: Chart — gradients and stroke color switch in Spotify mode */}
               <div style={{ height: 180 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   {selectedYear ? (
@@ -1251,7 +1246,6 @@ export default function MyShowsClient({
                       <Area type="monotone" dataKey="shows" stroke={chartLineColor} strokeWidth={2} fill="url(#gradShows)"
                         dot={(p: any) => {
                           const { cx, cy, payload } = p
-                          // In Spotify mode, use uniform dots; in show modes highlight first/last
                           if (viewMode !== 'spotify' && payload.year === firstYear)
                             return <circle key={`f-${cx}`} cx={cx} cy={cy} r={5} fill={chartLineColor} stroke="var(--background)" strokeWidth={2}/>
                           if (viewMode !== 'spotify' && payload.year === lastYear && lastYear !== firstYear)
@@ -1263,7 +1257,6 @@ export default function MyShowsClient({
                 </ResponsiveContainer>
               </div>
 
-              {/* Year nav pills */}
               {selectedYear ? (() => {
                 const idx = availableYears.indexOf(selectedYear)
                 const prevYear = idx > 0 ? availableYears[idx - 1] : null
@@ -1299,7 +1292,6 @@ export default function MyShowsClient({
                   </div>
                 )
               })() : (
-                // SCRUM-80: hide first/last show annotation in Spotify mode
                 viewMode !== 'spotify' && (stats.firstShow || stats.lastShow) && (
                   <div className="flex items-start justify-between gap-2 mt-2 text-xs text-muted-foreground">
                     {stats.firstShow && <span>First: <span className="text-foreground font-medium">{stats.firstShow.artist.artist_name}</span> · {fmtDate(stats.firstShow.date)}</span>}
@@ -1431,7 +1423,7 @@ export default function MyShowsClient({
             </div>
           )}
 
-          {/* ── SCRUM-80: Spotify tab content — top 50 artists by liked-song count ── */}
+          {/* ── SCRUM-80 / SCRUM-88: Spotify tab — top 50 artists, album-grouped song rows ── */}
           {viewMode === 'spotify' && hasSpotify && (
             <div className="bg-card rounded-lg shadow border border-border overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -1450,7 +1442,6 @@ export default function MyShowsClient({
                 <div className="divide-y divide-border">
                   {topSpotifyArtists.map((artist, i) => {
                     const isExpanded  = expandedSpotifyArtists.has(artist.spotifyId)
-                    const hasAlbumData = artist.songs.some(s => s.album_name)
                     const toggleExpanded = () => setExpandedSpotifyArtists(prev => {
                       const n = new Set(prev)
                       n.has(artist.spotifyId) ? n.delete(artist.spotifyId) : n.add(artist.spotifyId)
@@ -1483,58 +1474,64 @@ export default function MyShowsClient({
                           </div>
                         </div>
 
-                        {/* Expanded songs list */}
+                        {/* Expanded songs — grouped by album (SCRUM-88) */}
                         {isExpanded && (
                           <div className="border-t border-border/40 bg-background/50">
-                            {/* Column headers */}
+                            {/* Column headers — teal, always 3-col: Song | Year | Liked On */}
                             <div
-                              className="grid px-4 py-1.5 text-[10px] font-semibold text-foreground/45 uppercase tracking-wider bg-muted/30 border-b border-border/30"
-                              style={{ gridTemplateColumns: hasAlbumData ? 'minmax(0, 1fr) 160px 56px 108px' : 'minmax(0, 1fr) 56px 108px' }}
+                              className="grid px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider bg-muted/30 border-b border-border/30"
+                              style={{ gridTemplateColumns: 'minmax(0, 1fr) 56px 108px', color: TEAL }}
                             >
                               <span>Song</span>
-                              {hasAlbumData && <span>Album</span>}
                               <span className="text-right">Year</span>
                               <span className="text-right">Liked on</span>
                             </div>
-                            {/* Song rows */}
-                            <div className="divide-y divide-border/20 max-h-60 overflow-y-auto">
-                              {artist.songs.map((song, j) => (
-                                <div
-                                  key={j}
-                                  className="grid items-center px-4 py-2 hover:bg-muted/20 transition-colors"
-                                  style={{ gridTemplateColumns: hasAlbumData ? 'minmax(0, 1fr) 160px 56px 108px' : 'minmax(0, 1fr) 56px 108px' }}
-                                >
-                                  {/* Song name — linked to Spotify if track_id available */}
-                                  <div className="min-w-0 pr-3">
-                                    {song.track_id ? (
-                                      <a
-                                        href={`https://open.spotify.com/track/${song.track_id}`}
-                                        target="_blank" rel="noopener noreferrer"
-                                        className="text-xs text-foreground hover:text-primary hover:underline truncate block transition-colors"
-                                        title={song.track_name}
-                                      >
-                                        {song.track_name}
-                                      </a>
-                                    ) : (
-                                      <span className="text-xs text-foreground truncate block" title={song.track_name}>
-                                        {song.track_name}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {/* Album — only shown when column exists */}
-                                  {hasAlbumData && (
-                                    <span className="text-xs text-foreground/75 truncate pr-3" title={song.album_name ?? undefined}>
-                                      {song.album_name ?? <span className="opacity-30">—</span>}
-                                    </span>
+                            {/* Album sections */}
+                            <div className="max-h-72 overflow-y-auto">
+                              {artist.albums.map((album, ai) => (
+                                <div key={ai} className={ai > 0 ? 'border-t border-border/20' : ''}>
+                                  {/* Album section header — teal, only when artist has album data and this album is named */}
+                                  {artist.hasAlbumData && album.name && (
+                                    <div className="px-4 py-1 text-xs font-semibold" style={{ color: TEAL }}>
+                                      {album.name}{album.year ? ` (${album.year})` : ''}
+                                    </div>
                                   )}
-                                  {/* Release year */}
-                                  <span className="text-xs text-foreground/65 tabular-nums text-right">
-                                    {song.release_year ?? <span className="opacity-30">—</span>}
-                                  </span>
-                                  {/* Liked on date */}
-                                  <span className="text-xs text-foreground/50 tabular-nums text-right">
-                                    {new Date(song.added_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                  </span>
+                                  {/* Song rows */}
+                                  <div className="divide-y divide-border/10">
+                                    {album.songs.map((song, j) => (
+                                      <div
+                                        key={j}
+                                        className="grid items-center px-4 py-2 hover:bg-muted/20 transition-colors"
+                                        style={{ gridTemplateColumns: 'minmax(0, 1fr) 56px 108px' }}
+                                      >
+                                        {/* Song name — linked to Spotify track when track_id available */}
+                                        <div className="min-w-0 pr-3">
+                                          {song.track_id ? (
+                                            <a
+                                              href={`https://open.spotify.com/track/${song.track_id}`}
+                                              target="_blank" rel="noopener noreferrer"
+                                              className="text-xs text-foreground hover:text-primary hover:underline truncate block transition-colors"
+                                              title={song.track_name}
+                                            >
+                                              {song.track_name}
+                                            </a>
+                                          ) : (
+                                            <span className="text-xs text-foreground truncate block" title={song.track_name}>
+                                              {song.track_name}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {/* Year (album-level — shared for all songs in this album) */}
+                                        <span className="text-xs text-foreground/65 tabular-nums text-right">
+                                          {album.year ?? <span className="opacity-30">—</span>}
+                                        </span>
+                                        {/* Liked on date */}
+                                        <span className="text-xs text-foreground/50 tabular-nums text-right">
+                                          {new Date(song.added_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               ))}
                             </div>
