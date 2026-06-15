@@ -641,6 +641,15 @@ export default function MyShowsClient({
     )
   }, [shows, filterText])
 
+  // Year range label for the h1 when a text filter is active (e.g. "2018–2026")
+  const filterRange = useMemo(() => {
+    if (!filterText.trim() || textFiltered.length === 0) return null
+    const years = textFiltered.map(s => s.date.split('-')[0]).sort()
+    const first = years[0]
+    const last  = years[years.length - 1]
+    return first === last ? first : `${first}–${last}`
+  }, [textFiltered, filterText])
+
   // ── Year-filtered set (chains from textFiltered so the whole page responds) ──
   const yearFiltered = useMemo(() => {
     if (!selectedYear) return textFiltered
@@ -1024,8 +1033,20 @@ export default function MyShowsClient({
 
           <h1 className="text-3xl md:text-4xl font-bold text-foreground">
             {readOnly ? `${username}'s Shows` : 'My Shows'}
-            {selectedYear && <span className="text-muted-foreground font-normal"> · {selectedYear}</span>}
-            {!selectedYear && capFilter !== 'all' && <span className="text-muted-foreground font-normal"> · {CAP_BY_KEY[capFilter]?.legendLabel}</span>}
+            {filterText.trim() ? (
+              <>
+                <span className="text-muted-foreground font-normal"> · {filterText}</span>
+                {selectedYear
+                  ? <span className="text-muted-foreground font-normal"> · {selectedYear}</span>
+                  : filterRange && <span className="text-muted-foreground font-normal"> · {filterRange}</span>
+                }
+              </>
+            ) : (
+              <>
+                {selectedYear && <span className="text-muted-foreground font-normal"> · {selectedYear}</span>}
+                {!selectedYear && capFilter !== 'all' && <span className="text-muted-foreground font-normal"> · {CAP_BY_KEY[capFilter]?.legendLabel}</span>}
+              </>
+            )}
           </h1>
 
           {/* ── Unadded CTA ── */}
