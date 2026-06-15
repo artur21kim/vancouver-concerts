@@ -1,0 +1,17 @@
+# Environment variables (contains secrets)
+.env
+
+# Data files (personal data)
+*.csv
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+venv/
+env/
+ENV/
