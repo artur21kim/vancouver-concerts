@@ -1477,22 +1477,28 @@ export default function MyShowsClient({
                         {/* Expanded songs — grouped by album (SCRUM-88) */}
                         {isExpanded && (
                           <div className="border-t border-border/40 bg-background/50">
-                            {/* Column headers — teal, always 3-col: Song | Year | Liked On */}
+                            {/* Column headers — teal, 2-col: Song | Liked On (Year dropped; it lives in the album header) */}
                             <div
                               className="grid px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider bg-muted/30 border-b border-border/30"
-                              style={{ gridTemplateColumns: 'minmax(0, 1fr) 56px 108px', color: TEAL }}
+                              style={{ gridTemplateColumns: 'minmax(0, 1fr) 108px', color: TEAL }}
                             >
                               <span>Song</span>
-                              <span className="text-right">Year</span>
                               <span className="text-right">Liked on</span>
                             </div>
                             {/* Album sections */}
                             <div className="max-h-72 overflow-y-auto">
                               {artist.albums.map((album, ai) => (
-                                <div key={ai} className={ai > 0 ? 'border-t border-border/20' : ''}>
-                                  {/* Album section header — teal, only when artist has album data and this album is named */}
-                                  {artist.hasAlbumData && album.name && (
-                                    <div className="px-4 py-1 text-xs font-semibold" style={{ color: TEAL }}>
+                                <div key={ai}>
+                                  {/* Album section header:
+                                      · only when artist has album data + album is named
+                                      · suppressed for single-song albums (Spotify singles / EPs with one
+                                        liked track) to avoid a sea of one-song sections for artists
+                                        who release lots of standalone singles */}
+                                  {artist.hasAlbumData && album.name && album.songs.length >= 2 && (
+                                    <div
+                                      className={`px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide bg-muted/50 ${ai > 0 ? 'border-t border-teal-500/15' : ''}`}
+                                      style={{ color: '#0d9488' }}
+                                    >
                                       {album.name}{album.year ? ` (${album.year})` : ''}
                                     </div>
                                   )}
@@ -1502,29 +1508,25 @@ export default function MyShowsClient({
                                       <div
                                         key={j}
                                         className="grid items-center px-4 py-2 hover:bg-muted/20 transition-colors"
-                                        style={{ gridTemplateColumns: 'minmax(0, 1fr) 56px 108px' }}
+                                        style={{ gridTemplateColumns: 'minmax(0, 1fr) 108px' }}
                                       >
-                                        {/* Song name — linked to Spotify track when track_id available */}
-                                        <div className="min-w-0 pr-3">
+                                        {/* Song name — pl-2 indent reads as child of album header */}
+                                        <div className="min-w-0 pl-2 pr-3">
                                           {song.track_id ? (
                                             <a
                                               href={`https://open.spotify.com/track/${song.track_id}`}
                                               target="_blank" rel="noopener noreferrer"
-                                              className="text-xs text-foreground hover:text-primary hover:underline truncate block transition-colors"
+                                              className="text-xs text-foreground/80 hover:text-primary hover:underline truncate block transition-colors"
                                               title={song.track_name}
                                             >
                                               {song.track_name}
                                             </a>
                                           ) : (
-                                            <span className="text-xs text-foreground truncate block" title={song.track_name}>
+                                            <span className="text-xs text-foreground/80 truncate block" title={song.track_name}>
                                               {song.track_name}
                                             </span>
                                           )}
                                         </div>
-                                        {/* Year (album-level — shared for all songs in this album) */}
-                                        <span className="text-xs text-foreground/65 tabular-nums text-right">
-                                          {album.year ?? <span className="opacity-30">—</span>}
-                                        </span>
                                         {/* Liked on date */}
                                         <span className="text-xs text-foreground/50 tabular-nums text-right">
                                           {new Date(song.added_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
