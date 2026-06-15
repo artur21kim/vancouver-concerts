@@ -1488,8 +1488,8 @@ export default function MyShowsClient({
                           <div className="border-t border-border/40 bg-background/50">
                             {/* Column headers */}
                             <div
-                              className="grid px-4 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b border-border/30"
-                              style={{ gridTemplateColumns: hasAlbumData ? '1fr 1fr 52px 96px' : '1fr 52px 96px' }}
+                              className="grid px-4 py-1.5 text-[10px] font-semibold text-foreground/45 uppercase tracking-wider bg-muted/30 border-b border-border/30"
+                              style={{ gridTemplateColumns: hasAlbumData ? 'minmax(0, 1fr) 160px 56px 108px' : 'minmax(0, 1fr) 56px 108px' }}
                             >
                               <span>Song</span>
                               {hasAlbumData && <span>Album</span>}
@@ -1502,7 +1502,7 @@ export default function MyShowsClient({
                                 <div
                                   key={j}
                                   className="grid items-center px-4 py-2 hover:bg-muted/20 transition-colors"
-                                  style={{ gridTemplateColumns: hasAlbumData ? '1fr 1fr 52px 96px' : '1fr 52px 96px' }}
+                                  style={{ gridTemplateColumns: hasAlbumData ? 'minmax(0, 1fr) 160px 56px 108px' : 'minmax(0, 1fr) 56px 108px' }}
                                 >
                                   {/* Song name — linked to Spotify if track_id available */}
                                   <div className="min-w-0 pr-3">
@@ -1523,16 +1523,16 @@ export default function MyShowsClient({
                                   </div>
                                   {/* Album — only shown when column exists */}
                                   {hasAlbumData && (
-                                    <span className="text-xs text-muted-foreground truncate pr-3" title={song.album_name ?? undefined}>
+                                    <span className="text-xs text-foreground/75 truncate pr-3" title={song.album_name ?? undefined}>
                                       {song.album_name ?? <span className="opacity-30">—</span>}
                                     </span>
                                   )}
                                   {/* Release year */}
-                                  <span className="text-xs text-muted-foreground tabular-nums text-right">
+                                  <span className="text-xs text-foreground/65 tabular-nums text-right">
                                     {song.release_year ?? <span className="opacity-30">—</span>}
                                   </span>
                                   {/* Liked on date */}
-                                  <span className="text-xs text-muted-foreground tabular-nums text-right">
+                                  <span className="text-xs text-foreground/50 tabular-nums text-right">
                                     {new Date(song.added_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                   </span>
                                 </div>
