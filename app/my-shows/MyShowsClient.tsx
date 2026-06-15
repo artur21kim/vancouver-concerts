@@ -434,7 +434,11 @@ function VenueYearBars({ venues, max, onNavigate }: {
   )
 }
 
-// ── SCRUM-93: Spotify artist album-segmented bars ─────────────────────────────
+// ── SCRUM-93: Spotify artist year-bucket bars ────────────────────────────────
+// Groups all albums from the same release year into one segment. This bounds
+// segment count by career span in years (≤~20) rather than album output,
+// preventing prolific artists (King Gizzard, Thee Oh Sees) from producing
+// unreadable hairline slices.
 function SpotifyArtistBars({ artists, max }: {
   artists: {
     name: string; count: number; spotifyId: string; hasAlbumData: boolean
@@ -443,7 +447,7 @@ function SpotifyArtistBars({ artists, max }: {
   max: number
 }) {
   const [tooltip, setTooltip] = useState<{
-    artist: string; albumName: string | null; year: string | null; count: number; x: number
+    artist: string; year: string | null; albumNames: string[]; count: number; x: number
   } | null>(null)
 
   return (
@@ -451,8 +455,18 @@ function SpotifyArtistBars({ artists, max }: {
       {artists.map((artist) => {
         const totalWidth = max > 0 ? (artist.count / max) * 100 : 0
 
-        // Albums sorted year ascending (oldest left), nulls last
-        const sortedAlbums = [...artist.albums].sort((a, b) => {
+        // Aggregate albums → year buckets
+        const yearMap = new Map<string, { year: string | null; albumNames: string[]; count: number }>()
+        for (const album of artist.albums) {
+          const key = album.year ?? '__null__'
+          if (!yearMap.has(key)) yearMap.set(key, { year: album.year, albumNames: [], count: 0 })
+          const bucket = yearMap.get(key)!
+          if (album.name) bucket.albumNames.push(album.name)
+          bucket.count += album.songs.length
+        }
+
+        // Sort year buckets ascending (oldest left), null last
+        const yearBuckets = Array.from(yearMap.values()).sort((a, b) => {
           if (!a.year && !b.year) return 0
           if (!a.year) return 1
           if (!b.year) return -1
@@ -474,14 +488,16 @@ function SpotifyArtistBars({ artists, max }: {
             <div className="flex-1 relative">
               <div className="h-5 bg-muted/40 rounded-full overflow-hidden flex">
                 <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
-                  {sortedAlbums.map((album, i) => {
-                    const widthPct = (album.songs.length / artist.count) * 100
+                  {yearBuckets.map((bucket, i) => {
+                    const widthPct = (bucket.count / artist.count) * 100
                     const color = SPOTIFY_PALETTE[i % SPOTIFY_PALETTE.length]
                     const isFirst = i === 0
-                    const isLast = i === sortedAlbums.length - 1
+                    const isLast = i === yearBuckets.length - 1
+                    // Suppress label on narrow segments — 4-char year needs ~28px minimum
+                    const showLabel = widthPct >= 6
                     return (
                       <div
-                        key={i}
+                        key={bucket.year ?? '__null__'}
                         className="h-full flex items-center justify-center overflow-hidden cursor-default"
                         style={{
                           width: `${widthPct}%`,
@@ -491,16 +507,18 @@ function SpotifyArtistBars({ artists, max }: {
                         }}
                         onMouseEnter={e => {
                           const rect = (e.currentTarget as HTMLElement).closest('.flex-1')!.getBoundingClientRect()
-                          setTooltip({ artist: artist.name, albumName: album.name, year: album.year, count: album.songs.length, x: e.clientX - rect.left })
+                          setTooltip({ artist: artist.name, year: bucket.year, albumNames: bucket.albumNames, count: bucket.count, x: e.clientX - rect.left })
                         }}
                         onMouseLeave={() => setTooltip(null)}
                       >
-                        <span
-                          className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
-                          style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}
-                        >
-                          {album.year ?? ''}
-                        </span>
+                        {showLabel && (
+                          <span
+                            className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
+                            style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}
+                          >
+                            {bucket.year ?? ''}
+                          </span>
+                        )}
                       </div>
                     )
                   })}
@@ -509,12 +527,16 @@ function SpotifyArtistBars({ artists, max }: {
 
               {tooltip?.artist === artist.name && (
                 <div
-                  className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px]"
+                  className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px] max-w-[240px]"
                   style={{ left: Math.min(tooltip.x, 220), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}
                 >
-                  <p className="font-semibold text-foreground">
-                    {tooltip.albumName ?? 'Unknown Album'}{tooltip.year ? ` (${tooltip.year})` : ''}
-                  </p>
+                  <p className="font-semibold text-foreground">{tooltip.year ?? 'Unknown year'}</p>
+                  {tooltip.albumNames.length > 0 && (
+                    <p className="text-muted-foreground mt-0.5 leading-snug">
+                      {tooltip.albumNames.slice(0, 3).join(', ')}
+                      {tooltip.albumNames.length > 3 ? ` +${tooltip.albumNames.length - 3} more` : ''}
+                    </p>
+                  )}
                   <p style={{ color: SPOTIFY_GREEN }} className="mt-0.5">
                     {tooltip.count} {tooltip.count === 1 ? 'song' : 'songs'}
                   </p>
