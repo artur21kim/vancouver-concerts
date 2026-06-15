@@ -230,13 +230,14 @@ function DonutTip({ active, payload }: any) {
 }
 
 // ── Per-show artist bars ──────────────────────────────────────────────────────
-function ArtistYearBars({ artists, max, onNavigate }: {
+function ArtistYearBars({ artists, max, onNavigate, onYearClick }: {
   artists: {
     name: string; spotifyId: string | null; total: number
     byCapacity: Record<string, number>
     showsByYear: Record<string, { venue: string; capKey: CapFilter }[]>
   }[]
   max: number; onNavigate: (name: string) => void
+  onYearClick?: (artistName: string, year: string) => void
 }) {
   const [tooltip, setTooltip] = useState<{ artist: string; year: string; venue: string; capKey: CapFilter; x: number } | null>(null)
 
@@ -277,13 +278,15 @@ function ArtistYearBars({ artists, max, onNavigate }: {
                     return (
                       <div
                         key={i}
-                        className="h-full flex items-center justify-center overflow-hidden cursor-default"
+                        className="h-full flex items-center justify-center overflow-hidden"
                         style={{
                           width: `${seg.widthPct}%`,
                           backgroundColor: seg.color,
                           borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
                           borderRight: !isLast ? '1px solid rgba(0,0,0,0.25)' : undefined,
+                          cursor: onYearClick ? 'pointer' : 'default',
                         }}
+                        onClick={() => onYearClick?.(artist.name, seg.year)}
                         onMouseEnter={e => {
                           const rect = (e.currentTarget as HTMLElement).closest('.flex-1')!.getBoundingClientRect()
                           setTooltip({ artist: artist.name, year: seg.year, venue: seg.venue, capKey: seg.capKey, x: e.clientX - rect.left })
@@ -439,12 +442,13 @@ function VenueYearBars({ venues, max, onNavigate }: {
 // segment count by career span in years (≤~20) rather than album output,
 // preventing prolific artists (King Gizzard, Thee Oh Sees) from producing
 // unreadable hairline slices.
-function SpotifyArtistBars({ artists, max }: {
+function SpotifyArtistBars({ artists, max, onYearClick }: {
   artists: {
     name: string; count: number; spotifyId: string; hasAlbumData: boolean
     albums: { name: string | null; year: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
   }[]
   max: number
+  onYearClick?: (artistName: string, year: string) => void
 }) {
   const [tooltip, setTooltip] = useState<{
     artist: string; year: string | null; albumNames: string[]; count: number; x: number
@@ -493,18 +497,22 @@ function SpotifyArtistBars({ artists, max }: {
                     const color = SPOTIFY_PALETTE[i % SPOTIFY_PALETTE.length]
                     const isFirst = i === 0
                     const isLast = i === yearBuckets.length - 1
-                    // Suppress label on narrow segments — 4-char year needs ~28px minimum
-                    const showLabel = widthPct >= 6
+                    // Absolute width check: segment must be ≥5% of the max-width bar to show a label.
+                    // Relative-only threshold lets narrow overall bars show cramped labels even at 8%+.
+                    const showLabel = widthPct >= 6 && (totalWidth * widthPct / 100) >= 5
+                    const clickable = !!onYearClick && !!bucket.year
                     return (
                       <div
                         key={bucket.year ?? '__null__'}
-                        className="h-full flex items-center justify-center overflow-hidden cursor-default"
+                        className="h-full flex items-center justify-center overflow-hidden"
                         style={{
                           width: `${widthPct}%`,
                           backgroundColor: color,
                           borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
                           borderRight: !isLast ? '1px solid rgba(0,0,0,0.25)' : undefined,
+                          cursor: clickable ? 'pointer' : 'default',
                         }}
+                        onClick={() => clickable && onYearClick!(artist.name, bucket.year!)}
                         onMouseEnter={e => {
                           const rect = (e.currentTarget as HTMLElement).closest('.flex-1')!.getBoundingClientRect()
                           setTooltip({ artist: artist.name, year: bucket.year, albumNames: bucket.albumNames, count: bucket.count, x: e.clientX - rect.left })
@@ -1110,6 +1118,16 @@ export default function MyShowsClient({
     setFilterText(name)
     setPage(1)
     setPageInput('1')
+  }, [])
+
+  // SCRUM-107: year segment click — drills to that artist + year in one click
+  const handleYearSegmentClick = useCallback((artistName: string, year: string) => {
+    setIsPlaying(false)
+    setFilterText(artistName)
+    setSelectedYear(year)
+    setPage(1)
+    setPageInput('1')
+    setShowAllArtists(false)
   }, [])
 
   const removeShow = async (id: number) => {
@@ -1732,6 +1750,7 @@ export default function MyShowsClient({
                       <SpotifyArtistBars
                         artists={filteredSpotifyArtists.slice(0, showAllArtists ? undefined : 10)}
                         max={filteredSpotifyArtists[0]?.count ?? 1}
+                        onYearClick={handleYearSegmentClick}
                       />
                       {filteredSpotifyArtists.length > 10 && (
                         <button onClick={() => setShowAllArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
@@ -1749,6 +1768,7 @@ export default function MyShowsClient({
                         artists={topArtists.slice(0, showAllArtists ? undefined : 10)}
                         max={maxArtistShows}
                         onNavigate={(name) => applyFilter(name)}
+                        onYearClick={handleYearSegmentClick}
                       />
                       {topArtists.length > 10 && (
                         <button onClick={() => setShowAllArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
