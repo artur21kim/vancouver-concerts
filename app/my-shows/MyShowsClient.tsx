@@ -477,6 +477,10 @@ export default function MyShowsClient({
   const [addingIndividual, setAddingIndividual]     = useState<Set<number>>(new Set())
   const [skippingIndividual, setSkippingIndividual] = useState<Set<number>>(new Set())
   const [skippingAll, setSkippingAll]               = useState(false)
+  // SCRUM-90: skipped artists restore
+  const [skippedArtists, setSkippedArtists]         = useState<UnaddedArtist[]>([])
+  const [skippedExpanded, setSkippedExpanded]       = useState(false)
+  const [restoringIndividual, setRestoringIndividual] = useState<Set<number>>(new Set())
   const [sessionShowsModified, setSessionShowsModified] = useState(false)
 
   const PER_PAGE   = 50
@@ -516,6 +520,7 @@ export default function MyShowsClient({
         .eq('user_id', user.id)
       const reviewedIds = new Set((reviewedRows ?? []).map((r: any) => r.show_id))
       setUnaddedArtists(unadded.filter(a => !reviewedIds.has(a.show_id)))
+      setSkippedArtists(unadded.filter(a => reviewedIds.has(a.show_id)))
     } catch (e) { console.error('Error checking unadded:', e) }
   }, [shows, supabase, readOnly])
 
@@ -1046,7 +1051,8 @@ export default function MyShowsClient({
         }).filter(Boolean)
         setShows(mapped as Show[])
       }
-      setUnaddedArtists([]); setUnaddedDismissed(true)
+      setUnaddedArtists([])
+      // Banner hides naturally when both unaddedArtists and skippedArtists are empty
     } catch (e) { console.error('Error adding unadded:', e) }
     finally { setAddingUnadded(false) }
   }
@@ -1062,11 +1068,7 @@ export default function MyShowsClient({
         { user_id: user.id, show_id: artist.show_id, status: 'attended', source: 'manual' },
         { onConflict: 'user_id,show_id' }
       )
-      setUnaddedArtists(prev => {
-        const next = prev.filter(a => a.show_id !== artist.show_id)
-        if (next.length === 0) setUnaddedDismissed(true)
-        return next
-      })
+      setUnaddedArtists(prev => prev.filter(a => a.show_id !== artist.show_id))
       setSessionShowsModified(true)
     } catch (e) { console.error('Error adding show:', e) }
     finally { setAddingIndividual(prev => { const s = new Set(prev); s.delete(artist.show_id); return s }) }
@@ -1083,11 +1085,8 @@ export default function MyShowsClient({
         { user_id: user.id, show_id: artist.show_id, source: 'cobill', status: 'skipped' },
         { onConflict: 'user_id,show_id' }
       )
-      setUnaddedArtists(prev => {
-        const next = prev.filter(a => a.show_id !== artist.show_id)
-        if (next.length === 0) setUnaddedDismissed(true)
-        return next
-      })
+      setUnaddedArtists(prev => prev.filter(a => a.show_id !== artist.show_id))
+      setSkippedArtists(prev => [...prev, artist].sort((a, b) => a.date.localeCompare(b.date)))
     } catch (e) { console.error('Error skipping show:', e) }
     finally { setSkippingIndividual(prev => { const s = new Set(prev); s.delete(artist.show_id); return s }) }
   }
@@ -1103,10 +1102,29 @@ export default function MyShowsClient({
         user_id: user.id, show_id: a.show_id, source: 'cobill', status: 'skipped',
       }))
       await supabase.from('user_show_reviews').upsert(records, { onConflict: 'user_id,show_id' })
+      setSkippedArtists(prev => [...prev, ...unaddedArtists].sort((a, b) => a.date.localeCompare(b.date)))
       setUnaddedArtists([])
-      setUnaddedDismissed(true)
+      // Don't dismiss — CTA stays visible so skipped artists can be restored
     } catch (e) { console.error('Error skipping all:', e) }
     finally { setSkippingAll(false) }
+  }
+
+  // SCRUM-90: restore a previously skipped artist back to the unadded list
+  const restoreSkipped = async (artist: UnaddedArtist) => {
+    if (readOnly) return
+    setRestoringIndividual(prev => new Set(prev).add(artist.show_id))
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      await supabase
+        .from('user_show_reviews')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('show_id', artist.show_id)
+      setSkippedArtists(prev => prev.filter(a => a.show_id !== artist.show_id))
+      setUnaddedArtists(prev => [...prev, artist].sort((a, b) => a.date.localeCompare(b.date)))
+    } catch (e) { console.error('Error restoring show:', e) }
+    finally { setRestoringIndividual(prev => { const s = new Set(prev); s.delete(artist.show_id); return s }) }
   }
 
   const HeartIcon = ({ size = 5 }: { size?: number }) => (
@@ -1143,86 +1161,139 @@ export default function MyShowsClient({
           </h1>
 
           {/* ── Unadded CTA ── */}
-          {!readOnly && !unaddedDismissed && unaddedArtists.length > 0 && (
+          {!readOnly && !unaddedDismissed && (unaddedArtists.length > 0 || skippedArtists.length > 0) && (
             <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground mb-1">
-                    {unaddedArtists.length} artist{unaddedArtists.length !== 1 ? 's' : ''} from shows you attended {unaddedArtists.length !== 1 ? "haven't" : "hasn't"} been added yet
-                  </p>
 
-                  {/* Collapsed preview */}
-                  {!unaddedExpanded && (
-                    <p className="text-xs text-muted-foreground truncate">
-                      {unaddedArtists.slice(0, 4).map(a => a.artist_name).join(', ')}
-                      {unaddedArtists.length > 4 ? ` + ${unaddedArtists.length - 4} more` : ''}
-                    </p>
+                  {/* ── Unadded section (only when there are unadded artists) ── */}
+                  {unaddedArtists.length > 0 && (
+                    <>
+                      <p className="text-sm font-medium text-foreground mb-1">
+                        {unaddedArtists.length} artist{unaddedArtists.length !== 1 ? 's' : ''} from shows you attended {unaddedArtists.length !== 1 ? "haven't" : "hasn't"} been added yet
+                      </p>
+
+                      {/* Collapsed preview */}
+                      {!unaddedExpanded && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {unaddedArtists.slice(0, 4).map(a => a.artist_name).join(', ')}
+                          {unaddedArtists.length > 4 ? ` + ${unaddedArtists.length - 4} more` : ''}
+                        </p>
+                      )}
+
+                      {/* SCRUM-90: Expanded list with per-row Add / Skip buttons */}
+                      {unaddedExpanded && (
+                        <div className="mt-2 space-y-1 max-h-52 overflow-y-auto pr-1">
+                          {unaddedArtists.map(a => {
+                            const isAdding   = addingIndividual.has(a.show_id)
+                            const isSkipping = skippingIndividual.has(a.show_id)
+                            const isBusy     = isAdding || isSkipping
+                            const globalBusy = addingUnadded || skippingAll
+                            return (
+                              <div key={a.show_id} className="flex items-center gap-3 py-1.5">
+                                <span className="text-muted-foreground text-[11px] w-20 flex-shrink-0 tabular-nums">{fmtDate(a.date)}</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-foreground font-medium truncate">{a.artist_name}</p>
+                                  <p className="text-[11px] text-muted-foreground truncate">@ {a.venue_name}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  {/* Add button */}
+                                  <button
+                                    onClick={() => addUnaddedOne(a)}
+                                    disabled={isBusy || globalBusy}
+                                    className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-40"
+                                  >
+                                    {isAdding
+                                      ? <div className="w-2.5 h-2.5 border border-primary border-t-transparent rounded-full animate-spin" />
+                                      : '+ Add'}
+                                  </button>
+                                  {/* Skip button */}
+                                  <button
+                                    onClick={() => skipUnaddedOne(a)}
+                                    disabled={isBusy || globalBusy}
+                                    className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-muted text-foreground/70 hover:text-foreground hover:bg-muted/80 transition-colors disabled:opacity-40"
+                                  >
+                                    {isSkipping
+                                      ? <div className="w-2.5 h-2.5 border border-foreground/40 border-t-transparent rounded-full animate-spin" />
+                                      : '× Skip'}
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {/* SCRUM-90: footer — Add All | Skip All | Review/Show less */}
+                      <div className="flex items-center gap-3 mt-2 flex-wrap">
+                        <button
+                          onClick={addUnaddedAll}
+                          disabled={addingUnadded || skippingAll || addingIndividual.size > 0 || skippingIndividual.size > 0}
+                          className="text-xs font-semibold px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition disabled:opacity-50"
+                        >
+                          {addingUnadded ? 'Adding...' : 'Add All'}
+                        </button>
+                        <button
+                          onClick={skipUnaddedAll}
+                          disabled={addingUnadded || skippingAll || addingIndividual.size > 0 || skippingIndividual.size > 0}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg transition disabled:opacity-50 bg-destructive/15 text-destructive border border-destructive/25 hover:bg-destructive/20"
+                        >
+                          {skippingAll ? 'Skipping...' : 'Skip All'}
+                        </button>
+                        <button
+                          onClick={() => setUnaddedExpanded(v => !v)}
+                          className="text-xs text-primary hover:opacity-80 transition"
+                        >
+                          {unaddedExpanded ? 'Show less' : 'Review'}
+                        </button>
+                      </div>
+                    </>
                   )}
 
-                  {/* SCRUM-90: Expanded list with per-row Add / Skip buttons */}
-                  {unaddedExpanded && (
-                    <div className="mt-2 space-y-1 max-h-52 overflow-y-auto pr-1">
-                      {unaddedArtists.map(a => {
-                        const isAdding   = addingIndividual.has(a.show_id)
-                        const isSkipping = skippingIndividual.has(a.show_id)
-                        const isBusy     = isAdding || isSkipping
-                        const globalBusy = addingUnadded || skippingAll
-                        return (
-                          <div key={a.show_id} className="flex items-center gap-2 text-xs py-0.5">
-                            <span className="text-muted-foreground w-24 flex-shrink-0 tabular-nums">{fmtDate(a.date)}</span>
-                            <span className="text-foreground font-medium truncate flex-1 min-w-0">{a.artist_name}</span>
-                            <span className="text-muted-foreground/60 truncate hidden sm:block max-w-[120px]">@ {a.venue_name}</span>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              {/* Add button */}
-                              <button
-                                onClick={() => addUnaddedOne(a)}
-                                disabled={isBusy || globalBusy}
-                                className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-40"
-                              >
-                                {isAdding
-                                  ? <div className="w-2.5 h-2.5 border border-primary border-t-transparent rounded-full animate-spin" />
-                                  : '+ Add'}
-                              </button>
-                              {/* Skip button */}
-                              <button
-                                onClick={() => skipUnaddedOne(a)}
-                                disabled={isBusy || globalBusy}
-                                className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors disabled:opacity-40"
-                              >
-                                {isSkipping
-                                  ? <div className="w-2.5 h-2.5 border border-muted-foreground border-t-transparent rounded-full animate-spin" />
-                                  : '× Skip'}
-                              </button>
-                            </div>
-                          </div>
-                        )
-                      })}
+                  {/* ── Skipped section — always shown when skipped list is non-empty ── */}
+                  {skippedArtists.length > 0 && (
+                    <div className={unaddedArtists.length > 0 ? 'mt-3 pt-2.5 border-t border-primary/15' : ''}>
+                      {/* Header when unadded section is gone */}
+                      {unaddedArtists.length === 0 && (
+                        <p className="text-sm font-medium text-foreground mb-1.5">
+                          {skippedArtists.length} skipped artist{skippedArtists.length !== 1 ? 's' : ''}
+                        </p>
+                      )}
+                      <button
+                        onClick={() => setSkippedExpanded(v => !v)}
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition"
+                      >
+                        <span>{skippedExpanded ? '▴' : '▾'}</span>
+                        View skipped ({skippedArtists.length})
+                      </button>
+                      {skippedExpanded && (
+                        <div className="mt-2 max-h-44 overflow-y-auto pr-1 divide-y divide-border/20">
+                          {skippedArtists.map(a => {
+                            const isRestoring = restoringIndividual.has(a.show_id)
+                            return (
+                              <div key={a.show_id} className="flex items-center gap-3 py-1.5 opacity-60 hover:opacity-80 transition-opacity">
+                                <span className="text-[11px] text-muted-foreground w-20 flex-shrink-0 tabular-nums">{fmtDate(a.date)}</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-foreground font-medium truncate">{a.artist_name}</p>
+                                  <p className="text-[11px] text-muted-foreground truncate">@ {a.venue_name}</p>
+                                </div>
+                                <button
+                                  onClick={() => restoreSkipped(a)}
+                                  disabled={isRestoring}
+                                  className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40 flex-shrink-0"
+                                >
+                                  {isRestoring
+                                    ? <div className="w-2.5 h-2.5 border border-muted-foreground border-t-transparent rounded-full animate-spin" />
+                                    : '↩ Restore'}
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* SCRUM-90: footer — Add All | Skip All | Review/Show less */}
-                  <div className="flex items-center gap-3 mt-2 flex-wrap">
-                    <button
-                      onClick={addUnaddedAll}
-                      disabled={addingUnadded || skippingAll || addingIndividual.size > 0 || skippingIndividual.size > 0}
-                      className="text-xs font-semibold px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition disabled:opacity-50"
-                    >
-                      {addingUnadded ? 'Adding...' : 'Add All'}
-                    </button>
-                    <button
-                      onClick={skipUnaddedAll}
-                      disabled={addingUnadded || skippingAll || addingIndividual.size > 0 || skippingIndividual.size > 0}
-                      className="text-xs font-semibold px-3 py-1.5 bg-muted text-muted-foreground rounded-lg hover:text-foreground hover:bg-muted/80 transition disabled:opacity-50"
-                    >
-                      {skippingAll ? 'Skipping...' : 'Skip All'}
-                    </button>
-                    <button
-                      onClick={() => setUnaddedExpanded(v => !v)}
-                      className="text-xs text-primary hover:opacity-80 transition"
-                    >
-                      {unaddedExpanded ? 'Show less' : 'Review'}
-                    </button>
-                  </div>
                 </div>
                 <button onClick={() => setUnaddedDismissed(true)} className="text-muted-foreground hover:text-foreground transition text-lg leading-none flex-shrink-0">×</button>
               </div>
