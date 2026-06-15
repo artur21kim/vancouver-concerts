@@ -456,6 +456,7 @@ export default function MyShowsClient({
   const [expandedBills, setExpandedBills]       = useState<Set<string>>(new Set())
   const [isPlaying, setIsPlaying]               = useState(false)
   const [expandedSpotifyArtists, setExpandedSpotifyArtists] = useState<Set<string>>(new Set())
+  const [filterText, setFilterText]                         = useState('')
 
   // Unadded CTA — own profile only
   const [unaddedArtists, setUnaddedArtists]         = useState<UnaddedArtist[]>([])
@@ -466,7 +467,7 @@ export default function MyShowsClient({
 
   const PER_PAGE   = 50
   const hasSpotify = spotifySongs.length > 0
-  const anyFilterActive = selectedYear !== null || capFilter !== 'all'
+  const anyFilterActive = selectedYear !== null || capFilter !== 'all' || filterText.trim() !== ''
 
   // ── Unadded check ────────────────────────────────────────────────────────
   const checkUnaddedArtists = useCallback(async () => {
@@ -818,10 +819,17 @@ export default function MyShowsClient({
 
   // ── Bill groups ───────────────────────────────────────────────────────────
   const billGroups = useMemo(() => {
-    const src = yearFiltered.filter(s => !isFestivalShow(s))
+    let src = yearFiltered.filter(s => !isFestivalShow(s))
+    if (filterText.trim()) {
+      const q = filterText.toLowerCase()
+      src = src.filter(s =>
+        s.artist.artist_name.toLowerCase().includes(q) ||
+        s.venue.venue_name.toLowerCase().includes(q)
+      )
+    }
     const filtered = capFilter === 'all' ? src : src.filter(s => getCapMeta(s.venue.capacity_category).key === capFilter)
     return buildBillGroups(filtered)
-  }, [yearFiltered, capFilter])
+  }, [yearFiltered, capFilter, filterText])
 
   // ── Festival groups ────────────────────────────────────────────────────────
   const festivalGroups = useMemo(() => {
@@ -832,17 +840,31 @@ export default function MyShowsClient({
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(s)
     }
-    return Array.from(map.entries()).map(([key, fs]) => {
+    const groups = Array.from(map.entries()).map(([key, fs]) => {
       const [name] = key.split('__')
       const sorted = [...fs].sort((a, b) => b.date.localeCompare(a.date))
       const dates  = fs.map(s => s.date).sort()
       return { key, festival_name: name, year: fs[0].date.split('-')[0], shows: sorted, date_from: dates[0], date_to: dates[dates.length - 1], venue_name: fs[0].venue.venue_name }
     }).sort((a, b) => b.date_to.localeCompare(a.date_to))
-  }, [yearFiltered])
+    if (!filterText.trim()) return groups
+    const q = filterText.toLowerCase()
+    return groups.filter(g =>
+      (g.festival_name ?? '').toLowerCase().includes(q) ||
+      g.venue_name.toLowerCase().includes(q) ||
+      g.shows.some(s => s.artist.artist_name.toLowerCase().includes(q))
+    )
+  }, [yearFiltered, filterText])
 
   // ── Sets (sorted) ─────────────────────────────────────────────────────────
   const setsFiltered = useMemo(() => {
-    const src = capFilter === 'all' ? yearFiltered : yearFiltered.filter(s => getCapMeta(s.venue.capacity_category).key === capFilter)
+    let src = capFilter === 'all' ? yearFiltered : yearFiltered.filter(s => getCapMeta(s.venue.capacity_category).key === capFilter)
+    if (filterText.trim()) {
+      const q = filterText.toLowerCase()
+      src = src.filter(s =>
+        s.artist.artist_name.toLowerCase().includes(q) ||
+        s.venue.venue_name.toLowerCase().includes(q)
+      )
+    }
     return [...src].sort((a, b) => {
       let av: string, bv: string
       switch (sortField) {
@@ -856,7 +878,14 @@ export default function MyShowsClient({
       if (av > bv) return sortDir === 'asc' ? 1 : -1
       return 0
     })
-  }, [yearFiltered, capFilter, sortField, sortDir])
+  }, [yearFiltered, capFilter, sortField, sortDir, filterText])
+
+  // Filtered Spotify artists — client-side text filter on top of topSpotifyArtists
+  const filteredSpotifyArtists = useMemo(() => {
+    if (!filterText.trim()) return topSpotifyArtists
+    const q = filterText.toLowerCase()
+    return topSpotifyArtists.filter(a => a.name.toLowerCase().includes(q))
+  }, [topSpotifyArtists, filterText])
 
   const totalPages   = Math.ceil(setsFiltered.length / PER_PAGE)
   const currentShows = setsFiltered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
@@ -921,7 +950,7 @@ export default function MyShowsClient({
 
   const clearAll = useCallback(() => {
     setIsPlaying(false)
-    setSelectedYear(null); setCapFilter('all')
+    setSelectedYear(null); setCapFilter('all'); setFilterText('')
     setPage(1); setPageInput('1'); setShowAllArtists(false)
   }, [])
 
@@ -1423,6 +1452,36 @@ export default function MyShowsClient({
             </div>
           )}
 
+          {/* ── Filter search box — applies to all view modes ── */}
+          {(shows.length > 0 || hasSpotify) && (
+            <div className="relative">
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none text-primary/60"
+                fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+              <input
+                type="text"
+                value={filterText}
+                onChange={e => { setFilterText(e.target.value); setPage(1); setPageInput('1') }}
+                placeholder={viewMode === 'spotify' ? 'Filter by artist…' : 'Filter by artist or venue…'}
+                className="w-full pl-9 pr-8 py-2 text-sm bg-card border border-primary/30 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors shadow-sm"
+              />
+              {filterText && (
+                <button
+                  onClick={() => { setFilterText(''); setPage(1); setPageInput('1') }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* ── SCRUM-80 / SCRUM-88: Spotify tab — top 50 artists, album-grouped song rows ── */}
           {viewMode === 'spotify' && hasSpotify && (
             <div className="bg-card rounded-lg shadow border border-border overflow-hidden">
@@ -1434,13 +1493,13 @@ export default function MyShowsClient({
                     {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                   </h2>
                 </div>
-                <span className="text-xs text-muted-foreground">{topSpotifyArtists.length} artists</span>
+                <span className="text-xs text-muted-foreground">{filteredSpotifyArtists.length} artists</span>
               </div>
-              {topSpotifyArtists.length === 0 ? (
+              {filteredSpotifyArtists.length === 0 ? (
                 <p className="text-sm text-muted-foreground px-4 py-6">No Spotify data{selectedYear ? ` for ${selectedYear}` : ''}.</p>
               ) : (
                 <div className="divide-y divide-border">
-                  {topSpotifyArtists.map((artist, i) => {
+                  {filteredSpotifyArtists.map((artist, i) => {
                     const isExpanded  = expandedSpotifyArtists.has(artist.spotifyId)
                     const toggleExpanded = () => setExpandedSpotifyArtists(prev => {
                       const n = new Set(prev)
