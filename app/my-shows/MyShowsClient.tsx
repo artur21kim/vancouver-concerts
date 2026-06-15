@@ -236,24 +236,28 @@ function ArtistYearBars({ artists, max, onNavigate }: {
   }[]
   max: number; onNavigate: (name: string) => void
 }) {
-  const [tooltip, setTooltip] = useState<{ artist: string; year: string; venue: string; capKey: CapFilter; x: number; y: number } | null>(null)
+  const [tooltip, setTooltip] = useState<{ artist: string; year: string; count: number; venues: string[]; capKey: CapFilter; x: number } | null>(null)
 
   return (
     <div className="w-full space-y-1.5">
       {artists.map((artist) => {
         const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
-        const years = Object.keys(artist.showsByYear).sort()
-        const yearSegments = years.flatMap(year => {
+
+        // One segment per year, width ∝ show count in that year
+        const yearSegments = Object.keys(artist.showsByYear).sort().map(year => {
           const yearShows = artist.showsByYear[year]
-          return yearShows.map((show, idx) => ({
+          const capCounts: Record<string, number> = {}
+          for (const s of yearShows) { capCounts[s.capKey] = (capCounts[s.capKey] ?? 0) + 1 }
+          const capKey = (Object.entries(capCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'unknown') as CapFilter
+          const venues = [...new Set(yearShows.map(s => s.venue))]
+          return {
             year,
-            showIdx: idx,
-            totalInYear: yearShows.length,
-            venue: show.venue,
-            capKey: show.capKey,
-            color: CAP_BY_KEY[show.capKey]?.color ?? 'rgba(156,163,175,0.75)',
-            widthPct: (1 / artist.total) * 100,
-          }))
+            count: yearShows.length,
+            capKey,
+            color: CAP_BY_KEY[capKey]?.color ?? 'rgba(156,163,175,0.75)',
+            widthPct: (yearShows.length / artist.total) * 100,
+            venues,
+          }
         })
 
         return (
@@ -270,27 +274,24 @@ function ArtistYearBars({ artists, max, onNavigate }: {
                 <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
                   {yearSegments.map((seg, i) => {
                     const isFirst = i === 0, isLast = i === yearSegments.length - 1
-                    const isYearBoundary = i > 0 && yearSegments[i - 1].year !== seg.year
                     return (
                       <div
-                        key={`${seg.year}-${seg.showIdx}`}
+                        key={seg.year}
                         className="h-full flex items-center justify-center overflow-hidden cursor-default"
                         style={{
                           width: `${seg.widthPct}%`,
                           backgroundColor: seg.color,
                           borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
-                          borderRight: !isLast ? `1px solid rgba(0,0,0,${isYearBoundary ? 0.3 : 0.12})` : undefined,
+                          borderRight: !isLast ? '1px solid rgba(0,0,0,0.25)' : undefined,
                         }}
                         onMouseEnter={e => {
                           const rect = (e.currentTarget as HTMLElement).closest('.flex-1')!.getBoundingClientRect()
-                          setTooltip({ artist: artist.name, year: seg.year, venue: seg.venue, capKey: seg.capKey, x: e.clientX - rect.left, y: 0 })
+                          setTooltip({ artist: artist.name, year: seg.year, count: seg.count, venues: seg.venues, capKey: seg.capKey, x: e.clientX - rect.left })
                         }}
                         onMouseLeave={() => setTooltip(null)}
                       >
-                        <span
-                          className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
-                          style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}
-                        >
+                        <span className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
+                          style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
                           {seg.year}
                         </span>
                       </div>
@@ -305,10 +306,13 @@ function ArtistYearBars({ artists, max, onNavigate }: {
                   style={{ left: Math.min(tooltip.x, 220), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}
                 >
                   <p className="font-semibold text-foreground">{artist.name} · {tooltip.year}</p>
-                  {tooltip.venue && <p className="text-muted-foreground mt-0.5">{tooltip.venue}</p>}
-                  <p className="mt-0.5" style={{ color: CAP_BY_KEY[tooltip.capKey]?.color ?? TEAL }}>
-                    {CAP_BY_KEY[tooltip.capKey]?.legendLabel ?? ''}
-                  </p>
+                  <p style={{ color: TEAL }} className="mt-0.5">{tooltip.count} {tooltip.count === 1 ? 'show' : 'shows'}</p>
+                  {tooltip.venues.slice(0, 3).map(v => (
+                    <p key={v} className="text-muted-foreground mt-0.5 truncate">{v}</p>
+                  ))}
+                  {tooltip.venues.length > 3 && (
+                    <p className="text-muted-foreground/60 mt-0.5">+{tooltip.venues.length - 3} more</p>
+                  )}
                 </div>
               )}
             </div>
@@ -341,20 +345,28 @@ function VenueYearBars({ venues, max, onNavigate }: {
   }[]
   max: number; onNavigate: (name: string) => void
 }) {
-  const [tooltip, setTooltip] = useState<{ venue: string; year: string; artist: string; capKey: CapFilter; x: number } | null>(null)
+  const [tooltip, setTooltip] = useState<{ venue: string; year: string; count: number; artists: string[]; capKey: CapFilter; x: number } | null>(null)
 
   return (
     <div className="w-full space-y-1.5">
       {venues.map((venue) => {
         const totalWidth = max > 0 ? (venue.total / max) * 100 : 0
-        const yearSegments = Object.keys(venue.showsByYear).sort().flatMap(year => {
+
+        // One segment per year, width ∝ show count in that year
+        const yearSegments = Object.keys(venue.showsByYear).sort().map(year => {
           const yearShows = venue.showsByYear[year]
-          return yearShows.map((show, showIdx) => ({
-            year, showIdx, totalInYear: yearShows.length,
-            artist: show.artist, capKey: show.capKey,
-            color: CAP_BY_KEY[show.capKey]?.color ?? 'rgba(156,163,175,0.75)',
-            widthPct: (1 / venue.total) * 100,
-          }))
+          const capCounts: Record<string, number> = {}
+          for (const s of yearShows) { capCounts[s.capKey] = (capCounts[s.capKey] ?? 0) + 1 }
+          const capKey = (Object.entries(capCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'unknown') as CapFilter
+          const artists = [...new Set(yearShows.map(s => s.artist))]
+          return {
+            year,
+            count: yearShows.length,
+            capKey,
+            color: CAP_BY_KEY[capKey]?.color ?? 'rgba(156,163,175,0.75)',
+            widthPct: (yearShows.length / venue.total) * 100,
+            artists,
+          }
         })
 
         return (
@@ -369,20 +381,19 @@ function VenueYearBars({ venues, max, onNavigate }: {
                 <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
                   {yearSegments.map((seg, i) => {
                     const isFirst = i === 0, isLast = i === yearSegments.length - 1
-                    const isYearBoundary = i > 0 && yearSegments[i - 1].year !== seg.year
                     return (
                       <div
-                        key={`${seg.year}-${seg.showIdx}`}
+                        key={seg.year}
                         className="h-full flex items-center justify-center overflow-hidden cursor-default"
                         style={{
                           width: `${seg.widthPct}%`,
                           backgroundColor: seg.color,
                           borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
-                          borderRight: !isLast ? `1px solid rgba(0,0,0,${isYearBoundary ? 0.3 : 0.12})` : undefined,
+                          borderRight: !isLast ? '1px solid rgba(0,0,0,0.25)' : undefined,
                         }}
                         onMouseEnter={e => {
                           const rect = (e.currentTarget as HTMLElement).closest('.flex-1')!.getBoundingClientRect()
-                          setTooltip({ venue: venue.name, year: seg.year, artist: seg.artist, capKey: seg.capKey, x: e.clientX - rect.left })
+                          setTooltip({ venue: venue.name, year: seg.year, count: seg.count, artists: seg.artists, capKey: seg.capKey, x: e.clientX - rect.left })
                         }}
                         onMouseLeave={() => setTooltip(null)}
                       >
@@ -399,10 +410,13 @@ function VenueYearBars({ venues, max, onNavigate }: {
                 <div className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px]"
                   style={{ left: Math.min(tooltip.x, 220), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}>
                   <p className="font-semibold text-foreground">{venue.name} · {tooltip.year}</p>
-                  <p className="text-muted-foreground mt-0.5">{tooltip.artist}</p>
-                  <p className="mt-0.5" style={{ color: CAP_BY_KEY[tooltip.capKey]?.color ?? TEAL }}>
-                    {CAP_BY_KEY[tooltip.capKey]?.legendLabel ?? ''}
-                  </p>
+                  <p style={{ color: TEAL }} className="mt-0.5">{tooltip.count} {tooltip.count === 1 ? 'show' : 'shows'}</p>
+                  {tooltip.artists.slice(0, 3).map(a => (
+                    <p key={a} className="text-muted-foreground mt-0.5 truncate">{a}</p>
+                  ))}
+                  {tooltip.artists.length > 3 && (
+                    <p className="text-muted-foreground/60 mt-0.5">+{tooltip.artists.length - 3} more</p>
+                  )}
                 </div>
               )}
             </div>
@@ -506,13 +520,27 @@ export default function MyShowsClient({
     const past   = shows.filter(s => !isFuture(s.date))
     const future = shows.filter(s =>  isFuture(s.date))
     const sortedPast = [...past].sort((a, b) => a.date.localeCompare(b.date))
+
+    // Pick the headliner (highest headlinerScore) from the bill on the first/last date,
+    // so openers don't surface as "First: The Sword" when Metallica was headlining.
+    const firstDate = sortedPast[0]?.date ?? null
+    const lastDate  = sortedPast[sortedPast.length - 1]?.date ?? null
+    const firstCandidates = firstDate ? past.filter(s => s.date === firstDate) : []
+    const lastCandidates  = lastDate  ? past.filter(s => s.date === lastDate)  : []
+    const firstShow = firstCandidates.length > 0
+      ? firstCandidates.reduce((best, s) => headlinerScore(s) > headlinerScore(best) ? s : best)
+      : null
+    const lastShow = lastCandidates.length > 0
+      ? lastCandidates.reduce((best, s) => headlinerScore(s) > headlinerScore(best) ? s : best)
+      : null
+
     return {
       total: shows.length,
       artists: new Set(shows.map(s => s.artist.artist_id)).size,
       venues:  new Set(shows.map(s => s.venue.venue_id)).size,
       past, future,
-      firstShow: sortedPast[0]                     ?? null,
-      lastShow:  sortedPast[sortedPast.length - 1] ?? null,
+      firstShow,
+      lastShow,
     }
   }, [shows])
 
@@ -1748,7 +1776,7 @@ export default function MyShowsClient({
                               )}
                             </div>
                             <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-[13px] text-muted-foreground">{group.venue_name}</span>
+                              <button onClick={e => { e.stopPropagation(); applyFilter(group.venue_name) }} className="text-[13px] text-muted-foreground hover:text-primary hover:underline transition-colors">{group.venue_name}</button>
                               <CapacityBadge category={group.capacity_category} />
                             </div>
                           </div>
