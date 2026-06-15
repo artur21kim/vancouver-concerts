@@ -1904,7 +1904,7 @@ export default function MyShowsClient({
                                     {show.setlist_url && <SetlistLink url={show.setlist_url} />}
                                   </div>
                                   <div className="flex items-center gap-1.5 flex-wrap">
-                                    <button onClick={() => router.push(`/browse?venue_id=${show.venue.venue_id}`)} className="text-[13px] text-muted-foreground hover:text-primary hover:underline">{show.venue.venue_name}</button>
+                                    <button onClick={() => applyFilter(show.venue.venue_name)} className="text-[13px] text-muted-foreground hover:text-primary hover:underline">{show.venue.venue_name}</button>
                                     <CapacityBadge category={show.venue.capacity_category} />
                                   </div>
                                 </div>
@@ -1927,7 +1927,7 @@ export default function MyShowsClient({
                                     {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
                                   </div>
                                   <div className="flex items-center gap-1 flex-wrap">
-                                    <button onClick={() => router.push(`/browse?venue_id=${show.venue.venue_id}`)} className="text-[10px] text-muted-foreground hover:text-primary truncate">{show.venue.venue_name}</button>
+                                    <button onClick={() => applyFilter(show.venue.venue_name)} className="text-[10px] text-muted-foreground hover:text-primary truncate">{show.venue.venue_name}</button>
                                     <CapacityBadge category={show.venue.capacity_category} />
                                   </div>
                                 </div>
@@ -1980,7 +1980,7 @@ export default function MyShowsClient({
                                 </td>
                                 <td className="px-3 py-3">
                                   <div className="flex items-center gap-1.5 flex-wrap">
-                                    <button onClick={() => router.push(`/browse?venue_id=${show.venue.venue_id}`)} className="text-muted-foreground hover:text-primary hover:underline text-left">{show.venue.venue_name}</button>
+                                    <button onClick={() => applyFilter(show.venue.venue_name)} className="text-muted-foreground hover:text-primary hover:underline text-left">{show.venue.venue_name}</button>
                                     <CapacityBadge category={show.venue.capacity_category} />
                                   </div>
                                 </td>
