@@ -1190,35 +1190,33 @@ export default function MyShowsClient({
                             const isBusy     = isAdding || isSkipping
                             const globalBusy = addingUnadded || skippingAll
                             return (
-                              <div key={a.show_id} className="flex items-center gap-3 py-1.5">
-                                <span className="text-muted-foreground text-[11px] w-20 flex-shrink-0 tabular-nums">{fmtDate(a.date)}</span>
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <div className="min-w-0">
-                                    <p className="text-xs font-medium truncate" style={{ color: TEAL }}>{a.artist_name}</p>
-                                    <p className="text-[11px] text-foreground/75 truncate">@ {a.venue_name}</p>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                                    {/* Add button */}
-                                    <button
-                                      onClick={() => addUnaddedOne(a)}
-                                      disabled={isBusy || globalBusy}
-                                      className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-40"
-                                    >
-                                      {isAdding
-                                        ? <div className="w-2.5 h-2.5 border border-primary border-t-transparent rounded-full animate-spin" />
-                                        : '+ Add'}
-                                    </button>
-                                    {/* Skip button */}
-                                    <button
-                                      onClick={() => skipUnaddedOne(a)}
-                                      disabled={isBusy || globalBusy}
-                                      className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-muted text-foreground/70 hover:text-foreground hover:bg-muted/80 transition-colors disabled:opacity-40"
-                                    >
-                                      {isSkipping
-                                        ? <div className="w-2.5 h-2.5 border border-foreground/40 border-t-transparent rounded-full animate-spin" />
-                                        : '× Skip'}
-                                    </button>
-                                  </div>
+                              <div key={a.show_id} className="grid items-center gap-x-3 py-1.5" style={{ gridTemplateColumns: '80px 1fr auto' }}>
+                                <span className="text-muted-foreground text-[11px] tabular-nums">{fmtDate(a.date)}</span>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium truncate" style={{ color: TEAL }}>{a.artist_name}</p>
+                                  <p className="text-[11px] text-foreground/75 truncate">@ {a.venue_name}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  {/* Add button */}
+                                  <button
+                                    onClick={() => addUnaddedOne(a)}
+                                    disabled={isBusy || globalBusy}
+                                    className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-40"
+                                  >
+                                    {isAdding
+                                      ? <div className="w-2.5 h-2.5 border border-primary border-t-transparent rounded-full animate-spin" />
+                                      : '+ Add'}
+                                  </button>
+                                  {/* Skip button */}
+                                  <button
+                                    onClick={() => skipUnaddedOne(a)}
+                                    disabled={isBusy || globalBusy}
+                                    className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-muted text-foreground/70 hover:text-foreground hover:bg-muted/80 transition-colors disabled:opacity-40"
+                                  >
+                                    {isSkipping
+                                      ? <div className="w-2.5 h-2.5 border border-foreground/40 border-t-transparent rounded-full animate-spin" />
+                                      : '× Skip'}
+                                  </button>
                                 </div>
                               </div>
                             )
@@ -1273,23 +1271,21 @@ export default function MyShowsClient({
                           {skippedArtists.map(a => {
                             const isRestoring = restoringIndividual.has(a.show_id)
                             return (
-                              <div key={a.show_id} className="flex items-center gap-3 py-1.5 opacity-60 hover:opacity-80 transition-opacity">
-                                <span className="text-[11px] text-muted-foreground w-20 flex-shrink-0 tabular-nums">{fmtDate(a.date)}</span>
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <div className="min-w-0">
-                                    <p className="text-xs font-medium truncate" style={{ color: TEAL }}>{a.artist_name}</p>
-                                    <p className="text-[11px] text-foreground/75 truncate">@ {a.venue_name}</p>
-                                  </div>
-                                  <button
-                                    onClick={() => restoreSkipped(a)}
-                                    disabled={isRestoring}
-                                    className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-40 flex-shrink-0 opacity-100"
-                                  >
-                                    {isRestoring
-                                      ? <div className="w-2.5 h-2.5 border border-primary border-t-transparent rounded-full animate-spin" />
-                                      : '↩ Restore'}
-                                  </button>
+                              <div key={a.show_id} className="grid items-center gap-x-3 py-1.5 opacity-60 hover:opacity-80 transition-opacity" style={{ gridTemplateColumns: '80px 1fr auto' }}>
+                                <span className="text-[11px] text-muted-foreground tabular-nums">{fmtDate(a.date)}</span>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium truncate" style={{ color: TEAL }}>{a.artist_name}</p>
+                                  <p className="text-[11px] text-foreground/75 truncate">@ {a.venue_name}</p>
                                 </div>
+                                <button
+                                  onClick={() => restoreSkipped(a)}
+                                  disabled={isRestoring}
+                                  className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-40 opacity-100"
+                                >
+                                  {isRestoring
+                                    ? <div className="w-2.5 h-2.5 border border-primary border-t-transparent rounded-full animate-spin" />
+                                    : '↩ Restore'}
+                                </button>
                               </div>
                             )
                           })}
