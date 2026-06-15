@@ -533,8 +533,7 @@ function SpotifyArtistBars({ artists, max }: {
                   <p className="font-semibold text-foreground">{tooltip.year ?? 'Unknown year'}</p>
                   {tooltip.albumNames.length > 0 && (
                     <p className="text-muted-foreground mt-0.5 leading-snug">
-                      {tooltip.albumNames.slice(0, 3).join(', ')}
-                      {tooltip.albumNames.length > 3 ? ` +${tooltip.albumNames.length - 3} more` : ''}
+                      {tooltip.albumNames.join(', ')}
                     </p>
                   )}
                   <p style={{ color: SPOTIFY_GREEN }} className="mt-0.5">
@@ -1778,8 +1777,8 @@ export default function MyShowsClient({
                 )}
               </div>
 
-              {/* Donut */}
-              <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 w-56 flex-shrink-0 hidden md:flex flex-col">
+              {/* Donut — hidden in Spotify mode (no venue data) */}
+              {viewMode !== 'spotify' && <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 w-56 flex-shrink-0 hidden md:flex flex-col">
                 <h2 className="text-base font-bold text-foreground mb-3">Venues by Size</h2>
                 {donutData.length === 0 ? (
                   <p className="text-sm text-muted-foreground italic">No data</p>
@@ -1837,7 +1836,7 @@ export default function MyShowsClient({
                     </div>
                   </>
                 )}
-              </div>
+              </div>}
             </div>
           )}
 
