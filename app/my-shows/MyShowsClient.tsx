@@ -243,8 +243,7 @@ function ArtistYearBars({ artists, max, onNavigate }: {
       {artists.map((artist) => {
         const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
 
-        // One segment per year, equal width — bar shows which years, not how many times
-        const numYears = Object.keys(artist.showsByYear).length
+        // One segment per year, width proportional to show count in that year
         const yearSegments = Object.keys(artist.showsByYear).sort().map(year => {
           const yearShows = artist.showsByYear[year]
           const capCounts: Record<string, number> = {}
@@ -256,7 +255,7 @@ function ArtistYearBars({ artists, max, onNavigate }: {
             count: yearShows.length,
             capKey,
             color: CAP_BY_KEY[capKey]?.color ?? 'rgba(156,163,175,0.75)',
-            widthPct: (1 / numYears) * 100,
+            widthPct: (yearShows.length / artist.total) * 100,
             venues,
           }
         })
