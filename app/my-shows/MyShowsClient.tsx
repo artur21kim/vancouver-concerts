@@ -1280,7 +1280,7 @@ export default function MyShowsClient({
                                 <button
                                   onClick={() => restoreSkipped(a)}
                                   disabled={isRestoring}
-                                  className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-40 opacity-100"
+                                  className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-40 opacity-100 justify-self-start"
                                 >
                                   {isRestoring
                                     ? <div className="w-2.5 h-2.5 border border-primary border-t-transparent rounded-full animate-spin" />
