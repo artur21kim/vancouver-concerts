@@ -227,7 +227,7 @@ function DonutTip({ active, payload }: any) {
   )
 }
 
-// ── Year-segmented artist bars ────────────────────────────────────────────────
+// ── Per-show artist bars ──────────────────────────────────────────────────────
 function ArtistYearBars({ artists, max, onNavigate }: {
   artists: {
     name: string; spotifyId: string | null; total: number
@@ -236,29 +236,28 @@ function ArtistYearBars({ artists, max, onNavigate }: {
   }[]
   max: number; onNavigate: (name: string) => void
 }) {
-  const [tooltip, setTooltip] = useState<{ artist: string; year: string; count: number; venues: string[]; capKey: CapFilter; x: number } | null>(null)
+  const [tooltip, setTooltip] = useState<{ artist: string; year: string; venue: string; capKey: CapFilter; x: number } | null>(null)
 
   return (
     <div className="w-full space-y-1.5">
       {artists.map((artist) => {
         const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
 
-        // One segment per year, width proportional to show count in that year
-        const yearSegments = Object.keys(artist.showsByYear).sort().map(year => {
-          const yearShows = artist.showsByYear[year]
-          const capCounts: Record<string, number> = {}
-          for (const s of yearShows) { capCounts[s.capKey] = (capCounts[s.capKey] ?? 0) + 1 }
-          const capKey = (Object.entries(capCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'unknown') as CapFilter
-          const venues = [...new Set(yearShows.map(s => s.venue))]
-          return {
-            year,
-            count: yearShows.length,
-            capKey,
-            color: CAP_BY_KEY[capKey]?.color ?? 'rgba(156,163,175,0.75)',
-            widthPct: (yearShows.length / artist.total) * 100,
-            venues,
-          }
-        })
+        // One segment per show — equal width, own capacity colour preserves M vs XL distinction
+        const segments: { year: string; venue: string; capKey: CapFilter; color: string; widthPct: number; showYear: boolean }[] = []
+        for (const year of Object.keys(artist.showsByYear).sort()) {
+          const shows = artist.showsByYear[year]
+          shows.forEach((show, idx) => {
+            segments.push({
+              year,
+              venue: show.venue,
+              capKey: show.capKey,
+              color: CAP_BY_KEY[show.capKey]?.color ?? 'rgba(156,163,175,0.75)',
+              widthPct: (1 / artist.total) * 100,
+              showYear: idx === 0, // label year only on first show of each year
+            })
+          })
+        }
 
         return (
           <div key={artist.name} className="flex items-center gap-2 py-0.5">
@@ -272,11 +271,11 @@ function ArtistYearBars({ artists, max, onNavigate }: {
             <div className="flex-1 relative">
               <div className="h-5 bg-muted/40 rounded-full overflow-hidden flex">
                 <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
-                  {yearSegments.map((seg, i) => {
-                    const isFirst = i === 0, isLast = i === yearSegments.length - 1
+                  {segments.map((seg, i) => {
+                    const isFirst = i === 0, isLast = i === segments.length - 1
                     return (
                       <div
-                        key={seg.year}
+                        key={i}
                         className="h-full flex items-center justify-center overflow-hidden cursor-default"
                         style={{
                           width: `${seg.widthPct}%`,
@@ -286,14 +285,16 @@ function ArtistYearBars({ artists, max, onNavigate }: {
                         }}
                         onMouseEnter={e => {
                           const rect = (e.currentTarget as HTMLElement).closest('.flex-1')!.getBoundingClientRect()
-                          setTooltip({ artist: artist.name, year: seg.year, count: seg.count, venues: seg.venues, capKey: seg.capKey, x: e.clientX - rect.left })
+                          setTooltip({ artist: artist.name, year: seg.year, venue: seg.venue, capKey: seg.capKey, x: e.clientX - rect.left })
                         }}
                         onMouseLeave={() => setTooltip(null)}
                       >
-                        <span className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
-                          style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
-                          {seg.year}
-                        </span>
+                        {seg.showYear && (
+                          <span className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
+                            style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
+                            {seg.year}
+                          </span>
+                        )}
                       </div>
                     )
                   })}
@@ -302,14 +303,14 @@ function ArtistYearBars({ artists, max, onNavigate }: {
 
               {tooltip?.artist === artist.name && (
                 <div
-                  className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px]"
+                  className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[140px]"
                   style={{ left: Math.min(tooltip.x, 220), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}
                 >
                   <p className="font-semibold text-foreground">{artist.name} · {tooltip.year}</p>
-                  <p style={{ color: TEAL }} className="mt-0.5">{tooltip.count} {tooltip.count === 1 ? 'show' : 'shows'}</p>
-                  {tooltip.venues.map(v => (
-                    <p key={v} className="text-muted-foreground mt-0.5 truncate">{v}</p>
-                  ))}
+                  <p className="text-muted-foreground mt-0.5 truncate">{tooltip.venue}</p>
+                  <p style={{ color: CAP_BY_KEY[tooltip.capKey]?.color ?? TEAL }} className="mt-0.5 text-[10px]">
+                    {CAP_BY_KEY[tooltip.capKey]?.legendLabel ?? 'Unknown'}
+                  </p>
                 </div>
               )}
             </div>
