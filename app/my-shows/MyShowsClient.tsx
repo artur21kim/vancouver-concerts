@@ -1331,6 +1331,36 @@ export default function MyShowsClient({
             </div>
           )}
 
+          {/* ── Filter search box — applies to all view modes ── */}
+          {(shows.length > 0 || hasSpotify) && (
+            <div className="relative">
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none text-primary/60"
+                fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+              <input
+                type="text"
+                value={filterText}
+                onChange={e => { setFilterText(e.target.value); setPage(1); setPageInput('1') }}
+                placeholder={viewMode === 'spotify' ? 'Filter by artist…' : 'Filter by artist or venue…'}
+                className="w-full pl-9 pr-8 py-2 text-sm bg-card border border-primary/30 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors shadow-sm"
+              />
+              {filterText && (
+                <button
+                  onClick={() => { setFilterText(''); setPage(1); setPageInput('1') }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* ── Top Artists / Venues + Donut ── */}
           {shows.length > 0 && (
             <div className="flex gap-4">
@@ -1449,36 +1479,6 @@ export default function MyShowsClient({
                   </>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* ── Filter search box — applies to all view modes ── */}
-          {(shows.length > 0 || hasSpotify) && (
-            <div className="relative">
-              <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none text-primary/60"
-                fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round"
-                  d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-              </svg>
-              <input
-                type="text"
-                value={filterText}
-                onChange={e => { setFilterText(e.target.value); setPage(1); setPageInput('1') }}
-                placeholder={viewMode === 'spotify' ? 'Filter by artist…' : 'Filter by artist or venue…'}
-                className="w-full pl-9 pr-8 py-2 text-sm bg-card border border-primary/30 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors shadow-sm"
-              />
-              {filterText && (
-                <button
-                  onClick={() => { setFilterText(''); setPage(1); setPageInput('1') }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
             </div>
           )}
 
