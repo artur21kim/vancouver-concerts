@@ -92,16 +92,7 @@ export default function OnboardingPage() {
 
             if (profileError) throw profileError
 
-            // SCRUM-81: Capture referral attribution if a referrer was stored in localStorage
-            // (set when the new user visited a profile page via ?r=1 before signing up).
-            const referrer = localStorage.getItem('gp_referrer')
-            if (referrer) {
-                await supabase
-                    .from('user_profiles')
-                    .update({ referred_by: referrer })
-                    .eq('user_id', user.id)
-                localStorage.removeItem('gp_referrer')
-            }
+            // Referral attribution handled in AuthProvider.tsx (covers all sign-in flows)
 
             // Redirect to home
             router.push('/')

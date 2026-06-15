@@ -539,16 +539,15 @@ export default function ProfilePage() {
     }
   }, [profile])
 
-  // SCRUM-81: Store referrer in localStorage when a visitor arrives via ?r=1.
-  // Skips own-profile visits. Consumed + cleared in onboarding on signup.
+  // SCRUM-81: Detect ?r=1 on mount and store referrer username in localStorage.
+  // Runs immediately without waiting for the profile fetch — avoids RLS issues
+  // with get_user_profile for unauthenticated visitors. Resolved to user_id in
+  // onboarding/page.tsx at signup completion.
   useEffect(() => {
-    if (!profile || isRestricted(profile)) return
-    const p = profile as FullProfile
-    if (p.is_own_profile) return
     if (new URLSearchParams(window.location.search).get('r') === '1') {
-      localStorage.setItem('gp_referrer', p.user_id)
+      localStorage.setItem('gp_referrer_username', username)
     }
-  }, [profile])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Friendship actions ────────────────────────────────────────────────────
 
