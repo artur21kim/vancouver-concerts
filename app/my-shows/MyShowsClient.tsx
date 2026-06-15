@@ -630,11 +630,22 @@ export default function MyShowsClient({
 
   const firstSpotifyYear = useMemo(() => Object.keys(spotifyByYearMonth).sort()[0] ?? null, [spotifyByYearMonth])
 
-  // ── Year-filtered set ─────────────────────────────────────────────────────
+  // ── SCRUM-92: text-filtered base — artist, venue, or festival name match ─
+  const textFiltered = useMemo(() => {
+    if (!filterText.trim()) return shows
+    const q = filterText.toLowerCase()
+    return shows.filter(s =>
+      s.artist.artist_name.toLowerCase().includes(q) ||
+      s.venue.venue_name.toLowerCase().includes(q) ||
+      (s.festival_name ?? '').toLowerCase().includes(q)
+    )
+  }, [shows, filterText])
+
+  // ── Year-filtered set (chains from textFiltered so the whole page responds) ──
   const yearFiltered = useMemo(() => {
-    if (!selectedYear) return shows
-    return shows.filter(s => s.date.split('-')[0] === selectedYear)
-  }, [shows, selectedYear])
+    if (!selectedYear) return textFiltered
+    return textFiltered.filter(s => s.date.split('-')[0] === selectedYear)
+  }, [textFiltered, selectedYear])
 
   // SCRUM-80: yearTimelineData
   const yearTimelineData = useMemo(() => {
@@ -650,12 +661,12 @@ export default function MyShowsClient({
 
     let src: (Show | BillGroup)[]
     if (viewMode === 'festivals') {
-      src = shows.filter(isFestivalShow)
+      src = textFiltered.filter(isFestivalShow)
     } else if (viewMode === 'shows') {
-      const groups = buildBillGroups(shows.filter(s => !isFestivalShow(s)))
+      const groups = buildBillGroups(textFiltered.filter(s => !isFestivalShow(s)))
       src = groups
     } else {
-      src = shows
+      src = textFiltered
     }
 
     const byYear: Record<string, number> = {}
@@ -667,7 +678,7 @@ export default function MyShowsClient({
     return Object.entries(byYear)
       .sort(([a],[b]) => a.localeCompare(b))
       .map(([year, count]) => ({ year, shows: count }))
-  }, [shows, viewMode, spotifyByYearMonth])
+  }, [textFiltered, viewMode, spotifyByYearMonth])
 
   const availableYears = useMemo(
     () => yearTimelineData.map(d => d.year),
@@ -704,8 +715,8 @@ export default function MyShowsClient({
     }
 
     const src = viewMode === 'festivals'
-      ? shows.filter(isFestivalShow).filter(s => s.date.split('-')[0] === selectedYear)
-      : shows.filter(s => s.date.split('-')[0] === selectedYear)
+      ? textFiltered.filter(isFestivalShow).filter(s => s.date.split('-')[0] === selectedYear)
+      : textFiltered.filter(s => s.date.split('-')[0] === selectedYear)
     const byMonth: Record<number, number> = {}
     for (let m = 0; m < 12; m++) byMonth[m] = 0
     for (const s of src) {
@@ -721,7 +732,7 @@ export default function MyShowsClient({
       shows: byMonth[m],
       ...(hasSpotify && hasContextual ? { songs: contextualByMonth[m] ?? 0 } : {}),
     }))
-  }, [shows, selectedYear, viewMode, spotifyByYearMonth, artistContextualByYearMonth, hasSpotify])
+  }, [textFiltered, selectedYear, viewMode, spotifyByYearMonth, artistContextualByYearMonth, hasSpotify])
 
   const firstYear = stats.firstShow?.date.split('-')[0]
   const lastYear  = stats.lastShow?.date.split('-')[0]
@@ -741,14 +752,7 @@ export default function MyShowsClient({
 
   // ── Top artists ───────────────────────────────────────────────────────────
   const topArtists = useMemo(() => {
-    let src = viewMode === 'festivals' ? yearFiltered.filter(isFestivalShow) : yearFiltered
-    if (filterText.trim()) {
-      const q = filterText.toLowerCase()
-      src = src.filter(s =>
-        s.artist.artist_name.toLowerCase().includes(q) ||
-        s.venue.venue_name.toLowerCase().includes(q)
-      )
-    }
+    const src = viewMode === 'festivals' ? yearFiltered.filter(isFestivalShow) : yearFiltered
     const map: Record<number, {
       name: string; spotifyId: string | null; total: number
       byCapacity: Record<string, number>; byVenue: Record<string, number>
@@ -771,19 +775,12 @@ export default function MyShowsClient({
         return { ...a, venueBreakdown }
       })
       .sort((a, b) => b.total - a.total)
-  }, [yearFiltered, viewMode, filterText])
+  }, [yearFiltered, viewMode])
 
   const maxArtistShows = topArtists[0]?.total ?? 1
 
   const topVenues = useMemo(() => {
-    let src = viewMode === 'festivals' ? yearFiltered.filter(isFestivalShow) : yearFiltered
-    if (filterText.trim()) {
-      const q = filterText.toLowerCase()
-      src = src.filter(s =>
-        s.artist.artist_name.toLowerCase().includes(q) ||
-        s.venue.venue_name.toLowerCase().includes(q)
-      )
-    }
+    const src = viewMode === 'festivals' ? yearFiltered.filter(isFestivalShow) : yearFiltered
     const map: Record<number, {
       name: string; total: number
       byCapacity: Record<string, number>
@@ -800,7 +797,7 @@ export default function MyShowsClient({
       map[id].showsByYear[year].push({ artist: s.artist.artist_name, capKey })
     }
     return Object.values(map).sort((a, b) => b.total - a.total)
-  }, [yearFiltered, viewMode, filterText])
+  }, [yearFiltered, viewMode])
 
   const maxVenueShows = topVenues[0]?.total ?? 1
 
@@ -833,17 +830,10 @@ export default function MyShowsClient({
 
   // ── Bill groups ───────────────────────────────────────────────────────────
   const billGroups = useMemo(() => {
-    let src = yearFiltered.filter(s => !isFestivalShow(s))
-    if (filterText.trim()) {
-      const q = filterText.toLowerCase()
-      src = src.filter(s =>
-        s.artist.artist_name.toLowerCase().includes(q) ||
-        s.venue.venue_name.toLowerCase().includes(q)
-      )
-    }
+    const src = yearFiltered.filter(s => !isFestivalShow(s))
     const filtered = capFilter === 'all' ? src : src.filter(s => getCapMeta(s.venue.capacity_category).key === capFilter)
     return buildBillGroups(filtered)
-  }, [yearFiltered, capFilter, filterText])
+  }, [yearFiltered, capFilter])
 
   // ── Festival groups ────────────────────────────────────────────────────────
   const festivalGroups = useMemo(() => {
@@ -860,25 +850,12 @@ export default function MyShowsClient({
       const dates  = fs.map(s => s.date).sort()
       return { key, festival_name: name, year: fs[0].date.split('-')[0], shows: sorted, date_from: dates[0], date_to: dates[dates.length - 1], venue_name: fs[0].venue.venue_name }
     }).sort((a, b) => b.date_to.localeCompare(a.date_to))
-    if (!filterText.trim()) return groups
-    const q = filterText.toLowerCase()
-    return groups.filter(g =>
-      (g.festival_name ?? '').toLowerCase().includes(q) ||
-      g.venue_name.toLowerCase().includes(q) ||
-      g.shows.some(s => s.artist.artist_name.toLowerCase().includes(q))
-    )
-  }, [yearFiltered, filterText])
+    return groups
+  }, [yearFiltered])
 
   // ── Sets (sorted) ─────────────────────────────────────────────────────────
   const setsFiltered = useMemo(() => {
-    let src = capFilter === 'all' ? yearFiltered : yearFiltered.filter(s => getCapMeta(s.venue.capacity_category).key === capFilter)
-    if (filterText.trim()) {
-      const q = filterText.toLowerCase()
-      src = src.filter(s =>
-        s.artist.artist_name.toLowerCase().includes(q) ||
-        s.venue.venue_name.toLowerCase().includes(q)
-      )
-    }
+    const src = capFilter === 'all' ? yearFiltered : yearFiltered.filter(s => getCapMeta(s.venue.capacity_category).key === capFilter)
     return [...src].sort((a, b) => {
       let av: string, bv: string
       switch (sortField) {
@@ -892,7 +869,7 @@ export default function MyShowsClient({
       if (av > bv) return sortDir === 'asc' ? 1 : -1
       return 0
     })
-  }, [yearFiltered, capFilter, sortField, sortDir, filterText])
+  }, [yearFiltered, capFilter, sortField, sortDir])
 
   // Filtered Spotify artists — client-side text filter on top of topSpotifyArtists
   const filteredSpotifyArtists = useMemo(() => {
