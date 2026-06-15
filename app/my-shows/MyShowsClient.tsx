@@ -74,6 +74,8 @@ function getCapMeta(category: string | null) {
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const SPOTIFY_GREEN = '#1DB954'
 const TEAL = '#0d9488'
+// SCRUM-93: fixed 6-color palette for album segments in SpotifyArtistBars
+const SPOTIFY_PALETTE = ['#0d9488', '#0891b2', '#7c3aed', '#be185d', '#b45309', '#065f46'] as const
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d })()
@@ -432,6 +434,104 @@ function VenueYearBars({ venues, max, onNavigate }: {
   )
 }
 
+// ── SCRUM-93: Spotify artist album-segmented bars ─────────────────────────────
+function SpotifyArtistBars({ artists, max }: {
+  artists: {
+    name: string; count: number; spotifyId: string; hasAlbumData: boolean
+    albums: { name: string | null; year: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
+  }[]
+  max: number
+}) {
+  const [tooltip, setTooltip] = useState<{
+    artist: string; albumName: string | null; year: string | null; count: number; x: number
+  } | null>(null)
+
+  return (
+    <div className="w-full space-y-1.5">
+      {artists.map((artist) => {
+        const totalWidth = max > 0 ? (artist.count / max) * 100 : 0
+
+        // Albums sorted year ascending (oldest left), nulls last
+        const sortedAlbums = [...artist.albums].sort((a, b) => {
+          if (!a.year && !b.year) return 0
+          if (!a.year) return 1
+          if (!b.year) return -1
+          return parseInt(a.year) - parseInt(b.year)
+        })
+
+        return (
+          <div key={artist.name} className="flex items-center gap-2 py-0.5">
+            <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
+              <button
+                className="text-xs text-primary hover:opacity-80 hover:underline truncate text-right cursor-default"
+                title={artist.name}
+              >
+                {artist.name}
+              </button>
+              <SpotifyLink artistId={artist.spotifyId} />
+            </div>
+
+            <div className="flex-1 relative">
+              <div className="h-5 bg-muted/40 rounded-full overflow-hidden flex">
+                <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
+                  {sortedAlbums.map((album, i) => {
+                    const widthPct = (album.songs.length / artist.count) * 100
+                    const color = SPOTIFY_PALETTE[i % SPOTIFY_PALETTE.length]
+                    const isFirst = i === 0
+                    const isLast = i === sortedAlbums.length - 1
+                    return (
+                      <div
+                        key={i}
+                        className="h-full flex items-center justify-center overflow-hidden cursor-default"
+                        style={{
+                          width: `${widthPct}%`,
+                          backgroundColor: color,
+                          borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
+                          borderRight: !isLast ? '1px solid rgba(0,0,0,0.25)' : undefined,
+                        }}
+                        onMouseEnter={e => {
+                          const rect = (e.currentTarget as HTMLElement).closest('.flex-1')!.getBoundingClientRect()
+                          setTooltip({ artist: artist.name, albumName: album.name, year: album.year, count: album.songs.length, x: e.clientX - rect.left })
+                        }}
+                        onMouseLeave={() => setTooltip(null)}
+                      >
+                        <span
+                          className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
+                          style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}
+                        >
+                          {album.year ?? ''}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {tooltip?.artist === artist.name && (
+                <div
+                  className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px]"
+                  style={{ left: Math.min(tooltip.x, 220), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}
+                >
+                  <p className="font-semibold text-foreground">
+                    {tooltip.albumName ?? 'Unknown Album'}{tooltip.year ? ` (${tooltip.year})` : ''}
+                  </p>
+                  <p style={{ color: SPOTIFY_GREEN }} className="mt-0.5">
+                    {tooltip.count} {tooltip.count === 1 ? 'song' : 'songs'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <span className="text-xs tabular-nums flex-shrink-0 w-16 text-right" style={{ color: SPOTIFY_GREEN }}>
+              {artist.count} {artist.count === 1 ? 'song' : 'songs'}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function MyShowsClient({
   shows: initialShows,
@@ -530,8 +630,6 @@ export default function MyShowsClient({
     const future = shows.filter(s =>  isFuture(s.date))
     const sortedPast = [...past].sort((a, b) => a.date.localeCompare(b.date))
 
-    // Pick the headliner (highest headlinerScore) from the bill on the first/last date,
-    // so openers don't surface as "First: The Sword" when Metallica was headlining.
     const firstDate = sortedPast[0]?.date ?? null
     const lastDate  = sortedPast[sortedPast.length - 1]?.date ?? null
     const firstCandidates = firstDate ? past.filter(s => s.date === firstDate) : []
@@ -605,8 +703,6 @@ export default function MyShowsClient({
   }, [shows, spotifySongs, hasSpotify])
 
   // SCRUM-80 / SCRUM-88: Top Spotify artists by liked-song count (respects selectedYear filter).
-  // Songs are grouped by album for expandable rows in the Spotify tab.
-  // Albums sorted by release year desc; songs within each album sorted by added_at desc.
   const topSpotifyArtists = useMemo(() => {
     if (!hasSpotify) return [] as {
       name: string; count: number; spotifyId: string; hasAlbumData: boolean
@@ -615,7 +711,6 @@ export default function MyShowsClient({
     const src = selectedYear
       ? spotifySongs.filter(s => new Date(s.added_at).getFullYear() === parseInt(selectedYear))
       : spotifySongs
-    // Accumulate raw song list per artist first
     const raw: Record<string, {
       name: string; count: number; spotifyId: string
       songList: { track_name: string; album_name: string | null; release_year: string | null; track_id: string | null; added_at: string }[]
@@ -645,14 +740,13 @@ export default function MyShowsClient({
       .map(artist => {
         const sorted = [...artist.songList].sort((a, b) => b.added_at.localeCompare(a.added_at))
         const hasAlbumData = sorted.some(s => s.album_name)
-        // Group by album
         const albumMap: Record<string, { name: string | null; year: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }> = {}
         for (const song of sorted) {
           const key = song.album_name ?? '__null__'
           if (!albumMap[key]) albumMap[key] = { name: song.album_name, year: song.release_year, songs: [] }
           albumMap[key].songs.push({ track_name: song.track_name, track_id: song.track_id, added_at: song.added_at })
         }
-        // Sort albums: year desc (newest first), null-named albums last
+        // Sort albums: year desc (newest first for expandable list), null-named albums last
         const albums = Object.values(albumMap).sort((a, b) => {
           if (a.name === null) return 1
           if (b.name === null) return -1
@@ -667,7 +761,7 @@ export default function MyShowsClient({
 
   const firstSpotifyYear = useMemo(() => Object.keys(spotifyByYearMonth).sort()[0] ?? null, [spotifyByYearMonth])
 
-  // ── SCRUM-92: text-filtered base — artist, venue, or festival name match ─
+  // ── SCRUM-92: text-filtered base ─────────────────────────────────────────
   const textFiltered = useMemo(() => {
     if (!filterText.trim()) return shows
     const q = filterText.toLowerCase()
@@ -678,7 +772,6 @@ export default function MyShowsClient({
     )
   }, [shows, filterText])
 
-  // Year range label for the h1 when a text filter is active (e.g. "2018–2026")
   const filterRange = useMemo(() => {
     if (!filterText.trim() || textFiltered.length === 0) return null
     const years = textFiltered.map(s => s.date.split('-')[0]).sort()
@@ -687,7 +780,7 @@ export default function MyShowsClient({
     return first === last ? first : `${first}–${last}`
   }, [textFiltered, filterText])
 
-  // ── Year-filtered set (chains from textFiltered so the whole page responds) ──
+  // ── Year-filtered set ────────────────────────────────────────────────────
   const yearFiltered = useMemo(() => {
     if (!selectedYear) return textFiltered
     return textFiltered.filter(s => s.date.split('-')[0] === selectedYear)
@@ -991,7 +1084,7 @@ export default function MyShowsClient({
     setPage(1); setPageInput('1'); setShowAllArtists(false)
   }, [])
 
-  // SCRUM-91: set filter text and reset pagination in one call (used for artists and venues)
+  // SCRUM-91: set filter text and reset pagination
   const applyFilter = useCallback((name: string) => {
     setFilterText(name)
     setPage(1)
@@ -1049,7 +1142,6 @@ export default function MyShowsClient({
         setShows(mapped as Show[])
       }
       setUnaddedArtists([])
-      // Banner hides naturally when both unaddedArtists and skippedArtists are empty
     } catch (e) { console.error('Error adding unadded:', e) }
     finally { setAddingUnadded(false) }
   }
@@ -1071,7 +1163,7 @@ export default function MyShowsClient({
     finally { setAddingIndividual(prev => { const s = new Set(prev); s.delete(artist.show_id); return s }) }
   }
 
-  // SCRUM-90: skip a single co-billed artist (persists to user_show_reviews so it doesn't resurface)
+  // SCRUM-90: skip a single co-billed artist
   const skipUnaddedOne = async (artist: UnaddedArtist) => {
     if (readOnly) return
     setSkippingIndividual(prev => new Set(prev).add(artist.show_id))
@@ -1101,12 +1193,11 @@ export default function MyShowsClient({
       await supabase.from('user_show_reviews').upsert(records, { onConflict: 'user_id,show_id' })
       setSkippedArtists(prev => [...prev, ...unaddedArtists].sort((a, b) => a.date.localeCompare(b.date)))
       setUnaddedArtists([])
-      // Don't dismiss — CTA stays visible so skipped artists can be restored
     } catch (e) { console.error('Error skipping all:', e) }
     finally { setSkippingAll(false) }
   }
 
-  // SCRUM-90: restore a previously skipped artist back to the unadded list
+  // SCRUM-90: restore a previously skipped artist
   const restoreSkipped = async (artist: UnaddedArtist) => {
     if (readOnly) return
     setRestoringIndividual(prev => new Set(prev).add(artist.show_id))
@@ -1163,14 +1254,12 @@ export default function MyShowsClient({
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
 
-                  {/* ── Unadded section (only when there are unadded artists) ── */}
                   {unaddedArtists.length > 0 && (
                     <>
                       <p className="text-sm font-medium text-foreground mb-1">
                         {unaddedArtists.length} artist{unaddedArtists.length !== 1 ? 's' : ''} from shows you attended {unaddedArtists.length !== 1 ? "haven't" : "hasn't"} been added yet
                       </p>
 
-                      {/* Collapsed preview */}
                       {!unaddedExpanded && (
                         <p className="text-xs text-muted-foreground truncate">
                           {unaddedArtists.slice(0, 4).map(a => a.artist_name).join(', ')}
@@ -1178,7 +1267,6 @@ export default function MyShowsClient({
                         </p>
                       )}
 
-                      {/* SCRUM-90: Expanded list with per-row Add / Skip buttons */}
                       {unaddedExpanded && (
                         <div className="mt-2 space-y-1 max-h-52 overflow-y-auto pr-1">
                           {unaddedArtists.map(a => {
@@ -1194,7 +1282,6 @@ export default function MyShowsClient({
                                   <p className="text-[11px] text-foreground/75 truncate">@ {a.venue_name}</p>
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                  {/* Add button */}
                                   <button
                                     onClick={() => addUnaddedOne(a)}
                                     disabled={isBusy || globalBusy}
@@ -1204,7 +1291,6 @@ export default function MyShowsClient({
                                       ? <div className="w-2.5 h-2.5 border border-primary border-t-transparent rounded-full animate-spin" />
                                       : '+ Add'}
                                   </button>
-                                  {/* Skip button */}
                                   <button
                                     onClick={() => skipUnaddedOne(a)}
                                     disabled={isBusy || globalBusy}
@@ -1221,7 +1307,6 @@ export default function MyShowsClient({
                         </div>
                       )}
 
-                      {/* SCRUM-90: footer — Add All | Skip All | Review/Show less */}
                       <div className="flex items-center gap-3 mt-2 flex-wrap">
                         <button
                           onClick={addUnaddedAll}
@@ -1247,10 +1332,8 @@ export default function MyShowsClient({
                     </>
                   )}
 
-                  {/* ── Skipped section — always shown when skipped list is non-empty ── */}
                   {skippedArtists.length > 0 && (
                     <div className={unaddedArtists.length > 0 ? 'mt-3 pt-2.5 border-t border-primary/15' : ''}>
-                      {/* Header when unadded section is gone */}
                       {unaddedArtists.length === 0 && (
                         <p className="text-sm font-medium text-foreground mb-1.5">
                           {skippedArtists.length} skipped artist{skippedArtists.length !== 1 ? 's' : ''}
@@ -1297,12 +1380,15 @@ export default function MyShowsClient({
             </div>
           )}
 
-          {/* ── Concert Timeline ── */}
+          {/* ── Concert / Spotify Timeline ── */}
           {yearTimelineData.length > 0 && (
             <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5">
               <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <h2 className="text-lg md:text-xl font-bold text-foreground">Concert Timeline</h2>
+                  {/* SCRUM-93: dynamic title */}
+                  <h2 className="text-lg md:text-xl font-bold text-foreground">
+                    {viewMode === 'spotify' ? 'Spotify Timeline' : 'Concert Timeline'}
+                  </h2>
                   <div className="flex items-center gap-2 text-xs flex-wrap">
                     {viewMode === 'shows' && <>
                       <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
@@ -1559,7 +1645,7 @@ export default function MyShowsClient({
             </div>
           )}
 
-          {/* ── Filter search box — applies to all view modes ── */}
+          {/* ── Filter search box ── */}
           {(shows.length > 0 || hasSpotify) && (
             <div className="relative">
               <svg
@@ -1594,23 +1680,46 @@ export default function MyShowsClient({
             <div className="flex gap-4">
               <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                  {/* SCRUM-93: dynamic card title */}
                   <h2 className="text-lg font-bold text-foreground">
-                    {chartSection === 'artists' ? 'Top Artists' : 'Top Venues'}
+                    {viewMode === 'spotify'
+                      ? 'Top Artists in Your Library'
+                      : (chartSection === 'artists' ? 'Top Artists' : 'Top Venues')}
                     {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                   </h2>
-                  <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
-                    {(['artists', 'venues'] as const).map((s, i) => (
-                      <button key={s} onClick={() => setChartSection(s)}
-                        className={`px-2.5 py-1 capitalize transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
-                          chartSection === s ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
-                        }`}>
-                        {s.charAt(0).toUpperCase() + s.slice(1)}
-                      </button>
-                    ))}
-                  </div>
+                  {/* SCRUM-93: hide Artists/Venues toggle in Spotify mode */}
+                  {viewMode !== 'spotify' && (
+                    <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
+                      {(['artists', 'venues'] as const).map((s, i) => (
+                        <button key={s} onClick={() => setChartSection(s)}
+                          className={`px-2.5 py-1 capitalize transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                            chartSection === s ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
+                          }`}>
+                          {s.charAt(0).toUpperCase() + s.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                {chartSection === 'artists' ? (
+                {/* SCRUM-93: Spotify mode renders SpotifyArtistBars; otherwise existing Artists/Venues logic */}
+                {viewMode === 'spotify' ? (
+                  filteredSpotifyArtists.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic">No Spotify data{selectedYear ? ` for ${selectedYear}` : ''}.</p>
+                  ) : (
+                    <>
+                      <SpotifyArtistBars
+                        artists={filteredSpotifyArtists.slice(0, showAllArtists ? undefined : 10)}
+                        max={filteredSpotifyArtists[0]?.count ?? 1}
+                      />
+                      {filteredSpotifyArtists.length > 10 && (
+                        <button onClick={() => setShowAllArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
+                          {showAllArtists ? '← Show less' : `View all ${filteredSpotifyArtists.length} library artists \u2192`}
+                        </button>
+                      )}
+                    </>
+                  )
+                ) : chartSection === 'artists' ? (
                   topArtists.length === 0 ? (
                     <p className="text-sm text-muted-foreground italic">No shows{selectedYear ? ` in ${selectedYear}` : ''}.</p>
                   ) : (
@@ -1736,7 +1845,6 @@ export default function MyShowsClient({
                     })
                     return (
                       <div key={artist.spotifyId}>
-                        {/* Artist header row — click to expand */}
                         <div
                           className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors cursor-pointer"
                           onClick={toggleExpanded}
@@ -1761,10 +1869,8 @@ export default function MyShowsClient({
                           </div>
                         </div>
 
-                        {/* Expanded songs — grouped by album (SCRUM-88) */}
                         {isExpanded && (
                           <div className="border-t border-border/40 bg-background/50">
-                            {/* Column headers — teal, 2-col: Song | Liked On (Year dropped; it lives in the album header) */}
                             <div
                               className="grid px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider bg-muted/30 border-b border-border/30"
                               style={{ gridTemplateColumns: 'minmax(0, 1fr) 108px', color: TEAL }}
@@ -1772,15 +1878,9 @@ export default function MyShowsClient({
                               <span>Song</span>
                               <span className="text-right">Liked on</span>
                             </div>
-                            {/* Album sections */}
                             <div className="max-h-72 overflow-y-auto">
                               {artist.albums.map((album, ai) => (
                                 <div key={ai}>
-                                  {/* Album section header:
-                                      · only when artist has album data + album is named
-                                      · suppressed for single-song albums (Spotify singles / EPs with one
-                                        liked track) to avoid a sea of one-song sections for artists
-                                        who release lots of standalone singles */}
                                   {artist.hasAlbumData && album.name && album.songs.length >= 2 && (
                                     <div
                                       className={`px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide bg-muted/50 ${ai > 0 ? 'border-t border-teal-500/15' : ''}`}
@@ -1789,7 +1889,6 @@ export default function MyShowsClient({
                                       {album.name}{album.year ? ` (${album.year})` : ''}
                                     </div>
                                   )}
-                                  {/* Song rows */}
                                   <div className="divide-y divide-border/10">
                                     {album.songs.map((song, j) => (
                                       <div
@@ -1797,7 +1896,6 @@ export default function MyShowsClient({
                                         className="grid items-center px-4 py-2 hover:bg-muted/20 transition-colors"
                                         style={{ gridTemplateColumns: 'minmax(0, 1fr) 108px' }}
                                       >
-                                        {/* Song name — pl-2 indent reads as child of album header */}
                                         <div className="min-w-0 pl-2 pr-3">
                                           {song.track_id ? (
                                             <a
@@ -1814,7 +1912,6 @@ export default function MyShowsClient({
                                             </span>
                                           )}
                                         </div>
-                                        {/* Liked on date */}
                                         <span className="text-xs text-foreground/50 tabular-nums text-right">
                                           {new Date(song.added_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                         </span>
@@ -1924,7 +2021,6 @@ export default function MyShowsClient({
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              {/* SCRUM-91: headliner name → filter; Spotify icon added separately */}
                               <button
                                 onClick={e => { e.stopPropagation(); applyFilter(group.headliner.artist.artist_name) }}
                                 className="text-sm font-medium text-primary hover:opacity-80 hover:underline text-left">
@@ -1941,7 +2037,6 @@ export default function MyShowsClient({
                               {supporters.length > 0 && (
                                 <>
                                   <span className="text-[11px] text-muted-foreground/40">·</span>
-                                  {/* SCRUM-91: supporter names → filter */}
                                   {supporters.slice(0, 3).map((s, i) => (
                                     <span key={s.show_id} className="text-[13px] text-muted-foreground">
                                       {i > 0 && <span className="mx-0.5 opacity-40">·</span>}
@@ -1980,7 +2075,6 @@ export default function MyShowsClient({
                                   {showIdx === 0 && <span className="text-[9px] text-primary/60 font-medium">headliner</span>}
                                 </div>
                                 <div className="px-3 py-2.5 min-w-0">
-                                  {/* SCRUM-91: expanded bill artist names → filter + Spotify icon */}
                                   <div className="flex items-center gap-1.5">
                                     <button
                                       onClick={e => { e.stopPropagation(); applyFilter(show.artist.artist_name) }}
@@ -2037,7 +2131,6 @@ export default function MyShowsClient({
                                   </button>
                                 )}
                                 <span className="text-xs text-muted-foreground/60 w-20 flex-shrink-0 tabular-nums">{fmtDate(show.date)}</span>
-                                {/* SCRUM-91: festival expanded artist names → filter + Spotify icon */}
                                 <div className="flex-1 min-w-0 flex items-center gap-1.5">
                                   <button
                                     onClick={() => applyFilter(show.artist.artist_name)}
@@ -2105,7 +2198,6 @@ export default function MyShowsClient({
                                 </div>
                                 <div className="px-3 py-3.5 min-w-0">
                                   <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                                    {/* SCRUM-91: Sets card desktop — artist name → filter */}
                                     <button onClick={() => applyFilter(show.artist.artist_name)} className="text-sm font-medium text-primary hover:opacity-80 hover:underline">{show.artist.artist_name}</button>
                                     {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
                                     {show.setlist_url && <SetlistLink url={show.setlist_url} />}
@@ -2129,7 +2221,6 @@ export default function MyShowsClient({
                                 </div>
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1 mb-0.5 flex-wrap">
-                                    {/* SCRUM-91: Sets card mobile — artist name → filter */}
                                     <button onClick={() => applyFilter(show.artist.artist_name)} className="text-[11px] font-medium text-primary hover:opacity-80 truncate">{show.artist.artist_name}</button>
                                     {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
                                   </div>
@@ -2179,7 +2270,6 @@ export default function MyShowsClient({
                                 </td>
                                 <td className="px-3 py-3">
                                   <div className="flex items-center gap-1.5 flex-wrap">
-                                    {/* SCRUM-91: Sets table — artist name → filter */}
                                     <button onClick={() => applyFilter(show.artist.artist_name)} className="text-primary hover:opacity-80 hover:underline text-left">{show.artist.artist_name}</button>
                                     {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
                                     {show.setlist_url && <SetlistLink url={show.setlist_url} />}
