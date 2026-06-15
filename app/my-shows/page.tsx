@@ -104,11 +104,11 @@ export default async function MyShowsPage() {
     //    for artist-contextual song counting in the monthly drilldown overlay ──
     const { data: spotifySongsRaw } = await supabase
         .from('user_spotify_songs')
-        .select('added_at, spotify_artist_id, artist_name')
+        .select('added_at, spotify_artist_id, artist_name, track_name, spotify_album_name, spotify_album_release_date, spotify_track_id')
         .eq('user_id', user.id)
         .not('added_at', 'is', null)
 
-    const spotifySongs: { added_at: string; spotify_artist_id: string | null; artist_name: string }[] =
+    const spotifySongs: { added_at: string; spotify_artist_id: string | null; artist_name: string; track_name: string; spotify_album_name: string | null; spotify_album_release_date: string | null; spotify_track_id: string | null }[] =
         spotifySongsRaw ?? []
 
     return <MyShowsClient shows={shows as any} spotifySongs={spotifySongs} />

@@ -436,8 +436,8 @@ export default function MyShowsClient({
   username,
 }: {
   shows: Show[]
-  // SCRUM-80: extended to include spotify_artist_id + artist_name for contextual matching
-  spotifySongs: { added_at: string; spotify_artist_id: string | null; artist_name: string }[]
+  // SCRUM-80: extended to include per-song fields for contextual matching and Spotify tab expansion
+  spotifySongs: { added_at: string; spotify_artist_id: string | null; artist_name: string; track_name: string; spotify_album_name: string | null; spotify_album_release_date: string | null; spotify_track_id: string | null }[]
   readOnly?: boolean
   username?: string
 }) {
@@ -459,6 +459,7 @@ export default function MyShowsClient({
   const [showAllVenues, setShowAllVenues]       = useState(false)
   const [expandedBills, setExpandedBills]       = useState<Set<string>>(new Set())
   const [isPlaying, setIsPlaying]               = useState(false)
+  const [expandedSpotifyArtists, setExpandedSpotifyArtists] = useState<Set<string>>(new Set())
 
   // Unadded CTA — own profile only
   const [unaddedArtists, setUnaddedArtists]         = useState<UnaddedArtist[]>([])
@@ -576,25 +577,46 @@ export default function MyShowsClient({
   }, [shows, spotifySongs, hasSpotify])
 
   // SCRUM-80: Top Spotify artists by liked-song count (respects selectedYear filter).
-  // Used in the Spotify tab list.
+  // Each artist entry includes a songs array for expandable rows in the Spotify tab.
+  // Songs sorted by added_at desc (most recently liked first).
   const topSpotifyArtists = useMemo(() => {
-    if (!hasSpotify) return [] as { name: string; count: number; spotifyId: string }[]
+    if (!hasSpotify) return [] as {
+      name: string; count: number; spotifyId: string
+      songs: { track_name: string; album_name: string | null; release_year: string | null; track_id: string | null; added_at: string }[]
+    }[]
     const src = selectedYear
       ? spotifySongs.filter(s => new Date(s.added_at).getFullYear() === parseInt(selectedYear))
       : spotifySongs
-    const counts: Record<string, { name: string; count: number; spotifyId: string }> = {}
+    const map: Record<string, {
+      name: string; count: number; spotifyId: string
+      songs: { track_name: string; album_name: string | null; release_year: string | null; track_id: string | null; added_at: string }[]
+    }> = {}
     for (const song of src) {
       if (!song.spotify_artist_id) continue
-      if (!counts[song.spotify_artist_id]) {
-        counts[song.spotify_artist_id] = {
+      if (!map[song.spotify_artist_id]) {
+        map[song.spotify_artist_id] = {
           name: song.artist_name,
           count: 0,
           spotifyId: song.spotify_artist_id,
+          songs: [],
         }
       }
-      counts[song.spotify_artist_id].count++
+      map[song.spotify_artist_id].count++
+      map[song.spotify_artist_id].songs.push({
+        track_name:   song.track_name,
+        album_name:   song.spotify_album_name ?? null,
+        release_year: song.spotify_album_release_date ? song.spotify_album_release_date.substring(0, 4) : null,
+        track_id:     song.spotify_track_id ?? null,
+        added_at:     song.added_at,
+      })
     }
-    return Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 50)
+    return Object.values(map)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 50)
+      .map(artist => ({
+        ...artist,
+        songs: [...artist.songs].sort((a, b) => b.added_at.localeCompare(a.added_at)),
+      }))
   }, [spotifySongs, hasSpotify, selectedYear])
 
   const firstSpotifyYear = useMemo(() => Object.keys(spotifyByYearMonth).sort()[0] ?? null, [spotifyByYearMonth])
@@ -1426,24 +1448,101 @@ export default function MyShowsClient({
                 <p className="text-sm text-muted-foreground px-4 py-6">No Spotify data{selectedYear ? ` for ${selectedYear}` : ''}.</p>
               ) : (
                 <div className="divide-y divide-border">
-                  {topSpotifyArtists.map((artist, i) => (
-                    <div key={artist.spotifyId} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors">
-                      <span className="text-xs font-bold tabular-nums w-6 text-right flex-shrink-0" style={{ color: SPOTIFY_GREEN }}>
-                        #{i + 1}
-                      </span>
-                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                        <span className="text-sm text-foreground truncate">{artist.name}</span>
-                        <a href={`https://open.spotify.com/artist/${artist.spotifyId}`}
-                          target="_blank" rel="noopener noreferrer" title="Open in Spotify"
-                          className="flex-shrink-0 hover:opacity-70 transition-opacity">
-                          <SpotifyIcon className="w-3 h-3" />
-                        </a>
+                  {topSpotifyArtists.map((artist, i) => {
+                    const isExpanded  = expandedSpotifyArtists.has(artist.spotifyId)
+                    const hasAlbumData = artist.songs.some(s => s.album_name)
+                    const toggleExpanded = () => setExpandedSpotifyArtists(prev => {
+                      const n = new Set(prev)
+                      n.has(artist.spotifyId) ? n.delete(artist.spotifyId) : n.add(artist.spotifyId)
+                      return n
+                    })
+                    return (
+                      <div key={artist.spotifyId}>
+                        {/* Artist header row — click to expand */}
+                        <div
+                          className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors cursor-pointer"
+                          onClick={toggleExpanded}
+                        >
+                          <span className="text-xs font-bold tabular-nums w-6 text-right flex-shrink-0" style={{ color: SPOTIFY_GREEN }}>
+                            #{i + 1}
+                          </span>
+                          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                            <span className="text-sm text-foreground truncate">{artist.name}</span>
+                            <a href={`https://open.spotify.com/artist/${artist.spotifyId}`}
+                              target="_blank" rel="noopener noreferrer" title="Open in Spotify"
+                              onClick={e => e.stopPropagation()}
+                              className="flex-shrink-0 hover:opacity-70 transition-opacity">
+                              <SpotifyIcon className="w-3 h-3" />
+                            </a>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-xs tabular-nums" style={{ color: SPOTIFY_GREEN }}>
+                              {artist.count} {artist.count === 1 ? 'song' : 'songs'}
+                            </span>
+                            <span className="text-muted-foreground text-[10px] w-3 text-center">{isExpanded ? '▲' : '▼'}</span>
+                          </div>
+                        </div>
+
+                        {/* Expanded songs list */}
+                        {isExpanded && (
+                          <div className="border-t border-border/40 bg-background/50">
+                            {/* Column headers */}
+                            <div
+                              className="grid px-4 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b border-border/30"
+                              style={{ gridTemplateColumns: hasAlbumData ? '1fr 1fr 52px 96px' : '1fr 52px 96px' }}
+                            >
+                              <span>Song</span>
+                              {hasAlbumData && <span>Album</span>}
+                              <span className="text-right">Year</span>
+                              <span className="text-right">Liked on</span>
+                            </div>
+                            {/* Song rows */}
+                            <div className="divide-y divide-border/20 max-h-60 overflow-y-auto">
+                              {artist.songs.map((song, j) => (
+                                <div
+                                  key={j}
+                                  className="grid items-center px-4 py-2 hover:bg-muted/20 transition-colors"
+                                  style={{ gridTemplateColumns: hasAlbumData ? '1fr 1fr 52px 96px' : '1fr 52px 96px' }}
+                                >
+                                  {/* Song name — linked to Spotify if track_id available */}
+                                  <div className="min-w-0 pr-3">
+                                    {song.track_id ? (
+                                      <a
+                                        href={`https://open.spotify.com/track/${song.track_id}`}
+                                        target="_blank" rel="noopener noreferrer"
+                                        className="text-xs text-foreground hover:text-primary hover:underline truncate block transition-colors"
+                                        title={song.track_name}
+                                      >
+                                        {song.track_name}
+                                      </a>
+                                    ) : (
+                                      <span className="text-xs text-foreground truncate block" title={song.track_name}>
+                                        {song.track_name}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {/* Album — only shown when column exists */}
+                                  {hasAlbumData && (
+                                    <span className="text-xs text-muted-foreground truncate pr-3" title={song.album_name ?? undefined}>
+                                      {song.album_name ?? <span className="opacity-30">—</span>}
+                                    </span>
+                                  )}
+                                  {/* Release year */}
+                                  <span className="text-xs text-muted-foreground tabular-nums text-right">
+                                    {song.release_year ?? <span className="opacity-30">—</span>}
+                                  </span>
+                                  {/* Liked on date */}
+                                  <span className="text-xs text-muted-foreground tabular-nums text-right">
+                                    {new Date(song.added_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <span className="text-xs tabular-nums flex-shrink-0 text-right" style={{ color: SPOTIFY_GREEN }}>
-                        {artist.count} {artist.count === 1 ? 'song' : 'songs'}
-                      </span>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
