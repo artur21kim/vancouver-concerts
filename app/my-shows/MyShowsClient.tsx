@@ -540,9 +540,11 @@ function SpotifyArtistBars({ artists, max, onYearClick }: {
                 >
                   <p className="font-semibold text-foreground">{tooltip.year ?? 'Unknown year'}</p>
                   {tooltip.albumNames.length > 0 && (
-                    <p className="text-muted-foreground mt-0.5 leading-snug">
-                      {tooltip.albumNames.join(', ')}
-                    </p>
+                    <div className="mt-1 space-y-0.5">
+                      {tooltip.albumNames.map((name, i) => (
+                        <p key={i} className="text-muted-foreground leading-snug text-[11px]">{name}</p>
+                      ))}
+                    </div>
                   )}
                   <p style={{ color: SPOTIFY_GREEN }} className="mt-0.5">
                     {tooltip.count} {tooltip.count === 1 ? 'song' : 'songs'}
@@ -557,6 +559,91 @@ function SpotifyArtistBars({ artists, max, onYearClick }: {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ── Expandable artist song list with scroll fade indicator ────────────────────
+// Extracted as a sub-component so each expanded artist gets its own scroll
+// state without lifting it into the parent.
+type AlbumEntry = {
+  name: string | null; year: string | null
+  songs: { track_name: string; track_id: string | null; added_at: string }[]
+}
+function ArtistSongList({ albums, hasAlbumData, focusYear }: {
+  albums: AlbumEntry[]; hasAlbumData: boolean; focusYear: string | null
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [showFade, setShowFade] = useState(true)
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    // Initial check — if content fits, no fade needed
+    const check = () => {
+      setShowFade(el.scrollHeight - el.scrollTop > el.clientHeight + 16)
+    }
+    check()
+    el.addEventListener('scroll', check, { passive: true })
+    return () => el.removeEventListener('scroll', check)
+  }, [albums])
+
+  const displayAlbums = focusYear
+    ? albums.filter(alb => alb.year === focusYear)
+    : albums
+
+  return (
+    <div className="relative">
+      <div ref={scrollRef} className="max-h-[520px] overflow-y-auto">
+        {displayAlbums.map((album, ai) => (
+          <div key={ai}>
+            {hasAlbumData && album.name && album.songs.length >= 2 && (
+              <div
+                className={`px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide bg-muted/50 ${ai > 0 ? 'border-t border-teal-500/15' : ''}`}
+                style={{ color: '#0d9488' }}
+              >
+                {album.name}{album.year ? ` (${album.year})` : ''}
+              </div>
+            )}
+            <div className="divide-y divide-border/10">
+              {album.songs.map((song, j) => (
+                <div
+                  key={j}
+                  className="grid items-center px-4 py-2 hover:bg-muted/20 transition-colors"
+                  style={{ gridTemplateColumns: 'minmax(0, 1fr) 108px' }}
+                >
+                  <div className="min-w-0 pl-2 pr-3">
+                    {song.track_id ? (
+                      <a
+                        href={`https://open.spotify.com/track/${song.track_id}`}
+                        target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-foreground/80 hover:text-primary hover:underline truncate block transition-colors"
+                        title={song.track_name}
+                      >
+                        {song.track_name}
+                      </a>
+                    ) : (
+                      <span className="text-xs text-foreground/80 truncate block" title={song.track_name}>
+                        {song.track_name}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-foreground/50 tabular-nums text-right">
+                    {new Date(song.added_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Scroll fade indicator — disappears once user reaches the bottom */}
+      {showFade && (
+        <div
+          className="absolute bottom-0 left-0 right-0 h-14 pointer-events-none"
+          style={{ background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.75))' }}
+        />
+      )}
     </div>
   )
 }
@@ -1938,58 +2025,13 @@ export default function MyShowsClient({
                               <span>Song</span>
                               <span className="text-right">Liked on</span>
                             </div>
-                            <div className="max-h-72 overflow-y-auto">
-                              {(() => {
-                                // SCRUM-107: when a year segment was clicked, filter to that release year only
-                                const focusYear = spotifyReleaseFocus?.artistId === artist.spotifyId
-                                  ? spotifyReleaseFocus.releaseYear
-                                  : null
-                                const displayAlbums = focusYear
-                                  ? artist.albums.filter(alb => alb.year === focusYear)
-                                  : artist.albums
-                                return displayAlbums.map((album, ai) => (
-                                  <div key={ai}>
-                                    {artist.hasAlbumData && album.name && album.songs.length >= 2 && (
-                                      <div
-                                        className={`px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide bg-muted/50 ${ai > 0 ? 'border-t border-teal-500/15' : ''}`}
-                                        style={{ color: '#0d9488' }}
-                                      >
-                                        {album.name}{album.year ? ` (${album.year})` : ''}
-                                      </div>
-                                    )}
-                                    <div className="divide-y divide-border/10">
-                                      {album.songs.map((song, j) => (
-                                        <div
-                                          key={j}
-                                          className="grid items-center px-4 py-2 hover:bg-muted/20 transition-colors"
-                                          style={{ gridTemplateColumns: 'minmax(0, 1fr) 108px' }}
-                                        >
-                                          <div className="min-w-0 pl-2 pr-3">
-                                            {song.track_id ? (
-                                              <a
-                                                href={`https://open.spotify.com/track/${song.track_id}`}
-                                                target="_blank" rel="noopener noreferrer"
-                                                className="text-xs text-foreground/80 hover:text-primary hover:underline truncate block transition-colors"
-                                                title={song.track_name}
-                                              >
-                                                {song.track_name}
-                                              </a>
-                                            ) : (
-                                              <span className="text-xs text-foreground/80 truncate block" title={song.track_name}>
-                                                {song.track_name}
-                                              </span>
-                                            )}
-                                          </div>
-                                          <span className="text-xs text-foreground/50 tabular-nums text-right">
-                                            {new Date(song.added_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ))
-                              })()}
-                            </div>
+                            <ArtistSongList
+                              albums={artist.albums}
+                              hasAlbumData={artist.hasAlbumData}
+                              focusYear={spotifyReleaseFocus?.artistId === artist.spotifyId
+                                ? spotifyReleaseFocus.releaseYear
+                                : null}
+                            />
                           </div>
                         )}
                       </div>
