@@ -539,6 +539,17 @@ export default function ProfilePage() {
     }
   }, [profile])
 
+  // SCRUM-81: Store referrer in localStorage when a visitor arrives via ?r=1.
+  // Skips own-profile visits. Consumed + cleared in onboarding on signup.
+  useEffect(() => {
+    if (!profile || isRestricted(profile)) return
+    const p = profile as FullProfile
+    if (p.is_own_profile) return
+    if (new URLSearchParams(window.location.search).get('r') === '1') {
+      localStorage.setItem('gp_referrer', p.user_id)
+    }
+  }, [profile])
+
   // ─── Friendship actions ────────────────────────────────────────────────────
 
   const handleAddFriend = async (targetUserId: string) => {
@@ -565,8 +576,10 @@ export default function ProfilePage() {
     setActionLoading(false)
   }
 
+  // SCRUM-81: Copy Link now appends ?r=1 so the recipient's visit is attributed
+  // to this user as a referral. The button label stays "Copy Link" — no UX change.
   const handleCopy = () => {
-    navigator.clipboard.writeText(`https://grooveprint.app/profile/${username}`)
+    navigator.clipboard.writeText(`https://grooveprint.app/profile/${username}?r=1`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -878,7 +891,6 @@ export default function ProfilePage() {
               p.top_venues.map((venue, i) => {
                 const capKey = getCapacityKey(venue.capacity_category)
                 const capStyle = CAPACITY_STYLES[capKey]
-                // SCRUM-77: letter only — capacity number removed from badge
                 const capLabel = capStyle.letter
 
                 return (

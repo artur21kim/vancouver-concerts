@@ -60,6 +60,9 @@ export default function SettingsPage() {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
+  // SCRUM-81: Referral count
+  const [referralCount, setReferralCount] = useState<number>(0)
+
   // Auth guard
   useEffect(() => {
     if (!authLoading && !user) router.replace('/')
@@ -86,6 +89,14 @@ export default function SettingsPage() {
       setBio(p.bio ?? '')
       setVisibility((p.profile_visibility ?? 'public') as typeof visibility)
       setShowSpotifyStats(p.show_spotify_stats ?? false)
+
+      // SCRUM-81: Fetch referral count in the same load cycle
+      const { count: refCount } = await supabase
+        .from('user_profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('referred_by', user.id)
+      setReferralCount(refCount ?? 0)
+
       setPageLoading(false)
     }
     fetchSettings()
@@ -302,6 +313,32 @@ export default function SettingsPage() {
                   </div>
                 </section>
               )}
+
+              {/* ── SCRUM-81: Referrals section ── */}
+              <section className="bg-card rounded-lg shadow p-5 space-y-3">
+                <h2 className="text-base font-semibold text-foreground">Referrals</h2>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">Users you've referred</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      People who signed up using your profile link
+                    </p>
+                  </div>
+                  <span className="text-2xl font-bold text-primary tabular-nums flex-shrink-0">
+                    {referralCount}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground border-t border-border pt-3">
+                  Share your profile link from your{' '}
+                  <a
+                    href={`/profile/${settings?.username}`}
+                    className="text-primary hover:underline transition-colors"
+                  >
+                    profile page
+                  </a>{' '}
+                  to refer new users.
+                </p>
+              </section>
 
               {/* ── Save button ── */}
               <div className="flex items-center gap-3">
