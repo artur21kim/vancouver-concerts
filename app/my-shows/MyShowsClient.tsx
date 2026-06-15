@@ -1190,7 +1190,7 @@ export default function MyShowsClient({
                             const isBusy     = isAdding || isSkipping
                             const globalBusy = addingUnadded || skippingAll
                             return (
-                              <div key={a.show_id} className="grid items-center gap-x-3 py-1.5" style={{ gridTemplateColumns: '80px 1fr auto' }}>
+                              <div key={a.show_id} className="grid items-center gap-x-3 py-1.5" style={{ gridTemplateColumns: '80px 200px auto' }}>
                                 <span className="text-muted-foreground text-[11px] tabular-nums">{fmtDate(a.date)}</span>
                                 <div className="min-w-0">
                                   <p className="text-xs font-medium truncate" style={{ color: TEAL }}>{a.artist_name}</p>
@@ -1271,7 +1271,7 @@ export default function MyShowsClient({
                           {skippedArtists.map(a => {
                             const isRestoring = restoringIndividual.has(a.show_id)
                             return (
-                              <div key={a.show_id} className="grid items-center gap-x-3 py-1.5 opacity-60 hover:opacity-80 transition-opacity" style={{ gridTemplateColumns: '80px 1fr auto' }}>
+                              <div key={a.show_id} className="grid items-center gap-x-3 py-1.5 opacity-60 hover:opacity-80 transition-opacity" style={{ gridTemplateColumns: '80px 200px auto' }}>
                                 <span className="text-[11px] text-muted-foreground tabular-nums">{fmtDate(a.date)}</span>
                                 <div className="min-w-0">
                                   <p className="text-xs font-medium truncate" style={{ color: TEAL }}>{a.artist_name}</p>
