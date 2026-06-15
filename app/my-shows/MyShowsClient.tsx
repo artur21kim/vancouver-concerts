@@ -244,17 +244,16 @@ function ArtistYearBars({ artists, max, onNavigate }: {
         const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
 
         // One segment per show — equal width, own capacity colour preserves M vs XL distinction
-        const segments: { year: string; venue: string; capKey: CapFilter; color: string; widthPct: number; showYear: boolean }[] = []
+        const segments: { year: string; venue: string; capKey: CapFilter; color: string; widthPct: number }[] = []
         for (const year of Object.keys(artist.showsByYear).sort()) {
           const shows = artist.showsByYear[year]
-          shows.forEach((show, idx) => {
+          shows.forEach((show) => {
             segments.push({
               year,
               venue: show.venue,
               capKey: show.capKey,
               color: CAP_BY_KEY[show.capKey]?.color ?? 'rgba(156,163,175,0.75)',
               widthPct: (1 / artist.total) * 100,
-              showYear: idx === 0, // label year only on first show of each year
             })
           })
         }
@@ -289,12 +288,10 @@ function ArtistYearBars({ artists, max, onNavigate }: {
                         }}
                         onMouseLeave={() => setTooltip(null)}
                       >
-                        {seg.showYear && (
-                          <span className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
-                            style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
-                            {seg.year}
-                          </span>
-                        )}
+                        <span className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
+                          style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
+                          {seg.year}
+                        </span>
                       </div>
                     )
                   })}
