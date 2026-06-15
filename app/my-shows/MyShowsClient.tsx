@@ -741,7 +741,14 @@ export default function MyShowsClient({
 
   // ── Top artists ───────────────────────────────────────────────────────────
   const topArtists = useMemo(() => {
-    const src = viewMode === 'festivals' ? yearFiltered.filter(isFestivalShow) : yearFiltered
+    let src = viewMode === 'festivals' ? yearFiltered.filter(isFestivalShow) : yearFiltered
+    if (filterText.trim()) {
+      const q = filterText.toLowerCase()
+      src = src.filter(s =>
+        s.artist.artist_name.toLowerCase().includes(q) ||
+        s.venue.venue_name.toLowerCase().includes(q)
+      )
+    }
     const map: Record<number, {
       name: string; spotifyId: string | null; total: number
       byCapacity: Record<string, number>; byVenue: Record<string, number>
@@ -764,12 +771,19 @@ export default function MyShowsClient({
         return { ...a, venueBreakdown }
       })
       .sort((a, b) => b.total - a.total)
-  }, [yearFiltered, viewMode])
+  }, [yearFiltered, viewMode, filterText])
 
   const maxArtistShows = topArtists[0]?.total ?? 1
 
   const topVenues = useMemo(() => {
-    const src = viewMode === 'festivals' ? yearFiltered.filter(isFestivalShow) : yearFiltered
+    let src = viewMode === 'festivals' ? yearFiltered.filter(isFestivalShow) : yearFiltered
+    if (filterText.trim()) {
+      const q = filterText.toLowerCase()
+      src = src.filter(s =>
+        s.artist.artist_name.toLowerCase().includes(q) ||
+        s.venue.venue_name.toLowerCase().includes(q)
+      )
+    }
     const map: Record<number, {
       name: string; total: number
       byCapacity: Record<string, number>
@@ -786,7 +800,7 @@ export default function MyShowsClient({
       map[id].showsByYear[year].push({ artist: s.artist.artist_name, capKey })
     }
     return Object.values(map).sort((a, b) => b.total - a.total)
-  }, [yearFiltered, viewMode])
+  }, [yearFiltered, viewMode, filterText])
 
   const maxVenueShows = topVenues[0]?.total ?? 1
 
@@ -954,8 +968,8 @@ export default function MyShowsClient({
     setPage(1); setPageInput('1'); setShowAllArtists(false)
   }, [])
 
-  // SCRUM-91: set filter text and reset pagination in one call
-  const filterByArtist = useCallback((name: string) => {
+  // SCRUM-91: set filter text and reset pagination in one call (used for artists and venues)
+  const applyFilter = useCallback((name: string) => {
     setFilterText(name)
     setPage(1)
     setPageInput('1')
@@ -1397,7 +1411,7 @@ export default function MyShowsClient({
                       <ArtistYearBars
                         artists={topArtists.slice(0, showAllArtists ? undefined : 10)}
                         max={maxArtistShows}
-                        onNavigate={(name) => router.push(`/browse?artist=${encodeURIComponent(name)}`)}
+                        onNavigate={(name) => applyFilter(name)}
                       />
                       {topArtists.length > 10 && (
                         <button onClick={() => setShowAllArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
@@ -1414,7 +1428,7 @@ export default function MyShowsClient({
                       <VenueYearBars
                         venues={topVenues.slice(0, showAllVenues ? undefined : 10)}
                         max={maxVenueShows}
-                        onNavigate={(name) => router.push(`/browse?venue=${encodeURIComponent(name)}`)}
+                        onNavigate={(name) => applyFilter(name)}
                       />
                       {topVenues.length > 10 && (
                         <button onClick={() => setShowAllVenues(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
@@ -1705,7 +1719,7 @@ export default function MyShowsClient({
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {/* SCRUM-91: headliner name → filter; Spotify icon added separately */}
                               <button
-                                onClick={e => { e.stopPropagation(); filterByArtist(group.headliner.artist.artist_name) }}
+                                onClick={e => { e.stopPropagation(); applyFilter(group.headliner.artist.artist_name) }}
                                 className="text-sm font-medium text-primary hover:opacity-80 hover:underline text-left">
                                 {group.headliner.artist.artist_name}
                               </button>
@@ -1725,7 +1739,7 @@ export default function MyShowsClient({
                                     <span key={s.show_id} className="text-[13px] text-muted-foreground">
                                       {i > 0 && <span className="mx-0.5 opacity-40">·</span>}
                                       <button
-                                        onClick={e => { e.stopPropagation(); filterByArtist(s.artist.artist_name) }}
+                                        onClick={e => { e.stopPropagation(); applyFilter(s.artist.artist_name) }}
                                         className="hover:text-primary hover:underline transition-colors">
                                         {s.artist.artist_name}
                                       </button>
@@ -1762,7 +1776,7 @@ export default function MyShowsClient({
                                   {/* SCRUM-91: expanded bill artist names → filter + Spotify icon */}
                                   <div className="flex items-center gap-1.5">
                                     <button
-                                      onClick={e => { e.stopPropagation(); filterByArtist(show.artist.artist_name) }}
+                                      onClick={e => { e.stopPropagation(); applyFilter(show.artist.artist_name) }}
                                       className="text-sm font-medium text-primary hover:opacity-80 hover:underline text-left">
                                       {show.artist.artist_name}
                                     </button>
@@ -1819,7 +1833,7 @@ export default function MyShowsClient({
                                 {/* SCRUM-91: festival expanded artist names → filter + Spotify icon */}
                                 <div className="flex-1 min-w-0 flex items-center gap-1.5">
                                   <button
-                                    onClick={() => filterByArtist(show.artist.artist_name)}
+                                    onClick={() => applyFilter(show.artist.artist_name)}
                                     className="text-xs text-foreground hover:text-primary hover:underline transition-colors">
                                     {show.artist.artist_name}
                                   </button>
@@ -1885,7 +1899,7 @@ export default function MyShowsClient({
                                 <div className="px-3 py-3.5 min-w-0">
                                   <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                                     {/* SCRUM-91: Sets card desktop — artist name → filter */}
-                                    <button onClick={() => filterByArtist(show.artist.artist_name)} className="text-sm font-medium text-primary hover:opacity-80 hover:underline">{show.artist.artist_name}</button>
+                                    <button onClick={() => applyFilter(show.artist.artist_name)} className="text-sm font-medium text-primary hover:opacity-80 hover:underline">{show.artist.artist_name}</button>
                                     {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
                                     {show.setlist_url && <SetlistLink url={show.setlist_url} />}
                                   </div>
@@ -1909,7 +1923,7 @@ export default function MyShowsClient({
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1 mb-0.5 flex-wrap">
                                     {/* SCRUM-91: Sets card mobile — artist name → filter */}
-                                    <button onClick={() => filterByArtist(show.artist.artist_name)} className="text-[11px] font-medium text-primary hover:opacity-80 truncate">{show.artist.artist_name}</button>
+                                    <button onClick={() => applyFilter(show.artist.artist_name)} className="text-[11px] font-medium text-primary hover:opacity-80 truncate">{show.artist.artist_name}</button>
                                     {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
                                   </div>
                                   <div className="flex items-center gap-1 flex-wrap">
@@ -1959,7 +1973,7 @@ export default function MyShowsClient({
                                 <td className="px-3 py-3">
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     {/* SCRUM-91: Sets table — artist name → filter */}
-                                    <button onClick={() => filterByArtist(show.artist.artist_name)} className="text-primary hover:opacity-80 hover:underline text-left">{show.artist.artist_name}</button>
+                                    <button onClick={() => applyFilter(show.artist.artist_name)} className="text-primary hover:opacity-80 hover:underline text-left">{show.artist.artist_name}</button>
                                     {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
                                     {show.setlist_url && <SetlistLink url={show.setlist_url} />}
                                   </div>
