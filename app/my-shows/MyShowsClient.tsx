@@ -243,7 +243,8 @@ function ArtistYearBars({ artists, max, onNavigate }: {
       {artists.map((artist) => {
         const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
 
-        // One segment per year, width ∝ show count in that year
+        // One segment per year, equal width — bar shows which years, not how many times
+        const numYears = Object.keys(artist.showsByYear).length
         const yearSegments = Object.keys(artist.showsByYear).sort().map(year => {
           const yearShows = artist.showsByYear[year]
           const capCounts: Record<string, number> = {}
@@ -255,7 +256,7 @@ function ArtistYearBars({ artists, max, onNavigate }: {
             count: yearShows.length,
             capKey,
             color: CAP_BY_KEY[capKey]?.color ?? 'rgba(156,163,175,0.75)',
-            widthPct: (yearShows.length / artist.total) * 100,
+            widthPct: (1 / numYears) * 100,
             venues,
           }
         })
@@ -307,12 +308,9 @@ function ArtistYearBars({ artists, max, onNavigate }: {
                 >
                   <p className="font-semibold text-foreground">{artist.name} · {tooltip.year}</p>
                   <p style={{ color: TEAL }} className="mt-0.5">{tooltip.count} {tooltip.count === 1 ? 'show' : 'shows'}</p>
-                  {tooltip.venues.slice(0, 3).map(v => (
+                  {tooltip.venues.map(v => (
                     <p key={v} className="text-muted-foreground mt-0.5 truncate">{v}</p>
                   ))}
-                  {tooltip.venues.length > 3 && (
-                    <p className="text-muted-foreground/60 mt-0.5">+{tooltip.venues.length - 3} more</p>
-                  )}
                 </div>
               )}
             </div>
@@ -352,7 +350,8 @@ function VenueYearBars({ venues, max, onNavigate }: {
       {venues.map((venue) => {
         const totalWidth = max > 0 ? (venue.total / max) * 100 : 0
 
-        // One segment per year, width ∝ show count in that year
+        // One segment per year, equal width — bar shows which years, not how many times
+        const numYears = Object.keys(venue.showsByYear).length
         const yearSegments = Object.keys(venue.showsByYear).sort().map(year => {
           const yearShows = venue.showsByYear[year]
           const capCounts: Record<string, number> = {}
@@ -364,7 +363,7 @@ function VenueYearBars({ venues, max, onNavigate }: {
             count: yearShows.length,
             capKey,
             color: CAP_BY_KEY[capKey]?.color ?? 'rgba(156,163,175,0.75)',
-            widthPct: (yearShows.length / venue.total) * 100,
+            widthPct: (1 / numYears) * 100,
             artists,
           }
         })
@@ -411,12 +410,9 @@ function VenueYearBars({ venues, max, onNavigate }: {
                   style={{ left: Math.min(tooltip.x, 220), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}>
                   <p className="font-semibold text-foreground">{venue.name} · {tooltip.year}</p>
                   <p style={{ color: TEAL }} className="mt-0.5">{tooltip.count} {tooltip.count === 1 ? 'show' : 'shows'}</p>
-                  {tooltip.artists.slice(0, 3).map(a => (
+                  {tooltip.artists.map(a => (
                     <p key={a} className="text-muted-foreground mt-0.5 truncate">{a}</p>
                   ))}
-                  {tooltip.artists.length > 3 && (
-                    <p className="text-muted-foreground/60 mt-0.5">+{tooltip.artists.length - 3} more</p>
-                  )}
                 </div>
               )}
             </div>
