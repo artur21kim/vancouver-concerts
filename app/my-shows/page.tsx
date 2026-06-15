@@ -100,14 +100,16 @@ export default async function MyShowsPage() {
         }
     }).filter(Boolean)
 
-    // ── Spotify songs (added_at only — for timeline overlay) ─────────────────
+    // ── Spotify songs — SCRUM-80: added_at + spotify_artist_id + artist_name
+    //    for artist-contextual song counting in the monthly drilldown overlay ──
     const { data: spotifySongsRaw } = await supabase
         .from('user_spotify_songs')
-        .select('added_at')
+        .select('added_at, spotify_artist_id, artist_name')
         .eq('user_id', user.id)
         .not('added_at', 'is', null)
 
-    const spotifySongs: { added_at: string }[] = spotifySongsRaw ?? []
+    const spotifySongs: { added_at: string; spotify_artist_id: string | null; artist_name: string }[] =
+        spotifySongsRaw ?? []
 
     return <MyShowsClient shows={shows as any} spotifySongs={spotifySongs} />
 }

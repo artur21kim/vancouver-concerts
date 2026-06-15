@@ -44,7 +44,8 @@ type UnaddedArtist = {
 
 type SortField     = 'date' | 'artist' | 'venue' | 'added_at'
 type SortDir       = 'asc' | 'desc'
-type ViewMode      = 'shows' | 'sets' | 'festivals'
+// SCRUM-80: added 'spotify' view mode
+type ViewMode      = 'shows' | 'sets' | 'festivals' | 'spotify'
 type SetsSubView   = 'card' | 'table'
 type CapFilter     = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown'
 
@@ -169,11 +170,24 @@ function SetlistLink({ url }: { url: string }) {
   )
 }
 
+// ── Spotify icon SVG (inline, used in the view toggle and Spotify tab) ────────
+function SpotifyIcon({ className = 'w-3 h-3', fill = SPOTIFY_GREEN }: { className?: string; fill?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill={fill}>
+      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+    </svg>
+  )
+}
+
 // ── Timeline tooltips ─────────────────────────────────────────────────────────
+// SCRUM-80: YearTip updated — Spotify mode shows 'songs' label
 function YearTip({ active, payload, label, viewMode }: any) {
   if (!active || !payload?.length) return null
   const val = payload.find((p: any) => p.dataKey === 'shows')?.value
-  const label2 = viewMode === 'sets' ? 'sets' : viewMode === 'festivals' ? 'festivals' : 'shows'
+  const label2 = viewMode === 'spotify' ? 'songs'
+    : viewMode === 'sets' ? 'sets'
+    : viewMode === 'festivals' ? 'festivals'
+    : 'shows'
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
       <p className="font-semibold text-foreground mb-0.5">{label}</p>
@@ -182,16 +196,23 @@ function YearTip({ active, payload, label, viewMode }: any) {
   )
 }
 
-// SCRUM-78: removed `future` display from MonthTip — orange line removed from charts
-function MonthTip({ active, payload, label }: any) {
+// SCRUM-80: MonthTip updated — Spotify mode labels primary series as 'songs added';
+// non-Spotify modes label the overlay series as 'matched songs' (contextual, not raw total)
+function MonthTip({ active, payload, label, viewMode }: any) {
   if (!active || !payload?.length) return null
   const shows = payload.find((p: any) => p.dataKey === 'shows')?.value ?? 0
   const songs = payload.find((p: any) => p.dataKey === 'songs')?.value
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
       <p className="font-semibold text-foreground mb-0.5">{label}</p>
-      {shows > 0 && <p className="text-primary">{shows} {shows === 1 ? 'show' : 'shows'}</p>}
-      {songs != null && songs > 0 && <p style={{ color: SPOTIFY_GREEN }}>{songs} songs added</p>}
+      {viewMode === 'spotify' ? (
+        shows > 0 ? <p style={{ color: SPOTIFY_GREEN }}>{shows} songs added</p> : null
+      ) : (
+        <>
+          {shows > 0 && <p className="text-primary">{shows} {shows === 1 ? 'show' : 'shows'}</p>}
+          {songs != null && songs > 0 && <p style={{ color: SPOTIFY_GREEN }}>{songs} matched songs</p>}
+        </>
+      )}
     </div>
   )
 }
@@ -415,7 +436,8 @@ export default function MyShowsClient({
   username,
 }: {
   shows: Show[]
-  spotifySongs: { added_at: string }[]
+  // SCRUM-80: extended to include spotify_artist_id + artist_name for contextual matching
+  spotifySongs: { added_at: string; spotify_artist_id: string | null; artist_name: string }[]
   readOnly?: boolean
   username?: string
 }) {
@@ -496,7 +518,7 @@ export default function MyShowsClient({
     }
   }, [shows])
 
-  // ── Spotify per month ─────────────────────────────────────────────────────
+  // ── Raw Spotify songs per year/month (used in Spotify tab and as fallback) ─
   const spotifyByYearMonth = useMemo(() => {
     const result: Record<string, Record<number, number>> = {}
     for (const s of spotifySongs) {
@@ -509,6 +531,72 @@ export default function MyShowsClient({
     return result
   }, [spotifySongs])
 
+  // SCRUM-80: Artist-contextual Spotify songs per year/month.
+  // For each month, counts songs in spotifySongs where spotify_artist_id matches
+  // an artist from shows attended within a ±1 month window around that month.
+  // This surfaces pre-show research and post-show listening behaviour.
+  const artistContextualByYearMonth = useMemo(() => {
+    if (!hasSpotify) return {} as Record<string, Record<number, number>>
+
+    // Build map: (year-month key) → Set of spotify_artist_ids from attended shows
+    const showArtistsByKey: Record<string, Set<string>> = {}
+    for (const show of shows) {
+      if (!show.artist.spotify_artist_id) continue
+      const [yearStr, monthStr] = show.date.split('-')
+      const year  = parseInt(yearStr)
+      const month = parseInt(monthStr) - 1 // 0-based
+
+      // Expand into ±1 month window
+      for (let delta = -1; delta <= 1; delta++) {
+        let m = month + delta
+        let y = year
+        if (m < 0)  { m += 12; y-- }
+        if (m > 11) { m -= 12; y++ }
+        const key = `${y}-${m}`
+        if (!showArtistsByKey[key]) showArtistsByKey[key] = new Set()
+        showArtistsByKey[key].add(show.artist.spotify_artist_id)
+      }
+    }
+
+    // Count Spotify songs whose artist falls in the window for that month
+    const result: Record<string, Record<number, number>> = {}
+    for (const song of spotifySongs) {
+      if (!song.spotify_artist_id) continue
+      const dt = new Date(song.added_at)
+      const y  = dt.getFullYear()
+      const m  = dt.getMonth()
+      const key = `${y}-${m}`
+      if (showArtistsByKey[key]?.has(song.spotify_artist_id)) {
+        const yStr = String(y)
+        if (!result[yStr]) result[yStr] = {}
+        result[yStr][m] = (result[yStr][m] ?? 0) + 1
+      }
+    }
+    return result
+  }, [shows, spotifySongs, hasSpotify])
+
+  // SCRUM-80: Top Spotify artists by liked-song count (respects selectedYear filter).
+  // Used in the Spotify tab list.
+  const topSpotifyArtists = useMemo(() => {
+    if (!hasSpotify) return [] as { name: string; count: number; spotifyId: string }[]
+    const src = selectedYear
+      ? spotifySongs.filter(s => new Date(s.added_at).getFullYear() === parseInt(selectedYear))
+      : spotifySongs
+    const counts: Record<string, { name: string; count: number; spotifyId: string }> = {}
+    for (const song of src) {
+      if (!song.spotify_artist_id) continue
+      if (!counts[song.spotify_artist_id]) {
+        counts[song.spotify_artist_id] = {
+          name: song.artist_name,
+          count: 0,
+          spotifyId: song.spotify_artist_id,
+        }
+      }
+      counts[song.spotify_artist_id].count++
+    }
+    return Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 50)
+  }, [spotifySongs, hasSpotify, selectedYear])
+
   const firstSpotifyYear = useMemo(() => Object.keys(spotifyByYearMonth).sort()[0] ?? null, [spotifyByYearMonth])
 
   // ── Year-filtered set ─────────────────────────────────────────────────────
@@ -517,11 +605,20 @@ export default function MyShowsClient({
     return shows.filter(s => s.date.split('-')[0] === selectedYear)
   }, [shows, selectedYear])
 
-  // SCRUM-78: yearTimelineData — counts all shows per year (no future/past split).
-  // Orange upcoming Area series removed; teal line now represents full "My Shows" count.
+  // SCRUM-80: yearTimelineData — Spotify mode returns raw songs-per-year.
+  // Non-Spotify modes return show/set/festival counts as before (orange future series removed in SCRUM-78).
   const yearTimelineData = useMemo(() => {
-    let src: (Show | BillGroup)[]
+    if (viewMode === 'spotify') {
+      const byYear: Record<string, number> = {}
+      for (const [y, months] of Object.entries(spotifyByYearMonth)) {
+        byYear[y] = Object.values(months).reduce((a: number, b: number) => a + b, 0)
+      }
+      return Object.entries(byYear)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([year, count]) => ({ year, shows: count }))
+    }
 
+    let src: (Show | BillGroup)[]
     if (viewMode === 'festivals') {
       src = shows.filter(isFestivalShow)
     } else if (viewMode === 'shows') {
@@ -540,7 +637,7 @@ export default function MyShowsClient({
     return Object.entries(byYear)
       .sort(([a],[b]) => a.localeCompare(b))
       .map(([year, count]) => ({ year, shows: count }))
-  }, [shows, viewMode])
+  }, [shows, viewMode, spotifyByYearMonth])
 
   const availableYears = useMemo(
     () => yearTimelineData.map(d => d.year),
@@ -548,7 +645,6 @@ export default function MyShowsClient({
   )
 
   // SCRUM-79: Slideshow — advance selectedYear through availableYears every 1500ms.
-  // Stops automatically at the last year (no loop).
   useEffect(() => {
     if (!isPlaying) return
     const id = setInterval(() => {
@@ -565,9 +661,19 @@ export default function MyShowsClient({
     return () => clearInterval(id)
   }, [isPlaying, availableYears])
 
-  // SCRUM-78: monthTimelineData — counts all shows per month (no future tracking).
+  // SCRUM-80: monthTimelineData — Spotify mode returns raw songs-per-month.
+  // Non-Spotify modes use artist-contextual matched count for the overlay series.
   const monthTimelineData = useMemo(() => {
     if (!selectedYear) return []
+
+    if (viewMode === 'spotify') {
+      const songsByMonth = spotifyByYearMonth[selectedYear] ?? {}
+      return Array.from({ length: 12 }, (_, m) => ({
+        month: MONTHS[m],
+        shows: songsByMonth[m] ?? 0,
+      }))
+    }
+
     const src = viewMode === 'festivals'
       ? shows.filter(isFestivalShow).filter(s => s.date.split('-')[0] === selectedYear)
       : shows.filter(s => s.date.split('-')[0] === selectedYear)
@@ -577,21 +683,35 @@ export default function MyShowsClient({
       const m = parseInt(s.date.split('-')[1]) - 1
       byMonth[m]++
     }
-    const songsByMonth = spotifyByYearMonth[selectedYear] ?? {}
-    const hasSongs = Object.keys(songsByMonth).length > 0
+
+    // SCRUM-80: overlay series = contextual matched songs (artist within ±1 month window)
+    const contextualByMonth = artistContextualByYearMonth[selectedYear] ?? {}
+    const hasContextual = Object.keys(contextualByMonth).length > 0
+
     return Array.from({ length: 12 }, (_, m) => ({
-      month: MONTHS[m], shows: byMonth[m],
-      ...(hasSpotify && hasSongs ? { songs: songsByMonth[m] ?? 0 } : {}),
+      month: MONTHS[m],
+      shows: byMonth[m],
+      ...(hasSpotify && hasContextual ? { songs: contextualByMonth[m] ?? 0 } : {}),
     }))
-  }, [shows, selectedYear, viewMode, spotifyByYearMonth, hasSpotify])
+  }, [shows, selectedYear, viewMode, spotifyByYearMonth, artistContextualByYearMonth, hasSpotify])
 
   const firstYear = stats.firstShow?.date.split('-')[0]
   const lastYear  = stats.lastShow?.date.split('-')[0]
+
+  // SCRUM-80: drilldownHasSpotify — gates on contextual count for non-Spotify modes
+  // (so the overlay only appears when there are actually matched songs for the year).
+  // Always false in Spotify mode (Spotify tab shows its own content, not an overlay).
   const drilldownHasSpotify = selectedYear
-    ? hasSpotify && Object.keys(spotifyByYearMonth[selectedYear] ?? {}).length > 0
+    ? hasSpotify &&
+      viewMode !== 'spotify' &&
+      Object.keys(artistContextualByYearMonth[selectedYear] ?? {}).length > 0
     : false
 
-  const timelineLegendLabel = viewMode === 'sets' ? 'Sets per year'
+  // SCRUM-80: chart line color — switches to Spotify green in Spotify mode
+  const chartLineColor = viewMode === 'spotify' ? SPOTIFY_GREEN : TEAL
+
+  const timelineLegendLabel = viewMode === 'spotify' ? 'Songs added per year'
+    : viewMode === 'sets' ? 'Sets per year'
     : viewMode === 'festivals' ? 'Festivals per year'
     : 'Shows per year'
 
@@ -718,8 +838,20 @@ export default function MyShowsClient({
   const totalPages   = Math.ceil(setsFiltered.length / PER_PAGE)
   const currentShows = setsFiltered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
-  // ── Dynamic stats ─────────────────────────────────────────────────────────
+  // SCRUM-80: dynamicStats — Spotify mode shows songs + artist counts
   const dynamicStats = useMemo(() => {
+    if (viewMode === 'spotify') {
+      const src = selectedYear
+        ? spotifySongs.filter(s => new Date(s.added_at).getFullYear() === parseInt(selectedYear))
+        : spotifySongs
+      return {
+        sets: src.length,
+        shows: 0,
+        artists: new Set(src.map(s => s.spotify_artist_id).filter(Boolean)).size,
+        venues: 0,
+        festivals: 0,
+      }
+    }
     if (viewMode === 'shows') {
       const sets    = billGroups.reduce((n, g) => n + g.shows.length, 0)
       const showsC  = billGroups.length
@@ -738,7 +870,7 @@ export default function MyShowsClient({
     const artists   = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.artist.artist_id))).size
     const venues    = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.venue.venue_id))).size
     return { sets, shows: 0, artists, venues, festivals }
-  }, [viewMode, billGroups, setsFiltered, festivalGroups])
+  }, [viewMode, billGroups, setsFiltered, festivalGroups, spotifySongs, selectedYear])
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleCap = useCallback((key: CapFilter) => {
@@ -752,7 +884,6 @@ export default function MyShowsClient({
     setCapFilter('all'); setPage(1); setPageInput('1'); setShowAllArtists(false)
   }, [])
 
-  // SCRUM-79: Play/pause handler — starts slideshow from first year when entering play mode
   const handlePlayPause = useCallback(() => {
     if (isPlaying) {
       setIsPlaying(false)
@@ -943,6 +1074,17 @@ export default function MyShowsClient({
                         <span className="text-muted-foreground"> venues</span>
                       </span>
                     </>}
+                    {/* SCRUM-80: Spotify tab stat badges */}
+                    {viewMode === 'spotify' && <>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: SPOTIFY_GREEN }}>{dynamicStats.sets.toLocaleString()}</span>
+                        <span className="text-muted-foreground"> songs</span>
+                      </span>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: SPOTIFY_GREEN }}>{dynamicStats.artists.toLocaleString()}</span>
+                        <span className="text-muted-foreground"> artists</span>
+                      </span>
+                    </>}
                   </div>
                   {anyFilterActive && (
                     <button onClick={clearAll}
@@ -959,7 +1101,7 @@ export default function MyShowsClient({
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {/* SCRUM-79: Play/pause — only available in the year-level all-time view */}
+                  {/* Play/pause — only in year-level all-time view */}
                   {!selectedYear && yearTimelineData.length > 1 && (
                     <button
                       onClick={handlePlayPause}
@@ -985,6 +1127,8 @@ export default function MyShowsClient({
                       )}
                     </button>
                   )}
+
+                  {/* SCRUM-80: view mode toggle — Spotify tab added, visible when hasSpotify */}
                   <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                     {(['shows', 'sets', 'festivals'] as ViewMode[]).map((m, i) => (
                       <button key={m} onClick={() => setViewMode(m)}
@@ -992,37 +1136,52 @@ export default function MyShowsClient({
                           viewMode === m ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
                         }`}>{m}</button>
                     ))}
+                    {hasSpotify && (
+                      <button
+                        onClick={() => setViewMode('spotify')}
+                        className={`px-3 py-1.5 flex items-center gap-1 transition-colors border-l border-border ${
+                          viewMode === 'spotify' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        <SpotifyIcon className="w-3 h-3" fill={viewMode === 'spotify' ? 'currentColor' : SPOTIFY_GREEN} />
+                        Spotify
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* SCRUM-78: Legend — removed Upcoming entry */}
+              {/* SCRUM-80: Legend — chartLineColor switches to green in Spotify mode;
+                  overlay label renamed to 'Matched artist songs' */}
               <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#0d9488' }} />
-                  {selectedYear ? (viewMode === 'sets' ? 'Sets' : viewMode === 'festivals' ? 'Festivals' : 'Shows') : timelineLegendLabel}
+                  <span className="w-3 h-3 rounded-sm inline-block" style={{ background: chartLineColor }} />
+                  {selectedYear
+                    ? (viewMode === 'spotify' ? 'Songs' : viewMode === 'sets' ? 'Sets' : viewMode === 'festivals' ? 'Festivals' : 'Shows')
+                    : timelineLegendLabel}
                 </span>
                 {drilldownHasSpotify && (
                   <span className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded-sm inline-block" style={{ background: SPOTIFY_GREEN }} />
-                    Songs added {firstSpotifyYear && <span className="text-muted-foreground/50 ml-0.5">(from {firstSpotifyYear})</span>}
+                    Matched artist songs {firstSpotifyYear && <span className="text-muted-foreground/50 ml-0.5">(from {firstSpotifyYear})</span>}
                   </span>
                 )}
-                {viewMode !== 'sets' && (
+                {viewMode !== 'sets' && viewMode !== 'spotify' && (
                   <span className="text-muted-foreground/50 text-[10px]">
                     {viewMode === 'shows' ? '· Bills with multiple acts count as 1 show' : '· Festival shows only'}
                   </span>
                 )}
               </div>
 
+              {/* SCRUM-80: Chart — gradients and stroke color switch in Spotify mode */}
               <div style={{ height: 180 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   {selectedYear ? (
                     <ComposedChart data={monthTimelineData} margin={{ top: 16, right: drilldownHasSpotify ? 40 : 8, left: -20, bottom: 0 }}>
                       <defs>
                         <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#0d9488" stopOpacity={0.02}/>
+                          <stop offset="5%"  stopColor={chartLineColor} stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor={chartLineColor} stopOpacity={0.02}/>
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="month" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -1030,14 +1189,13 @@ export default function MyShowsClient({
                       {drilldownHasSpotify && (
                         <YAxis yAxisId="songs" orientation="right" tick={{ fill: SPOTIFY_GREEN, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
                       )}
-                      <Tooltip content={<MonthTip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
-                      {/* SCRUM-78: future Area removed — only teal shows area remains */}
-                      <Area yAxisId="shows" type="monotone" dataKey="shows" stroke="#0d9488" strokeWidth={2} fill="url(#gradShows)"
+                      <Tooltip content={(props: any) => <MonthTip {...props} viewMode={viewMode} />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                      <Area yAxisId="shows" type="monotone" dataKey="shows" stroke={chartLineColor} strokeWidth={2} fill="url(#gradShows)"
                         dot={(p: any) => {
                           const { cx, cy, payload } = p
                           if ((payload.shows ?? 0) === 0) return <g key={`e-${cx}`} />
-                          return <circle key={`s-${cx}`} cx={cx} cy={cy} r={3} fill="#0d9488" stroke="var(--background)" strokeWidth={1.5}/>
-                        }} activeDot={{ r: 4, fill: '#0d9488' }} />
+                          return <circle key={`s-${cx}`} cx={cx} cy={cy} r={3} fill={chartLineColor} stroke="var(--background)" strokeWidth={1.5}/>
+                        }} activeDot={{ r: 4, fill: chartLineColor }} />
                       {drilldownHasSpotify && (
                         <Line yAxisId="songs" type="monotone" dataKey="songs" stroke={SPOTIFY_GREEN} strokeWidth={2}
                           dot={(p: any) => {
@@ -1052,10 +1210,9 @@ export default function MyShowsClient({
                       onClick={(d: any) => { const y = d?.activeLabel; if (y) handleYearClick(y) }}
                       style={{ cursor: 'pointer' }}>
                       <defs>
-                        {/* SCRUM-78: gradFuture removed — only teal gradient remains */}
                         <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#0d9488" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#0d9488" stopOpacity={0.02}/>
+                          <stop offset="5%"  stopColor={chartLineColor} stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor={chartLineColor} stopOpacity={0.02}/>
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="year"
@@ -1069,19 +1226,22 @@ export default function MyShowsClient({
                         axisLine={false} tickLine={false} />
                       <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                       <Tooltip content={(props: any) => <YearTip {...props} viewMode={viewMode} />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
-                      <Area type="monotone" dataKey="shows" stroke="#0d9488" strokeWidth={2} fill="url(#gradShows)"
+                      <Area type="monotone" dataKey="shows" stroke={chartLineColor} strokeWidth={2} fill="url(#gradShows)"
                         dot={(p: any) => {
                           const { cx, cy, payload } = p
-                          if (payload.year === firstYear) return <circle key={`f-${cx}`} cx={cx} cy={cy} r={5} fill="#0d9488" stroke="var(--background)" strokeWidth={2}/>
-                          if (payload.year === lastYear && lastYear !== firstYear) return <circle key={`l-${cx}`} cx={cx} cy={cy} r={5} fill="#5eead4" stroke="var(--background)" strokeWidth={2}/>
-                          return <circle key={`d-${cx}`} cx={cx} cy={cy} r={3} fill="#0d9488" fillOpacity={0.7}/>
-                        }} activeDot={{ r: 5, fill: '#0d9488' }} />
-                      {/* SCRUM-78: future Area removed */}
+                          // In Spotify mode, use uniform dots; in show modes highlight first/last
+                          if (viewMode !== 'spotify' && payload.year === firstYear)
+                            return <circle key={`f-${cx}`} cx={cx} cy={cy} r={5} fill={chartLineColor} stroke="var(--background)" strokeWidth={2}/>
+                          if (viewMode !== 'spotify' && payload.year === lastYear && lastYear !== firstYear)
+                            return <circle key={`l-${cx}`} cx={cx} cy={cy} r={5} fill={TEAL} stroke="var(--background)" strokeWidth={2}/>
+                          return <circle key={`d-${cx}`} cx={cx} cy={cy} r={3} fill={chartLineColor} fillOpacity={0.7}/>
+                        }} activeDot={{ r: 5, fill: chartLineColor }} />
                     </AreaChart>
                   )}
                 </ResponsiveContainer>
               </div>
 
+              {/* Year nav pills */}
               {selectedYear ? (() => {
                 const idx = availableYears.indexOf(selectedYear)
                 const prevYear = idx > 0 ? availableYears[idx - 1] : null
@@ -1116,11 +1276,14 @@ export default function MyShowsClient({
                     </button>
                   </div>
                 )
-              })() : (stats.firstShow || stats.lastShow) && (
-                <div className="flex items-start justify-between gap-2 mt-2 text-xs text-muted-foreground">
-                  {stats.firstShow && <span>First: <span className="text-foreground font-medium">{stats.firstShow.artist.artist_name}</span> · {fmtDate(stats.firstShow.date)}</span>}
-                  {stats.lastShow && lastYear !== firstYear && <span className="text-right flex-shrink-0">Last: <span className="text-foreground font-medium">{stats.lastShow.artist.artist_name}</span> · {fmtDate(stats.lastShow.date)}</span>}
-                </div>
+              })() : (
+                // SCRUM-80: hide first/last show annotation in Spotify mode
+                viewMode !== 'spotify' && (stats.firstShow || stats.lastShow) && (
+                  <div className="flex items-start justify-between gap-2 mt-2 text-xs text-muted-foreground">
+                    {stats.firstShow && <span>First: <span className="text-foreground font-medium">{stats.firstShow.artist.artist_name}</span> · {fmtDate(stats.firstShow.date)}</span>}
+                    {stats.lastShow && lastYear !== firstYear && <span className="text-right flex-shrink-0">Last: <span className="text-foreground font-medium">{stats.lastShow.artist.artist_name}</span> · {fmtDate(stats.lastShow.date)}</span>}
+                  </div>
+                )
               )}
             </div>
           )}
@@ -1197,8 +1360,6 @@ export default function MyShowsClient({
                             innerRadius={38} outerRadius={62} paddingAngle={2} dataKey="value" stroke="none"
                             onClick={(d: any) => handleCap(d.key as CapFilter)} style={{ cursor: 'pointer' }}
                             label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, key }: any) => {
-                              // SCRUM-74: use data entry's `key` field instead of positional `index`
-                              // to look up the correct short label regardless of bucket filtering
                               if (midAngle == null || percent == null || percent < 0.05) return null
                               const RADIAN = Math.PI / 180
                               const r = (innerRadius + outerRadius) * 0.5
@@ -1248,7 +1409,49 @@ export default function MyShowsClient({
             </div>
           )}
 
-          {/* ── Show list ── */}
+          {/* ── SCRUM-80: Spotify tab content — top 50 artists by liked-song count ── */}
+          {viewMode === 'spotify' && hasSpotify && (
+            <div className="bg-card rounded-lg shadow border border-border overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <SpotifyIcon className="w-4 h-4" />
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Top Artists in Your Library
+                    {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
+                  </h2>
+                </div>
+                <span className="text-xs text-muted-foreground">{topSpotifyArtists.length} artists</span>
+              </div>
+              {topSpotifyArtists.length === 0 ? (
+                <p className="text-sm text-muted-foreground px-4 py-6">No Spotify data{selectedYear ? ` for ${selectedYear}` : ''}.</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {topSpotifyArtists.map((artist, i) => (
+                    <div key={artist.spotifyId} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors">
+                      <span className="text-xs font-bold tabular-nums w-6 text-right flex-shrink-0" style={{ color: SPOTIFY_GREEN }}>
+                        #{i + 1}
+                      </span>
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <span className="text-sm text-foreground truncate">{artist.name}</span>
+                        <a href={`https://open.spotify.com/artist/${artist.spotifyId}`}
+                          target="_blank" rel="noopener noreferrer" title="Open in Spotify"
+                          className="flex-shrink-0 hover:opacity-70 transition-opacity">
+                          <SpotifyIcon className="w-3 h-3" />
+                        </a>
+                      </div>
+                      <span className="text-xs tabular-nums flex-shrink-0 text-right" style={{ color: SPOTIFY_GREEN }}>
+                        {artist.count} {artist.count === 1 ? 'song' : 'songs'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Show list — hidden in Spotify mode ── */}
+          {viewMode !== 'spotify' && (
+          <>
           {shows.length === 0 ? (
             <div className="bg-card rounded-lg shadow border border-border p-12 text-center">
               <p className="text-muted-foreground text-lg mb-4">
@@ -1307,7 +1510,6 @@ export default function MyShowsClient({
                     const supporters = group.shows.slice(1)
                     const future = isFuture(group.date)
                     const isExpanded = expandedBills.has(group.key)
-                    // SCRUM-75: only show chevron and enable click when there are multiple acts on the bill
                     const canExpand = group.shows.length > 1
                     const toggleExpand = () => setExpandedBills(prev => {
                       const n = new Set(prev); n.has(group.key) ? n.delete(group.key) : n.add(group.key); return n
@@ -1318,7 +1520,6 @@ export default function MyShowsClient({
                           className={`group/row flex items-center gap-3 px-4 py-3 transition-colors ${canExpand ? 'cursor-pointer hover:bg-muted/30' : ''}`}
                           onClick={canExpand ? toggleExpand : undefined}
                         >
-                          {/* Heart — own profile only */}
                           {!readOnly && (
                             <div className="flex-shrink-0" onClick={e => { e.stopPropagation(); removeShow(group.headliner.show_id) }}>
                               <button disabled={removingSet.has(group.headliner.show_id)} className="focus:outline-none disabled:opacity-50">
@@ -1328,17 +1529,14 @@ export default function MyShowsClient({
                               </button>
                             </div>
                           )}
-                          {/* Rank + chevron — SCRUM-75: chevron hidden for single-act shows */}
                           <div className="w-10 flex-shrink-0 text-right">
                             <span className="text-sm font-bold tabular-nums" style={{ color: TEAL }}>#{idx + 1}</span>
                             {canExpand && <span className="text-[10px] text-muted-foreground ml-0.5">{isExpanded ? '▴' : '▾'}</span>}
                           </div>
-                          {/* Date */}
                           <div className="w-24 flex-shrink-0">
                             <p className="text-sm text-foreground whitespace-nowrap">{fmtDate(group.date)}</p>
                             {future && <span className="text-[9px] font-semibold text-amber-400">upcoming</span>}
                           </div>
-                          {/* Headliner + supporters + venue */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {group.headliner.artist.spotify_artist_id ? (
@@ -1381,7 +1579,6 @@ export default function MyShowsClient({
                           </div>
                         </div>
 
-                        {/* Expanded desktop rows — SCRUM-75: only rendered when canExpand */}
                         {isExpanded && canExpand && (
                           <div className="border-t border-border/40 bg-background/50 divide-y divide-border/30">
                             {group.shows.map((show, showIdx) => (
@@ -1635,6 +1832,9 @@ export default function MyShowsClient({
               )}
             </div>
           )}
+          </>
+          )}
+
         </div>
       </main>
     </>
