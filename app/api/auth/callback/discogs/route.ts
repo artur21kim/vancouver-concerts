@@ -146,6 +146,7 @@ export async function GET(request: Request) {
       .from('user_profiles')
       .update({
         discogs_connected: true,
+        discogs_username:  discogsUsername,
         updated_at:        new Date().toISOString(),
       })
       .eq('user_id', user.id)

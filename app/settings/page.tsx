@@ -13,6 +13,7 @@ type ProfileSettings = {
   spotify_connected: boolean
   show_spotify_stats: boolean
   discogs_connected: boolean | null
+  discogs_username: string | null
 }
 
 const VISIBILITY_OPTIONS: {
@@ -91,7 +92,7 @@ export default function SettingsPage() {
     const fetchSettings = async () => {
       const { data, error: fetchError } = await supabase
         .from('user_profiles')
-        .select('username, bio, profile_visibility, spotify_connected, show_spotify_stats, discogs_connected')
+        .select('username, bio, profile_visibility, spotify_connected, show_spotify_stats, discogs_connected, discogs_username')
         .eq('user_id', user.id)
         .single()
 
@@ -362,7 +363,9 @@ export default function SettingsPage() {
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground">Vinyl collection</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Your Discogs library is connected
+                        {settings?.discogs_username
+                          ? `Connected as @${settings.discogs_username}`
+                          : 'Your Discogs library is connected'}
                       </p>
                     </div>
                     <a
