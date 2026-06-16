@@ -186,6 +186,7 @@ function YearTip({ active, payload, label, viewMode }: any) {
   if (!active || !payload?.length) return null
   const val = payload.find((p: any) => p.dataKey === 'shows')?.value
   const albumCount: number = payload[0]?.payload?.albumCount ?? 0
+  const artistCount: number = payload[0]?.payload?.artistCount ?? 0
   const label2 = viewMode === 'spotify' ? 'songs'
     : viewMode === 'sets' ? 'sets'
     : viewMode === 'festivals' ? 'festivals'
@@ -193,9 +194,12 @@ function YearTip({ active, payload, label, viewMode }: any) {
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
       <p className="font-semibold text-foreground mb-0.5">{label}</p>
-      {val != null && val > 0 && <p className="text-primary">{val} {val === 1 ? label2.slice(0,-1) : label2}</p>}
+      {val != null && val > 0 && <p className="text-primary">{val.toLocaleString()} {val === 1 ? label2.slice(0,-1) : label2}</p>}
+      {viewMode === 'spotify' && artistCount > 0 && (
+        <p className="text-muted-foreground">{artistCount.toLocaleString()} artists</p>
+      )}
       {viewMode === 'spotify' && albumCount > 0 && (
-        <p className="text-muted-foreground mt-0.5">{albumCount} {albumCount === 1 ? 'album' : 'albums'} released</p>
+        <p className="text-muted-foreground">{albumCount.toLocaleString()} albums released</p>
       )}
     </div>
   )
@@ -207,15 +211,17 @@ function MonthTip({ active, payload, label, viewMode }: any) {
   const songs = payload.find((p: any) => p.dataKey === 'songs')?.value
   // SCRUM-109: album release markers (single-artist Spotify view only)
   const albumReleases: { name: string; ordinal: number }[] = payload[0]?.payload?.albumReleases ?? []
+  // SCRUM-110 (#2): plain album count for multi-artist months
+  const monthAlbumCount: number = payload[0]?.payload?.albumMonthCount ?? 0
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none max-w-[220px]">
       <p className="font-semibold text-foreground mb-0.5">{label}</p>
       {viewMode === 'spotify' ? (
-        shows > 0 ? <p style={{ color: SPOTIFY_GREEN }}>{shows} songs added</p> : null
+        shows > 0 ? <p style={{ color: SPOTIFY_GREEN }}>{shows.toLocaleString()} songs added</p> : null
       ) : (
         <>
-          {shows > 0 && <p className="text-primary">{shows} {shows === 1 ? 'show' : 'shows'}</p>}
-          {songs != null && songs > 0 && <p style={{ color: SPOTIFY_GREEN }}>{songs} matched songs</p>}
+          {shows > 0 && <p className="text-primary">{shows.toLocaleString()} {shows === 1 ? 'show' : 'shows'}</p>}
+          {songs != null && songs > 0 && <p style={{ color: SPOTIFY_GREEN }}>{songs.toLocaleString()} matched songs</p>}
         </>
       )}
       {albumReleases.length > 0 && (
@@ -226,6 +232,11 @@ function MonthTip({ active, payload, label, viewMode }: any) {
               {' '}{r.name}
             </p>
           ))}
+        </div>
+      )}
+      {albumReleases.length === 0 && monthAlbumCount > 0 && viewMode === 'spotify' && (
+        <div className="mt-1.5 pt-1.5 border-t border-border/40">
+          <p className="text-[10px] text-muted-foreground">{monthAlbumCount.toLocaleString()} {monthAlbumCount === 1 ? 'album' : 'albums'} released</p>
         </div>
       )}
     </div>
@@ -968,13 +979,22 @@ export default function MyShowsClient({
   const yearTimelineData = useMemo(() => {
     if (viewMode === 'spotify') {
       const q = filterText.trim().toLowerCase()
+      // SCRUM-111 (#3): also match spotify_album_name so users can filter by album title
       const src = q
-        ? spotifySongs.filter(s => s.artist_name.toLowerCase().includes(q))
+        ? spotifySongs.filter(s =>
+            s.artist_name.toLowerCase().includes(q) ||
+            (s.spotify_album_name?.toLowerCase().includes(q) ?? false)
+          )
         : spotifySongs
       const byYear: Record<string, number> = {}
+      const artistsByYear: Record<string, Set<string>> = {}
       for (const song of src) {
         const y = String(new Date(song.added_at).getFullYear())
         byYear[y] = (byYear[y] ?? 0) + 1
+        if (song.spotify_artist_id) {
+          if (!artistsByYear[y]) artistsByYear[y] = new Set()
+          artistsByYear[y].add(song.spotify_artist_id)
+        }
       }
 
       // SCRUM-110: count unique albums released in each year (release year, not added year)
@@ -992,6 +1012,7 @@ export default function MyShowsClient({
           year,
           shows: count,
           albumCount: albumsByReleaseYear[year]?.size ?? 0,
+          artistCount: artistsByYear[year]?.size ?? 0,
         }))
     }
 
@@ -1046,8 +1067,12 @@ export default function MyShowsClient({
 
     if (viewMode === 'spotify') {
       const q = filterText.trim().toLowerCase()
+      // SCRUM-111 (#3): also match spotify_album_name
       const src = q
-        ? spotifySongs.filter(s => s.artist_name.toLowerCase().includes(q))
+        ? spotifySongs.filter(s =>
+            s.artist_name.toLowerCase().includes(q) ||
+            (s.spotify_album_name?.toLowerCase().includes(q) ?? false)
+          )
         : spotifySongs
       const songsByMonth: Record<number, number> = {}
       for (const song of src) {
@@ -1055,6 +1080,20 @@ export default function MyShowsClient({
         if (String(dt.getFullYear()) !== selectedYear) continue
         const m = dt.getMonth()
         songsByMonth[m] = (songsByMonth[m] ?? 0) + 1
+      }
+
+      // SCRUM-110 (#2): album count per month for bubble markers — all Spotify views
+      const albumCountByMonth: Record<number, number> = {}
+      const seenAlbumsForCount = new Set<string>()
+      for (const song of src) {
+        if (!song.spotify_album_release_date || !song.spotify_album_name) continue
+        if (song.spotify_album_release_date.length < 7) continue
+        if (!song.spotify_album_release_date.startsWith(selectedYear)) continue
+        const albumKey = `${song.spotify_album_name}::${song.spotify_artist_id ?? ''}`
+        if (seenAlbumsForCount.has(albumKey)) continue
+        seenAlbumsForCount.add(albumKey)
+        const month = parseInt(song.spotify_album_release_date.substring(5, 7)) - 1
+        albumCountByMonth[month] = (albumCountByMonth[month] ?? 0) + 1
       }
 
       // SCRUM-109: compute album release markers for single-artist view.
@@ -1089,6 +1128,7 @@ export default function MyShowsClient({
       return Array.from({ length: 12 }, (_, m) => ({
         month: MONTHS[m],
         shows: songsByMonth[m] ?? 0,
+        albumMonthCount: albumCountByMonth[m] ?? 0,
         ...(hasReleaseMarkers ? { albumReleases: albumReleasesByMonth[m] ?? [] } : {}),
       }))
     }
@@ -1254,7 +1294,11 @@ export default function MyShowsClient({
   const filteredSpotifyArtists = useMemo(() => {
     if (!filterText.trim()) return topSpotifyArtists
     const q = filterText.toLowerCase()
-    return topSpotifyArtists.filter(a => a.name.toLowerCase().includes(q))
+    // SCRUM-111 (#3): match artist name OR any album name
+    return topSpotifyArtists.filter(a =>
+      a.name.toLowerCase().includes(q) ||
+      a.albums.some(alb => alb.name?.toLowerCase().includes(q))
+    )
   }, [topSpotifyArtists, filterText])
 
   const totalPages   = Math.ceil(setsFiltered.length / PER_PAGE)
@@ -1265,8 +1309,12 @@ export default function MyShowsClient({
   const dynamicStats = useMemo(() => {
     if (viewMode === 'spotify') {
       const q = filterText.trim().toLowerCase()
+      // SCRUM-111 (#3): also match spotify_album_name
       const artistFiltered = q
-        ? spotifySongs.filter(s => s.artist_name.toLowerCase().includes(q))
+        ? spotifySongs.filter(s =>
+            s.artist_name.toLowerCase().includes(q) ||
+            (s.spotify_album_name?.toLowerCase().includes(q) ?? false)
+          )
         : spotifySongs
       const src = selectedYear
         ? artistFiltered.filter(s => new Date(s.added_at).getFullYear() === parseInt(selectedYear))
@@ -1838,6 +1886,20 @@ export default function MyShowsClient({
                               </g>
                             )
                           }
+                          // SCRUM-110 (#2): plain count bubble for multi-artist months
+                          const monthCount: number = payload?.albumMonthCount ?? 0
+                          if (monthCount > 0) {
+                            const bubbleY = Math.max(10, cy - 18)
+                            return (
+                              <g key={`mc-${cx}`}>
+                                <circle cx={cx} cy={cy} r={3} fill={chartLineColor} stroke="var(--background)" strokeWidth={1.5}/>
+                                <circle cx={cx} cy={bubbleY} r={9} fill="rgba(29,185,84,0.15)" stroke={SPOTIFY_GREEN} strokeWidth={1}/>
+                                <text x={cx} y={bubbleY + 4} textAnchor="middle" fontSize={monthCount >= 100 ? 7 : monthCount >= 10 ? 8 : 9} fontWeight={700} fill={SPOTIFY_GREEN}>
+                                  {monthCount}
+                                </text>
+                              </g>
+                            )
+                          }
                           if ((payload.shows ?? 0) === 0) return <g key={`e-${cx}`} />
                           return <circle key={`s-${cx}`} cx={cx} cy={cy} r={3} fill={chartLineColor} stroke="var(--background)" strokeWidth={1.5}/>
                         }} activeDot={{ r: 4, fill: chartLineColor }} />
@@ -1962,7 +2024,7 @@ export default function MyShowsClient({
                 type="text"
                 value={filterText}
                 onChange={e => { setFilterText(e.target.value); setPage(1); setPageInput('1') }}
-                placeholder={viewMode === 'spotify' ? 'Filter by artist…' : 'Filter by artist or venue…'}
+                placeholder={viewMode === 'spotify' ? 'Filter by artist or album…' : 'Filter by artist or venue…'}
                 className="w-full pl-9 pr-8 py-2 text-sm bg-card border border-primary/30 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors shadow-sm"
               />
               {filterText && (
