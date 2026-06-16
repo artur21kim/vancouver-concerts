@@ -185,6 +185,7 @@ function SpotifyIcon({ className = 'w-3 h-3', fill = SPOTIFY_GREEN }: { classNam
 function YearTip({ active, payload, label, viewMode }: any) {
   if (!active || !payload?.length) return null
   const val = payload.find((p: any) => p.dataKey === 'shows')?.value
+  const albumCount: number = payload[0]?.payload?.albumCount ?? 0
   const label2 = viewMode === 'spotify' ? 'songs'
     : viewMode === 'sets' ? 'sets'
     : viewMode === 'festivals' ? 'festivals'
@@ -193,6 +194,9 @@ function YearTip({ active, payload, label, viewMode }: any) {
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
       <p className="font-semibold text-foreground mb-0.5">{label}</p>
       {val != null && val > 0 && <p className="text-primary">{val} {val === 1 ? label2.slice(0,-1) : label2}</p>}
+      {viewMode === 'spotify' && albumCount > 0 && (
+        <p className="text-muted-foreground mt-0.5">{albumCount} {albumCount === 1 ? 'album' : 'albums'} released</p>
+      )}
     </div>
   )
 }
@@ -457,7 +461,7 @@ function VenueYearBars({ venues, max, onNavigate }: {
 function SpotifyArtistBars({ artists, max, onYearClick }: {
   artists: {
     name: string; count: number; spotifyId: string; hasAlbumData: boolean
-    albums: { name: string | null; year: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
+    albums: { name: string | null; year: string | null; releaseDate: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
   }[]
   max: number
   onYearClick?: (artistName: string, year: string, spotifyId: string) => void
@@ -579,7 +583,7 @@ function SpotifyArtistBars({ artists, max, onYearClick }: {
 // Extracted as a sub-component so each expanded artist gets its own scroll
 // state without lifting it into the parent.
 type AlbumEntry = {
-  name: string | null; year: string | null
+  name: string | null; year: string | null; releaseDate: string | null
   songs: { track_name: string; track_id: string | null; added_at: string }[]
 }
 function ArtistSongList({ albums, hasAlbumData, focusYear }: {
@@ -630,12 +634,22 @@ function ArtistSongList({ albums, hasAlbumData, focusYear }: {
             <div key={ai}>
               {hasAlbumData && album.name && (
                 <div
-                  className={`px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide bg-muted/50 transition-colors ${ai > 0 ? 'border-t border-teal-500/15' : ''} ${useCollapsed ? 'cursor-pointer hover:bg-muted/70' : ''}`}
+                  className={`px-4 py-2 bg-muted/50 transition-colors ${ai > 0 ? 'border-t border-teal-500/15' : ''} ${useCollapsed ? 'cursor-pointer hover:bg-muted/70' : ''}`}
                   style={{ color: '#0d9488' }}
+                  title={album.releaseDate
+                    ? (() => {
+                        if (album.releaseDate.length === 4) return album.releaseDate
+                        if (album.releaseDate.length === 7) {
+                          const [y, m] = album.releaseDate.split('-')
+                          return `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)-1]} ${y}`
+                        }
+                        return new Date(album.releaseDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                      })()
+                    : album.year ?? undefined}
                   onClick={useCollapsed ? () => toggleAlbum(albumKey) : undefined}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <span>{album.name}{album.year ? ` (${album.year})` : ''}</span>
+                    <span className="text-[13px] font-semibold">{album.name}{album.year ? ` (${album.year})` : ''}</span>
                     {useCollapsed && (
                       <span className="flex items-center gap-2 flex-shrink-0">
                         <span className="text-muted-foreground font-normal text-[10px] normal-case tracking-normal">
@@ -868,14 +882,14 @@ export default function MyShowsClient({
   const topSpotifyArtists = useMemo(() => {
     if (!hasSpotify) return [] as {
       name: string; count: number; spotifyId: string; hasAlbumData: boolean
-      albums: { name: string | null; year: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
+      albums: { name: string | null; year: string | null; releaseDate: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
     }[]
     const src = selectedYear
       ? spotifySongs.filter(s => new Date(s.added_at).getFullYear() === parseInt(selectedYear))
       : spotifySongs
     const raw: Record<string, {
       name: string; count: number; spotifyId: string
-      songList: { track_name: string; album_name: string | null; release_year: string | null; track_id: string | null; added_at: string }[]
+      songList: { track_name: string; album_name: string | null; release_year: string | null; release_date: string | null; track_id: string | null; added_at: string }[]
     }> = {}
     for (const song of src) {
       if (!song.spotify_artist_id) continue
@@ -892,6 +906,7 @@ export default function MyShowsClient({
         track_name:   song.track_name,
         album_name:   song.spotify_album_name ?? null,
         release_year: song.spotify_album_release_date ? song.spotify_album_release_date.substring(0, 4) : null,
+        release_date: song.spotify_album_release_date ?? null,
         track_id:     song.spotify_track_id ?? null,
         added_at:     song.added_at,
       })
@@ -902,10 +917,10 @@ export default function MyShowsClient({
       .map(artist => {
         const sorted = [...artist.songList].sort((a, b) => b.added_at.localeCompare(a.added_at))
         const hasAlbumData = sorted.some(s => s.album_name)
-        const albumMap: Record<string, { name: string | null; year: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }> = {}
+        const albumMap: Record<string, { name: string | null; year: string | null; releaseDate: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }> = {}
         for (const song of sorted) {
           const key = song.album_name ?? '__null__'
-          if (!albumMap[key]) albumMap[key] = { name: song.album_name, year: song.release_year, songs: [] }
+          if (!albumMap[key]) albumMap[key] = { name: song.album_name, year: song.release_year, releaseDate: song.release_date ?? null, songs: [] }
           albumMap[key].songs.push({ track_name: song.track_name, track_id: song.track_id, added_at: song.added_at })
         }
         // Sort albums: year desc (newest first for expandable list), null-named albums last
@@ -961,9 +976,23 @@ export default function MyShowsClient({
         const y = String(new Date(song.added_at).getFullYear())
         byYear[y] = (byYear[y] ?? 0) + 1
       }
+
+      // SCRUM-110: count unique albums released in each year (release year, not added year)
+      const albumsByReleaseYear: Record<string, Set<string>> = {}
+      for (const song of src) {
+        if (!song.spotify_album_release_date || !song.spotify_album_name) continue
+        const releaseYear = song.spotify_album_release_date.substring(0, 4)
+        if (!albumsByReleaseYear[releaseYear]) albumsByReleaseYear[releaseYear] = new Set()
+        albumsByReleaseYear[releaseYear].add(song.spotify_album_name)
+      }
+
       return Object.entries(byYear)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([year, count]) => ({ year, shows: count }))
+        .map(([year, count]) => ({
+          year,
+          shows: count,
+          albumCount: albumsByReleaseYear[year]?.size ?? 0,
+        }))
     }
 
     let src: (Show | BillGroup)[]
@@ -1845,6 +1874,24 @@ export default function MyShowsClient({
                       <Area type="monotone" dataKey="shows" stroke={chartLineColor} strokeWidth={2} fill="url(#gradShows)"
                         dot={(p: any) => {
                           const { cx, cy, payload } = p
+                          // SCRUM-110: album release count bubble in Spotify mode (plain number, no # prefix)
+                          if (viewMode === 'spotify') {
+                            const albumCount: number = payload?.albumCount ?? 0
+                            const bubbleY = Math.max(10, cy - 18)
+                            return (
+                              <g key={`sp-${cx}`}>
+                                <circle cx={cx} cy={cy} r={3} fill={chartLineColor} fillOpacity={0.8}/>
+                                {albumCount > 0 && (
+                                  <>
+                                    <circle cx={cx} cy={bubbleY} r={9} fill="rgba(29,185,84,0.15)" stroke={SPOTIFY_GREEN} strokeWidth={1}/>
+                                    <text x={cx} y={bubbleY + 4} textAnchor="middle" fontSize={albumCount >= 100 ? 7 : albumCount >= 10 ? 8 : 9} fontWeight={700} fill={SPOTIFY_GREEN}>
+                                      {albumCount}
+                                    </text>
+                                  </>
+                                )}
+                              </g>
+                            )
+                          }
                           if (viewMode !== 'spotify' && payload.year === firstYear)
                             return <circle key={`f-${cx}`} cx={cx} cy={cy} r={5} fill={chartLineColor} stroke="var(--background)" strokeWidth={2}/>
                           if (viewMode !== 'spotify' && payload.year === lastYear && lastYear !== firstYear)
@@ -2139,7 +2186,7 @@ export default function MyShowsClient({
                               className="grid px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider bg-muted/30 border-b border-border/30"
                               style={{ gridTemplateColumns: 'minmax(0, 1fr) 108px', color: TEAL }}
                             >
-                              <span>Song</span>
+                              <span>Album</span>
                               <span className="text-right">Liked on</span>
                             </div>
                             <ArtistSongList
