@@ -905,11 +905,17 @@ export default function MyShowsClient({
   }, [textFiltered, selectedYear])
 
   // SCRUM-80: yearTimelineData
+  // SCRUM-108: Spotify branch now filters by filterText so chart tracks the active artist/venue filter
   const yearTimelineData = useMemo(() => {
     if (viewMode === 'spotify') {
+      const q = filterText.trim().toLowerCase()
+      const src = q
+        ? spotifySongs.filter(s => s.artist_name.toLowerCase().includes(q))
+        : spotifySongs
       const byYear: Record<string, number> = {}
-      for (const [y, months] of Object.entries(spotifyByYearMonth)) {
-        byYear[y] = Object.values(months).reduce((a: number, b: number) => a + b, 0)
+      for (const song of src) {
+        const y = String(new Date(song.added_at).getFullYear())
+        byYear[y] = (byYear[y] ?? 0) + 1
       }
       return Object.entries(byYear)
         .sort(([a], [b]) => a.localeCompare(b))
@@ -935,7 +941,7 @@ export default function MyShowsClient({
     return Object.entries(byYear)
       .sort(([a],[b]) => a.localeCompare(b))
       .map(([year, count]) => ({ year, shows: count }))
-  }, [textFiltered, viewMode, spotifyByYearMonth])
+  }, [textFiltered, viewMode, spotifySongs, filterText])
 
   const availableYears = useMemo(
     () => yearTimelineData.map(d => d.year),
@@ -960,11 +966,22 @@ export default function MyShowsClient({
   }, [isPlaying, availableYears])
 
   // SCRUM-80: monthTimelineData
+  // SCRUM-108: Spotify branch inline-filters by filterText so month drilldown tracks active artist
   const monthTimelineData = useMemo(() => {
     if (!selectedYear) return []
 
     if (viewMode === 'spotify') {
-      const songsByMonth = spotifyByYearMonth[selectedYear] ?? {}
+      const q = filterText.trim().toLowerCase()
+      const src = q
+        ? spotifySongs.filter(s => s.artist_name.toLowerCase().includes(q))
+        : spotifySongs
+      const songsByMonth: Record<number, number> = {}
+      for (const song of src) {
+        const dt = new Date(song.added_at)
+        if (String(dt.getFullYear()) !== selectedYear) continue
+        const m = dt.getMonth()
+        songsByMonth[m] = (songsByMonth[m] ?? 0) + 1
+      }
       return Array.from({ length: 12 }, (_, m) => ({
         month: MONTHS[m],
         shows: songsByMonth[m] ?? 0,
@@ -989,7 +1006,7 @@ export default function MyShowsClient({
       shows: byMonth[m],
       ...(hasSpotify && hasContextual ? { songs: contextualByMonth[m] ?? 0 } : {}),
     }))
-  }, [textFiltered, selectedYear, viewMode, spotifyByYearMonth, artistContextualByYearMonth, hasSpotify])
+  }, [textFiltered, selectedYear, viewMode, spotifySongs, filterText, artistContextualByYearMonth, hasSpotify])
 
   const firstYear = stats.firstShow?.date.split('-')[0]
   const lastYear  = stats.lastShow?.date.split('-')[0]
@@ -1139,11 +1156,16 @@ export default function MyShowsClient({
   const currentShows = setsFiltered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
   // SCRUM-80: dynamicStats
+  // SCRUM-108: Spotify branch now filters by filterText so badge counts reflect active filter
   const dynamicStats = useMemo(() => {
     if (viewMode === 'spotify') {
-      const src = selectedYear
-        ? spotifySongs.filter(s => new Date(s.added_at).getFullYear() === parseInt(selectedYear))
+      const q = filterText.trim().toLowerCase()
+      const artistFiltered = q
+        ? spotifySongs.filter(s => s.artist_name.toLowerCase().includes(q))
         : spotifySongs
+      const src = selectedYear
+        ? artistFiltered.filter(s => new Date(s.added_at).getFullYear() === parseInt(selectedYear))
+        : artistFiltered
       return {
         sets: src.length,
         shows: 0,
@@ -1170,7 +1192,7 @@ export default function MyShowsClient({
     const artists   = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.artist.artist_id))).size
     const venues    = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.venue.venue_id))).size
     return { sets, shows: 0, artists, venues, festivals }
-  }, [viewMode, billGroups, setsFiltered, festivalGroups, spotifySongs, selectedYear])
+  }, [viewMode, billGroups, setsFiltered, festivalGroups, spotifySongs, selectedYear, filterText])
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleCap = useCallback((key: CapFilter) => {
