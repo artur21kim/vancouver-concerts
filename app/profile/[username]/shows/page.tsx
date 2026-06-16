@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import MyShowsClient from '@/app/my-grooveprint/MyShowsClient'
+import MyGrooveprintClient, { type ProfileHeader } from '@/app/my-grooveprint/MyGrooveprintClient'
 
 interface PageProps {
   params: Promise<{ username: string }>
@@ -15,26 +15,59 @@ export default async function FriendShowsPage({ params }: PageProps) {
   const { username } = await params
   const supabase = await createClient()
 
-  // Unauthenticated → back to profile (friendship required)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     redirect(`/profile/${username}`)
   }
 
-  const { data: rows, error } = await supabase.rpc('get_friend_shows', {
-    target_username: username,
-    viewer_user_id:  user.id,
-  })
+  // Run both queries in parallel
+  const [profileResult, showsResult] = await Promise.all([
+    supabase.rpc('get_user_profile', { target_username: username }),
+    supabase.rpc('get_friend_shows', {
+      target_username: username,
+      viewer_user_id:  user.id,
+    }),
+  ])
 
-  if (error) {
-    console.error('get_friend_shows error:', error)
+  if (showsResult.error) {
+    console.error('get_friend_shows error:', showsResult.error)
     redirect(`/profile/${username}`)
   }
 
-  // Transform flat RPC rows → Show[] (same shape as MyShowsPage)
+  // Build profileHeader — only when get_user_profile returned a full (non-restricted) profile
+  const raw = !profileResult.error && profileResult.data ? (profileResult.data as any) : null
+  const profileHeader: ProfileHeader | undefined =
+    raw && !('visibility' in raw)
+      ? {
+          user_id:               raw.user_id,
+          username:              raw.username,
+          bio:                   raw.bio ?? null,
+          avatar_url:            raw.avatar_url ?? null,
+          confirmed_shows:       raw.confirmed_shows   ?? 0,
+          unique_artists:        raw.unique_artists    ?? 0,
+          unique_venues:         raw.unique_venues     ?? 0,
+          festival_count:        raw.festival_count    ?? 0,
+          first_show_year:       raw.first_show_year   ?? null,
+          last_show_year:        raw.last_show_year    ?? null,
+          spotify_song_count:    raw.spotify_song_count   ?? null,
+          spotify_artist_count:  raw.spotify_artist_count ?? null,
+          spotify_connected:     raw.spotify_connected    ?? false,
+          show_spotify_stats:    raw.show_spotify_stats   ?? false,
+          spotify_user_id:       raw.spotify_user_id      ?? null,
+          discogs_connected:     raw.discogs_connected     ?? false,
+          discogs_username:      raw.discogs_username      ?? null,
+          discogs_release_count: raw.discogs_release_count ?? null,
+          is_own_profile:        raw.is_own_profile        ?? false,
+          friendship_status:     raw.friendship_status     ?? null,
+          request_direction:     raw.request_direction     ?? null,
+          request_id:            raw.request_id            ?? null,
+        }
+      : undefined
+
+  // Transform flat RPC rows → Show[] (same shape as MyGrooveprintPage)
   // match_score omitted — friend's scores aren't accessible;
-  // headliner ranking falls back to monthly_listeners in MyShowsClient
-  const shows = (rows ?? []).map((row: any) => ({
+  // headliner ranking falls back to monthly_listeners in MyGrooveprintClient
+  const shows = (showsResult.data ?? []).map((row: any) => ({
     show_id:       row.show_id,
     date:          row.date,
     setlist_url:   row.setlist_url,
@@ -59,11 +92,12 @@ export default async function FriendShowsPage({ params }: PageProps) {
   }))
 
   return (
-    <MyShowsClient
+    <MyGrooveprintClient
       shows={shows}
       spotifySongs={[]}
       readOnly
       username={username}
+      profileHeader={profileHeader}
     />
   )
 }
