@@ -202,9 +202,9 @@ function MonthTip({ active, payload, label, viewMode }: any) {
   const shows = payload.find((p: any) => p.dataKey === 'shows')?.value ?? 0
   const songs = payload.find((p: any) => p.dataKey === 'songs')?.value
   // SCRUM-109: album release markers (single-artist Spotify view only)
-  const albumReleases: string[] = payload[0]?.payload?.albumReleases ?? []
+  const albumReleases: { name: string; ordinal: number }[] = payload[0]?.payload?.albumReleases ?? []
   return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
+    <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none max-w-[220px]">
       <p className="font-semibold text-foreground mb-0.5">{label}</p>
       {viewMode === 'spotify' ? (
         shows > 0 ? <p style={{ color: SPOTIFY_GREEN }}>{shows} songs added</p> : null
@@ -215,9 +215,12 @@ function MonthTip({ active, payload, label, viewMode }: any) {
         </>
       )}
       {albumReleases.length > 0 && (
-        <div className="mt-1.5 pt-1.5 border-t border-border/40">
-          {albumReleases.map((name, i) => (
-            <p key={i} className="text-[10px] leading-snug" style={{ color: SPOTIFY_GREEN }}>↑ {name}</p>
+        <div className="mt-1.5 pt-1.5 border-t border-border/40 space-y-0.5">
+          {albumReleases.map((r, i) => (
+            <p key={i} className="text-[10px] leading-snug text-foreground/85">
+              <span style={{ color: SPOTIFY_GREEN }} className="font-bold">↑ #{r.ordinal}</span>
+              {' '}{r.name}
+            </p>
           ))}
         </div>
       )}
@@ -584,11 +587,12 @@ function ArtistSongList({ albums, hasAlbumData, focusYear }: {
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [showFade, setShowFade] = useState(true)
+  // Albums collapsed by default when there are multiple named albums (avoids long scroll)
+  const [expandedAlbums, setExpandedAlbums] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    // Initial check — if content fits, no fade needed
     const check = () => {
       setShowFade(el.scrollHeight - el.scrollTop > el.clientHeight + 16)
     }
@@ -597,56 +601,87 @@ function ArtistSongList({ albums, hasAlbumData, focusYear }: {
     return () => el.removeEventListener('scroll', check)
   }, [albums])
 
+  // Reset expansion when release-year focus changes
+  useEffect(() => {
+    setExpandedAlbums(new Set())
+  }, [focusYear])
+
   const displayAlbums = focusYear
     ? albums.filter(alb => alb.year === focusYear)
     : albums
 
+  // Use collapsed mode when there are multiple named albums
+  const namedAlbumCount = displayAlbums.filter(a => a.name).length
+  const useCollapsed = hasAlbumData && namedAlbumCount > 1
+
+  const toggleAlbum = (key: string) => {
+    setExpandedAlbums(prev => {
+      const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n
+    })
+  }
+
   return (
     <div className="relative">
       <div ref={scrollRef} className="max-h-[520px] overflow-y-auto">
-        {displayAlbums.map((album, ai) => (
-          <div key={ai}>
-            {hasAlbumData && album.name && album.songs.length >= 2 && (
-              <div
-                className={`px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide bg-muted/50 ${ai > 0 ? 'border-t border-teal-500/15' : ''}`}
-                style={{ color: '#0d9488' }}
-              >
-                {album.name}{album.year ? ` (${album.year})` : ''}
-              </div>
-            )}
-            <div className="divide-y divide-border/10">
-              {album.songs.map((song, j) => (
+        {displayAlbums.map((album, ai) => {
+          const albumKey = album.name ?? `__null_${ai}`
+          const isExpanded = !useCollapsed || !album.name || expandedAlbums.has(albumKey)
+          return (
+            <div key={ai}>
+              {hasAlbumData && album.name && (
                 <div
-                  key={j}
-                  className="grid items-center px-4 py-2 hover:bg-muted/20 transition-colors"
-                  style={{ gridTemplateColumns: 'minmax(0, 1fr) 108px' }}
+                  className={`px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide bg-muted/50 transition-colors ${ai > 0 ? 'border-t border-teal-500/15' : ''} ${useCollapsed ? 'cursor-pointer hover:bg-muted/70' : ''}`}
+                  style={{ color: '#0d9488' }}
+                  onClick={useCollapsed ? () => toggleAlbum(albumKey) : undefined}
                 >
-                  <div className="min-w-0 pl-2 pr-3">
-                    {song.track_id ? (
-                      <a
-                        href={`https://open.spotify.com/track/${song.track_id}`}
-                        target="_blank" rel="noopener noreferrer"
-                        className="text-xs text-foreground/80 hover:text-primary hover:underline truncate block transition-colors"
-                        title={song.track_name}
-                      >
-                        {song.track_name}
-                      </a>
-                    ) : (
-                      <span className="text-xs text-foreground/80 truncate block" title={song.track_name}>
-                        {song.track_name}
+                  <div className="flex items-center justify-between gap-3">
+                    <span>{album.name}{album.year ? ` (${album.year})` : ''}</span>
+                    {useCollapsed && (
+                      <span className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-muted-foreground font-normal text-[10px] normal-case tracking-normal">
+                          {album.songs.length} {album.songs.length === 1 ? 'song' : 'songs'}
+                        </span>
+                        <span className="text-muted-foreground text-[10px]">{isExpanded ? '▲' : '▼'}</span>
                       </span>
                     )}
                   </div>
-                  <span className="text-xs text-foreground/50 tabular-nums text-right">
-                    {new Date(song.added_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </span>
                 </div>
-              ))}
+              )}
+              {isExpanded && (
+                <div className="divide-y divide-border/10">
+                  {album.songs.map((song, j) => (
+                    <div
+                      key={j}
+                      className="grid items-center px-4 py-2 hover:bg-muted/20 transition-colors"
+                      style={{ gridTemplateColumns: 'minmax(0, 1fr) 108px' }}
+                    >
+                      <div className="min-w-0 pl-2 pr-3">
+                        {song.track_id ? (
+                          <a
+                            href={`https://open.spotify.com/track/${song.track_id}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="text-xs text-foreground/80 hover:text-primary hover:underline truncate block transition-colors"
+                            title={song.track_name}
+                          >
+                            {song.track_name}
+                          </a>
+                        ) : (
+                          <span className="text-xs text-foreground/80 truncate block" title={song.track_name}>
+                            {song.track_name}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-foreground/50 tabular-nums text-right">
+                        {new Date(song.added_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
-      {/* Scroll fade indicator — disappears once user reaches the bottom */}
       {showFade && (
         <div
           className="absolute bottom-0 left-0 right-0 h-14 pointer-events-none"
@@ -993,13 +1028,15 @@ export default function MyShowsClient({
         songsByMonth[m] = (songsByMonth[m] ?? 0) + 1
       }
 
-      // SCRUM-109: compute album release markers for single-artist view
-      const albumReleasesByMonth: Record<number, string[]> = {}
+      // SCRUM-109: compute album release markers for single-artist view.
+      // Sequential ordinals (#1, #2...) ordered by release date within the year.
+      const albumReleasesByMonth: Record<number, { name: string; ordinal: number }[]> = {}
       if (q) {
         const uniqueArtistIds = new Set(src.map(s => s.spotify_artist_id).filter(Boolean))
         if (uniqueArtistIds.size === 1) {
           const [singleArtistId] = uniqueArtistIds
           const seenAlbums = new Set<string>()
+          const releases: { name: string; releaseDate: string; month: number }[] = []
           for (const song of spotifySongs) {
             if (song.spotify_artist_id !== singleArtistId) continue
             if (!song.spotify_album_release_date || !song.spotify_album_name) continue
@@ -1008,9 +1045,14 @@ export default function MyShowsClient({
             if (seenAlbums.has(song.spotify_album_name)) continue
             seenAlbums.add(song.spotify_album_name)
             const month = parseInt(song.spotify_album_release_date.substring(5, 7)) - 1
-            if (!albumReleasesByMonth[month]) albumReleasesByMonth[month] = []
-            albumReleasesByMonth[month].push(song.spotify_album_name)
+            releases.push({ name: song.spotify_album_name, releaseDate: song.spotify_album_release_date, month })
           }
+          // Sort chronologically within the year, then assign sequential ordinals
+          releases.sort((a, b) => a.releaseDate.localeCompare(b.releaseDate))
+          releases.forEach((r, i) => {
+            if (!albumReleasesByMonth[r.month]) albumReleasesByMonth[r.month] = []
+            albumReleasesByMonth[r.month].push({ name: r.name, ordinal: i + 1 })
+          })
         }
       }
       const hasReleaseMarkers = Object.keys(albumReleasesByMonth).length > 0
@@ -1751,15 +1793,18 @@ export default function MyShowsClient({
                       <Area yAxisId="shows" type="monotone" dataKey="shows" stroke={chartLineColor} strokeWidth={2} fill="url(#gradShows)"
                         dot={(p: any) => {
                           const { cx, cy, payload } = p
-                          // SCRUM-109: release month marker — distinctive outlined dot + #N label
-                          const releases: string[] = payload?.albumReleases ?? []
+                          // SCRUM-109: release month marker — distinctive outlined dot + sequential ordinal label
+                          const releases: { name: string; ordinal: number }[] = payload?.albumReleases ?? []
                           if (releases.length > 0) {
+                            const ords = releases.map(r => r.ordinal)
+                            const lo = Math.min(...ords), hi = Math.max(...ords)
+                            const label = lo === hi ? `#${lo}` : `#${lo}–${hi}`
                             return (
                               <g key={`rel-${cx}`}>
                                 <circle cx={cx} cy={cy} r={5} fill={SPOTIFY_GREEN} stroke="var(--background)" strokeWidth={2}/>
                                 <circle cx={cx} cy={cy} r={8} fill="none" stroke={SPOTIFY_GREEN} strokeWidth={1.5} opacity={0.55}/>
-                                <text x={cx} y={cy - 13} textAnchor="middle" fontSize={8} fontWeight={700} fill={SPOTIFY_GREEN}>
-                                  #{releases.length}
+                                <text x={cx} y={cy - 14} textAnchor="middle" fontSize={11} fontWeight={700} fill={SPOTIFY_GREEN}>
+                                  {label}
                                 </text>
                               </g>
                             )
