@@ -1892,9 +1892,9 @@ export default function MyShowsClient({
                               </g>
                             )
                           }
-                          if (viewMode !== 'spotify' && payload.year === firstYear)
+                          if (payload.year === firstYear)
                             return <circle key={`f-${cx}`} cx={cx} cy={cy} r={5} fill={chartLineColor} stroke="var(--background)" strokeWidth={2}/>
-                          if (viewMode !== 'spotify' && payload.year === lastYear && lastYear !== firstYear)
+                          if (payload.year === lastYear && lastYear !== firstYear)
                             return <circle key={`l-${cx}`} cx={cx} cy={cy} r={5} fill={TEAL} stroke="var(--background)" strokeWidth={2}/>
                           return <circle key={`d-${cx}`} cx={cx} cy={cy} r={3} fill={chartLineColor} fillOpacity={0.7}/>
                         }} activeDot={{ r: 5, fill: chartLineColor }} />
