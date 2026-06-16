@@ -1149,6 +1149,7 @@ export default function MyShowsClient({
     return Array.from({ length: 12 }, (_, m) => ({
       month: MONTHS[m],
       shows: byMonth[m],
+      albumMonthCount: 0,  // not applicable in concert modes; keeps type uniform with Spotify branch
       ...(hasSpotify && hasContextual ? { songs: contextualByMonth[m] ?? 0 } : {}),
     }))
   }, [textFiltered, selectedYear, viewMode, spotifySongs, filterText, artistContextualByYearMonth, hasSpotify])
