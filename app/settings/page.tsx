@@ -12,6 +12,7 @@ type ProfileSettings = {
   profile_visibility: 'public' | 'friends' | 'private'
   spotify_connected: boolean
   show_spotify_stats: boolean
+  discogs_connected: boolean | null
 }
 
 const VISIBILITY_OPTIONS: {
@@ -45,6 +46,8 @@ export default function SettingsPage() {
   const [bio, setBio] = useState('')
   const [visibility, setVisibility] = useState<'public' | 'friends' | 'private'>('public')
   const [showSpotifyStats, setShowSpotifyStats] = useState(false)
+  const [discogsConnected, setDiscogsConnected] = useState(false)
+  const [discogsFlash, setDiscogsFlash] = useState<'connected' | 'error' | null>(null)
   const [pageLoading, setPageLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -68,13 +71,27 @@ export default function SettingsPage() {
     if (!authLoading && !user) router.replace('/')
   }, [user, authLoading, router])
 
+  // Handle ?discogs= URL param (set after OAuth redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const discogsParam = params.get('discogs')
+    if (discogsParam === 'connected') {
+      setDiscogsFlash('connected')
+      window.history.replaceState({}, '', '/settings')
+      setTimeout(() => setDiscogsFlash(null), 5000)
+    } else if (discogsParam === 'error') {
+      setDiscogsFlash('error')
+      window.history.replaceState({}, '', '/settings')
+    }
+  }, [])
+
   // Load current settings
   useEffect(() => {
     if (!user) return
     const fetchSettings = async () => {
       const { data, error: fetchError } = await supabase
         .from('user_profiles')
-        .select('username, bio, profile_visibility, spotify_connected, show_spotify_stats')
+        .select('username, bio, profile_visibility, spotify_connected, show_spotify_stats, discogs_connected')
         .eq('user_id', user.id)
         .single()
 
@@ -89,6 +106,7 @@ export default function SettingsPage() {
       setBio(p.bio ?? '')
       setVisibility((p.profile_visibility ?? 'public') as typeof visibility)
       setShowSpotifyStats(p.show_spotify_stats ?? false)
+      setDiscogsConnected(p.discogs_connected ?? false)
 
       // SCRUM-81: Fetch referral count in the same load cycle
       const { count: refCount } = await supabase
@@ -313,6 +331,66 @@ export default function SettingsPage() {
                   </div>
                 </section>
               )}
+
+              {/* ── Discogs section (SCRUM-116) ── */}
+              <section className="bg-card rounded-lg shadow p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  {/* Vinyl record icon */}
+                  <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0 text-foreground" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm0-5.5c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z" />
+                  </svg>
+                  <h2 className="text-base font-semibold text-foreground">Discogs</h2>
+                  {discogsConnected && (
+                    <span className="text-xs font-medium text-green-500">Connected</span>
+                  )}
+                </div>
+
+                {/* Flash messages from OAuth redirect */}
+                {discogsFlash === 'connected' && (
+                  <p className="text-sm font-medium text-green-500">
+                    Discogs connected successfully!
+                  </p>
+                )}
+                {discogsFlash === 'error' && (
+                  <p className="text-sm font-medium text-destructive">
+                    Failed to connect Discogs. Please try again.
+                  </p>
+                )}
+
+                {discogsConnected ? (
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">Vinyl collection</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Your Discogs library is connected
+                      </p>
+                    </div>
+                    <a
+                      href="/api/auth/discogs"
+                      className="px-3 py-1.5 bg-primary/10 border border-primary/20 text-primary text-xs font-semibold rounded-lg hover:bg-primary/20 transition-colors flex-shrink-0"
+                    >
+                      Reconnect
+                    </a>
+                  </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">
+                        Connect your vinyl collection
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Import your Discogs library to see your vinyl alongside concerts and Spotify
+                      </p>
+                    </div>
+                    <a
+                      href="/api/auth/discogs"
+                      className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded-lg hover:bg-primary/90 transition-colors flex-shrink-0 whitespace-nowrap"
+                    >
+                      Connect Discogs
+                    </a>
+                  </div>
+                )}
+              </section>
 
               {/* ── SCRUM-81: Referrals section ── */}
               <section className="bg-card rounded-lg shadow p-5 space-y-3">
