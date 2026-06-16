@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import MyShowsClient from './MyShowsClient'
 
 export const metadata = {
-    title: 'My Shows | Grooveprint',
+    title: 'My Grooveprint | Grooveprint',
 }
 
 export default async function MyShowsPage() {

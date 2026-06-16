@@ -472,9 +472,9 @@ function NewShowsTable({ title, shows, allReviewed, onSave, onSkip, onSaveAll, o
             <tr>
               <td colSpan={4} className="px-4 py-5">
                 <p className="text-foreground font-semibold text-sm mb-1">You're all set!</p>
-                <p className="text-muted-foreground text-xs mb-3">Saved shows will appear in My Shows.</p>
+                <p className="text-muted-foreground text-xs mb-3">Saved shows will appear in My Grooveprint.</p>
                 <div className="flex gap-2">
-                  <button onClick={onViewMyShows} className="px-4 py-1.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition">View My Shows</button>
+                  <button onClick={onViewMyShows} className="px-4 py-1.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition">View My Grooveprint</button>
                   <button onClick={onBrowse} className="px-4 py-1.5 bg-card border border-border text-foreground text-sm font-semibold rounded-lg hover:bg-muted transition">Browse All Shows</button>
                 </div>
               </td>
@@ -655,7 +655,6 @@ function UpcomingShowsContent() {
     return sortDir === 'asc' ? cmp : -cmp;
   });
 
-  // Capacity filter removed — search box covers this use case
   const process = (shows: Show[]) => sortShows(filterByText(shows));
 
   const newShows     = process(allShows.filter(s => s.status === 'pending'));
@@ -1055,7 +1054,7 @@ function UpcomingShowsContent() {
 
               {allShows.length > 0 && !allReviewed && (
                 <div className="mt-4 flex justify-center gap-4 text-sm">
-                  <button onClick={() => router.push('/my-shows')} className="text-primary hover:text-primary/80 font-medium transition">View My Shows →</button>
+                  <button onClick={() => router.push('/my-shows')} className="text-primary hover:text-primary/80 font-medium transition">View My Grooveprint →</button>
                   <button onClick={() => router.push('/browse')} className="text-primary hover:text-primary/80 font-medium transition">Browse All Shows →</button>
                 </div>
               )}

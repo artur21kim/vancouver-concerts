@@ -122,7 +122,7 @@ export default function AuthButton() {
                         }}
                         className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted"
                     >
-                        My Shows
+                        My Grooveprint
                     </button>
                     <button
                         onClick={() => {

@@ -165,7 +165,7 @@ export default function ReviewSummaryPage() {
               <div className="text-4xl font-bold text-foreground mb-2">
                 {summary.total_shows_in_my_shows.toLocaleString()}
               </div>
-              <div className="text-sm text-muted-foreground">Shows in My Shows (all sources)</div>
+              <div className="text-sm text-muted-foreground">Shows in My Grooveprint (all sources)</div>
             </div>
           </div>
 
@@ -175,7 +175,7 @@ export default function ReviewSummaryPage() {
               onClick={() => router.push('/my-shows')}
               className="px-8 py-4 bg-primary text-primary-foreground font-semibold text-lg rounded-lg hover:bg-primary/90 transition"
             >
-              View My Shows →
+              View My Grooveprint →
             </button>
             <button
               onClick={() => router.push('/likely-shows')}

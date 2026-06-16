@@ -1755,7 +1755,7 @@ export default function MyShowsClient({
         <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
 
           <h1 className="text-3xl md:text-4xl font-bold text-foreground">
-            {readOnly ? `${username}'s Shows` : 'My Shows'}
+            {readOnly ? `${username}'s Shows` : 'My Grooveprint'}
             {filterText.trim() ? (
               <>
                 <span className="text-muted-foreground font-normal"> · {filterText}</span>
