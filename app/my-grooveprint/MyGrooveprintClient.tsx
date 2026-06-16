@@ -59,6 +59,7 @@ export type ProfileHeader = {
   spotify_connected:     boolean
   show_spotify_stats:    boolean
   spotify_user_id:       string | null
+  spotify_album_count:   number | null
   discogs_connected:     boolean
   discogs_username:      string | null
   discogs_release_count: number | null
@@ -696,9 +697,7 @@ function ProfileHeaderCard({ header, readOnly }: { header: ProfileHeader; readOn
   const [imgError, setImgError] = useState(false)
 
   const profileUrl = `https://grooveprint.app/profile/${header.username}`
-  const yearRange = header.first_show_year
-    ? header.first_show_year === header.last_show_year ? String(header.first_show_year) : `${header.first_show_year}–${header.last_show_year}`
-    : null
+  const sinceYear = header.first_show_year ? `since ${header.first_show_year}` : null
   const showSpotifyStats = (header.is_own_profile || header.show_spotify_stats) && header.spotify_connected && (header.spotify_song_count ?? 0) > 0
 
   const handleAddFriend = async () => { setActionLoading(true); await supabase.rpc('send_friend_request', { target_user_id: header.user_id }); router.refresh(); setActionLoading(false) }
@@ -733,7 +732,7 @@ function ProfileHeaderCard({ header, readOnly }: { header: ProfileHeader; readOn
                 <span className="text-border">·</span>
                 <span className="font-semibold text-foreground">{header.unique_venues}</span><span className="text-muted-foreground">venues</span>
                 {header.festival_count > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.festival_count}</span><span className="text-muted-foreground">{header.festival_count === 1 ? 'festival' : 'festivals'}</span></>)}
-                {yearRange && (<><span className="text-border">·</span><span className="font-medium" style={{ color: TEAL }}>{yearRange}</span></>)}
+                {sinceYear && (<><span className="text-border">·</span><span className="font-medium" style={{ color: TEAL }}>{sinceYear}</span></>)}
               </div>
               {showSpotifyStats && (
                 <div className="flex items-center gap-1.5 mt-1.5 text-sm flex-wrap">
@@ -760,7 +759,7 @@ function ProfileHeaderCard({ header, readOnly }: { header: ProfileHeader; readOn
                   {header.discogs_connected && header.discogs_username && (
                     <a href={`https://www.discogs.com/user/${header.discogs_username}`} target="_blank" rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
-                      style={{ background: 'rgba(255,136,0,0.10)', color: '#ff8800', border: '1px solid rgba(255,136,0,0.28)' }}>
+                      style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)' }}>
                       <DiscogsIcon className="w-3 h-3" />Discogs
                     </a>
                   )}
@@ -1397,9 +1396,6 @@ export default function MyGrooveprintClient({
       <main className="min-h-screen bg-background py-6 md:py-8 px-4">
         <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
 
-          {/* ── GP-114: Profile header card ── */}
-          {profileHeader && <ProfileHeaderCard header={profileHeader} readOnly={readOnly} />}
-
           <h1 className="text-3xl md:text-4xl font-bold text-foreground">
             {readOnly ? `${username}'s Shows` : 'My Grooveprint'}
             {filterText.trim() ? (
@@ -1417,8 +1413,11 @@ export default function MyGrooveprintClient({
             )}
           </h1>
 
+          {/* ── GP-114: Profile header card ── */}
+          {profileHeader && <ProfileHeaderCard header={profileHeader} readOnly={readOnly} />}
+
           {/* ── Unadded CTA ── */}
-          {!readOnly && !unaddedDismissed && (unaddedArtists.length > 0 || skippedArtists.length > 0) && (
+          {!readOnly && !unaddedDismissed && unaddedArtists.length > 0 && (
             <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
@@ -1500,6 +1499,36 @@ export default function MyGrooveprintClient({
                 </div>
                 <button onClick={() => setUnaddedDismissed(true)} className="text-muted-foreground hover:text-foreground transition text-lg leading-none flex-shrink-0">×</button>
               </div>
+            </div>
+          )}
+
+          {/* ── Restore skipped link (shown only when no unadded remain) ── */}
+          {!readOnly && !unaddedDismissed && unaddedArtists.length === 0 && skippedArtists.length > 0 && (
+            <div>
+              <button onClick={() => setSkippedExpanded(v => !v)}
+                className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-1">
+                {skippedExpanded ? '▴' : '▾'} {skippedArtists.length} skipped co-bill {skippedArtists.length === 1 ? 'artist' : 'artists'} · restore?
+              </button>
+              {skippedExpanded && (
+                <div className="mt-2 bg-card border border-border rounded-lg p-3 space-y-1 max-h-48 overflow-y-auto">
+                  {skippedArtists.map(a => {
+                    const isRestoring = restoringIndividual.has(a.show_id)
+                    return (
+                      <div key={a.show_id} className="grid items-center gap-x-3 py-1" style={{ gridTemplateColumns: '80px 200px auto' }}>
+                        <span className="text-[11px] text-muted-foreground tabular-nums">{fmtDate(a.date)}</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium truncate" style={{ color: TEAL }}>{a.artist_name}</p>
+                          <p className="text-[11px] text-foreground/75 truncate">@ {a.venue_name}</p>
+                        </div>
+                        <button onClick={() => restoreSkipped(a)} disabled={isRestoring}
+                          className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-40">
+                          {isRestoring ? <div className="w-2.5 h-2.5 border border-primary border-t-transparent rounded-full animate-spin" /> : '↩ Restore'}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -1706,111 +1735,85 @@ export default function MyGrooveprintClient({
             )}
           </div>
 
-          {/* ── Capacity filter pills (shows/sets/festivals) ── */}
-          {(viewMode === 'shows' || viewMode === 'sets' || viewMode === 'festivals') && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-muted-foreground">Venue size:</span>
-              {(['all', ...CAP_KEYS] as CapFilter[]).map(key => (
-                <button key={key} onClick={() => handleCap(key)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${capFilter === key ? 'border-primary bg-primary/20 text-primary' : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'}`}>
-                  {key === 'all' ? 'All' : CAP_BY_KEY[key]?.legendLabel}
-                </button>
-              ))}
-            </div>
-          )}
 
-          {/* ── Top Artists / Venues card ── */}
+          {/* ── Top Artists / Venues + inline compact donut ── */}
           {viewMode !== 'spotify' && (topArtists.length > 0 || topVenues.length > 0) && (
-            <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5">
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
-                  {(['artists', 'venues'] as const).map((s, i) => (
-                    <button key={s} onClick={() => { setChartSection(s); setShowAllArtists(false); setShowAllVenues(false) }}
-                      className={`px-3 py-1.5 capitalize transition-colors ${i > 0 ? 'border-l border-border' : ''} ${chartSection === s ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
-                      {s}
-                    </button>
-                  ))}
+            <div className="flex gap-4 items-start">
+              {/* Left: artist / venue bars */}
+              <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 flex-1 min-w-0">
+                <div className="flex items-center mb-4">
+                  <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
+                    {(['artists', 'venues'] as const).map((s, i) => (
+                      <button key={s} onClick={() => { setChartSection(s); setShowAllArtists(false); setShowAllVenues(false) }}
+                        className={`px-3 py-1.5 capitalize transition-colors ${i > 0 ? 'border-l border-border' : ''} ${chartSection === s ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+                {chartSection === 'artists' && topArtists.length > 0 && (
+                  <>
+                    <ArtistYearBars
+                      artists={(showAllArtists ? topArtists : topArtists.slice(0, 15)).map(a => ({ name: a.name, spotifyId: a.spotifyId, total: a.total, byCapacity: a.byCapacity, showsByYear: a.showsByYear }))}
+                      max={maxArtistShows}
+                      onNavigate={name => applyFilter(name)}
+                      onYearClick={handleYearSegmentClick}
+                    />
+                    {topArtists.length > 15 && (
+                      <button onClick={() => setShowAllArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 transition">
+                        {showAllArtists ? 'Show less' : `Show ${topArtists.length - 15} more`}
+                      </button>
+                    )}
+                  </>
+                )}
+                {chartSection === 'venues' && topVenues.length > 0 && (
+                  <>
+                    <VenueYearBars
+                      venues={(showAllVenues ? topVenues : topVenues.slice(0, 15)).map(v => ({ name: v.name, total: v.total, byCapacity: v.byCapacity, showsByYear: v.showsByYear }))}
+                      max={maxVenueShows}
+                      onNavigate={name => applyFilter(name)}
+                    />
+                    {topVenues.length > 15 && (
+                      <button onClick={() => setShowAllVenues(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 transition">
+                        {showAllVenues ? 'Show less' : `Show ${topVenues.length - 15} more`}
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
-              {chartSection === 'artists' && topArtists.length > 0 && (
-                <>
-                  <ArtistYearBars
-                    artists={(showAllArtists ? topArtists : topArtists.slice(0, 15)).map(a => ({ name: a.name, spotifyId: a.spotifyId, total: a.total, byCapacity: a.byCapacity, showsByYear: a.showsByYear }))}
-                    max={maxArtistShows}
-                    onNavigate={name => applyFilter(name)}
-                    onYearClick={handleYearSegmentClick}
-                  />
-                  {topArtists.length > 15 && (
-                    <button onClick={() => setShowAllArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 transition">
-                      {showAllArtists ? 'Show less' : `Show ${topArtists.length - 15} more`}
-                    </button>
-                  )}
-                </>
-              )}
-              {chartSection === 'venues' && topVenues.length > 0 && (
-                <>
-                  <VenueYearBars
-                    venues={(showAllVenues ? topVenues : topVenues.slice(0, 15)).map(v => ({ name: v.name, total: v.total, byCapacity: v.byCapacity, showsByYear: v.showsByYear }))}
-                    max={maxVenueShows}
-                    onNavigate={name => applyFilter(name)}
-                  />
-                  {topVenues.length > 15 && (
-                    <button onClick={() => setShowAllVenues(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 transition">
-                      {showAllVenues ? 'Show less' : `Show ${topVenues.length - 15} more`}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
-          {/* ── Venue-size donut ── */}
-          {viewMode !== 'spotify' && donutData.length > 0 && (
-            <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5">
-              <h2 className="text-lg md:text-xl font-bold text-foreground mb-4">Venue Size Breakdown</h2>
-              <div className="flex items-start gap-6 flex-wrap">
-                <div className="shrink-0" style={{ width: 160, height: 160 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={donutData} dataKey="value" innerRadius={50} outerRadius={75} paddingAngle={2}>
-                        {donutData.map((_entry, i) => <Cell key={i} fill={donutData[i].color} />)}
-                      </Pie>
-                      <Tooltip content={<DonutTip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex-1 min-w-[200px] space-y-3">
-                  {donutData.map(entry => {
-                    const total = donutData.reduce((n, d) => n + d.value, 0)
-                    const pct = total > 0 ? Math.round((entry.value / total) * 100) : 0
-                    const venueList = venueBreakdown[entry.key] ?? []
-                    return (
-                      <div key={entry.key} className="space-y-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: entry.color }} />
-                            <span className="text-sm text-foreground">{entry.name}</span>
+              {/* Right: compact Venues by Size sidebar */}
+              {donutData.length > 0 && (
+                <div className="bg-card rounded-lg shadow border border-border p-4 w-52 shrink-0 hidden md:block">
+                  <h3 className="text-sm font-bold text-foreground mb-3">Venues by Size</h3>
+                  <div style={{ height: 120 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={donutData} dataKey="value" innerRadius={35} outerRadius={55} paddingAngle={2}>
+                          {donutData.map((_entry, i) => <Cell key={i} fill={donutData[i].color} />)}
+                        </Pie>
+                        <Tooltip content={<DonutTip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="mt-3 space-y-1.5">
+                    {donutData.map(entry => {
+                      const total = donutData.reduce((n, d) => n + d.value, 0)
+                      const pct = total > 0 ? Math.round((entry.value / total) * 100) : 0
+                      return (
+                        <div key={entry.key} className="flex items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: entry.color }} />
+                            <span className="text-muted-foreground truncate">{entry.name}</span>
                           </div>
-                          <span className="text-sm font-semibold tabular-nums" style={{ color: entry.color }}>
-                            {entry.value} <span className="text-muted-foreground font-normal text-xs">({pct}%)</span>
+                          <span className="font-semibold tabular-nums shrink-0" style={{ color: entry.color }}>
+                            {entry.value} <span className="text-muted-foreground font-normal">({pct}%)</span>
                           </span>
                         </div>
-                        {venueList.length > 0 && (
-                          <div className="pl-4 space-y-0.5">
-                            {venueList.slice(0, 3).map(v => (
-                              <div key={v.name} className="flex items-center justify-between gap-2">
-                                <button onClick={() => applyFilter(v.name)} className="text-xs text-muted-foreground hover:text-primary hover:underline truncate text-left">{v.name}</button>
-                                <span className="text-[10px] text-muted-foreground tabular-nums flex-shrink-0">{v.count}</span>
-                              </div>
-                            ))}
-                            {venueList.length > 3 && <p className="text-[10px] text-muted-foreground">+{venueList.length - 3} more</p>}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -1940,7 +1943,7 @@ export default function MyGrooveprintClient({
                             onClick={() => setExpandedBills(prev => { const s = new Set(prev); s.has(group.key) ? s.delete(group.key) : s.add(group.key); return s })}>
                             <div className="flex flex-col items-center gap-0.5 shrink-0 w-12 text-center">
                               <span className="text-[11px] text-muted-foreground font-medium leading-none">{new Date(group.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })}</span>
-                              <span className="text-2xl font-bold leading-tight text-foreground">{new Date(group.date + 'T12:00:00').getDate()}</span>
+                              <span className="text-xl font-bold leading-tight text-foreground">{new Date(group.date + 'T12:00:00').getDate()}</span>
                               <span className="text-[11px] text-muted-foreground leading-none">{new Date(group.date + 'T12:00:00').getFullYear()}</span>
                             </div>
                             <div className="flex-1 min-w-0">

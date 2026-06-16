@@ -147,6 +147,7 @@ export default async function MyGrooveprintPage() {
         // Spotify stats from already-fetched songs array
         const spotifySongCount   = new Set(spotifySongs.map(s => s.spotify_track_id).filter(Boolean)).size
         const spotifyArtistCount = new Set(spotifySongs.map(s => s.spotify_artist_id).filter(Boolean)).size
+        const spotifyAlbumCount  = new Set(spotifySongs.filter(s => s.spotify_album_name).map(s => s.spotify_album_name)).size
 
         profileHeader = {
             user_id:               user.id,
@@ -161,6 +162,7 @@ export default async function MyGrooveprintPage() {
             last_show_year:        lastShowYear,
             spotify_song_count:    spotifySongCount   > 0 ? spotifySongCount   : null,
             spotify_artist_count:  spotifyArtistCount > 0 ? spotifyArtistCount : null,
+            spotify_album_count:   spotifyAlbumCount  > 0 ? spotifyAlbumCount  : null,
             spotify_connected:     (profileRow as any).spotify_connected  ?? false,
             show_spotify_stats:    (profileRow as any).show_spotify_stats ?? true,
             spotify_user_id:       (profileRow as any).spotify_user_id   ?? null,

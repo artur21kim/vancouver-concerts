@@ -51,6 +51,7 @@ export default async function FriendShowsPage({ params }: PageProps) {
           last_show_year:        raw.last_show_year    ?? null,
           spotify_song_count:    raw.spotify_song_count   ?? null,
           spotify_artist_count:  raw.spotify_artist_count ?? null,
+          spotify_album_count:   raw.spotify_album_count  ?? null,
           spotify_connected:     raw.spotify_connected    ?? false,
           show_spotify_stats:    raw.show_spotify_stats   ?? false,
           spotify_user_id:       raw.spotify_user_id      ?? null,
