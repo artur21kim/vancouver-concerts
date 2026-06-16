@@ -55,7 +55,7 @@ export async function discogsFetch(
   )
 
   const headers: Record<string, string> = {
-    ...(authHeader as Record<string, string>),
+    ...(authHeader as unknown as Record<string, string>),
     'User-Agent': 'Grooveprint/1.0',
   }
 

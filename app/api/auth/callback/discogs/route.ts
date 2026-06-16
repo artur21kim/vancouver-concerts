@@ -69,7 +69,7 @@ export async function GET(request: Request) {
     const tokenRes = await fetch(DISCOGS_ACCESS_TOKEN_URL, {
       method:  'POST',
       headers: {
-        ...(authHeader as Record<string, string>),
+        ...(authHeader as unknown as Record<string, string>),
         'User-Agent':   'Grooveprint/1.0',
         'Content-Type': 'application/x-www-form-urlencoded',
       },
@@ -105,7 +105,7 @@ export async function GET(request: Request) {
 
     const identityRes = await fetch(DISCOGS_IDENTITY_URL, {
       headers: {
-        ...(identityAuthHeader as Record<string, string>),
+        ...(identityAuthHeader as unknown as Record<string, string>),
         'User-Agent': 'Grooveprint/1.0',
       },
     })

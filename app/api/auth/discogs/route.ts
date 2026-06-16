@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     const res = await fetch(fetchUrl, {
       method: 'GET',
       headers: {
-        ...(authHeader as Record<string, string>),
+        ...(authHeader as unknown as Record<string, string>),
         'User-Agent': 'Grooveprint/1.0',
       },
     })
