@@ -741,9 +741,9 @@ function DayTip({ active, payload, label, month, year }: any) {
 
 // ── SCRUM-111: Spotify album proportional bars ────────────────────────────────
 function SpotifyAlbumBars({ albums, max, onAlbumClick }: {
-  albums: { albumName: string; artistName: string; artistId: string | null; year: string | null; releaseDate: string | null; count: number }[]
+  albums: { albumName: string; artistName: string; artistId: string | null; year: string | null; releaseDate: string | null; addedYear: string | null; count: number }[]
   max: number
-  onAlbumClick: (artistName: string, releaseYear: string | null, artistId: string | null) => void
+  onAlbumClick: (artistName: string, releaseYear: string | null, artistId: string | null, addedYear: string | null) => void
 }) {
   const [tooltip, setTooltip] = useState<{ key: string; albumName: string; artistName: string; year: string | null; count: number; x: number } | null>(null)
 
@@ -758,9 +758,10 @@ function SpotifyAlbumBars({ albums, max, onAlbumClick }: {
               <button
                 className="text-xs hover:opacity-80 text-right min-w-0 flex-1"
                 title={`${album.albumName}${album.year ? ` (${album.year})` : ''} · ${album.artistName}`}
-                onClick={() => onAlbumClick(album.artistName, album.year, album.artistId)}
+                onClick={() => onAlbumClick(album.artistName, album.year, album.artistId, album.addedYear)}
               >
-                <span className="block text-primary truncate leading-tight">{album.albumName}{album.year ? ` (${album.year})` : ''}</span>
+                {/* SCRUM-111 (#3): year moved onto bar; label is just album name + artist */}
+                <span className="block text-primary truncate leading-tight">{album.albumName}</span>
                 <span className="block text-[10px] text-muted-foreground truncate">{album.artistName}</span>
               </button>
               {album.artistId && <SpotifyLink artistId={album.artistId} />}
@@ -768,15 +769,21 @@ function SpotifyAlbumBars({ albums, max, onAlbumClick }: {
             <div className="flex-1 relative">
               <div className="h-5 bg-muted/40 rounded-full overflow-hidden">
                 <div
-                  className="h-full rounded-full cursor-pointer"
+                  className="h-full rounded-full cursor-pointer flex items-center overflow-hidden"
                   style={{ width: `${totalWidth}%`, backgroundColor: SPOTIFY_GREEN, opacity: 0.8 }}
-                  onClick={() => onAlbumClick(album.artistName, album.year, album.artistId)}
+                  onClick={() => onAlbumClick(album.artistName, album.year, album.artistId, album.addedYear)}
                   onMouseEnter={e => {
                     const rect = (e.currentTarget as HTMLElement).closest('.flex-1')!.getBoundingClientRect()
                     setTooltip({ key, albumName: album.albumName, artistName: album.artistName, year: album.year, count: album.count, x: e.clientX - rect.left })
                   }}
                   onMouseLeave={() => setTooltip(null)}
-                />
+                >
+                  {album.year && totalWidth >= 8 && (
+                    <span className="text-[9px] font-semibold text-black/70 px-2 ml-auto select-none whitespace-nowrap">
+                      {album.year}
+                    </span>
+                  )}
+                </div>
               </div>
               {tooltip?.key === key && (
                 <div className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px]"
@@ -980,8 +987,14 @@ export default function MyShowsClient({
       name: string; count: number; spotifyId: string; hasAlbumData: boolean
       albums: { name: string | null; year: string | null; releaseDate: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
     }[]
+    // SCRUM-113: filter by year AND month (when selectedMonth is set for day drilldown)
     const src = selectedYear
-      ? spotifySongs.filter(s => new Date(s.added_at).getFullYear() === parseInt(selectedYear))
+      ? spotifySongs.filter(s => {
+          const dt = new Date(s.added_at)
+          if (String(dt.getFullYear()) !== selectedYear) return false
+          if (selectedMonth !== null && dt.getMonth() !== selectedMonth) return false
+          return true
+        })
       : spotifySongs
     const raw: Record<string, {
       name: string; count: number; spotifyId: string
@@ -1030,13 +1043,13 @@ export default function MyShowsClient({
         })
         return { name: artist.name, count: artist.count, spotifyId: artist.spotifyId, hasAlbumData, albums }
       })
-  }, [spotifySongs, hasSpotify, selectedYear])
+  }, [spotifySongs, hasSpotify, selectedYear, selectedMonth])
 
   const firstSpotifyYear = useMemo(() => Object.keys(spotifyByYearMonth).sort()[0] ?? null, [spotifyByYearMonth])
 
   // SCRUM-111: Top Albums memo — aggregates songs by album, respects filterText + selectedYear
   const topSpotifyAlbums = useMemo(() => {
-    if (!hasSpotify) return [] as { albumName: string; artistName: string; artistId: string | null; year: string | null; releaseDate: string | null; count: number; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
+    if (!hasSpotify) return [] as { albumName: string; artistName: string; artistId: string | null; year: string | null; releaseDate: string | null; addedYear: string | null; count: number; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
     const q = filterText.trim().toLowerCase()
     const src0 = q
       ? spotifySongs.filter(s =>
@@ -1044,19 +1057,35 @@ export default function MyShowsClient({
           (s.spotify_album_name?.toLowerCase().includes(q) ?? false)
         )
       : spotifySongs
+    // SCRUM-113: filter by year AND month when selectedMonth is set
     const src = selectedYear
-      ? src0.filter(s => new Date(s.added_at).getFullYear() === parseInt(selectedYear))
+      ? src0.filter(s => {
+          const dt = new Date(s.added_at)
+          if (String(dt.getFullYear()) !== selectedYear) return false
+          if (selectedMonth !== null && dt.getMonth() !== selectedMonth) return false
+          return true
+        })
       : src0
-    const albumMap: Record<string, { albumName: string; artistName: string; artistId: string | null; year: string | null; releaseDate: string | null; count: number; songs: { track_name: string; track_id: string | null; added_at: string }[] }> = {}
+    const albumMap: Record<string, { albumName: string; artistName: string; artistId: string | null; year: string | null; releaseDate: string | null; addedYear: string | null; count: number; songs: { track_name: string; track_id: string | null; added_at: string }[]; addedYearCounts: Record<string, number> }> = {}
     for (const song of src) {
       if (!song.spotify_album_name) continue
       const key = `${song.spotify_album_name}::${song.spotify_artist_id ?? ''}`
-      if (!albumMap[key]) albumMap[key] = { albumName: song.spotify_album_name, artistName: song.artist_name, artistId: song.spotify_artist_id ?? null, year: song.spotify_album_release_date ? song.spotify_album_release_date.substring(0, 4) : null, releaseDate: song.spotify_album_release_date ?? null, count: 0, songs: [] }
+      if (!albumMap[key]) albumMap[key] = { albumName: song.spotify_album_name, artistName: song.artist_name, artistId: song.spotify_artist_id ?? null, year: song.spotify_album_release_date ? song.spotify_album_release_date.substring(0, 4) : null, releaseDate: song.spotify_album_release_date ?? null, addedYear: null, count: 0, songs: [], addedYearCounts: {} }
       albumMap[key].count++
       albumMap[key].songs.push({ track_name: song.track_name, track_id: song.spotify_track_id ?? null, added_at: song.added_at })
+      // SCRUM-111 (#4): track which added year has the most songs to use for drilldown
+      const addedY = String(new Date(song.added_at).getFullYear())
+      albumMap[key].addedYearCounts[addedY] = (albumMap[key].addedYearCounts[addedY] ?? 0) + 1
     }
-    return Object.values(albumMap).sort((a, b) => b.count - a.count).slice(0, 50)
-  }, [spotifySongs, hasSpotify, filterText, selectedYear])
+    return Object.values(albumMap)
+      .map(alb => {
+        // Pick the mode year (most songs added)
+        const addedYear = Object.entries(alb.addedYearCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+        const { addedYearCounts: _, ...rest } = alb
+        return { ...rest, addedYear }
+      })
+      .sort((a, b) => b.count - a.count).slice(0, 50)
+  }, [spotifySongs, hasSpotify, filterText, selectedYear, selectedMonth])
 
   // SCRUM-112: Day-level data — computed when selectedMonth is set in Spotify mode
   const dayTimelineData = useMemo(() => {
@@ -1466,8 +1495,14 @@ export default function MyShowsClient({
             (s.spotify_album_name?.toLowerCase().includes(q) ?? false)
           )
         : spotifySongs
+      // SCRUM-113: filter by year AND month when selectedMonth is set
       const src = selectedYear
-        ? artistFiltered.filter(s => new Date(s.added_at).getFullYear() === parseInt(selectedYear))
+        ? artistFiltered.filter(s => {
+            const dt = new Date(s.added_at)
+            if (dt.getFullYear() !== parseInt(selectedYear)) return false
+            if (selectedMonth !== null && dt.getMonth() !== selectedMonth) return false
+            return true
+          })
         : artistFiltered
       return {
         sets: src.length,
@@ -1495,7 +1530,7 @@ export default function MyShowsClient({
     const artists   = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.artist.artist_id))).size
     const venues    = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.venue.venue_id))).size
     return { sets, shows: 0, artists, venues, festivals }
-  }, [viewMode, billGroups, setsFiltered, festivalGroups, spotifySongs, selectedYear, filterText])
+  }, [viewMode, billGroups, setsFiltered, festivalGroups, spotifySongs, selectedYear, selectedMonth, filterText])
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleCap = useCallback((key: CapFilter) => {
@@ -1561,14 +1596,19 @@ export default function MyShowsClient({
   }, [])
 
   // SCRUM-111: album row click — drills into artist + release year, switches back to artist view
-  const handleAlbumClick = useCallback((artistName: string, releaseYear: string | null, artistId: string | null) => {
+  // SCRUM-111 (#4): uses addedYear (not releaseYear) for selectedYear so the timeline shows when songs were added
+  const handleAlbumClick = useCallback((artistName: string, releaseYear: string | null, artistId: string | null, addedYear: string | null) => {
     setFilterText(artistName)
-    if (artistId && releaseYear) {
+    if (artistId) {
       setIsPlaying(false)
-      setSelectedYear(releaseYear)
-      setSelectedMonth(null)
       setExpandedSpotifyArtists(new Set([artistId]))
-      setSpotifyReleaseFocus({ artistId, releaseYear })
+      if (releaseYear) setSpotifyReleaseFocus({ artistId, releaseYear })
+      // Use addedYear for the timeline (when user actually added these songs), falling back to releaseYear
+      const yearForTimeline = addedYear ?? releaseYear
+      if (yearForTimeline) {
+        setSelectedYear(yearForTimeline)
+        setSelectedMonth(null)
+      }
     }
     setSpotifyLibraryView('artists')
     setPage(1)
@@ -1720,13 +1760,13 @@ export default function MyShowsClient({
               <>
                 <span className="text-muted-foreground font-normal"> · {filterText}</span>
                 {selectedYear
-                  ? <span className="text-muted-foreground font-normal"> · {selectedYear}</span>
+                  ? <span className="text-muted-foreground font-normal"> · {selectedMonth !== null ? `${MONTHS[selectedMonth]} ` : ''}{selectedYear}</span>
                   : filterRange && <span className="text-muted-foreground font-normal"> · {filterRange}</span>
                 }
               </>
             ) : (
               <>
-                {selectedYear && <span className="text-muted-foreground font-normal"> · {selectedYear}</span>}
+                {selectedYear && <span className="text-muted-foreground font-normal"> · {selectedMonth !== null ? `${MONTHS[selectedMonth]} ` : ''}{selectedYear}</span>}
                 {!selectedYear && capFilter !== 'all' && <span className="text-muted-foreground font-normal"> · {CAP_BY_KEY[capFilter]?.legendLabel}</span>}
               </>
             )}
