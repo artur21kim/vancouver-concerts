@@ -90,7 +90,7 @@ export default function SettingsPage() {
 
     try {
       while (true) {
-        const res = await fetch('/api/discogs/fetch', {
+        const res: Response = await fetch('/api/discogs/fetch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(cursor ? { cursor } : {}),
