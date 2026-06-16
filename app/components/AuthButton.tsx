@@ -118,7 +118,7 @@ export default function AuthButton() {
                     <button
                         onClick={() => {
                             setShowUserMenu(false)
-                            router.push('/my-shows')
+                            router.push('/my-grooveprint')
                         }}
                         className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted"
                     >

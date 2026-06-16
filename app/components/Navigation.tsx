@@ -38,7 +38,7 @@ const NAV_LINKS = [
   { label: 'Overview', path: '/' },
   { label: 'Discover', path: '/discover' },
   { label: 'Browse', path: '/browse' },
-  { label: 'My Grooveprint', path: '/my-shows' },
+  { label: 'My Grooveprint', path: '/my-grooveprint' },
   { label: 'Friends', path: '/friends' },
 ]
 

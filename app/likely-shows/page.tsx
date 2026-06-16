@@ -1287,7 +1287,7 @@ export default function LikelyShowsPage() {
                     These artists matched your Spotify library but have a very low match score (&lt;1%). They are unlikely to be shows you attended but may be useful for users with longer concert histories.
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {stretchShows.length} shows across {new Set(stretchShows.map(s => s.artist_id)).size} artists — go to <button onClick={() => router.push('/my-shows')} className="text-primary underline">My Shows</button> to manually add any you know you attended.
+                    {stretchShows.length} shows across {new Set(stretchShows.map(s => s.artist_id)).size} artists — go to <button onClick={() => router.push('/my-grooveprint')} className="text-primary underline">My Grooveprint</button> to manually add any you know you attended.
                   </p>
                 </div>
               )}

@@ -172,7 +172,7 @@ export default function ReviewSummaryPage() {
           {/* Action Buttons */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <button
-              onClick={() => router.push('/my-shows')}
+              onClick={() => router.push('/my-grooveprint')}
               className="px-8 py-4 bg-primary text-primary-foreground font-semibold text-lg rounded-lg hover:bg-primary/90 transition"
             >
               View My Grooveprint →

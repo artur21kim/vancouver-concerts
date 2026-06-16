@@ -999,7 +999,7 @@ function UpcomingShowsContent() {
                   onSave={handleSave} onSkip={handleSkip}
                   onSaveAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'added')}
                   onSkipAll={() => bulkUpdateStatus(newShows.map(s => s.show_id), 'skipped')}
-                  onViewMyShows={() => router.push('/my-shows')}
+                  onViewMyShows={() => router.push('/my-grooveprint')}
                   onBrowse={() => router.push('/browse')}
                   {...tableProps}
                 />
@@ -1013,7 +1013,7 @@ function UpcomingShowsContent() {
                     onSaveAll={() => bulkUpdateStatus(newMatchedShows.map(s => s.show_id), 'added')}
                     onSkipAll={() => bulkUpdateStatus(newMatchedShows.map(s => s.show_id), 'skipped')}
                     highlightHeader
-                    onViewMyShows={() => router.push('/my-shows')}
+                    onViewMyShows={() => router.push('/my-grooveprint')}
                     onBrowse={() => router.push('/browse')}
                     {...tableProps}
                   />
@@ -1054,7 +1054,7 @@ function UpcomingShowsContent() {
 
               {allShows.length > 0 && !allReviewed && (
                 <div className="mt-4 flex justify-center gap-4 text-sm">
-                  <button onClick={() => router.push('/my-shows')} className="text-primary hover:text-primary/80 font-medium transition">View My Grooveprint →</button>
+                  <button onClick={() => router.push('/my-grooveprint')} className="text-primary hover:text-primary/80 font-medium transition">View My Grooveprint →</button>
                   <button onClick={() => router.push('/browse')} className="text-primary hover:text-primary/80 font-medium transition">Browse All Shows →</button>
                 </div>
               )}

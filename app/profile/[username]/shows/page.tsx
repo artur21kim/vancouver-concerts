@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import MyShowsClient from '@/app/my-shows/MyShowsClient'
+import MyShowsClient from '@/app/my-grooveprint/MyShowsClient'
 
 interface PageProps {
   params: Promise<{ username: string }>
