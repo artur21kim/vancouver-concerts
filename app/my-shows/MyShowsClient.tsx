@@ -201,6 +201,8 @@ function MonthTip({ active, payload, label, viewMode }: any) {
   if (!active || !payload?.length) return null
   const shows = payload.find((p: any) => p.dataKey === 'shows')?.value ?? 0
   const songs = payload.find((p: any) => p.dataKey === 'songs')?.value
+  // SCRUM-109: album release markers (single-artist Spotify view only)
+  const albumReleases: string[] = payload[0]?.payload?.albumReleases ?? []
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
       <p className="font-semibold text-foreground mb-0.5">{label}</p>
@@ -211,6 +213,13 @@ function MonthTip({ active, payload, label, viewMode }: any) {
           {shows > 0 && <p className="text-primary">{shows} {shows === 1 ? 'show' : 'shows'}</p>}
           {songs != null && songs > 0 && <p style={{ color: SPOTIFY_GREEN }}>{songs} matched songs</p>}
         </>
+      )}
+      {albumReleases.length > 0 && (
+        <div className="mt-1.5 pt-1.5 border-t border-border/40">
+          {albumReleases.map((name, i) => (
+            <p key={i} className="text-[10px] leading-snug" style={{ color: SPOTIFY_GREEN }}>↑ {name}</p>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -967,6 +976,7 @@ export default function MyShowsClient({
 
   // SCRUM-80: monthTimelineData
   // SCRUM-108: Spotify branch inline-filters by filterText so month drilldown tracks active artist
+  // SCRUM-109: single-artist Spotify view adds albumReleasesByMonth for release month markers
   const monthTimelineData = useMemo(() => {
     if (!selectedYear) return []
 
@@ -982,9 +992,33 @@ export default function MyShowsClient({
         const m = dt.getMonth()
         songsByMonth[m] = (songsByMonth[m] ?? 0) + 1
       }
+
+      // SCRUM-109: compute album release markers for single-artist view
+      const albumReleasesByMonth: Record<number, string[]> = {}
+      if (q) {
+        const uniqueArtistIds = new Set(src.map(s => s.spotify_artist_id).filter(Boolean))
+        if (uniqueArtistIds.size === 1) {
+          const [singleArtistId] = uniqueArtistIds
+          const seenAlbums = new Set<string>()
+          for (const song of spotifySongs) {
+            if (song.spotify_artist_id !== singleArtistId) continue
+            if (!song.spotify_album_release_date || !song.spotify_album_name) continue
+            if (song.spotify_album_release_date.length < 7) continue
+            if (!song.spotify_album_release_date.startsWith(selectedYear)) continue
+            if (seenAlbums.has(song.spotify_album_name)) continue
+            seenAlbums.add(song.spotify_album_name)
+            const month = parseInt(song.spotify_album_release_date.substring(5, 7)) - 1
+            if (!albumReleasesByMonth[month]) albumReleasesByMonth[month] = []
+            albumReleasesByMonth[month].push(song.spotify_album_name)
+          }
+        }
+      }
+      const hasReleaseMarkers = Object.keys(albumReleasesByMonth).length > 0
+
       return Array.from({ length: 12 }, (_, m) => ({
         month: MONTHS[m],
         shows: songsByMonth[m] ?? 0,
+        ...(hasReleaseMarkers ? { albumReleases: albumReleasesByMonth[m] ?? [] } : {}),
       }))
     }
 
@@ -1243,9 +1277,12 @@ export default function MyShowsClient({
   }, [])
 
   // SCRUM-107: Spotify segment click — drills to release-year albums for that artist.
-  // Does NOT set selectedYear (which filters by added_at, not release year).
+  // Does NOT use selectedYear for the expandable list (which stays filtered by spotifyReleaseFocus),
+  // but DOES set selectedYear so the timeline immediately shows the monthly drilldown for that year.
   const handleSpotifySegmentClick = useCallback((artistName: string, releaseYear: string, spotifyId: string) => {
+    setIsPlaying(false)
     setFilterText(artistName)
+    setSelectedYear(releaseYear)
     setExpandedSpotifyArtists(new Set([spotifyId]))
     setSpotifyReleaseFocus({ artistId: spotifyId, releaseYear })
     setPage(1)
@@ -1714,6 +1751,19 @@ export default function MyShowsClient({
                       <Area yAxisId="shows" type="monotone" dataKey="shows" stroke={chartLineColor} strokeWidth={2} fill="url(#gradShows)"
                         dot={(p: any) => {
                           const { cx, cy, payload } = p
+                          // SCRUM-109: release month marker — distinctive outlined dot + #N label
+                          const releases: string[] = payload?.albumReleases ?? []
+                          if (releases.length > 0) {
+                            return (
+                              <g key={`rel-${cx}`}>
+                                <circle cx={cx} cy={cy} r={5} fill={SPOTIFY_GREEN} stroke="var(--background)" strokeWidth={2}/>
+                                <circle cx={cx} cy={cy} r={8} fill="none" stroke={SPOTIFY_GREEN} strokeWidth={1.5} opacity={0.55}/>
+                                <text x={cx} y={cy - 13} textAnchor="middle" fontSize={8} fontWeight={700} fill={SPOTIFY_GREEN}>
+                                  #{releases.length}
+                                </text>
+                              </g>
+                            )
+                          }
                           if ((payload.shows ?? 0) === 0) return <g key={`e-${cx}`} />
                           return <circle key={`s-${cx}`} cx={cx} cy={cy} r={3} fill={chartLineColor} stroke="var(--background)" strokeWidth={1.5}/>
                         }} activeDot={{ r: 4, fill: chartLineColor }} />
