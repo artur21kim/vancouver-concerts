@@ -129,6 +129,8 @@ export async function GET(request: Request) {
           access_token_secret: accessTokenSecret,
           discogs_username:    discogsUsername,
           status:              'pending',
+          releases_fetched:    0,
+          total_releases:      0,
           updated_at:          new Date().toISOString(),
         },
         { onConflict: 'user_id' }

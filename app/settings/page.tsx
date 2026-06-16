@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/app/providers/AuthProvider'
@@ -14,6 +14,12 @@ type ProfileSettings = {
   show_spotify_stats: boolean
   discogs_connected: boolean | null
   discogs_username: string | null
+}
+
+type DiscogsImportProgress = {
+  fetched: number
+  total: number
+  status: string
 }
 
 const VISIBILITY_OPTIONS: {
@@ -67,12 +73,56 @@ export default function SettingsPage() {
   // SCRUM-81: Referral count
   const [referralCount, setReferralCount] = useState<number>(0)
 
+  // SCRUM-117: Discogs collection import progress
+  const [discogsImporting, setDiscogsImporting] = useState(false)
+  const [discogsImportProgress, setDiscogsImportProgress] = useState<DiscogsImportProgress | null>(null)
+
   // Auth guard
   useEffect(() => {
     if (!authLoading && !user) router.replace('/')
   }, [user, authLoading, router])
 
-  // Handle ?discogs= URL param (set after OAuth redirect)
+  // SCRUM-117: Loop through paginated Discogs fetch until complete
+  const runDiscogsImport = useCallback(async () => {
+    setDiscogsImporting(true)
+    setDiscogsImportProgress(null)
+    let cursor: string | null = null
+
+    try {
+      while (true) {
+        const res = await fetch('/api/discogs/fetch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cursor ? { cursor } : {}),
+        })
+
+        if (!res.ok) {
+          console.error('Discogs import request failed:', res.status)
+          break
+        }
+
+        const data = await res.json()
+
+        setDiscogsImportProgress({
+          fetched: data.releases_fetched,
+          total: data.total_releases,
+          status: data.status,
+        })
+
+        if (!data.has_more || data.status === 'complete') break
+
+        cursor = data.next_url
+        // Brief pause between pages (Discogs rate limit: 60 req/min)
+        await new Promise(r => setTimeout(r, 400))
+      }
+    } catch (err) {
+      console.error('Discogs import error:', err)
+    } finally {
+      setDiscogsImporting(false)
+    }
+  }, [])
+
+  // Handle ?discogs= URL param set after OAuth redirect; auto-trigger import on connect
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const discogsParam = params.get('discogs')
@@ -80,11 +130,12 @@ export default function SettingsPage() {
       setDiscogsFlash('connected')
       window.history.replaceState({}, '', '/settings')
       setTimeout(() => setDiscogsFlash(null), 5000)
+      runDiscogsImport()
     } else if (discogsParam === 'error') {
       setDiscogsFlash('error')
       window.history.replaceState({}, '', '/settings')
     }
-  }, [])
+  }, [runDiscogsImport])
 
   // Load current settings
   useEffect(() => {
@@ -183,7 +234,6 @@ export default function SettingsPage() {
         const data = await res.json()
         throw new Error(data.error || 'Failed to delete account.')
       }
-      // Sign out client-side — auth identity is already gone server-side
       await supabase.auth.signOut()
       router.push('/')
     } catch (err: any) {
@@ -333,7 +383,7 @@ export default function SettingsPage() {
                 </section>
               )}
 
-              {/* ── Discogs section (SCRUM-116) ── */}
+              {/* ── Discogs section (SCRUM-116 / SCRUM-117) ── */}
               <section className="bg-card rounded-lg shadow p-5 space-y-4">
                 <div className="flex items-center gap-2">
                   {/* Vinyl record icon */}
@@ -359,21 +409,40 @@ export default function SettingsPage() {
                 )}
 
                 {discogsConnected ? (
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">Vinyl collection</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {settings?.discogs_username
-                          ? `Connected as @${settings.discogs_username}`
-                          : 'Your Discogs library is connected'}
-                      </p>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">Vinyl collection</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {settings?.discogs_username
+                            ? `Connected as @${settings.discogs_username}`
+                            : 'Your Discogs library is connected'}
+                        </p>
+                      </div>
+                      <a
+                        href="/api/auth/discogs"
+                        className="px-3 py-1.5 bg-primary/10 border border-primary/20 text-primary text-xs font-semibold rounded-lg hover:bg-primary/20 transition-colors flex-shrink-0"
+                      >
+                        Reconnect
+                      </a>
                     </div>
-                    <a
-                      href="/api/auth/discogs"
-                      className="px-3 py-1.5 bg-primary/10 border border-primary/20 text-primary text-xs font-semibold rounded-lg hover:bg-primary/20 transition-colors flex-shrink-0"
-                    >
-                      Reconnect
-                    </a>
+
+                    {/* SCRUM-117: Import progress */}
+                    {discogsImporting && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary flex-shrink-0" />
+                        <span>
+                          {discogsImportProgress
+                            ? `Importing ${discogsImportProgress.fetched}${discogsImportProgress.total > 0 ? ` / ${discogsImportProgress.total}` : ''} releases…`
+                            : 'Starting import…'}
+                        </span>
+                      </div>
+                    )}
+                    {!discogsImporting && discogsImportProgress?.status === 'complete' && (
+                      <p className="text-xs font-medium text-green-500">
+                        ✓ {discogsImportProgress.fetched} releases imported
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-start justify-between gap-4">
