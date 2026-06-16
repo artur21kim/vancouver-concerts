@@ -717,6 +717,86 @@ function ArtistSongList({ albums, hasAlbumData, focusYear }: {
   )
 }
 
+// ── Day-level tooltip (SCRUM-112) ─────────────────────────────────────────────
+function DayTip({ active, payload, label, month, year }: any) {
+  if (!active || !payload?.length) return null
+  const shows = payload.find((p: any) => p.dataKey === 'shows')?.value ?? 0
+  const albumReleases: string[] = payload[0]?.payload?.albumReleases ?? []
+  return (
+    <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none max-w-[220px]">
+      <p className="font-semibold text-foreground mb-0.5">Day {label}{month && year ? `, ${MONTHS[month]} ${year}` : ''}</p>
+      {shows > 0 && <p style={{ color: SPOTIFY_GREEN }}>{shows.toLocaleString()} {shows === 1 ? 'song' : 'songs'} added</p>}
+      {albumReleases.length > 0 && (
+        <div className="mt-1.5 pt-1.5 border-t border-border/40 space-y-0.5">
+          {albumReleases.map((name, i) => (
+            <p key={i} className="text-[10px] leading-snug text-foreground/85">
+              <span style={{ color: SPOTIFY_GREEN }} className="font-bold">↑</span> {name}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── SCRUM-111: Spotify album proportional bars ────────────────────────────────
+function SpotifyAlbumBars({ albums, max, onAlbumClick }: {
+  albums: { albumName: string; artistName: string; artistId: string | null; year: string | null; releaseDate: string | null; count: number }[]
+  max: number
+  onAlbumClick: (artistName: string, releaseYear: string | null, artistId: string | null) => void
+}) {
+  const [tooltip, setTooltip] = useState<{ key: string; albumName: string; artistName: string; year: string | null; count: number; x: number } | null>(null)
+
+  return (
+    <div className="w-full space-y-1.5">
+      {albums.map((album) => {
+        const totalWidth = max > 0 ? (album.count / max) * 100 : 0
+        const key = `${album.albumName}::${album.artistName}`
+        return (
+          <div key={key} className="flex items-center gap-2 py-0.5">
+            <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
+              <button
+                className="text-xs hover:opacity-80 text-right min-w-0 flex-1"
+                title={`${album.albumName}${album.year ? ` (${album.year})` : ''} · ${album.artistName}`}
+                onClick={() => onAlbumClick(album.artistName, album.year, album.artistId)}
+              >
+                <span className="block text-primary truncate leading-tight">{album.albumName}{album.year ? ` (${album.year})` : ''}</span>
+                <span className="block text-[10px] text-muted-foreground truncate">{album.artistName}</span>
+              </button>
+              {album.artistId && <SpotifyLink artistId={album.artistId} />}
+            </div>
+            <div className="flex-1 relative">
+              <div className="h-5 bg-muted/40 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full cursor-pointer"
+                  style={{ width: `${totalWidth}%`, backgroundColor: SPOTIFY_GREEN, opacity: 0.8 }}
+                  onClick={() => onAlbumClick(album.artistName, album.year, album.artistId)}
+                  onMouseEnter={e => {
+                    const rect = (e.currentTarget as HTMLElement).closest('.flex-1')!.getBoundingClientRect()
+                    setTooltip({ key, albumName: album.albumName, artistName: album.artistName, year: album.year, count: album.count, x: e.clientX - rect.left })
+                  }}
+                  onMouseLeave={() => setTooltip(null)}
+                />
+              </div>
+              {tooltip?.key === key && (
+                <div className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px]"
+                  style={{ left: Math.min(tooltip.x, 220), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}>
+                  <p className="font-semibold text-foreground">{tooltip.albumName}{tooltip.year ? ` (${tooltip.year})` : ''}</p>
+                  <p className="text-muted-foreground text-[10px] mt-0.5">{tooltip.artistName}</p>
+                  <p style={{ color: SPOTIFY_GREEN }} className="mt-0.5">{tooltip.count.toLocaleString()} {tooltip.count === 1 ? 'song' : 'songs'}</p>
+                </div>
+              )}
+            </div>
+            <span className="text-xs tabular-nums flex-shrink-0 w-16 text-right" style={{ color: SPOTIFY_GREEN }}>
+              {album.count.toLocaleString()} {album.count === 1 ? 'song' : 'songs'}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function MyShowsClient({
   shows: initialShows,
@@ -741,6 +821,7 @@ export default function MyShowsClient({
   const [page, setPage]                         = useState(1)
   const [pageInput, setPageInput]               = useState('1')
   const [selectedYear, setSelectedYear]         = useState<string | null>(null)
+  const [selectedMonth, setSelectedMonth]       = useState<number | null>(null)   // SCRUM-112
   const [capFilter, setCapFilter]               = useState<CapFilter>('all')
   const [chartSection, setChartSection]         = useState<'artists' | 'venues'>('artists')
   const [showAllArtists, setShowAllArtists]     = useState(false)
@@ -751,6 +832,10 @@ export default function MyShowsClient({
   const [filterText, setFilterText]                         = useState('')
   // SCRUM-107: release-year focus for SpotifyArtistBars drilldown (separate from selectedYear which filters by added_at)
   const [spotifyReleaseFocus, setSpotifyReleaseFocus]       = useState<{ artistId: string; releaseYear: string } | null>(null)
+  // SCRUM-111: Top Albums toggle
+  const [spotifyLibraryView, setSpotifyLibraryView] = useState<'artists' | 'albums'>('artists')
+  const [showAllAlbums, setShowAllAlbums]             = useState(false)
+  const [expandedAlbumKeys, setExpandedAlbumKeys]     = useState<Set<string>>(new Set())
 
   // Unadded CTA — own profile only
   const [unaddedArtists, setUnaddedArtists]         = useState<UnaddedArtist[]>([])
@@ -948,6 +1033,70 @@ export default function MyShowsClient({
   }, [spotifySongs, hasSpotify, selectedYear])
 
   const firstSpotifyYear = useMemo(() => Object.keys(spotifyByYearMonth).sort()[0] ?? null, [spotifyByYearMonth])
+
+  // SCRUM-111: Top Albums memo — aggregates songs by album, respects filterText + selectedYear
+  const topSpotifyAlbums = useMemo(() => {
+    if (!hasSpotify) return [] as { albumName: string; artistName: string; artistId: string | null; year: string | null; releaseDate: string | null; count: number; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
+    const q = filterText.trim().toLowerCase()
+    const src0 = q
+      ? spotifySongs.filter(s =>
+          s.artist_name.toLowerCase().includes(q) ||
+          (s.spotify_album_name?.toLowerCase().includes(q) ?? false)
+        )
+      : spotifySongs
+    const src = selectedYear
+      ? src0.filter(s => new Date(s.added_at).getFullYear() === parseInt(selectedYear))
+      : src0
+    const albumMap: Record<string, { albumName: string; artistName: string; artistId: string | null; year: string | null; releaseDate: string | null; count: number; songs: { track_name: string; track_id: string | null; added_at: string }[] }> = {}
+    for (const song of src) {
+      if (!song.spotify_album_name) continue
+      const key = `${song.spotify_album_name}::${song.spotify_artist_id ?? ''}`
+      if (!albumMap[key]) albumMap[key] = { albumName: song.spotify_album_name, artistName: song.artist_name, artistId: song.spotify_artist_id ?? null, year: song.spotify_album_release_date ? song.spotify_album_release_date.substring(0, 4) : null, releaseDate: song.spotify_album_release_date ?? null, count: 0, songs: [] }
+      albumMap[key].count++
+      albumMap[key].songs.push({ track_name: song.track_name, track_id: song.spotify_track_id ?? null, added_at: song.added_at })
+    }
+    return Object.values(albumMap).sort((a, b) => b.count - a.count).slice(0, 50)
+  }, [spotifySongs, hasSpotify, filterText, selectedYear])
+
+  // SCRUM-112: Day-level data — computed when selectedMonth is set in Spotify mode
+  const dayTimelineData = useMemo(() => {
+    if (selectedMonth === null || !selectedYear || viewMode !== 'spotify') return [] as { day: string; shows: number; albumReleases: string[] }[]
+    const q = filterText.trim().toLowerCase()
+    const src = q
+      ? spotifySongs.filter(s =>
+          s.artist_name.toLowerCase().includes(q) ||
+          (s.spotify_album_name?.toLowerCase().includes(q) ?? false)
+        )
+      : spotifySongs
+    const byDay: Record<number, number> = {}
+    for (const song of src) {
+      const dt = new Date(song.added_at)
+      if (String(dt.getFullYear()) !== selectedYear || dt.getMonth() !== selectedMonth) continue
+      const d = dt.getDate()
+      byDay[d] = (byDay[d] ?? 0) + 1
+    }
+    // Album releases on specific days (day-precision release dates only)
+    const albumReleasesByDay: Record<number, string[]> = {}
+    const seenAlbums = new Set<string>()
+    for (const song of src) {
+      if (!song.spotify_album_release_date || !song.spotify_album_name) continue
+      if (song.spotify_album_release_date.length < 10) continue
+      const rel = new Date(song.spotify_album_release_date + 'T12:00:00')
+      if (String(rel.getFullYear()) !== selectedYear || rel.getMonth() !== selectedMonth) continue
+      const albumKey = `${song.spotify_album_name}::${song.spotify_artist_id ?? ''}`
+      if (seenAlbums.has(albumKey)) continue
+      seenAlbums.add(albumKey)
+      const d = rel.getDate()
+      if (!albumReleasesByDay[d]) albumReleasesByDay[d] = []
+      albumReleasesByDay[d].push(song.spotify_album_name)
+    }
+    const daysInMonth = new Date(parseInt(selectedYear), selectedMonth + 1, 0).getDate()
+    return Array.from({ length: daysInMonth }, (_, i) => ({
+      day: String(i + 1),
+      shows: byDay[i + 1] ?? 0,
+      albumReleases: albumReleasesByDay[i + 1] ?? [],
+    }))
+  }, [spotifySongs, selectedYear, selectedMonth, viewMode, filterText])
 
   // ── SCRUM-92: text-filtered base ─────────────────────────────────────────
   const textFiltered = useMemo(() => {
@@ -1374,7 +1523,7 @@ export default function MyShowsClient({
 
   const clearAll = useCallback(() => {
     setIsPlaying(false)
-    setSelectedYear(null); setCapFilter('all'); setFilterText('')
+    setSelectedYear(null); setSelectedMonth(null); setCapFilter('all'); setFilterText('')
     setPage(1); setPageInput('1'); setShowAllArtists(false)
     setSpotifyReleaseFocus(null)
   }, [])
@@ -1391,6 +1540,7 @@ export default function MyShowsClient({
     setIsPlaying(false)
     setFilterText(artistName)
     setSelectedYear(year)
+    setSelectedMonth(null)
     setPage(1)
     setPageInput('1')
     setShowAllArtists(false)
@@ -1403,8 +1553,24 @@ export default function MyShowsClient({
     setIsPlaying(false)
     setFilterText(artistName)
     setSelectedYear(releaseYear)
+    setSelectedMonth(null)
     setExpandedSpotifyArtists(new Set([spotifyId]))
     setSpotifyReleaseFocus({ artistId: spotifyId, releaseYear })
+    setPage(1)
+    setPageInput('1')
+  }, [])
+
+  // SCRUM-111: album row click — drills into artist + release year, switches back to artist view
+  const handleAlbumClick = useCallback((artistName: string, releaseYear: string | null, artistId: string | null) => {
+    setFilterText(artistName)
+    if (artistId && releaseYear) {
+      setIsPlaying(false)
+      setSelectedYear(releaseYear)
+      setSelectedMonth(null)
+      setExpandedSpotifyArtists(new Set([artistId]))
+      setSpotifyReleaseFocus({ artistId, releaseYear })
+    }
+    setSpotifyLibraryView('artists')
     setPage(1)
     setPageInput('1')
   }, [])
@@ -1854,8 +2020,47 @@ export default function MyShowsClient({
 
               <div style={{ height: 180 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  {selectedYear ? (
-                    <ComposedChart data={monthTimelineData} margin={{ top: 16, right: drilldownHasSpotify ? 40 : 8, left: -20, bottom: 0 }}>
+                  {selectedMonth !== null ? (
+                    // SCRUM-112: Day chart — third level of Spotify drilldown
+                    <AreaChart data={dayTimelineData} margin={{ top: 22, right: 8, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor={chartLineColor} stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor={chartLineColor} stopOpacity={0.02}/>
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="day" tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false}
+                        tickFormatter={(v: string) => (parseInt(v) % 5 === 0 || v === '1') ? v : ''} />
+                      <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} tickFormatter={(v: number) => v.toLocaleString()} />
+                      <Tooltip content={(props: any) => <DayTip {...props} month={selectedMonth} year={selectedYear} />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                      <Area type="monotone" dataKey="shows" stroke={chartLineColor} strokeWidth={2} fill="url(#gradShows)"
+                        dot={(p: any) => {
+                          const { cx, cy, payload } = p
+                          const releases: string[] = payload?.albumReleases ?? []
+                          if (releases.length > 0) {
+                            const bubbleY = Math.max(10, cy - 18)
+                            return (
+                              <g key={`day-rel-${cx}`}>
+                                <circle cx={cx} cy={cy} r={4} fill={SPOTIFY_GREEN} stroke="var(--background)" strokeWidth={1.5}/>
+                                <circle cx={cx} cy={bubbleY} r={8} fill="rgba(29,185,84,0.15)" stroke={SPOTIFY_GREEN} strokeWidth={1}/>
+                                <text x={cx} y={bubbleY + 4} textAnchor="middle" fontSize={releases.length >= 10 ? 7 : 9} fontWeight={700} fill={SPOTIFY_GREEN}>{releases.length}</text>
+                              </g>
+                            )
+                          }
+                          if ((payload.shows ?? 0) === 0) return <g key={`e-${cx}`} />
+                          return <circle key={`d-${cx}`} cx={cx} cy={cy} r={3} fill={chartLineColor} stroke="var(--background)" strokeWidth={1.5}/>
+                        }} activeDot={{ r: 4, fill: chartLineColor }} />
+                    </AreaChart>
+                  ) : selectedYear ? (
+                    <ComposedChart data={monthTimelineData} margin={{ top: 16, right: drilldownHasSpotify ? 40 : 8, left: -20, bottom: 0 }}
+                      onClick={(d: any) => {
+                        if (viewMode === 'spotify') {
+                          const monthLabel = d?.activeLabel as string | undefined
+                          const monthIdx = MONTHS.indexOf(monthLabel ?? '')
+                          if (monthIdx >= 0) setSelectedMonth(monthIdx)
+                        }
+                      }}
+                      style={{ cursor: viewMode === 'spotify' ? 'pointer' : 'default' }}>
                       <defs>
                         <linearGradient id="gradShows" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%"  stopColor={chartLineColor} stopOpacity={0.3}/>
@@ -1863,7 +2068,7 @@ export default function MyShowsClient({
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="month" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <YAxis yAxisId="shows" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <YAxis yAxisId="shows" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} tickFormatter={(v: number) => v.toLocaleString()} />
                       {drilldownHasSpotify && (
                         <YAxis yAxisId="songs" orientation="right" tick={{ fill: SPOTIFY_GREEN, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
                       )}
@@ -1932,7 +2137,7 @@ export default function MyShowsClient({
                           </text>
                         )}
                         axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} tickFormatter={(v: number) => v.toLocaleString()} />
                       <Tooltip content={(props: any) => <YearTip {...props} viewMode={viewMode} />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
                       <Area type="monotone" dataKey="shows" stroke={chartLineColor} strokeWidth={2} fill="url(#gradShows)"
                         dot={(p: any) => {
@@ -1966,14 +2171,42 @@ export default function MyShowsClient({
                 </ResponsiveContainer>
               </div>
 
-              {selectedYear ? (() => {
+              {selectedMonth !== null ? (
+                // SCRUM-112: Day drilldown nav — month pills
+                <div className="flex items-center justify-center gap-2 mt-3">
+                  <button
+                    onClick={() => setSelectedMonth(prev => prev !== null && prev > 0 ? prev - 1 : null)}
+                    disabled={selectedMonth === 0}
+                    className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+                    style={{ background: 'rgba(94,234,212,0.12)', color: '#5eead4', border: '1px solid rgba(94,234,212,0.25)' }}
+                    onMouseEnter={e => { if (selectedMonth > 0) (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.22)' }}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.12)'}
+                  >
+                    ‹ {selectedMonth > 0 ? MONTHS[selectedMonth - 1] : ''}
+                  </button>
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold"
+                    style={{ background: 'rgba(13,148,136,0.2)', color: '#0d9488', border: '1px solid rgba(13,148,136,0.4)' }}>
+                    {MONTHS[selectedMonth]} {selectedYear}
+                  </span>
+                  <button
+                    onClick={() => setSelectedMonth(prev => prev !== null && prev < 11 ? prev + 1 : null)}
+                    disabled={selectedMonth === 11}
+                    className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+                    style={{ background: 'rgba(94,234,212,0.12)', color: '#5eead4', border: '1px solid rgba(94,234,212,0.25)' }}
+                    onMouseEnter={e => { if (selectedMonth < 11) (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.22)' }}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(94,234,212,0.12)'}
+                  >
+                    {selectedMonth < 11 ? MONTHS[selectedMonth + 1] : ''} ›
+                  </button>
+                </div>
+              ) : selectedYear ? (() => {
                 const idx = availableYears.indexOf(selectedYear)
                 const prevYear = idx > 0 ? availableYears[idx - 1] : null
                 const nextYear = idx < availableYears.length - 1 ? availableYears[idx + 1] : null
                 return (
                   <div className="flex items-center justify-center gap-2 mt-3">
                     <button
-                      onClick={() => { setIsPlaying(false); prevYear && setSelectedYear(prevYear) }}
+                      onClick={() => { setIsPlaying(false); prevYear && setSelectedYear(prevYear); setSelectedMonth(null) }}
                       disabled={!prevYear}
                       className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
                       style={{ background: 'rgba(94,234,212,0.12)', color: '#5eead4', border: '1px solid rgba(94,234,212,0.25)' }}
@@ -1989,7 +2222,7 @@ export default function MyShowsClient({
                       {selectedYear}
                     </span>
                     <button
-                      onClick={() => { setIsPlaying(false); nextYear && setSelectedYear(nextYear) }}
+                      onClick={() => { setIsPlaying(false); nextYear && setSelectedYear(nextYear); setSelectedMonth(null) }}
                       disabled={!nextYear}
                       className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
                       style={{ background: 'rgba(94,234,212,0.12)', color: '#5eead4', border: '1px solid rgba(94,234,212,0.25)' }}
@@ -2049,18 +2282,29 @@ export default function MyShowsClient({
                   {/* SCRUM-93: dynamic card title */}
                   <h2 className="text-lg font-bold text-foreground">
                     {viewMode === 'spotify'
-                      ? 'Top Artists in Your Library'
+                      ? (spotifyLibraryView === 'albums' ? 'Top Albums in Your Library' : 'Top Artists in Your Library')
                       : (chartSection === 'artists' ? 'Top Artists' : 'Top Venues')}
                     {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                   </h2>
-                  {spotifyReleaseFocus && viewMode === 'spotify' && (
+                  {spotifyReleaseFocus && viewMode === 'spotify' && spotifyLibraryView === 'artists' && (
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: 'rgba(29,185,84,0.15)', color: SPOTIFY_GREEN }}>
                       {spotifyReleaseFocus.releaseYear} releases
                       <button onClick={() => setSpotifyReleaseFocus(null)} className="hover:opacity-70 leading-none">×</button>
                     </span>
                   )}
-                  {/* SCRUM-93: hide Artists/Venues toggle in Spotify mode */}
-                  {viewMode !== 'spotify' && (
+                  {/* SCRUM-93/111: Artists/Albums toggle in Spotify mode; Artists/Venues toggle in concert modes */}
+                  {viewMode === 'spotify' ? (
+                    <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
+                      {(['artists', 'albums'] as const).map((v, i) => (
+                        <button key={v} onClick={() => setSpotifyLibraryView(v)}
+                          className={`px-2.5 py-1 capitalize transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                            spotifyLibraryView === v ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
+                          }`}>
+                          {v.charAt(0).toUpperCase() + v.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
                     <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                       {(['artists', 'venues'] as const).map((s, i) => (
                         <button key={s} onClick={() => setChartSection(s)}
@@ -2074,8 +2318,25 @@ export default function MyShowsClient({
                   )}
                 </div>
 
-                {/* SCRUM-93: Spotify mode renders SpotifyArtistBars; otherwise existing Artists/Venues logic */}
-                {viewMode === 'spotify' ? (
+                {/* SCRUM-93/111: Spotify Albums → SpotifyAlbumBars; Spotify Artists → SpotifyArtistBars; concert → existing */}
+                {viewMode === 'spotify' && spotifyLibraryView === 'albums' ? (
+                  topSpotifyAlbums.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic">No album data{selectedYear ? ` for ${selectedYear}` : ''}.</p>
+                  ) : (
+                    <>
+                      <SpotifyAlbumBars
+                        albums={topSpotifyAlbums.slice(0, showAllAlbums ? undefined : 10)}
+                        max={topSpotifyAlbums[0]?.count ?? 1}
+                        onAlbumClick={handleAlbumClick}
+                      />
+                      {topSpotifyAlbums.length > 10 && (
+                        <button onClick={() => setShowAllAlbums(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
+                          {showAllAlbums ? '← Show less' : `View all ${topSpotifyAlbums.length} library albums \u2192`}
+                        </button>
+                      )}
+                    </>
+                  )
+                ) : viewMode === 'spotify' ? (
                   filteredSpotifyArtists.length === 0 ? (
                     <p className="text-sm text-muted-foreground italic">No Spotify data{selectedYear ? ` for ${selectedYear}` : ''}.</p>
                   ) : (
@@ -2193,20 +2454,90 @@ export default function MyShowsClient({
             </div>
           )}
 
-          {/* ── SCRUM-80 / SCRUM-88: Spotify tab — top 50 artists, album-grouped song rows ── */}
+          {/* ── SCRUM-80 / SCRUM-88 / SCRUM-111: Spotify tab — artists or albums expandable list ── */}
           {viewMode === 'spotify' && hasSpotify && (
             <div className="bg-card rounded-lg shadow border border-border overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                 <div className="flex items-center gap-2">
                   <SpotifyIcon className="w-4 h-4" />
                   <h2 className="text-sm font-semibold text-foreground">
-                    Top Artists in Your Library
+                    {spotifyLibraryView === 'albums' ? 'Top Albums in Your Library' : 'Top Artists in Your Library'}
                     {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                   </h2>
                 </div>
-                <span className="text-xs text-muted-foreground">{filteredSpotifyArtists.length} artists</span>
+                <span className="text-xs text-muted-foreground">
+                  {spotifyLibraryView === 'albums'
+                    ? `${topSpotifyAlbums.length} albums`
+                    : `${filteredSpotifyArtists.length} artists`}
+                </span>
               </div>
-              {filteredSpotifyArtists.length === 0 ? (
+              {spotifyLibraryView === 'albums' ? (
+                // SCRUM-111: Album expandable list
+                topSpotifyAlbums.length === 0 ? (
+                  <p className="text-sm text-muted-foreground px-4 py-6">No album data{selectedYear ? ` for ${selectedYear}` : ''}.</p>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {topSpotifyAlbums.map((album, i) => {
+                      const albumKey = `${album.albumName}::${album.artistName}`
+                      const isExpanded = expandedAlbumKeys.has(albumKey)
+                      return (
+                        <div key={albumKey}>
+                          <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors cursor-pointer"
+                            onClick={() => setExpandedAlbumKeys(prev => { const n = new Set(prev); n.has(albumKey) ? n.delete(albumKey) : n.add(albumKey); return n })}>
+                            <span className="text-xs font-bold tabular-nums w-6 text-right flex-shrink-0" style={{ color: SPOTIFY_GREEN }}>#{i + 1}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm text-foreground truncate">{album.albumName}{album.year ? ` (${album.year})` : ''}</span>
+                                {album.artistId && (
+                                  <a href={`https://open.spotify.com/artist/${album.artistId}`} target="_blank" rel="noopener noreferrer"
+                                    onClick={e => e.stopPropagation()} className="flex-shrink-0 hover:opacity-70 transition-opacity">
+                                    <SpotifyIcon className="w-3 h-3" />
+                                  </a>
+                                )}
+                              </div>
+                              <span className="text-xs text-muted-foreground">{album.artistName}</span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className="text-xs tabular-nums" style={{ color: SPOTIFY_GREEN }}>{album.count.toLocaleString()} {album.count === 1 ? 'song' : 'songs'}</span>
+                              <span className="text-muted-foreground text-[10px] w-3 text-center">{isExpanded ? '▲' : '▼'}</span>
+                            </div>
+                          </div>
+                          {isExpanded && (
+                            <div className="border-t border-border/40 bg-background/50">
+                              <div className="grid px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider bg-muted/30 border-b border-border/30"
+                                style={{ gridTemplateColumns: 'minmax(0, 1fr) 108px', color: TEAL }}>
+                                <span>Track</span><span className="text-right">Liked on</span>
+                              </div>
+                              <div className="max-h-48 overflow-y-auto divide-y divide-border/10">
+                                {album.songs.map((song, j) => (
+                                  <div key={j} className="grid items-center px-4 py-2 hover:bg-muted/20 transition-colors"
+                                    style={{ gridTemplateColumns: 'minmax(0, 1fr) 108px' }}>
+                                    <div className="min-w-0 pl-2 pr-3">
+                                      {song.track_id ? (
+                                        <a href={`https://open.spotify.com/track/${song.track_id}`} target="_blank" rel="noopener noreferrer"
+                                          className="text-xs text-foreground/80 hover:text-primary hover:underline truncate block transition-colors">
+                                          {song.track_name}
+                                        </a>
+                                      ) : (
+                                        <span className="text-xs text-foreground/80 truncate block">{song.track_name}</span>
+                                      )}
+                                    </div>
+                                    <span className="text-xs text-foreground/50 tabular-nums text-right">
+                                      {new Date(song.added_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              ) : (
+              // Original artist expandable list
+              filteredSpotifyArtists.length === 0 ? (
                 <p className="text-sm text-muted-foreground px-4 py-6">No Spotify data{selectedYear ? ` for ${selectedYear}` : ''}.</p>
               ) : (
                 <div className="divide-y divide-border">
@@ -2265,7 +2596,7 @@ export default function MyShowsClient({
                     )
                   })}
                 </div>
-              )}
+              ))}
             </div>
           )}
 
