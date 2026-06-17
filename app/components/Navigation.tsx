@@ -216,16 +216,18 @@ export default function Navigation() {
                           <div className="absolute top-full left-1/2 -translate-x-1/2 pt-1.5 z-50">
                             <div className="bg-card border border-border rounded-lg shadow-xl py-1 px-1 flex flex-col min-w-[140px]">
 
-                              {/* Shows — teal dot placeholder until Grooveprint logo is finalised */}
+                              {/* Shows — teal circle placeholder until Grooveprint logo is finalised */}
                               <a href="/my-grooveprint" className="flex items-center gap-2.5 px-3 py-2 rounded-md hover:bg-muted transition-colors">
-                                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#00BFA8' }} />
+                                <svg width="16" height="16" viewBox="0 0 16 16" className="flex-shrink-0">
+                                  <circle cx="8" cy="8" r="6" fill="#00BFA8" />
+                                </svg>
                                 <span className="text-sm text-foreground">Shows</span>
                               </a>
 
                               {/* Spotify — brand icon, always green */}
                               {navProfile.spotifyConnected && (
                                 <a href="/my-grooveprint?tab=spotify" className="flex items-center gap-2.5 px-3 py-2 rounded-md hover:bg-muted transition-colors">
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="#1DB954" className="flex-shrink-0">
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="#1DB954" className="flex-shrink-0">
                                     <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
                                   </svg>
                                   <span className="text-sm text-foreground">Spotify</span>
@@ -235,8 +237,8 @@ export default function Navigation() {
                               {/* Discogs — brand icon, currentColor = theme-adaptive (white in dark mode) */}
                               {navProfile.discogsConnected && (
                                 <a href="/my-grooveprint?tab=discogs" className="flex items-center gap-2.5 px-3 py-2 rounded-md hover:bg-muted transition-colors">
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="flex-shrink-0 text-foreground">
-                                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm-.37 17.5H8.13V6.5h3.5c3.314 0 6 2.239 6 5.5s-2.686 5.5-6 5.5zm0-9.5H9.63v8h1.999c2.485 0 4.501-1.79 4.501-4s-2.016-4-4.501-4z"/>
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="flex-shrink-0 text-foreground">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 16.5a6.5 6.5 0 110-13 6.5 6.5 0 010 13zm0-9.5a3 3 0 100 6 3 3 0 000-6zm0 4a1 1 0 110-2 1 1 0 010 2z"/>
                                   </svg>
                                   <span className="text-sm text-foreground">Discogs</span>
                                 </a>
