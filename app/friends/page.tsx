@@ -327,19 +327,13 @@ export default function FriendsPage() {
                     <span className="flex-1 text-sm font-medium text-foreground min-w-0 truncate">
                       {friend.username}
                     </span>
-                    {/* SCRUM-76: Profile | Shows | Compare — Compare now opens modal via ?compare=true */}
+                    {/* GP-122: Profile button removed; Shows → Grooveprint */}
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <a
-                        href={`/profile/${friend.username}`}
-                        className="px-3 py-1 text-xs font-semibold rounded-md bg-muted text-foreground hover:bg-muted/70 transition"
-                      >
-                        Profile
-                      </a>
                       <a
                         href={`/profile/${friend.username}/shows`}
                         className="px-3 py-1 text-xs font-semibold rounded-md bg-muted text-foreground hover:bg-muted/70 transition"
                       >
-                        Shows
+                        Grooveprint
                       </a>
                       <a
                         href={`/profile/${friend.username}?compare=true`}
