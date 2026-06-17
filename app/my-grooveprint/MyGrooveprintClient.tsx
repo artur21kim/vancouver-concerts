@@ -1032,56 +1032,71 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
               </div>
               {header.bio && <p className="text-sm text-muted-foreground mt-0.5 max-w-sm leading-relaxed">{header.bio}</p>}
 
-              {/* Concert stats — First Show badge anchors the row */}
-              <div className="flex items-center gap-1.5 mt-1.5 text-sm flex-wrap">
-                {header.confirmed_shows > 0 && grooveprintYear && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium mr-0.5"
-                    style={{ background: 'rgba(0,191,168,0.12)', color: '#00BFA8', border: '1px solid rgba(0,191,168,0.3)', minWidth: '9rem', justifyContent: 'center' }}>
-                    First Show · {grooveprintYear}
-                  </span>
+              {/* Source-anchored stat rows: CSS grid sizes badge column to widest badge automatically */}
+              <div className="mt-1.5" style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', rowGap: '0.375rem', columnGap: '0.375rem', alignItems: 'center' }}>
+
+                {/* Row 1: concert stats anchored by First Show badge */}
+                <div>
+                  {header.confirmed_shows > 0 && grooveprintYear && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                      style={{ background: 'rgba(0,191,168,0.12)', color: '#00BFA8', border: '1px solid rgba(0,191,168,0.3)' }}>
+                      First Show · {grooveprintYear}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 text-sm flex-wrap">
+                  <span className="font-semibold text-foreground">{header.confirmed_shows}</span><span className="text-muted-foreground">shows</span>
+                  <span className="text-border">·</span>
+                  <span className="font-semibold text-foreground">{header.unique_artists}</span><span className="text-muted-foreground">artists</span>
+                  <span className="text-border">·</span>
+                  <span className="font-semibold text-foreground">{header.unique_venues}</span><span className="text-muted-foreground">venues</span>
+                  {header.festival_count > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.festival_count}</span><span className="text-muted-foreground">{header.festival_count === 1 ? 'festival' : 'festivals'}</span></>)}
+                </div>
+
+                {/* Row 2: Spotify stats anchored by Spotify badge */}
+                {showSpotifyStats && (
+                  <>
+                    <div>
+                      {header.spotify_user_id && (
+                        <a href={`https://open.spotify.com/user/${header.spotify_user_id}`} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
+                          style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)' }}>
+                          <SpotifyIcon className="w-3 h-3" />Spotify{header.spotify_since_year ? ` · ${header.spotify_since_year}` : ''}
+                        </a>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm flex-wrap">
+                      <span className="font-semibold text-foreground">{header.spotify_song_count?.toLocaleString()}</span><span className="text-muted-foreground">songs</span>
+                      {(header.spotify_artist_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_artist_count?.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
+                      {(header.spotify_album_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_album_count?.toLocaleString()}</span><span className="text-muted-foreground">albums</span></>)}
+                    </div>
+                  </>
                 )}
-                <span className="font-semibold text-foreground">{header.confirmed_shows}</span><span className="text-muted-foreground">shows</span>
-                <span className="text-border">·</span>
-                <span className="font-semibold text-foreground">{header.unique_artists}</span><span className="text-muted-foreground">artists</span>
-                <span className="text-border">·</span>
-                <span className="font-semibold text-foreground">{header.unique_venues}</span><span className="text-muted-foreground">venues</span>
-                {header.festival_count > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.festival_count}</span><span className="text-muted-foreground">{header.festival_count === 1 ? 'festival' : 'festivals'}</span></>)}
+
+                {/* Row 3: Discogs stats anchored by Discogs badge */}
+                {header.discogs_connected && (
+                  <>
+                    <div>
+                      {header.discogs_connected && header.discogs_username && (
+                        <a href={`https://www.discogs.com/user/${header.discogs_username}`} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
+                          style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)' }}>
+                          <DiscogsIcon className="w-3 h-3" />Discogs{discogsStats?.sinceYear ? ` · ${discogsStats.sinceYear}` : ''}
+                        </a>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm flex-wrap">
+                      {discogsStats ? (
+                        <>
+                          <span className="font-semibold text-foreground">{discogsStats.count.toLocaleString()}</span><span className="text-muted-foreground">records</span>
+                          {discogsStats.artistCount > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{discogsStats.artistCount.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
+                        </>
+                      ) : null}
+                    </div>
+                  </>
+                )}
+
               </div>
-
-              {/* Spotify stats — Spotify badge anchors the row */}
-              {showSpotifyStats && (
-                <div className="flex items-center gap-1.5 mt-1.5 text-sm flex-wrap">
-                  {header.spotify_user_id && (
-                    <a href={`https://open.spotify.com/user/${header.spotify_user_id}`} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity mr-0.5"
-                      style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)', minWidth: '9rem', justifyContent: 'center' }}>
-                      <SpotifyIcon className="w-3 h-3" />Spotify{header.spotify_since_year ? ` · ${header.spotify_since_year}` : ''}
-                    </a>
-                  )}
-                  <span className="font-semibold text-foreground">{header.spotify_song_count?.toLocaleString()}</span><span className="text-muted-foreground">songs</span>
-                  {(header.spotify_artist_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_artist_count?.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
-                  {(header.spotify_album_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_album_count?.toLocaleString()}</span><span className="text-muted-foreground">albums</span></>)}
-                </div>
-              )}
-
-              {/* Discogs stats — Discogs badge anchors the row */}
-              {header.discogs_connected && (
-                <div className="flex items-center gap-1.5 mt-1 text-sm flex-wrap">
-                  {header.discogs_connected && header.discogs_username && (
-                    <a href={`https://www.discogs.com/user/${header.discogs_username}`} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity mr-0.5"
-                      style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)', minWidth: '9rem', justifyContent: 'center' }}>
-                      <DiscogsIcon className="w-3 h-3" />Discogs{discogsStats?.sinceYear ? ` · ${discogsStats.sinceYear}` : ''}
-                    </a>
-                  )}
-                  {discogsStats ? (
-                    <>
-                      <span className="font-semibold text-foreground">{discogsStats.count.toLocaleString()}</span><span className="text-muted-foreground">records</span>
-                      {discogsStats.artistCount > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{discogsStats.artistCount.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
-                    </>
-                  ) : null}
-                </div>
-              )}
             </div>
             {header.is_own_profile ? (
               <div className="shrink-0 flex flex-col items-center gap-2">
