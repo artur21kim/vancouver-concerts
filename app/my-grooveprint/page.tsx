@@ -116,10 +116,12 @@ export default async function MyGrooveprintPage() {
     // ── GP-124: Spotify songs are lazy-loaded client-side on first tab click.
     // Stats (counts) come from the lightweight RPC above.
     // Full user_spotify_songs fetch removed from server component entirely.
-    const spotifyStats       = (spotifyStatsData as any)?.[0] ?? null
-    const spotifySongCount   = spotifyStats ? Number(spotifyStats.song_count)   : 0
-    const spotifyArtistCount = spotifyStats ? Number(spotifyStats.artist_count) : 0
-    const spotifyAlbumCount  = spotifyStats ? Number(spotifyStats.album_count)  : 0
+    const spotifyStats        = (spotifyStatsData as any)?.[0] ?? null
+    const spotifySongCount    = spotifyStats ? Number(spotifyStats.song_count)         : 0
+    const spotifyArtistCount  = spotifyStats ? Number(spotifyStats.artist_count)       : 0
+    const spotifyAlbumCount   = spotifyStats ? Number(spotifyStats.album_count)        : 0
+    const spotifySinceYear    = spotifyStats?.spotify_since_year
+                                  ? Number(spotifyStats.spotify_since_year) : null
 
     // ── Build profileHeader from fetched data ─────────────────────────────────
     let profileHeader: ProfileHeader | undefined
@@ -153,6 +155,7 @@ export default async function MyGrooveprintPage() {
             spotify_song_count:    spotifySongCount   > 0 ? spotifySongCount   : null,
             spotify_artist_count:  spotifyArtistCount > 0 ? spotifyArtistCount : null,
             spotify_album_count:   spotifyAlbumCount  > 0 ? spotifyAlbumCount  : null,
+            spotify_since_year:    spotifySinceYear,
             spotify_connected:     (profileRow as any).spotify_connected  ?? false,
             show_spotify_stats:    (profileRow as any).show_spotify_stats ?? true,
             spotify_user_id:       (profileRow as any).spotify_user_id   ?? null,
