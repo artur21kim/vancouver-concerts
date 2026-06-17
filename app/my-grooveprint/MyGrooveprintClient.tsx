@@ -1040,7 +1040,7 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                   {header.confirmed_shows > 0 && grooveprintYear && (
                     <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
                       style={{ background: 'rgba(0,191,168,0.12)', color: '#00BFA8', border: '1px solid rgba(0,191,168,0.3)' }}>
-                      First Show · {grooveprintYear}
+                      1st Show · {grooveprintYear}
                     </span>
                   )}
                 </div>
@@ -1067,8 +1067,8 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                     </div>
                     <div className="flex items-center gap-1.5 text-sm flex-wrap">
                       <span className="font-semibold text-foreground">{header.spotify_song_count?.toLocaleString()}</span><span className="text-muted-foreground">songs</span>
-                      {(header.spotify_artist_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_artist_count?.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
                       {(header.spotify_album_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_album_count?.toLocaleString()}</span><span className="text-muted-foreground">albums</span></>)}
+                      {(header.spotify_artist_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_artist_count?.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
                     </div>
                   </>
                 )}
@@ -1594,7 +1594,11 @@ export default function MyGrooveprintClient({
       .filter(r => r.date_added)
       .map(r => new Date(r.date_added!).getFullYear())
     const sinceYear = years.length > 0 ? Math.min(...years) : null
-    return { count: discogsReleases.length, artistCount: nonVarious.size, sinceYear }
+    const fmtCounts: Record<DiscogsFmt, number> = { vinyl: 0, cd: 0, cassette: 0, other: 0 }
+    for (const r of discogsReleases) fmtCounts[getDiscogsFmt(r.formats)]++
+    const formatCount = DISCOGS_FMT_KEYS.filter(f => fmtCounts[f] > 0).length
+    const dominantFmt = DISCOGS_FMT_KEYS.reduce((a, b) => fmtCounts[a] >= fmtCounts[b] ? a : b)
+    return { count: discogsReleases.length, artistCount: nonVarious.size, sinceYear, formatCount, dominantFmt }
   }, [discogsReleases])
 
   // GP-112: Day-level data — computed when selectedMonth is set in Spotify mode
