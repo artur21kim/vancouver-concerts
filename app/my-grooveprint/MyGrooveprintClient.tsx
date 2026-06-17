@@ -977,7 +977,7 @@ function SpotifyAlbumBars({ albums, max, onAlbumClick }: {
 }
 
 // ── GP-114: Profile header card ───────────────────────────────────────────────
-function ProfileHeaderCard({ header, readOnly }: { header: ProfileHeader; readOnly: boolean }) {
+function ProfileHeaderCard({ header, readOnly, discogsCount }: { header: ProfileHeader; readOnly: boolean; discogsCount?: number }) {
   const router = useRouter()
   const supabase = createClient()
   const [actionLoading, setActionLoading] = useState(false)
@@ -1029,28 +1029,26 @@ function ProfileHeaderCard({ header, readOnly }: { header: ProfileHeader; readOn
                   {(header.spotify_artist_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_artist_count?.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
                   {(header.spotify_album_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_album_count?.toLocaleString()}</span><span className="text-muted-foreground">albums</span></>)}
                   {header.spotify_since_year && (<><span className="text-border">·</span><span className="font-medium" style={{ color: SPOTIFY_GREEN }}>since {header.spotify_since_year}</span></>)}
-                </div>
-              )}
-              {header.discogs_connected && (header.discogs_release_count ?? 0) > 0 && (
-                <div className="flex items-center gap-1.5 mt-1 text-sm flex-wrap">
-                  <DiscogsIcon className="w-3.5 h-3.5 flex-shrink-0 text-orange-400" />
-                  <span className="font-semibold text-foreground">{header.discogs_release_count?.toLocaleString()}</span><span className="text-muted-foreground">records</span>
-                </div>
-              )}
-              {(header.spotify_user_id || (header.discogs_connected && header.discogs_username)) && (
-                <div className="flex items-center gap-2 mt-2.5 flex-wrap">
                   {header.spotify_user_id && (
                     <a href={`https://open.spotify.com/user/${header.spotify_user_id}`} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex-shrink-0"
                       style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)' }}>
-                      <SpotifyIcon className="w-3 h-3" />Spotify
+                      <SpotifyIcon className="w-2.5 h-2.5" />Profile ↗
                     </a>
                   )}
-                  {header.discogs_connected && header.discogs_username && (
+                </div>
+              )}
+              {header.discogs_connected && (
+                <div className="flex items-center gap-1.5 mt-1 text-sm flex-wrap">
+                  <DiscogsIcon className="w-3.5 h-3.5 flex-shrink-0 text-orange-400" />
+                  {(discogsCount ?? 0) > 0 && (
+                    <><span className="font-semibold text-foreground">{discogsCount?.toLocaleString()}</span><span className="text-muted-foreground">records</span></>
+                  )}
+                  {header.discogs_username && (
                     <a href={`https://www.discogs.com/user/${header.discogs_username}`} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
-                      style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)' }}>
-                      <DiscogsIcon className="w-3 h-3" />Discogs
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex-shrink-0"
+                      style={{ background: 'rgba(249,115,22,0.12)', color: DISCOGS_COLOR, border: '1px solid rgba(249,115,22,0.3)' }}>
+                      <DiscogsIcon className="w-2.5 h-2.5" />Profile ↗
                     </a>
                   )}
                 </div>
@@ -1444,24 +1442,26 @@ export default function MyGrooveprintClient({
   // GP-118: top Discogs artists (Various Artists excluded), sorted by total desc, sliced to 50
   const topDiscogsArtists = useMemo(() => {
     if (discogsReleases.length === 0) return [] as {
-      name: string; total: number
+      name: string; discogsArtistId: number | null; total: number
       formatCounts: Record<DiscogsFmt, number>
-      releases: { title: string; year: number | null; fmt: DiscogsFmt; date_added: string | null }[]
+      releases: { title: string; year: number | null; fmt: DiscogsFmt; date_added: string | null; releaseId: number }[]
     }[]
     const map: Record<string, {
-      name: string; total: number
+      name: string; discogsArtistId: number | null; total: number
       formatCounts: Record<DiscogsFmt, number>
-      releases: { title: string; year: number | null; fmt: DiscogsFmt; date_added: string | null }[]
+      releases: { title: string; year: number | null; fmt: DiscogsFmt; date_added: string | null; releaseId: number }[]
     }> = {}
     for (const r of discogsReleases) {
       const fmt = getDiscogsFmt(r.formats)
-      for (const name of r.discogs_artist_names) {
+      for (let idx = 0; idx < r.discogs_artist_names.length; idx++) {
+        const name = r.discogs_artist_names[idx]
         const nl = name.toLowerCase()
         if (nl === 'various' || nl === 'various artists') continue
-        if (!map[name]) map[name] = { name, total: 0, formatCounts: { vinyl: 0, cd: 0, cassette: 0, other: 0 }, releases: [] }
+        const artistId = r.discogs_artist_ids[idx] ?? null
+        if (!map[name]) map[name] = { name, discogsArtistId: artistId, total: 0, formatCounts: { vinyl: 0, cd: 0, cassette: 0, other: 0 }, releases: [] }
         map[name].total++
         map[name].formatCounts[fmt]++
-        map[name].releases.push({ title: r.title, year: r.year, fmt, date_added: r.date_added })
+        map[name].releases.push({ title: r.title, year: r.year, fmt, date_added: r.date_added, releaseId: r.discogs_release_id })
       }
     }
     return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 50)
@@ -2203,7 +2203,17 @@ export default function MyGrooveprintClient({
           </h1>
 
           {/* ── GP-114: Profile header card ── */}
-          {profileHeader && <ProfileHeaderCard header={profileHeader} readOnly={readOnly} />}
+          {profileHeader && (
+            <ProfileHeaderCard
+              header={profileHeader}
+              readOnly={readOnly}
+              discogsCount={
+                (!readOnly && discogsReleases.length > 0)
+                  ? discogsReleases.length
+                  : (profileHeader.discogs_release_count ?? undefined)
+              }
+            />
+          )}
 
           {/* ── Unadded CTA ── */}
           {!readOnly && !unaddedDismissed && unaddedArtists.length > 0 && (
@@ -3303,8 +3313,16 @@ export default function MyGrooveprintClient({
                           <span className="text-xs font-bold tabular-nums w-6 text-right flex-shrink-0" style={{ color: DISCOGS_COLOR }}>
                             #{i + 1}
                           </span>
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 flex items-center gap-1.5">
                             <span className="text-sm text-foreground truncate">{artist.name}</span>
+                            {artist.discogsArtistId && (
+                              <a href={`https://www.discogs.com/artist/${artist.discogsArtistId}`}
+                                target="_blank" rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                className="flex-shrink-0 text-orange-400 hover:opacity-70 transition-opacity">
+                                <DiscogsIcon className="w-3 h-3" />
+                              </a>
+                            )}
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <span className="text-xs tabular-nums" style={{ color: DISCOGS_COLOR }}>
@@ -3316,14 +3334,20 @@ export default function MyGrooveprintClient({
                         {isExpanded && (
                           <div className="border-t border-border/40 bg-background/50">
                             <div className="grid px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider bg-muted/30 border-b border-border/30"
-                              style={{ gridTemplateColumns: 'minmax(0, 1fr) 60px 108px', color: TEAL }}>
-                              <span>Title</span><span className="text-center">Year</span><span className="text-right">Format</span>
+                              style={{ gridTemplateColumns: 'minmax(0, 1fr) 60px 72px', color: TEAL }}>
+                              <span className="pl-2">Title</span><span className="text-center">Year</span><span className="text-right">Format</span>
                             </div>
-                            <div className="max-h-48 overflow-y-auto divide-y divide-border/10">
+                            <div className="max-h-48 overflow-y-auto divide-y divide-border/10" style={{ scrollbarGutter: 'stable' }}>
                               {artist.releases.sort((a, b) => (b.year ?? 0) - (a.year ?? 0)).map((rel, j) => (
                                 <div key={j} className="grid items-center px-4 py-2 hover:bg-muted/20 transition-colors"
-                                  style={{ gridTemplateColumns: 'minmax(0, 1fr) 60px 108px' }}>
-                                  <span className="text-xs text-foreground/80 truncate pl-2 pr-3">{rel.title}</span>
+                                  style={{ gridTemplateColumns: 'minmax(0, 1fr) 60px 72px' }}>
+                                  <div className="min-w-0 pl-2 pr-3">
+                                    <a href={`https://www.discogs.com/release/${rel.releaseId}`}
+                                      target="_blank" rel="noopener noreferrer"
+                                      className="text-xs text-foreground/80 hover:text-primary hover:underline truncate block transition-colors">
+                                      {rel.title}
+                                    </a>
+                                  </div>
                                   <span className="text-xs text-foreground/50 tabular-nums text-center">{rel.year ?? '—'}</span>
                                   <span className="text-xs tabular-nums text-right" style={{ color: DISCOGS_FMT_META[rel.fmt].color }}>
                                     {DISCOGS_FMT_META[rel.fmt].label}
