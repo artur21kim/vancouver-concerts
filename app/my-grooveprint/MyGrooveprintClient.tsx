@@ -1032,11 +1032,10 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                 {header.bio && <p className="text-sm text-muted-foreground leading-relaxed">{header.bio}</p>}
               </div>
 
-              {/* Unified 8-col grid: badge | num | label | · | num | label | · | rest
-                  max-content columns auto-size to widest cell → Spotify row sets column widths */}
-              <div className="mt-1.5 text-sm" style={{ display: 'grid', gridTemplateColumns: 'max-content max-content max-content max-content max-content max-content max-content 1fr', rowGap: '0.375rem', columnGap: '0.375rem', alignItems: 'center' }}>
+              {/* 2-col grid: badge column auto-sizes to widest badge; stats in natural flex rows */}
+              <div className="mt-1.5" style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', rowGap: '0.375rem', columnGap: '0.375rem', alignItems: 'center' }}>
 
-                {/* ── Row 1: concerts ── */}
+                {/* Row 1: concerts */}
                 <div>
                   {header.confirmed_shows > 0 && grooveprintYear && (
                     <span className="flex items-center gap-2 px-2.5 py-0.5 rounded-full text-xs font-medium"
@@ -1046,18 +1045,16 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                     </span>
                   )}
                 </div>
-                <span className="font-semibold text-foreground tabular-nums text-right">{header.confirmed_shows}</span>
-                <span className="text-muted-foreground">shows</span>
-                <span className="text-border text-center">·</span>
-                <span className="font-semibold text-foreground tabular-nums text-right">{header.unique_artists}</span>
-                <span className="text-muted-foreground">artists</span>
-                <span className="text-border text-center">·</span>
-                <span className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex items-center gap-1.5 text-sm flex-wrap">
+                  <span className="font-semibold text-foreground">{header.confirmed_shows}</span><span className="text-muted-foreground">shows</span>
+                  <span className="text-border">·</span>
+                  <span className="font-semibold text-foreground">{header.unique_artists}</span><span className="text-muted-foreground">artists</span>
+                  <span className="text-border">·</span>
                   <span className="font-semibold text-foreground">{header.unique_venues}</span><span className="text-muted-foreground">venues</span>
                   {header.festival_count > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.festival_count}</span><span className="text-muted-foreground">{header.festival_count === 1 ? 'festival' : 'festivals'}</span></>)}
-                </span>
+                </div>
 
-                {/* ── Row 2: Spotify ── */}
+                {/* Row 2: Spotify */}
                 {showSpotifyStats && (<>
                   <div>
                     {header.spotify_user_id && (
@@ -1069,20 +1066,14 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                       </a>
                     )}
                   </div>
-                  <span className="font-semibold text-foreground tabular-nums text-right">{header.spotify_song_count?.toLocaleString()}</span>
-                  <span className="text-muted-foreground">songs</span>
-                  <span className="text-border text-center">·</span>
-                  <span className="font-semibold text-foreground tabular-nums text-right">{(header.spotify_album_count ?? 0) > 0 ? header.spotify_album_count?.toLocaleString() : ''}</span>
-                  <span className="text-muted-foreground">{(header.spotify_album_count ?? 0) > 0 ? 'albums' : ''}</span>
-                  <span className="text-border text-center">{(header.spotify_artist_count ?? 0) > 0 ? '·' : ''}</span>
-                  <span>
-                    {(header.spotify_artist_count ?? 0) > 0 && (
-                      <><span className="font-semibold text-foreground tabular-nums">{header.spotify_artist_count?.toLocaleString()}</span>{' '}<span className="text-muted-foreground">artists</span></>
-                    )}
-                  </span>
+                  <div className="flex items-center gap-1.5 text-sm flex-wrap">
+                    <span className="font-semibold text-foreground">{header.spotify_song_count?.toLocaleString()}</span><span className="text-muted-foreground">songs</span>
+                    {(header.spotify_album_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_album_count?.toLocaleString()}</span><span className="text-muted-foreground">albums</span></>)}
+                    {(header.spotify_artist_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_artist_count?.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
+                  </div>
                 </>)}
 
-                {/* ── Row 3: Discogs ── */}
+                {/* Row 3: Discogs */}
                 {header.discogs_connected && (<>
                   <div>
                     {header.discogs_connected && header.discogs_username && (
@@ -1094,30 +1085,20 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                       </a>
                     )}
                   </div>
-                  {discogsStats ? (<>
-                    <span className="font-semibold text-foreground tabular-nums text-right">{discogsStats.count.toLocaleString()}</span>
-                    <span className="text-muted-foreground">records</span>
-                    <span className="text-border text-center">·</span>
-                    <span className="font-semibold text-foreground tabular-nums text-right">{discogsStats.artistCount > 0 ? discogsStats.artistCount.toLocaleString() : ''}</span>
-                    <span className="text-muted-foreground">{discogsStats.artistCount > 0 ? 'artists' : ''}</span>
-                    <span className="text-border text-center">{discogsStats.lastAdded ? '·' : ''}</span>
-                    <span>
-                      {discogsStats.lastAdded && (
-                        <span className="text-foreground">
-                          last added:{' '}
-                          <a
-                            href={`https://open.spotify.com/search/${encodeURIComponent([discogsStats.lastAdded.title, discogsStats.lastAdded.artist].filter(Boolean).join(' '))}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:underline"
-                            title={[discogsStats.lastAdded.fmt, discogsStats.lastAdded.year].filter(Boolean).join(' · ')}
-                          >
-                            {discogsStats.lastAdded.title}{discogsStats.lastAdded.artist ? ` — ${discogsStats.lastAdded.artist}` : ''}{discogsStats.lastAdded.year ? ` (${discogsStats.lastAdded.year})` : ''}
-                          </a>
-                        </span>
-                      )}
-                    </span>
-                  </>) : (<><span/><span/><span/><span/><span/><span/><span/></>)}
+                  <div className="flex items-center gap-1.5 text-sm flex-wrap">
+                    {discogsStats ? (
+                      <>
+                        <span className="font-semibold text-foreground">{discogsStats.count.toLocaleString()}</span><span className="text-muted-foreground">records</span>
+                        {discogsStats.artistCount > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{discogsStats.artistCount.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
+                        {discogsStats.lastAdded && (
+                          <><span className="text-border">·</span>
+                          <span className="text-foreground">
+                            last added: {discogsStats.lastAdded.title}{discogsStats.lastAdded.artist ? ` - ${discogsStats.lastAdded.artist}` : ''}
+                          </span></>
+                        )}
+                      </>
+                    ) : null}
+                  </div>
                 </>)}
 
               </div>
