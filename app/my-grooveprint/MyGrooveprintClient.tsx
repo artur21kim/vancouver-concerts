@@ -1168,8 +1168,8 @@ export default function MyGrooveprintClient({
   const PER_PAGE = 50
   // GP-124: tab visible when Spotify connected (even pre-load); data memos still guard on songs.length
   const hasSpotify = (profileHeader?.is_own_profile && profileHeader?.spotify_connected) || spotifySongs.length > 0
-  // GP-118: tab visible when Discogs connected and has releases
-  const hasDiscogs = !!(profileHeader?.discogs_connected && (profileHeader?.discogs_release_count ?? 0) > 0)
+  // GP-118: tab visible when Discogs connected; don't gate on release_count (GP-119 not yet built)
+  const hasDiscogs = !!(profileHeader?.discogs_connected)
   const anyFilterActive = selectedYear !== null || capFilter !== 'all' || filterText.trim() !== '' || discogsFmtFilter !== 'all'
 
   // ── Unadded check ────────────────────────────────────────────────────────
