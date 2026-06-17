@@ -1040,7 +1040,7 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                   {header.confirmed_shows > 0 && grooveprintYear && (
                     <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
                       style={{ background: 'rgba(0,191,168,0.12)', color: '#00BFA8', border: '1px solid rgba(0,191,168,0.3)' }}>
-                      1st Show · {grooveprintYear}
+                      First Show · {grooveprintYear}
                     </span>
                   )}
                 </div>
@@ -1090,6 +1090,15 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                         <>
                           <span className="font-semibold text-foreground">{discogsStats.count.toLocaleString()}</span><span className="text-muted-foreground">records</span>
                           {discogsStats.artistCount > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{discogsStats.artistCount.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
+                          {discogsStats.lastAdded && (
+                            <><span className="text-border">·</span>
+                            <span
+                              className="text-muted-foreground truncate max-w-[220px]"
+                              title={[discogsStats.lastAdded.fmt, discogsStats.lastAdded.year].filter(Boolean).join(' · ')}
+                            >
+                              {discogsStats.lastAdded.title}{discogsStats.lastAdded.artist ? ` — ${discogsStats.lastAdded.artist}` : ''}
+                            </span></>
+                          )}
                         </>
                       ) : null}
                     </div>
@@ -1598,7 +1607,16 @@ export default function MyGrooveprintClient({
     for (const r of discogsReleases) fmtCounts[getDiscogsFmt(r.formats)]++
     const formatCount = DISCOGS_FMT_KEYS.filter(f => fmtCounts[f] > 0).length
     const dominantFmt = DISCOGS_FMT_KEYS.reduce((a, b) => fmtCounts[a] >= fmtCounts[b] ? a : b)
-    return { count: discogsReleases.length, artistCount: nonVarious.size, sinceYear, formatCount, dominantFmt }
+    const latestRelease = discogsReleases
+      .filter(r => r.date_added)
+      .sort((a, b) => new Date(b.date_added!).getTime() - new Date(a.date_added!).getTime())[0] ?? null
+    const lastAdded = latestRelease ? {
+      title:  latestRelease.title,
+      artist: latestRelease.discogs_artist_names[0] ?? null,
+      year:   latestRelease.year,
+      fmt:    DISCOGS_FMT_META[getDiscogsFmt(latestRelease.formats)].label,
+    } : null
+    return { count: discogsReleases.length, artistCount: nonVarious.size, sinceYear, formatCount, dominantFmt, lastAdded }
   }, [discogsReleases])
 
   // GP-112: Day-level data — computed when selectedMonth is set in Spotify mode
