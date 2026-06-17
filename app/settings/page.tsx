@@ -278,13 +278,13 @@ export default function SettingsPage() {
                   <textarea
                     value={bio}
                     onChange={e => setBio(e.target.value)}
-                    maxLength={200}
+                    maxLength={150}
                     rows={3}
                     placeholder="Tell people about your concert history..."
                     className="w-full px-3 py-2 text-sm bg-background border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors resize-none"
                   />
                   <p className="text-xs text-muted-foreground text-right tabular-nums">
-                    {bio.length} / 200
+                    {bio.length} / 150
                   </p>
                 </div>
 
