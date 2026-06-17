@@ -2904,7 +2904,7 @@ export default function MyGrooveprintClient({
                       <button onClick={() => setSpotifyReleaseFocus(null)} className="hover:opacity-70 leading-none">×</button>
                     </span>
                   )}
-                  {/* GP-93/111/118: Artists/Albums toggle in Spotify mode; Artists/Years in Discogs mode; hidden in Discogs mode; Artists/Venues toggle in concert modes */}
+                  {/* GP-93/111/118: Artists/Years in Discogs; Artists/Albums in Spotify; Artists/Venues in concert */}
                   {viewMode === 'discogs' ? (
                     <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                       {(['artists', 'years'] as const).map((v, i) => (
@@ -2917,7 +2917,7 @@ export default function MyGrooveprintClient({
                         </button>
                       ))}
                     </div>
-                  ) : viewMode === 'discogs' ? null : viewMode === 'spotify' ? (
+                  ) : viewMode === 'spotify' ? (
                     <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                       {(['artists', 'albums'] as const).map((v, i) => (
                         <button key={v} onClick={() => setSpotifyLibraryView(v)}
