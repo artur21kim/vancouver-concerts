@@ -1028,14 +1028,14 @@ function ProfileHeaderCard({ header, readOnly, discogsStats }: {
                   <a href={`https://open.spotify.com/user/${header.spotify_user_id}`} target="_blank" rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
                     style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)' }}>
-                    <SpotifyIcon className="w-3 h-3" />Spotify
+                    <SpotifyIcon className="w-3 h-3" />Spotify{header.spotify_since_year ? ` · '${String(header.spotify_since_year).slice(-2)}` : ''}
                   </a>
                 )}
                 {header.discogs_connected && header.discogs_username && (
                   <a href={`https://www.discogs.com/user/${header.discogs_username}`} target="_blank" rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
                     style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)' }}>
-                    <DiscogsIcon className="w-3 h-3" />Discogs
+                    <DiscogsIcon className="w-3 h-3" />Discogs{discogsStats?.sinceYear ? ` · '${String(discogsStats.sinceYear).slice(-2)}` : ''}
                   </a>
                 )}
               </div>
@@ -1055,7 +1055,6 @@ function ProfileHeaderCard({ header, readOnly, discogsStats }: {
                   <span className="font-semibold text-foreground">{header.spotify_song_count?.toLocaleString()}</span><span className="text-muted-foreground">songs</span>
                   {(header.spotify_artist_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_artist_count?.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
                   {(header.spotify_album_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_album_count?.toLocaleString()}</span><span className="text-muted-foreground">albums</span></>)}
-                  {header.spotify_since_year && (<><span className="text-border">·</span><span className="font-medium" style={{ color: SPOTIFY_GREEN }}>since {header.spotify_since_year}</span></>)}
                 </div>
               )}
               {header.discogs_connected && (
@@ -1065,7 +1064,6 @@ function ProfileHeaderCard({ header, readOnly, discogsStats }: {
                     <>
                       <span className="font-semibold text-foreground">{discogsStats.count.toLocaleString()}</span><span className="text-muted-foreground">records</span>
                       {discogsStats.artistCount > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{discogsStats.artistCount.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
-                      {discogsStats.sinceYear && (<><span className="text-border">·</span><span className="font-medium text-muted-foreground">since {discogsStats.sinceYear}</span></>)}
                     </>
                   ) : null}
                 </div>
