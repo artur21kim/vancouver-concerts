@@ -15,10 +15,11 @@ export default async function MyGrooveprintPage() {
         redirect('/')
     }
 
-    // ── Run shows + profile in parallel ──────────────────────────────────────
+    // ── Run shows + profile + lightweight Spotify counts in parallel ──────────
     const [
         { data: userShows, error },
         { data: profileRow },
+        { data: spotifyStatsData },
     ] = await Promise.all([
         supabase
             .from('user_shows')
@@ -53,6 +54,8 @@ export default async function MyGrooveprintPage() {
             .select('username, bio, avatar_url, spotify_connected, show_spotify_stats, spotify_user_id, discogs_connected, discogs_username, discogs_release_count')
             .eq('user_id', user.id)
             .single(),
+        // GP-124: returns {song_count, artist_count, album_count} — 3 numbers instead of ~10k rows
+        supabase.rpc('get_user_spotify_stats', { p_user_id: user.id }),
     ])
 
     if (error) {
@@ -110,22 +113,13 @@ export default async function MyGrooveprintPage() {
         }
     }).filter(Boolean)
 
-    // ── Spotify songs ─────────────────────────────────────────────────────────
-    const { data: spotifySongsRaw } = await supabase
-        .from('user_spotify_songs')
-        .select('added_at, spotify_artist_id, artist_name, track_name, spotify_album_name, spotify_album_release_date, spotify_track_id')
-        .eq('user_id', user.id)
-        .not('added_at', 'is', null)
-
-    const spotifySongs: {
-        added_at: string
-        spotify_artist_id: string | null
-        artist_name: string
-        track_name: string
-        spotify_album_name: string | null
-        spotify_album_release_date: string | null
-        spotify_track_id: string | null
-    }[] = spotifySongsRaw ?? []
+    // ── GP-124: Spotify songs are lazy-loaded client-side on first tab click.
+    // Stats (counts) come from the lightweight RPC above.
+    // Full user_spotify_songs fetch removed from server component entirely.
+    const spotifyStats       = (spotifyStatsData as any)?.[0] ?? null
+    const spotifySongCount   = spotifyStats ? Number(spotifyStats.song_count)   : 0
+    const spotifyArtistCount = spotifyStats ? Number(spotifyStats.artist_count) : 0
+    const spotifyAlbumCount  = spotifyStats ? Number(spotifyStats.album_count)  : 0
 
     // ── Build profileHeader from fetched data ─────────────────────────────────
     let profileHeader: ProfileHeader | undefined
@@ -144,11 +138,6 @@ export default async function MyGrooveprintPage() {
         const firstShowYear    = showYears.length > 0 ? Math.min(...showYears) : null
         const lastShowYear     = showYears.length > 0 ? Math.max(...showYears) : null
 
-        // Spotify stats from already-fetched songs array
-        const spotifySongCount   = new Set(spotifySongs.map(s => s.spotify_track_id).filter(Boolean)).size
-        const spotifyArtistCount = new Set(spotifySongs.map(s => s.spotify_artist_id).filter(Boolean)).size
-        const spotifyAlbumCount  = new Set(spotifySongs.filter(s => s.spotify_album_name).map(s => s.spotify_album_name)).size
-
         profileHeader = {
             user_id:               user.id,
             username:              (profileRow as any).username ?? '',
@@ -160,6 +149,7 @@ export default async function MyGrooveprintPage() {
             festival_count:        festivalCount,
             first_show_year:       firstShowYear,
             last_show_year:        lastShowYear,
+            // GP-124: counts from lightweight RPC (not derived from full songs array)
             spotify_song_count:    spotifySongCount   > 0 ? spotifySongCount   : null,
             spotify_artist_count:  spotifyArtistCount > 0 ? spotifyArtistCount : null,
             spotify_album_count:   spotifyAlbumCount  > 0 ? spotifyAlbumCount  : null,
@@ -179,7 +169,7 @@ export default async function MyGrooveprintPage() {
     return (
         <MyGrooveprintClient
             shows={shows as any}
-            spotifySongs={spotifySongs}
+            spotifySongs={[]}
             profileHeader={profileHeader}
         />
     )

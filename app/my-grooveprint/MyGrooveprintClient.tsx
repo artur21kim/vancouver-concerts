@@ -961,7 +961,7 @@ function ProfileHeaderCard({ header, readOnly }: { header: ProfileHeader; readOn
 // ── Main component ────────────────────────────────────────────────────────────
 export default function MyGrooveprintClient({
   shows: initialShows,
-  spotifySongs,
+  spotifySongs: initialSpotifySongs,   // GP-124: wrapped in state for lazy-load
   readOnly = false,
   username,
   profileHeader,
@@ -975,8 +975,12 @@ export default function MyGrooveprintClient({
   const router  = useRouter()
   const supabase = createClient()
 
-  const [shows, setShows]                       = useState(initialShows)
-  const [viewMode, setViewMode]                 = useState<ViewMode>('shows')
+  const [shows, setShows] = useState(initialShows)
+  // GP-124: songs start empty, fetched client-side on first Spotify tab click
+  const [spotifySongs, setSpotifySongs] = useState(initialSpotifySongs)
+  const [spotifyLoading, setSpotifyLoading] = useState(false)
+  const [spotifyLoaded, setSpotifyLoaded] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>('shows')
   const [setsSubView, setSetsSubView]           = useState<SetsSubView>('card')
   const [sortField, setSortField]               = useState<SortField>('date')
   const [sortDir, setSortDir]                   = useState<SortDir>('desc')
@@ -1015,8 +1019,9 @@ export default function MyGrooveprintClient({
   const [restoringIndividual, setRestoringIndividual] = useState<Set<number>>(new Set())
   const [sessionShowsModified, setSessionShowsModified] = useState(false)
 
-  const PER_PAGE   = 50
-  const hasSpotify = spotifySongs.length > 0
+  const PER_PAGE = 50
+  // GP-124: tab visible when Spotify connected (even pre-load); data memos still guard on songs.length
+  const hasSpotify = (profileHeader?.is_own_profile && profileHeader?.spotify_connected) || spotifySongs.length > 0
   const anyFilterActive = selectedYear !== null || capFilter !== 'all' || filterText.trim() !== ''
 
   // ── Unadded check ────────────────────────────────────────────────────────
@@ -1058,6 +1063,22 @@ export default function MyGrooveprintClient({
 
   useEffect(() => { checkUnaddedArtists() }, [])
   useEffect(() => { if (sessionShowsModified) { checkUnaddedArtists(); setSessionShowsModified(false) } }, [sessionShowsModified])
+  // GP-124: lazy-load Spotify songs on first Spotify tab click; cache in state
+  useEffect(() => {
+    if (viewMode !== 'spotify') return
+    if (spotifyLoaded || spotifyLoading) return
+    if (readOnly || !profileHeader?.spotify_connected) return
+    setSpotifyLoading(true)
+    supabase
+      .from('user_spotify_songs')
+      .select('added_at, spotify_artist_id, artist_name, track_name, spotify_album_name, spotify_album_release_date, spotify_track_id')
+      .not('added_at', 'is', null)
+      .then(({ data, error }) => {
+        if (!error && data) setSpotifySongs(data as typeof initialSpotifySongs)
+        setSpotifyLoaded(true)
+        setSpotifyLoading(false)
+      })
+  }, [viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Base stats ────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -1101,7 +1122,7 @@ export default function MyGrooveprintClient({
 
   // GP-80: Artist-contextual Spotify songs per year/month.
   const artistContextualByYearMonth = useMemo(() => {
-    if (!hasSpotify) return {} as Record<string, Record<number, number>>
+    if (!hasSpotify || spotifySongs.length === 0) return {} as Record<string, Record<number, number>>
 
     const showArtistsByKey: Record<string, Set<string>> = {}
     for (const show of shows) {
@@ -1139,7 +1160,7 @@ export default function MyGrooveprintClient({
 
   // GP-80 / GP-88: Top Spotify artists by liked-song count (respects selectedYear filter).
   const topSpotifyArtists = useMemo(() => {
-    if (!hasSpotify) return [] as {
+    if (spotifySongs.length === 0) return [] as {
       name: string; count: number; spotifyId: string; hasAlbumData: boolean
       albums: { name: string | null; year: string | null; releaseDate: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
     }[]
@@ -1205,7 +1226,7 @@ export default function MyGrooveprintClient({
 
   // GP-111: Top Albums memo — aggregates songs by album, respects filterText + selectedYear
   const topSpotifyAlbums = useMemo(() => {
-    if (!hasSpotify) return [] as { albumName: string; artistName: string; artistId: string | null; year: string | null; releaseDate: string | null; addedYear: string | null; count: number; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
+    if (spotifySongs.length === 0) return [] as { albumName: string; artistName: string; artistId: string | null; year: string | null; releaseDate: string | null; addedYear: string | null; count: number; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
     const q = filterText.trim().toLowerCase()
     const src0 = q
       ? spotifySongs.filter(s =>
@@ -1492,8 +1513,8 @@ export default function MyGrooveprintClient({
   const lastYear  = stats.lastShow?.date.split('-')[0]
 
   const drilldownHasSpotify = selectedYear
-    ? hasSpotify &&
-      viewMode !== 'spotify' &&
+    ? spotifySongs.length > 0 &&
+    viewMode !== 'spotify' &&
       Object.keys(artistContextualByYearMonth[selectedYear] ?? {}).length > 0
     : false
 
@@ -2549,7 +2570,12 @@ export default function MyGrooveprintClient({
 
                 {/* GP-93/111: Spotify Albums → SpotifyAlbumBars; Spotify Artists → SpotifyArtistBars; concert → existing */}
                 {viewMode === 'spotify' && spotifyLibraryView === 'albums' ? (
-                  topSpotifyAlbums.length === 0 ? (
+                  spotifyLoading && spotifySongs.length === 0 ? (
+                    <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+                      <div className="w-4 h-4 border-2 border-muted-foreground/40 border-t-primary rounded-full animate-spin" />
+                      Loading your Spotify library…
+                    </div>
+                  ) : topSpotifyAlbums.length === 0 ? (
                     <p className="text-sm text-muted-foreground italic">No album data{selectedYear ? ` for ${selectedYear}` : ''}.</p>
                   ) : (
                     <>
@@ -2566,7 +2592,12 @@ export default function MyGrooveprintClient({
                     </>
                   )
                 ) : viewMode === 'spotify' ? (
-                  filteredSpotifyArtists.length === 0 ? (
+                  spotifyLoading && spotifySongs.length === 0 ? (
+                    <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+                      <div className="w-4 h-4 border-2 border-muted-foreground/40 border-t-primary rounded-full animate-spin" />
+                      Loading your Spotify library…
+                    </div>
+                  ) : filteredSpotifyArtists.length === 0 ? (
                     <p className="text-sm text-muted-foreground italic">No Spotify data{selectedYear ? ` for ${selectedYear}` : ''}.</p>
                   ) : (
                     <>
@@ -2766,7 +2797,12 @@ export default function MyGrooveprintClient({
                 )
               ) : (
               // Original artist expandable list
-              filteredSpotifyArtists.length === 0 ? (
+              spotifyLoading && spotifySongs.length === 0 ? (
+                <div className="flex items-center gap-2 px-4 py-6 text-sm text-muted-foreground">
+                  <div className="w-4 h-4 border-2 border-muted-foreground/40 border-t-primary rounded-full animate-spin" />
+                  Loading your Spotify library…
+                </div>
+              ) : filteredSpotifyArtists.length === 0 ? (
                 <p className="text-sm text-muted-foreground px-4 py-6">No Spotify data{selectedYear ? ` for ${selectedYear}` : ''}.</p>
               ) : (
                 <div className="divide-y divide-border">
