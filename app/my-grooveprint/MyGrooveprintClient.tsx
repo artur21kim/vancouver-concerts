@@ -987,7 +987,7 @@ function SpotifyAlbumBars({ albums, max, onAlbumClick }: {
 function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }: {
   header: ProfileHeader
   readOnly: boolean
-  discogsStats?: { count: number; artistCount: number; sinceYear: number | null } | null
+  discogsStats?: { count: number; artistCount: number; sinceYear: number | null; lastAdded?: { title: string; artist: string | null; year: number | null; fmt: string } | null } | null
   grooveprintSince?: string | null
 }) {
   const router = useRouter()
