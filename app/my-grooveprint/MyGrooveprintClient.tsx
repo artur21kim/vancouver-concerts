@@ -1026,11 +1026,10 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-bold text-primary">@{header.username}</h2>
-                {header.confirmed_shows > 0 && (
+                {header.confirmed_shows > 0 && grooveprintDate && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
                     style={{ background: 'rgba(0,191,168,0.12)', color: '#00BFA8', border: '1px solid rgba(0,191,168,0.3)' }}>
-                    <span className="font-bold text-[10px] leading-none">G</span>
-                    Grooveprint{grooveprintDate ? ` · ${grooveprintDate}` : ''}
+                    First Show · {grooveprintDate}
                   </span>
                 )}
                 {header.spotify_user_id && (
