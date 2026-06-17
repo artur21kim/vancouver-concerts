@@ -43,6 +43,19 @@ type UnaddedArtist = {
   venue_name: string
 }
 
+// GP-118: Discogs release row from user_discogs_releases
+type DiscogsRelease = {
+  discogs_release_id: number
+  discogs_instance_id?: number
+  title: string
+  year: number | null
+  formats: { name: string; qty?: string; descriptions?: string[] }[] | null
+  discogs_artist_names: string[]
+  discogs_artist_ids: number[]
+  date_added: string | null
+}
+type DiscogsFmt = 'vinyl' | 'cd' | 'cassette' | 'other'
+
 
 export type ProfileHeader = {
   user_id:               string
@@ -73,8 +86,8 @@ export type ProfileHeader = {
 
 type SortField     = 'date' | 'artist' | 'venue' | 'added_at'
 type SortDir       = 'asc' | 'desc'
-// GP-80: added 'spotify' view mode
-type ViewMode      = 'shows' | 'sets' | 'festivals' | 'spotify'
+// GP-80: added 'spotify' view mode; GP-118: added 'discogs'
+type ViewMode      = 'shows' | 'sets' | 'festivals' | 'spotify' | 'discogs'
 type SetsSubView   = 'card' | 'table'
 type CapFilter     = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown'
 
@@ -105,6 +118,26 @@ const SPOTIFY_GREEN = '#1DB954'
 const TEAL = '#0d9488'
 // GP-93: fixed 6-color palette for album segments in SpotifyArtistBars
 const SPOTIFY_PALETTE = ['#0d9488', '#0891b2', '#7c3aed', '#be185d', '#b45309', '#065f46'] as const
+
+// GP-118: Discogs format palette
+const DISCOGS_COLOR = '#F97316' // orange-500
+
+const DISCOGS_FMT_META: Record<DiscogsFmt, { label: string; color: string; shortLabel: string }> = {
+  vinyl:    { label: 'Vinyl',    color: 'rgba(139,92,246,0.85)',  shortLabel: 'LP'  },
+  cd:       { label: 'CD',       color: 'rgba(58,143,189,0.85)',  shortLabel: 'CD'  },
+  cassette: { label: 'Cassette', color: 'rgba(234,88,12,0.85)',   shortLabel: 'CS'  },
+  other:    { label: 'Other',    color: 'rgba(156,163,175,0.75)', shortLabel: '?'   },
+}
+const DISCOGS_FMT_KEYS: DiscogsFmt[] = ['vinyl', 'cd', 'cassette', 'other']
+
+function getDiscogsFmt(formats: { name: string }[] | null): DiscogsFmt {
+  if (!formats?.length) return 'other'
+  const n = formats[0].name.toLowerCase()
+  if (n.includes('vinyl')) return 'vinyl'
+  if (n === 'cd' || n.includes('cd')) return 'cd'
+  if (n.includes('cassette')) return 'cassette'
+  return 'other'
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d })()
@@ -290,6 +323,20 @@ function DonutTip({ active, payload }: any) {
     <div className="bg-card border border-border rounded-lg px-2.5 py-1.5 text-xs shadow-lg pointer-events-none">
       <p className="font-semibold text-foreground">{entry.name}</p>
       <p style={{ color: TEAL }} className="tabular-nums">{entry.value} shows</p>
+    </div>
+  )
+}
+
+// ── GP-118: Discogs timeline tooltip ─────────────────────────────────────────
+function DiscogsTip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  const releases = payload.find((p: any) => p.dataKey === 'releases')?.value ?? 0
+  const added    = payload.find((p: any) => p.dataKey === 'added')?.value ?? 0
+  return (
+    <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none">
+      <p className="font-semibold text-foreground mb-0.5">{label}</p>
+      {releases > 0 && <p style={{ color: DISCOGS_COLOR }}>{releases.toLocaleString()} {releases === 1 ? 'release' : 'releases'}</p>}
+      {added > 0 && <p style={{ color: TEAL }} className="mt-0.5">{added.toLocaleString()} added to collection</p>}
     </div>
   )
 }
@@ -495,6 +542,93 @@ function VenueYearBars({ venues, max, onNavigate }: {
           <span key={key} className="flex items-center gap-1">
             <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CAP_BY_KEY[key].color }} />
             {CAP_BY_KEY[key].legendLabel}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── GP-118: Discogs artist bars (format-colored segments) ─────────────────────
+function DiscogsArtistBars({ artists, max }: {
+  artists: {
+    name: string; total: number
+    formatCounts: Record<DiscogsFmt, number>
+    releases: { title: string; year: number | null; fmt: DiscogsFmt; date_added: string | null }[]
+  }[]
+  max: number
+}) {
+  const [tooltip, setTooltip] = useState<{
+    artist: string; formatCounts: Record<DiscogsFmt, number>; x: number
+  } | null>(null)
+
+  return (
+    <div className="w-full space-y-1.5">
+      {artists.map(artist => {
+        const totalWidth = max > 0 ? (artist.total / max) * 100 : 0
+        const segments = DISCOGS_FMT_KEYS
+          .filter(fmt => artist.formatCounts[fmt] > 0)
+          .map(fmt => ({
+            fmt,
+            color: DISCOGS_FMT_META[fmt].color,
+            widthPct: (artist.formatCounts[fmt] / artist.total) * 100,
+          }))
+        return (
+          <div key={artist.name} className="flex items-center gap-2 py-0.5">
+            <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
+              <span className="text-xs text-primary truncate text-right" title={artist.name}>{artist.name}</span>
+            </div>
+            <div className="flex-1 relative">
+              <div className="h-5 bg-muted/40 rounded-full overflow-hidden flex">
+                <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
+                  {segments.map((seg, i) => {
+                    const isFirst = i === 0, isLast = i === segments.length - 1
+                    return (
+                      <div key={seg.fmt} className="h-full flex items-center justify-center overflow-hidden"
+                        style={{
+                          width: `${seg.widthPct}%`, backgroundColor: seg.color,
+                          borderRadius: isFirst && isLast ? '9999px' : isFirst ? '9999px 0 0 9999px' : isLast ? '0 9999px 9999px 0' : '0',
+                          borderRight: !isLast ? '1px solid rgba(0,0,0,0.25)' : undefined,
+                        }}
+                        onMouseEnter={e => {
+                          const rect = (e.currentTarget as HTMLElement).closest('.flex-1')!.getBoundingClientRect()
+                          setTooltip({ artist: artist.name, formatCounts: artist.formatCounts, x: e.clientX - rect.left })
+                        }}
+                        onMouseLeave={() => setTooltip(null)}>
+                        {seg.widthPct >= 15 && (
+                          <span className="text-[9px] font-semibold leading-none select-none whitespace-nowrap px-0.5"
+                            style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
+                            {DISCOGS_FMT_META[seg.fmt].shortLabel}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              {tooltip?.artist === artist.name && (
+                <div className="absolute z-50 bg-card border border-border rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none min-w-[160px]"
+                  style={{ left: Math.min(tooltip.x, 220), bottom: 'calc(100% + 6px)', transform: 'translateX(-30%)' }}>
+                  <p className="font-semibold text-foreground mb-1">{artist.name}</p>
+                  {DISCOGS_FMT_KEYS.filter(f => tooltip.formatCounts[f] > 0).map(fmt => (
+                    <p key={fmt} style={{ color: DISCOGS_FMT_META[fmt].color }} className="mt-0.5">
+                      {DISCOGS_FMT_META[fmt].label}: {tooltip.formatCounts[fmt]}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+            <span className="text-xs tabular-nums flex-shrink-0 w-16 text-right" style={{ color: DISCOGS_COLOR }}>
+              {artist.total} {artist.total === 1 ? 'record' : 'records'}
+            </span>
+          </div>
+        )
+      })}
+      <div className="flex items-center gap-3 pt-2 border-t border-border text-[10px] text-muted-foreground flex-wrap">
+        {DISCOGS_FMT_KEYS.map(fmt => (
+          <span key={fmt} className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: DISCOGS_FMT_META[fmt].color }} />
+            {DISCOGS_FMT_META[fmt].label}
           </span>
         ))}
       </div>
@@ -964,12 +1098,14 @@ function ProfileHeaderCard({ header, readOnly }: { header: ProfileHeader; readOn
 export default function MyGrooveprintClient({
   shows: initialShows,
   spotifySongs: initialSpotifySongs,   // GP-124: wrapped in state for lazy-load
+  discogsReleases: initialDiscogsReleases = [],  // GP-118: Discogs tab
   readOnly = false,
   username,
   profileHeader,
 }: {
   shows: Show[]
   spotifySongs: { added_at: string; spotify_artist_id: string | null; artist_name: string; track_name: string; spotify_album_name: string | null; spotify_album_release_date: string | null; spotify_track_id: string | null }[]
+  discogsReleases?: DiscogsRelease[]
   readOnly?: boolean
   username?: string
   profileHeader?: ProfileHeader
@@ -1006,6 +1142,14 @@ export default function MyGrooveprintClient({
   const [showAllAlbums, setShowAllAlbums]             = useState(false)
   const [expandedAlbumKeys, setExpandedAlbumKeys]     = useState<Set<string>>(new Set())
 
+  // GP-118: Discogs tab state
+  const [discogsReleases, setDiscogsReleases]             = useState<DiscogsRelease[]>(initialDiscogsReleases)
+  const [discogsLoading, setDiscogsLoading]               = useState(false)
+  const [discogsLoaded, setDiscogsLoaded]                 = useState(initialDiscogsReleases.length > 0)
+  const [showAllDiscogsArtists, setShowAllDiscogsArtists] = useState(false)
+  const [discogsFmtFilter, setDiscogsFmtFilter]           = useState<DiscogsFmt | 'all'>('all')
+  const [expandedDiscogsArtists, setExpandedDiscogsArtists] = useState<Set<string>>(new Set())
+
   // Unadded CTA — own profile only
   const [unaddedArtists, setUnaddedArtists]         = useState<UnaddedArtist[]>([])
   const [unaddedDismissed, setUnaddedDismissed]     = useState(false)
@@ -1024,7 +1168,9 @@ export default function MyGrooveprintClient({
   const PER_PAGE = 50
   // GP-124: tab visible when Spotify connected (even pre-load); data memos still guard on songs.length
   const hasSpotify = (profileHeader?.is_own_profile && profileHeader?.spotify_connected) || spotifySongs.length > 0
-  const anyFilterActive = selectedYear !== null || capFilter !== 'all' || filterText.trim() !== ''
+  // GP-118: tab visible when Discogs connected and has releases
+  const hasDiscogs = !!(profileHeader?.discogs_connected && (profileHeader?.discogs_release_count ?? 0) > 0)
+  const anyFilterActive = selectedYear !== null || capFilter !== 'all' || filterText.trim() !== '' || discogsFmtFilter !== 'all'
 
   // ── Unadded check ────────────────────────────────────────────────────────
   const checkUnaddedArtists = useCallback(async () => {
@@ -1079,6 +1225,22 @@ export default function MyGrooveprintClient({
         if (!error && data) setSpotifySongs(data as typeof initialSpotifySongs)
         setSpotifyLoaded(true)
         setSpotifyLoading(false)
+      })
+  }, [viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // GP-118: lazy-load Discogs releases on first Discogs tab click
+  useEffect(() => {
+    if (viewMode !== 'discogs') return
+    if (discogsLoaded || discogsLoading) return
+    if (readOnly) { setDiscogsLoaded(true); return }
+    setDiscogsLoading(true)
+    supabase
+      .from('user_discogs_releases')
+      .select('discogs_release_id, discogs_instance_id, title, year, formats, discogs_artist_names, discogs_artist_ids, date_added')
+      .then(({ data, error }) => {
+        if (!error && data) setDiscogsReleases(data as DiscogsRelease[])
+        setDiscogsLoaded(true)
+        setDiscogsLoading(false)
       })
   }, [viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1266,6 +1428,68 @@ export default function MyGrooveprintClient({
       .sort((a, b) => b.count - a.count).slice(0, 50)
   }, [spotifySongs, hasSpotify, filterText, selectedYear, selectedMonth])
 
+  // GP-118: Discogs timeline — release year (area) + date_added year (dashed line)
+  const discogsTimelineData = useMemo((): { year: string; releases: number; added: number }[] => {
+    if (discogsReleases.length === 0) return []
+    const byReleaseYear: Record<string, number> = {}
+    const byAddedYear: Record<string, number>   = {}
+    for (const r of discogsReleases) {
+      if (r.year) { const y = String(r.year); byReleaseYear[y] = (byReleaseYear[y] ?? 0) + 1 }
+      if (r.date_added) { const y = String(new Date(r.date_added).getFullYear()); byAddedYear[y] = (byAddedYear[y] ?? 0) + 1 }
+    }
+    const allYears = new Set([...Object.keys(byReleaseYear), ...Object.keys(byAddedYear)])
+    return Array.from(allYears).sort().map(year => ({ year, releases: byReleaseYear[year] ?? 0, added: byAddedYear[year] ?? 0 }))
+  }, [discogsReleases])
+
+  // GP-118: top Discogs artists (Various Artists excluded), sorted by total desc, sliced to 50
+  const topDiscogsArtists = useMemo(() => {
+    if (discogsReleases.length === 0) return [] as {
+      name: string; total: number
+      formatCounts: Record<DiscogsFmt, number>
+      releases: { title: string; year: number | null; fmt: DiscogsFmt; date_added: string | null }[]
+    }[]
+    const map: Record<string, {
+      name: string; total: number
+      formatCounts: Record<DiscogsFmt, number>
+      releases: { title: string; year: number | null; fmt: DiscogsFmt; date_added: string | null }[]
+    }> = {}
+    for (const r of discogsReleases) {
+      const fmt = getDiscogsFmt(r.formats)
+      for (const name of r.discogs_artist_names) {
+        const nl = name.toLowerCase()
+        if (nl === 'various' || nl === 'various artists') continue
+        if (!map[name]) map[name] = { name, total: 0, formatCounts: { vinyl: 0, cd: 0, cassette: 0, other: 0 }, releases: [] }
+        map[name].total++
+        map[name].formatCounts[fmt]++
+        map[name].releases.push({ title: r.title, year: r.year, fmt, date_added: r.date_added })
+      }
+    }
+    return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 50)
+  }, [discogsReleases])
+
+  // GP-118: format breakdown for donut
+  const discogsFormatData = useMemo(() => {
+    if (discogsReleases.length === 0) return [] as { fmt: DiscogsFmt; label: string; value: number; color: string }[]
+    const counts: Record<DiscogsFmt, number> = { vinyl: 0, cd: 0, cassette: 0, other: 0 }
+    for (const r of discogsReleases) counts[getDiscogsFmt(r.formats)]++
+    return DISCOGS_FMT_KEYS
+      .map(fmt => ({ fmt, label: DISCOGS_FMT_META[fmt].label, value: counts[fmt], color: DISCOGS_FMT_META[fmt].color }))
+      .filter(d => d.value > 0)
+  }, [discogsReleases])
+
+  // GP-118: filtered Discogs artists (respects format filter + text filter)
+  const filteredDiscogsArtists = useMemo(() => {
+    const fmtFiltered = discogsFmtFilter === 'all'
+      ? topDiscogsArtists
+      : topDiscogsArtists.filter(a => a.formatCounts[discogsFmtFilter] > 0)
+    if (!filterText.trim()) return fmtFiltered
+    const q = filterText.toLowerCase()
+    return fmtFiltered.filter(a =>
+      a.name.toLowerCase().includes(q) ||
+      a.releases.some(r => r.title.toLowerCase().includes(q))
+    )
+  }, [topDiscogsArtists, discogsFmtFilter, filterText])
+
   // GP-112: Day-level data — computed when selectedMonth is set in Spotify mode
   const dayTimelineData = useMemo(() => {
     if (selectedMonth === null || !selectedYear || viewMode !== 'spotify') return [] as { day: string; shows: number; albumReleases: string[] }[]
@@ -1334,6 +1558,9 @@ export default function MyGrooveprintClient({
   // GP-80: yearTimelineData
   // GP-108: Spotify branch now filters by filterText so chart tracks the active artist/venue filter
   const yearTimelineData = useMemo(() => {
+    // GP-118: Discogs uses its own discogsTimelineData; this memo returns empty to suppress the timeline card
+    if (viewMode === 'discogs') return []
+
     if (viewMode === 'spotify') {
       const q = filterText.trim().toLowerCase()
       // GP-111 (#3): also match spotify_album_name so users can filter by album title
@@ -1520,9 +1747,15 @@ export default function MyGrooveprintClient({
       Object.keys(artistContextualByYearMonth[selectedYear] ?? {}).length > 0
     : false
 
-  const chartLineColor = viewMode === 'spotify' ? SPOTIFY_GREEN : TEAL
+  // GP-118: show dashed "added" line on Discogs timeline when date_added data exists
+  const drilldownHasDiscogsAdded = viewMode === 'discogs' && discogsTimelineData.some(d => d.added > 0)
+
+  const chartLineColor = viewMode === 'spotify' ? SPOTIFY_GREEN
+    : viewMode === 'discogs' ? DISCOGS_COLOR
+    : TEAL
 
   const timelineLegendLabel = viewMode === 'spotify' ? 'Songs added per year'
+    : viewMode === 'discogs' ? 'Releases by year'
     : viewMode === 'sets' ? 'Sets per year'
     : viewMode === 'festivals' ? 'Festivals per year'
     : 'Shows per year'
@@ -1665,6 +1898,22 @@ export default function MyGrooveprintClient({
   // GP-80: dynamicStats
   // GP-108: Spotify branch now filters by filterText so badge counts reflect active filter
   const dynamicStats = useMemo(() => {
+    // GP-118: Discogs branch
+    if (viewMode === 'discogs') {
+      const fmtFiltered = discogsFmtFilter === 'all'
+        ? discogsReleases
+        : discogsReleases.filter(r => getDiscogsFmt(r.formats) === discogsFmtFilter)
+      const q = filterText.trim().toLowerCase()
+      const src = q
+        ? fmtFiltered.filter(r =>
+            r.discogs_artist_names.some(n => n.toLowerCase().includes(q)) ||
+            r.title.toLowerCase().includes(q))
+        : fmtFiltered
+      const nonVarious = new Set(src.flatMap(r =>
+        r.discogs_artist_names.filter(n => { const nl = n.toLowerCase(); return nl !== 'various' && nl !== 'various artists' })
+      ))
+      return { sets: src.length, shows: 0, artists: nonVarious.size, venues: 0, festivals: 0 }
+    }
     if (viewMode === 'spotify') {
       const q = filterText.trim().toLowerCase()
       // GP-111 (#3): also match spotify_album_name
@@ -1709,7 +1958,7 @@ export default function MyGrooveprintClient({
     const artists   = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.artist.artist_id))).size
     const venues    = new Set(festivalGroups.flatMap(g => g.shows.map(s => s.venue.venue_id))).size
     return { sets, shows: 0, artists, venues, festivals }
-  }, [viewMode, billGroups, setsFiltered, festivalGroups, spotifySongs, selectedYear, selectedMonth, filterText])
+  }, [viewMode, billGroups, setsFiltered, festivalGroups, spotifySongs, selectedYear, selectedMonth, filterText, discogsReleases, discogsFmtFilter])
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleCap = useCallback((key: CapFilter) => {
@@ -1740,6 +1989,8 @@ export default function MyGrooveprintClient({
     setSelectedYear(null); setSelectedMonth(null); setCapFilter('all'); setFilterText('')
     setPage(1); setPageInput('1'); setShowAllArtists(false)
     setSpotifyReleaseFocus(null)
+    setDiscogsFmtFilter('all')
+    setShowAllDiscogsArtists(false)
   }, [])
 
   // GP-91: set filter text and reset pagination
@@ -2116,14 +2367,14 @@ export default function MyGrooveprintClient({
             </div>
           )}
 
-          {/* ── Concert / Spotify Timeline ── */}
-          {yearTimelineData.length > 0 && (
+          {/* ── Concert / Spotify / Discogs Timeline ── */}
+          {(viewMode === 'discogs' ? hasDiscogs : yearTimelineData.length > 0) && (
             <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5">
               <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
                 <div className="flex items-center gap-3 flex-wrap">
                   {/* GP-93: dynamic title */}
                   <h2 className="text-lg md:text-xl font-bold text-foreground">
-                    {viewMode === 'spotify' ? 'Spotify Timeline' : 'Concert Timeline'}
+                    {viewMode === 'spotify' ? 'Spotify Timeline' : viewMode === 'discogs' ? 'Collection Timeline' : 'Concert Timeline'}
                   </h2>
                   <div className="flex items-center gap-2 text-xs flex-wrap">
                     {viewMode === 'shows' && <>
@@ -2183,6 +2434,16 @@ export default function MyGrooveprintClient({
                       </span>
                       <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
                         <span style={{ color: SPOTIFY_GREEN }}>{dynamicStats.artists.toLocaleString()}</span>
+                        <span className="text-muted-foreground"> artists</span>
+                      </span>
+                    </>}
+                    {viewMode === 'discogs' && <>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: DISCOGS_COLOR }}>{dynamicStats.sets.toLocaleString()}</span>
+                        <span className="text-muted-foreground"> records</span>
+                      </span>
+                      <span className="bg-muted rounded-md px-2 py-0.5 font-medium">
+                        <span style={{ color: DISCOGS_COLOR }}>{dynamicStats.artists.toLocaleString()}</span>
                         <span className="text-muted-foreground"> artists</span>
                       </span>
                     </>}
@@ -2246,6 +2507,17 @@ export default function MyGrooveprintClient({
                         Spotify
                       </button>
                     )}
+                    {hasDiscogs && (
+                      <button
+                        onClick={() => setViewMode('discogs')}
+                        className={`px-3 py-1.5 flex items-center gap-1 transition-colors border-l border-border ${
+                          viewMode === 'discogs' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        <DiscogsIcon className="w-3 h-3" />
+                        Discogs
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2254,7 +2526,7 @@ export default function MyGrooveprintClient({
                 <span className="flex items-center gap-1.5">
                   <span className="w-3 h-3 rounded-sm inline-block" style={{ background: chartLineColor }} />
                   {selectedYear
-                    ? (viewMode === 'spotify' ? 'Songs' : viewMode === 'sets' ? 'Sets' : viewMode === 'festivals' ? 'Festivals' : 'Shows')
+                    ? (viewMode === 'spotify' ? 'Songs' : viewMode === 'sets' ? 'Sets' : viewMode === 'festivals' ? 'Festivals' : viewMode === 'discogs' ? 'Releases' : 'Shows')
                     : timelineLegendLabel}
                 </span>
                 {drilldownHasSpotify && (
@@ -2263,7 +2535,13 @@ export default function MyGrooveprintClient({
                     Matched artist songs {firstSpotifyYear && <span className="text-muted-foreground/50 ml-0.5">(from {firstSpotifyYear})</span>}
                   </span>
                 )}
-                {viewMode !== 'sets' && viewMode !== 'spotify' && (
+                {drilldownHasDiscogsAdded && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-0 border-t-2 border-dashed inline-block" style={{ borderColor: TEAL }} />
+                    Added to collection
+                  </span>
+                )}
+                {viewMode !== 'sets' && viewMode !== 'spotify' && viewMode !== 'discogs' && (
                   <span className="text-muted-foreground/50 text-[10px]">
                     {viewMode === 'shows' ? '· Bills with multiple acts count as 1 show' : '· Festival shows only'}
                   </span>
@@ -2370,6 +2648,36 @@ export default function MyGrooveprintClient({
                           }} connectNulls={false} activeDot={{ r: 4, fill: SPOTIFY_GREEN }} />
                       )}
                     </ComposedChart>
+                  ) : viewMode === 'discogs' ? (
+                    // GP-118: Discogs non-interactive area chart — releases by year + dashed added line
+                    <ComposedChart data={discogsTimelineData} margin={{ top: 16, right: drilldownHasDiscogsAdded ? 40 : 8, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="gradDiscogs" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor={DISCOGS_COLOR} stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor={DISCOGS_COLOR} stopOpacity={0.02}/>
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="year" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis yAxisId="releases" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} tickFormatter={(v: number) => v.toLocaleString()} />
+                      {drilldownHasDiscogsAdded && (
+                        <YAxis yAxisId="added" orientation="right" tick={{ fill: TEAL, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      )}
+                      <Tooltip content={(props: any) => <DiscogsTip {...props} />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+                      <Area yAxisId="releases" type="monotone" dataKey="releases" stroke={DISCOGS_COLOR} strokeWidth={2} fill="url(#gradDiscogs)"
+                        dot={(p: any) => {
+                          const { cx, cy, payload } = p
+                          if ((payload.releases ?? 0) === 0) return <g key={`e-${cx}`} />
+                          return <circle key={`d-${cx}`} cx={cx} cy={cy} r={3} fill={DISCOGS_COLOR} stroke="var(--background)" strokeWidth={1.5}/>
+                        }} activeDot={{ r: 4, fill: DISCOGS_COLOR }} />
+                      {drilldownHasDiscogsAdded && (
+                        <Line yAxisId="added" type="monotone" dataKey="added" stroke={TEAL} strokeWidth={2} strokeDasharray="5 3"
+                          dot={(p: any) => {
+                            const { cx, cy, payload } = p
+                            if (!payload.added || payload.added === 0) return <g key={`e-${cx}`} />
+                            return <circle key={`a-${cx}`} cx={cx} cy={cy} r={3} fill={TEAL} stroke="var(--background)" strokeWidth={1.5}/>
+                          }} connectNulls={false} activeDot={{ r: 4, fill: TEAL }} />
+                      )}
+                    </ComposedChart>
                   ) : (
                     <AreaChart data={yearTimelineData} margin={{ top: 16, right: 8, left: -20, bottom: 0 }}
                       onClick={(d: any) => { const y = d?.activeLabel; if (y) handleYearClick(y) }}
@@ -2451,7 +2759,7 @@ export default function MyGrooveprintClient({
                     {selectedMonth < 11 ? MONTHS[selectedMonth + 1] : ''} ›
                   </button>
                 </div>
-              ) : selectedYear ? (() => {
+              ) : selectedYear && viewMode !== 'discogs' ? (() => {
                 const idx = availableYears.indexOf(selectedYear)
                 const prevYear = idx > 0 ? availableYears[idx - 1] : null
                 const nextYear = idx < availableYears.length - 1 ? availableYears[idx + 1] : null
@@ -2486,7 +2794,7 @@ export default function MyGrooveprintClient({
                   </div>
                 )
               })() : (
-                viewMode !== 'spotify' && (stats.firstShow || stats.lastShow) && (
+                viewMode !== 'spotify' && viewMode !== 'discogs' && (stats.firstShow || stats.lastShow) && (
                   <div className="flex items-start justify-between gap-2 mt-2 text-xs text-muted-foreground">
                     {stats.firstShow && <span>First: <span className="text-foreground font-medium">{stats.firstShow.artist.artist_name}</span> · {fmtDate(stats.firstShow.date)}</span>}
                     {stats.lastShow && lastYear !== firstYear && <span className="text-right flex-shrink-0">Last: <span className="text-foreground font-medium">{stats.lastShow.artist.artist_name}</span> · {fmtDate(stats.lastShow.date)}</span>}
@@ -2497,7 +2805,7 @@ export default function MyGrooveprintClient({
           )}
 
           {/* ── Filter search box ── */}
-          {(shows.length > 0 || hasSpotify) && (
+          {(shows.length > 0 || hasSpotify || hasDiscogs) && (
             <div className="relative">
               <svg
                 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none text-primary/60"
@@ -2510,7 +2818,7 @@ export default function MyGrooveprintClient({
                 type="text"
                 value={filterText}
                 onChange={e => { setFilterText(e.target.value); setPage(1); setPageInput('1') }}
-                placeholder={viewMode === 'spotify' ? 'Filter by artist or album…' : 'Filter by artist or venue…'}
+                placeholder={viewMode === 'spotify' ? 'Filter by artist or album…' : viewMode === 'discogs' ? 'Filter by artist or title…' : 'Filter by artist or venue…'}
                 className="w-full pl-9 pr-8 py-2 text-sm bg-card border border-primary/30 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors shadow-sm"
               />
               {filterText && (
@@ -2535,6 +2843,8 @@ export default function MyGrooveprintClient({
                   <h2 className="text-lg font-bold text-foreground">
                     {viewMode === 'spotify'
                       ? (spotifyLibraryView === 'albums' ? 'Top Albums in Your Library' : 'Top Artists in Your Library')
+                      : viewMode === 'discogs'
+                      ? 'Top Artists in Your Collection'
                       : (chartSection === 'artists' ? 'Top Artists' : 'Top Venues')}
                     {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                   </h2>
@@ -2544,8 +2854,8 @@ export default function MyGrooveprintClient({
                       <button onClick={() => setSpotifyReleaseFocus(null)} className="hover:opacity-70 leading-none">×</button>
                     </span>
                   )}
-                  {/* GP-93/111: Artists/Albums toggle in Spotify mode; Artists/Venues toggle in concert modes */}
-                  {viewMode === 'spotify' ? (
+                  {/* GP-93/111: Artists/Albums toggle in Spotify mode; hidden in Discogs mode; Artists/Venues toggle in concert modes */}
+                  {viewMode === 'discogs' ? null : viewMode === 'spotify' ? (
                     <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                       {(['artists', 'albums'] as const).map((v, i) => (
                         <button key={v} onClick={() => setSpotifyLibraryView(v)}
@@ -2570,8 +2880,29 @@ export default function MyGrooveprintClient({
                   )}
                 </div>
 
-                {/* GP-93/111: Spotify Albums → SpotifyAlbumBars; Spotify Artists → SpotifyArtistBars; concert → existing */}
-                {viewMode === 'spotify' && spotifyLibraryView === 'albums' ? (
+                {/* GP-93/111/118: Discogs artist bars; Spotify Albums → SpotifyAlbumBars; Spotify Artists → SpotifyArtistBars; concert → existing */}
+                {viewMode === 'discogs' ? (
+                  discogsLoading && discogsReleases.length === 0 ? (
+                    <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+                      <div className="w-4 h-4 border-2 border-muted-foreground/40 border-t-primary rounded-full animate-spin" />
+                      Loading your Discogs collection…
+                    </div>
+                  ) : filteredDiscogsArtists.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic">No collection data.</p>
+                  ) : (
+                    <>
+                      <DiscogsArtistBars
+                        artists={filteredDiscogsArtists.slice(0, showAllDiscogsArtists ? undefined : 10)}
+                        max={filteredDiscogsArtists[0]?.total ?? 1}
+                      />
+                      {filteredDiscogsArtists.length > 10 && (
+                        <button onClick={() => setShowAllDiscogsArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
+                          {showAllDiscogsArtists ? '← Show less' : `View all ${filteredDiscogsArtists.length} artists \u2192`}
+                        </button>
+                      )}
+                    </>
+                  )
+                ) : viewMode === 'spotify' && spotifyLibraryView === 'albums' ? (
                   spotifyLoading && spotifySongs.length === 0 ? (
                     <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
                       <div className="w-4 h-4 border-2 border-muted-foreground/40 border-t-primary rounded-full animate-spin" />
@@ -2653,8 +2984,78 @@ export default function MyGrooveprintClient({
                 )}
               </div>
 
-              {/* Donut — hidden in Spotify mode (no venue data) */}
-              {viewMode !== 'spotify' && <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 w-56 flex-shrink-0 hidden md:flex flex-col">
+              {/* Donut — format breakdown in Discogs mode, venue sizes otherwise (hidden in Spotify mode) */}
+              {viewMode === 'discogs' ? (
+                <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 w-56 flex-shrink-0 hidden md:flex flex-col">
+                  <h2 className="text-base font-bold text-foreground mb-3">By Format</h2>
+                  {discogsFormatData.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic">No data</p>
+                  ) : (
+                    <>
+                      <div className="relative" style={{ height: 148 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={discogsFormatData} cx="50%" cy="50%"
+                              innerRadius={38} outerRadius={62} paddingAngle={2} dataKey="value" stroke="none"
+                              onClick={(d: any) => setDiscogsFmtFilter(prev => prev === d.fmt ? 'all' : d.fmt as DiscogsFmt)}
+                              style={{ cursor: 'pointer' }}
+                              label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, fmt }: any) => {
+                                if (midAngle == null || percent == null || percent < 0.05) return null
+                                const RADIAN = Math.PI / 180
+                                const r = (innerRadius + outerRadius) * 0.5
+                                const x = cx + r * Math.cos(-midAngle * RADIAN)
+                                const y = cy + r * Math.sin(-midAngle * RADIAN)
+                                return (
+                                  <text x={x} y={y} fill="rgba(255,255,255,0.95)" textAnchor="middle" dominantBaseline="central"
+                                    fontSize={11} fontWeight={700} style={{ pointerEvents: 'none' }}>
+                                    {DISCOGS_FMT_META[fmt as DiscogsFmt]?.shortLabel ?? '?'}
+                                  </text>
+                                )
+                              }}
+                              labelLine={false}>
+                              {discogsFormatData.map(entry => (
+                                <Cell key={entry.fmt} fill={entry.color}
+                                  opacity={discogsFmtFilter === 'all' || discogsFmtFilter === entry.fmt ? 1 : 0.25} />
+                              ))}
+                            </Pie>
+                            <Tooltip content={(props: any) => {
+                              if (!props.active || !props.payload?.length) return null
+                              const e = props.payload[0]?.payload
+                              if (!e) return null
+                              return (
+                                <div className="bg-card border border-border rounded-lg px-2.5 py-1.5 text-xs shadow-lg pointer-events-none">
+                                  <p className="font-semibold text-foreground">{e.label}</p>
+                                  <p style={{ color: DISCOGS_COLOR }} className="tabular-nums">{e.value} records</p>
+                                </div>
+                              )
+                            }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex-1 space-y-1.5 mt-1">
+                        {discogsFormatData.map(entry => {
+                          const total = discogsFormatData.reduce((s, d) => s + d.value, 0)
+                          const pct   = total > 0 ? Math.round((entry.value / total) * 100) : 0
+                          const isActive = discogsFmtFilter === 'all' || discogsFmtFilter === entry.fmt
+                          return (
+                            <button key={entry.fmt} onClick={() => setDiscogsFmtFilter(prev => prev === entry.fmt ? 'all' : entry.fmt)}
+                              className={`w-full flex items-center gap-2 text-left transition-opacity ${isActive ? '' : 'opacity-35'}`}>
+                              <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: entry.color }} />
+                              <span className="text-[11px] text-foreground flex-1 truncate">{entry.label}:</span>
+                              <span className="text-[11px] tabular-nums flex-shrink-0" style={{ color: DISCOGS_COLOR }}>
+                                {entry.value} ({pct}%)
+                              </span>
+                            </button>
+                          )
+                        })}
+                        {discogsFmtFilter !== 'all' && (
+                          <button onClick={() => setDiscogsFmtFilter('all')} className="text-[10px] text-primary hover:underline mt-1">Clear filter ×</button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : viewMode !== 'spotify' && <div className="bg-card rounded-lg shadow border border-border p-4 md:p-5 w-56 flex-shrink-0 hidden md:flex flex-col">
                 <h2 className="text-base font-bold text-foreground mb-3">Venues by Size</h2>
                 {donutData.length === 0 ? (
                   <p className="text-sm text-muted-foreground italic">No data</p>
@@ -2867,8 +3268,81 @@ export default function MyGrooveprintClient({
             </div>
           )}
 
-          {/* ── Show list — hidden in Spotify mode ── */}
-          {viewMode !== 'spotify' && (
+          {/* ── GP-118: Discogs tab — expandable collection list ── */}
+          {viewMode === 'discogs' && hasDiscogs && (
+            <div className="bg-card rounded-lg shadow border border-border overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <DiscogsIcon className="w-4 h-4 text-orange-400" />
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Your Collection
+                  </h2>
+                </div>
+                <span className="text-xs text-muted-foreground">{filteredDiscogsArtists.length} artists</span>
+              </div>
+              {discogsLoading && discogsReleases.length === 0 ? (
+                <div className="flex items-center gap-2 px-4 py-6 text-sm text-muted-foreground">
+                  <div className="w-4 h-4 border-2 border-muted-foreground/40 border-t-primary rounded-full animate-spin" />
+                  Loading your Discogs collection…
+                </div>
+              ) : filteredDiscogsArtists.length === 0 ? (
+                <p className="text-sm text-muted-foreground px-4 py-6">No collection data.</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {filteredDiscogsArtists.map((artist, i) => {
+                    const isExpanded = expandedDiscogsArtists.has(artist.name)
+                    const toggleExpanded = () => setExpandedDiscogsArtists(prev => {
+                      const n = new Set(prev)
+                      n.has(artist.name) ? n.delete(artist.name) : n.add(artist.name)
+                      return n
+                    })
+                    return (
+                      <div key={artist.name}>
+                        <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors cursor-pointer"
+                          onClick={toggleExpanded}>
+                          <span className="text-xs font-bold tabular-nums w-6 text-right flex-shrink-0" style={{ color: DISCOGS_COLOR }}>
+                            #{i + 1}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm text-foreground truncate">{artist.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-xs tabular-nums" style={{ color: DISCOGS_COLOR }}>
+                              {artist.total} {artist.total === 1 ? 'record' : 'records'}
+                            </span>
+                            <span className="text-muted-foreground text-[10px] w-3 text-center">{isExpanded ? '▲' : '▼'}</span>
+                          </div>
+                        </div>
+                        {isExpanded && (
+                          <div className="border-t border-border/40 bg-background/50">
+                            <div className="grid px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider bg-muted/30 border-b border-border/30"
+                              style={{ gridTemplateColumns: 'minmax(0, 1fr) 60px 108px', color: TEAL }}>
+                              <span>Title</span><span className="text-center">Year</span><span className="text-right">Format</span>
+                            </div>
+                            <div className="max-h-48 overflow-y-auto divide-y divide-border/10">
+                              {artist.releases.sort((a, b) => (b.year ?? 0) - (a.year ?? 0)).map((rel, j) => (
+                                <div key={j} className="grid items-center px-4 py-2 hover:bg-muted/20 transition-colors"
+                                  style={{ gridTemplateColumns: 'minmax(0, 1fr) 60px 108px' }}>
+                                  <span className="text-xs text-foreground/80 truncate pl-2 pr-3">{rel.title}</span>
+                                  <span className="text-xs text-foreground/50 tabular-nums text-center">{rel.year ?? '—'}</span>
+                                  <span className="text-xs tabular-nums text-right" style={{ color: DISCOGS_FMT_META[rel.fmt].color }}>
+                                    {DISCOGS_FMT_META[rel.fmt].label}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Show list — hidden in Spotify and Discogs modes ── */}
+          {viewMode !== 'spotify' && viewMode !== 'discogs' && (
           <>
           {shows.length === 0 ? (
             <div className="bg-card rounded-lg shadow border border-border p-12 text-center">
