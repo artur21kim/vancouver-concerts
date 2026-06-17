@@ -984,10 +984,11 @@ function SpotifyAlbumBars({ albums, max, onAlbumClick }: {
 }
 
 // ── GP-114: Profile header card ───────────────────────────────────────────────
-function ProfileHeaderCard({ header, readOnly, discogsStats }: {
+function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }: {
   header: ProfileHeader
   readOnly: boolean
   discogsStats?: { count: number; artistCount: number; sinceYear: number | null } | null
+  grooveprintSince?: string | null
 }) {
   const router = useRouter()
   const supabase = createClient()
@@ -996,8 +997,9 @@ function ProfileHeaderCard({ header, readOnly, discogsStats }: {
   const [imgError, setImgError] = useState(false)
 
   const profileUrl = `https://grooveprint.app/profile/${header.username}`
-  const sinceYear = header.first_show_year ? `since ${header.first_show_year}` : null
   const showSpotifyStats = (header.is_own_profile || header.show_spotify_stats) && header.spotify_connected && (header.spotify_song_count ?? 0) > 0
+  // Grooveprint badge date: month+year from RPC when available, falls back to year-only from profile
+  const grooveprintDate = grooveprintSince ?? (header.first_show_year ? String(header.first_show_year) : null)
 
   const handleAddFriend = async () => { setActionLoading(true); await supabase.rpc('send_friend_request', { target_user_id: header.user_id }); router.refresh(); setActionLoading(false) }
   const handleCancelRequest = async () => { setActionLoading(true); await supabase.rpc('cancel_friend_request', { target_user_id: header.user_id }); router.refresh(); setActionLoading(false) }
@@ -1024,6 +1026,13 @@ function ProfileHeaderCard({ header, readOnly, discogsStats }: {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-bold text-primary">@{header.username}</h2>
+                {header.confirmed_shows > 0 && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                    style={{ background: 'rgba(0,191,168,0.12)', color: '#00BFA8', border: '1px solid rgba(0,191,168,0.3)' }}>
+                    <span className="font-bold text-[10px] leading-none">G</span>
+                    Grooveprint{grooveprintDate ? ` · ${grooveprintDate}` : ''}
+                  </span>
+                )}
                 {header.spotify_user_id && (
                   <a href={`https://open.spotify.com/user/${header.spotify_user_id}`} target="_blank" rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
@@ -1047,7 +1056,6 @@ function ProfileHeaderCard({ header, readOnly, discogsStats }: {
                 <span className="text-border">·</span>
                 <span className="font-semibold text-foreground">{header.unique_venues}</span><span className="text-muted-foreground">venues</span>
                 {header.festival_count > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.festival_count}</span><span className="text-muted-foreground">{header.festival_count === 1 ? 'festival' : 'festivals'}</span></>)}
-                {sinceYear && (<><span className="text-border">·</span><span className="font-medium" style={{ color: TEAL }}>{sinceYear}</span></>)}
               </div>
               {showSpotifyStats && (
                 <div className="flex items-center gap-1.5 mt-1.5 text-sm flex-wrap">
@@ -1155,6 +1163,9 @@ export default function MyGrooveprintClient({
   const [showAllAlbums, setShowAllAlbums]             = useState(false)
   const [expandedAlbumKeys, setExpandedAlbumKeys]     = useState<Set<string>>(new Set())
 
+  // GP-126: first show date for Grooveprint badge (e.g. "Dec 2008")
+  const [grooveprintSince, setGrooveprintSince] = useState<string | null>(null)
+
   // GP-118: Discogs tab state
   const [discogsReleases, setDiscogsReleases]             = useState<DiscogsRelease[]>(initialDiscogsReleases)
   const [discogsLoading, setDiscogsLoading]               = useState(false)
@@ -1241,6 +1252,13 @@ export default function MyGrooveprintClient({
         setSpotifyLoading(false)
       })
   }, [viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // GP-126: load first show date for Grooveprint badge (own profile only)
+  useEffect(() => {
+    if (readOnly || !profileHeader?.confirmed_shows) return
+    supabase.rpc('get_first_show_date')
+      .then(({ data, error }) => { if (!error && data) setGrooveprintSince(data as string) })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // GP-118: load Discogs releases on mount when own profile is connected — data ready for header stats + Discogs tab
   useEffect(() => {
@@ -2267,6 +2285,7 @@ export default function MyGrooveprintClient({
               header={profileHeader}
               readOnly={readOnly}
               discogsStats={!readOnly ? discogsStats : null}
+              grooveprintSince={grooveprintSince}
             />
           )}
 
