@@ -949,7 +949,7 @@ function ProfileHeaderCard({ header, readOnly }: { header: ProfileHeader; readOn
                 )}
                 {header.friendship_status === 'accepted' && (
                   <><span className="px-3 py-1.5 text-sm font-medium rounded-lg" style={{ background: 'rgba(0,191,168,0.1)', color: '#00BFA8', border: '1px solid rgba(0,191,168,0.25)' }}>Friends ✓</span>
-                  <a href={`/profile/${header.username}?compare=true`} className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground text-sm font-medium rounded-lg transition-colors border border-border">Compare</a></>
+                  <a href={`/profile/${header.username}/shows?compare=true`} className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground text-sm font-medium rounded-lg transition-colors border border-border">Compare</a></>
                 )}
               </div>
             )}
