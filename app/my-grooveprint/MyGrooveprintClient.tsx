@@ -119,8 +119,8 @@ const TEAL = '#0d9488'
 // GP-93: fixed 6-color palette for album segments in SpotifyArtistBars
 const SPOTIFY_PALETTE = ['#0d9488', '#0891b2', '#7c3aed', '#be185d', '#b45309', '#065f46'] as const
 
-// GP-118: Discogs format palette
-const DISCOGS_COLOR = '#F97316' // orange-500
+// GP-118: Discogs accent — adapts to theme (white in dark mode, dark in light mode); matches current Discogs brand
+const DISCOGS_COLOR = 'var(--foreground)'
 
 const DISCOGS_FMT_META: Record<DiscogsFmt, { label: string; color: string; shortLabel: string }> = {
   vinyl:    { label: 'Vinyl',    color: 'rgba(139,92,246,0.85)',  shortLabel: 'LP'  },
@@ -1060,12 +1060,12 @@ function ProfileHeaderCard({ header, readOnly, discogsStats }: {
               )}
               {header.discogs_connected && (
                 <div className="flex items-center gap-1.5 mt-1 text-sm flex-wrap">
-                  <DiscogsIcon className="w-3.5 h-3.5 flex-shrink-0 text-orange-400" />
+                  <DiscogsIcon className="w-3.5 h-3.5 flex-shrink-0 text-foreground/60" />
                   {discogsStats ? (
                     <>
                       <span className="font-semibold text-foreground">{discogsStats.count.toLocaleString()}</span><span className="text-muted-foreground">records</span>
                       {discogsStats.artistCount > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{discogsStats.artistCount.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
-                      {discogsStats.sinceYear && (<><span className="text-border">·</span><span className="font-medium" style={{ color: DISCOGS_COLOR }}>since {discogsStats.sinceYear}</span></>)}
+                      {discogsStats.sinceYear && (<><span className="text-border">·</span><span className="font-medium text-muted-foreground">since {discogsStats.sinceYear}</span></>)}
                     </>
                   ) : null}
                 </div>
@@ -1244,11 +1244,10 @@ export default function MyGrooveprintClient({
       })
   }, [viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // GP-118: lazy-load Discogs releases on first Discogs tab click
+  // GP-118: load Discogs releases on mount when own profile is connected — data ready for header stats + Discogs tab
   useEffect(() => {
-    if (viewMode !== 'discogs') return
-    if (discogsLoaded || discogsLoading) return
-    if (readOnly) { setDiscogsLoaded(true); return }
+    if (discogsLoaded || discogsLoading || readOnly) return
+    if (!profileHeader?.discogs_connected) return
     setDiscogsLoading(true)
     supabase
       .from('user_discogs_releases')
@@ -1258,7 +1257,7 @@ export default function MyGrooveprintClient({
         setDiscogsLoaded(true)
         setDiscogsLoading(false)
       })
-  }, [viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Base stats ────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -3357,7 +3356,7 @@ export default function MyGrooveprintClient({
             <div className="bg-card rounded-lg shadow border border-border overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                 <div className="flex items-center gap-2">
-                  <DiscogsIcon className="w-4 h-4 text-orange-400" />
+                  <DiscogsIcon className="w-4 h-4 text-foreground/60" />
                   <h2 className="text-sm font-semibold text-foreground">
                     Your Collection
                   </h2>
@@ -3393,7 +3392,7 @@ export default function MyGrooveprintClient({
                               <a href={`https://www.discogs.com/artist/${artist.discogsArtistId}`}
                                 target="_blank" rel="noopener noreferrer"
                                 onClick={e => e.stopPropagation()}
-                                className="flex-shrink-0 text-orange-400 hover:opacity-70 transition-opacity">
+                                className="flex-shrink-0 text-foreground/50 hover:opacity-70 transition-opacity">
                                 <DiscogsIcon className="w-3 h-3" />
                               </a>
                             )}
