@@ -1041,7 +1041,7 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                     <span className="flex items-center gap-2 px-2.5 py-0.5 rounded-full text-xs font-medium"
                       style={{ background: 'rgba(0,191,168,0.12)', color: '#00BFA8', border: '1px solid rgba(0,191,168,0.3)' }}>
                       <span>First Show</span>
-                      <span>· {grooveprintYear}</span>
+                      <span>{grooveprintYear}</span>
                     </span>
                   )}
                 </div>
@@ -1062,7 +1062,7 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                         className="flex items-center gap-2 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
                         style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)' }}>
                         <span className="flex items-center gap-1.5"><SpotifyIcon className="w-3 h-3" />Spotify</span>
-                        {header.spotify_since_year && <span>· {header.spotify_since_year}</span>}
+                        {header.spotify_since_year && <span>{header.spotify_since_year}</span>}
                       </a>
                     )}
                   </div>
@@ -1081,7 +1081,7 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                         className="flex items-center gap-2 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
                         style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)' }}>
                         <span className="flex items-center gap-1.5"><DiscogsIcon className="w-3 h-3" />Discogs</span>
-                        {discogsStats?.sinceYear && <span>· {discogsStats.sinceYear}</span>}
+                        {discogsStats?.sinceYear && <span>{discogsStats.sinceYear}</span>}
                       </a>
                     )}
                   </div>
@@ -1093,7 +1093,7 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                         {discogsStats.lastAdded && (
                           <><span className="text-border">·</span>
                           <span className="text-foreground">
-                            last added: {discogsStats.lastAdded.title}{discogsStats.lastAdded.artist ? ` - ${discogsStats.lastAdded.artist}` : ''}
+                            last added: <span style={{ color: '#00BFA8' }}>{discogsStats.lastAdded.title}{discogsStats.lastAdded.artist ? ` - ${discogsStats.lastAdded.artist}` : ''}</span>
                           </span></>
                         )}
                       </>
