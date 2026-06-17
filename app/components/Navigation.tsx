@@ -55,6 +55,9 @@ function getBreadcrumbs(path: string): { label: string; path: string }[] | null 
   return null
 }
 
+// GP-125: connection status needed to gate Spotify / Discogs tab pills
+type NavProfile = { spotifyConnected: boolean; discogsConnected: boolean }
+
 export default function Navigation() {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
@@ -64,6 +67,8 @@ export default function Navigation() {
   const [menuOpen, setMenuOpen]             = useState(false)
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
   const [pendingCount, setPendingCount]     = useState(0)
+  const [navProfile, setNavProfile]         = useState<NavProfile | null>(null)
+  const [myGPHover, setMyGPHover]           = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
   useEffect(() => { setCurrentPath(pathname) }, [pathname])
@@ -87,6 +92,24 @@ export default function Navigation() {
       setPendingCount(data?.length ?? 0)
     })
   }, [user, currentPath])
+
+  // GP-125: fetch Spotify/Discogs connection status for My Grooveprint hover menu
+  // Only re-runs on user change (not every route change) — connection status is stable
+  useEffect(() => {
+    if (!user) { setNavProfile(null); return }
+    const supabase = createClient()
+    supabase
+      .from('user_profiles')
+      .select('spotify_user_id, discogs_username')
+      .eq('user_id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data) setNavProfile({
+          spotifyConnected: !!data.spotify_user_id,
+          discogsConnected: !!data.discogs_username,
+        })
+      })
+  }, [user])
 
   const isDiscoverActive = DISCOVER_PATHS.includes(currentPath)
   const breadcrumbs = getBreadcrumbs(currentPath)
@@ -168,20 +191,73 @@ export default function Navigation() {
 
               {/* Desktop nav links */}
               <div className="hidden md:flex items-center gap-6">
-                {NAV_LINKS.map(({ label, path }) => (
-                  <a
-                    key={path}
-                    href={path}
-                    className={`relative ${navLinkClass(isLinkActive(path))}`}
-                  >
-                    {label}
-                    {path === '/friends' && pendingCount > 0 && (
-                      <span className="absolute -top-1.5 -right-4 min-w-[16px] h-4 bg-destructive text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
-                        {pendingCount > 9 ? '9+' : pendingCount}
-                      </span>
-                    )}
-                  </a>
-                ))}
+                {NAV_LINKS.map(({ label, path }) => {
+                  // GP-125: My Grooveprint gets a hover dropdown when Spotify or Discogs is connected.
+                  // Dropdown is suppressed when neither is connected (no point showing a one-item menu).
+                  if (
+                    path === '/my-grooveprint' &&
+                    navProfile &&
+                    (navProfile.spotifyConnected || navProfile.discogsConnected)
+                  ) {
+                    const tabs = [
+                      { href: '/my-grooveprint',                        label: 'Shows',   color: '#00BFA8'            },
+                      ...(navProfile.spotifyConnected ? [{ href: '/my-grooveprint?tab=spotify', label: 'Spotify', color: '#1DB954'            }] : []),
+                      ...(navProfile.discogsConnected ? [{ href: '/my-grooveprint?tab=discogs', label: 'Discogs', color: 'rgba(20,20,20,0.9)' }] : []),
+                    ]
+                    return (
+                      <div
+                        key={path}
+                        className="relative"
+                        onMouseEnter={() => setMyGPHover(true)}
+                        onMouseLeave={() => setMyGPHover(false)}
+                      >
+                        {/* Main link — click behaviour unchanged */}
+                        <a href={path} className={navLinkClass(isLinkActive(path))}>
+                          {label}
+                        </a>
+
+                        {/* Tab jump dropdown */}
+                        {myGPHover && (
+                          // pt-1.5 bridges the gap so mousing into the card doesn't un-hover
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 pt-1.5 z-50">
+                            <div className="bg-card border border-border rounded-lg shadow-xl py-1.5 px-1.5 flex flex-col gap-0.5 min-w-max">
+                              {tabs.map(tab => (
+                                <a
+                                  key={tab.href}
+                                  href={tab.href}
+                                  className="flex items-center px-3 py-1.5 rounded-md hover:bg-muted transition-colors"
+                                >
+                                  <span
+                                    className="px-2.5 py-0.5 rounded-full text-xs font-semibold text-white"
+                                    style={{ backgroundColor: tab.color }}
+                                  >
+                                    {tab.label}
+                                  </span>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }
+
+                  // Default link for all other nav items
+                  return (
+                    <a
+                      key={path}
+                      href={path}
+                      className={`relative ${navLinkClass(isLinkActive(path))}`}
+                    >
+                      {label}
+                      {path === '/friends' && pendingCount > 0 && (
+                        <span className="absolute -top-1.5 -right-4 min-w-[16px] h-4 bg-destructive text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+                          {pendingCount > 9 ? '9+' : pendingCount}
+                        </span>
+                      )}
+                    </a>
+                  )
+                })}
               </div>
             </div>
 

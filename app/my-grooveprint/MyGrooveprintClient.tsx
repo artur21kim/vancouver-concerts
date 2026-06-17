@@ -1139,6 +1139,15 @@ export default function MyGrooveprintClient({
   const [spotifyLoading, setSpotifyLoading] = useState(false)
   const [spotifyLoaded, setSpotifyLoaded] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('shows')
+
+  // GP-125: read ?tab= on mount to support nav tab jump links
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tab = params.get('tab')
+    if (tab === 'spotify' || tab === 'discogs') {
+      setViewMode(tab as 'spotify' | 'discogs')
+    }
+  }, [])
   const [setsSubView, setSetsSubView]           = useState<SetsSubView>('card')
   const [sortField, setSortField]               = useState<SortField>('date')
   const [sortDir, setSortDir]                   = useState<SortDir>('desc')
