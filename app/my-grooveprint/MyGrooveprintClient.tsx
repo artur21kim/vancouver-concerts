@@ -584,6 +584,7 @@ function DiscogsArtistBars({ artists, max }: {
               ) : (
                 <span className="text-xs text-primary truncate text-right" title={artist.name}>{artist.name}</span>
               )}
+            </div>
             <div className="flex-1 relative">
               <div className="h-5 bg-muted/40 rounded-full overflow-hidden flex">
                 <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
