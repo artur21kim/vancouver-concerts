@@ -1038,9 +1038,10 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                 {/* Row 1: concert stats anchored by First Show badge */}
                 <div>
                   {header.confirmed_shows > 0 && grooveprintYear && (
-                    <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                    <span className="flex items-center justify-between px-2.5 py-0.5 rounded-full text-xs font-medium"
                       style={{ background: 'rgba(0,191,168,0.12)', color: '#00BFA8', border: '1px solid rgba(0,191,168,0.3)' }}>
-                      First Show · {grooveprintYear}
+                      <span>First Show</span>
+                      <span className="ml-2">· {grooveprintYear}</span>
                     </span>
                   )}
                 </div>
@@ -1059,9 +1060,10 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                     <div>
                       {header.spotify_user_id && (
                         <a href={`https://open.spotify.com/user/${header.spotify_user_id}`} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
+                          className="flex items-center justify-between px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
                           style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)' }}>
-                          <SpotifyIcon className="w-3 h-3" />Spotify{header.spotify_since_year ? ` · ${header.spotify_since_year}` : ''}
+                          <span className="flex items-center gap-1.5"><SpotifyIcon className="w-3 h-3" />Spotify</span>
+                          {header.spotify_since_year && <span className="ml-2">· {header.spotify_since_year}</span>}
                         </a>
                       )}
                     </div>
@@ -1079,9 +1081,10 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                     <div>
                       {header.discogs_connected && header.discogs_username && (
                         <a href={`https://www.discogs.com/user/${header.discogs_username}`} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
+                          className="flex items-center justify-between px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
                           style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)' }}>
-                          <DiscogsIcon className="w-3 h-3" />Discogs{discogsStats?.sinceYear ? ` · ${discogsStats.sinceYear}` : ''}
+                          <span className="flex items-center gap-1.5"><DiscogsIcon className="w-3 h-3" />Discogs</span>
+                          {discogsStats?.sinceYear && <span className="ml-2">· {discogsStats.sinceYear}</span>}
                         </a>
                       )}
                     </div>
@@ -1096,7 +1099,7 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                               className="text-muted-foreground truncate max-w-[220px]"
                               title={[discogsStats.lastAdded.fmt, discogsStats.lastAdded.year].filter(Boolean).join(' · ')}
                             >
-                              {discogsStats.lastAdded.title}{discogsStats.lastAdded.artist ? ` — ${discogsStats.lastAdded.artist}` : ''}
+                              last added: {discogsStats.lastAdded.title}{discogsStats.lastAdded.artist ? ` — ${discogsStats.lastAdded.artist}` : ''}{discogsStats.lastAdded.year ? ` (${discogsStats.lastAdded.year})` : ''}
                             </span></>
                           )}
                         </>
