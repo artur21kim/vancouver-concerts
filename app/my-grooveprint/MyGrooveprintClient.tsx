@@ -552,9 +552,9 @@ function VenueYearBars({ venues, max, onNavigate }: {
 // ── GP-118: Discogs artist bars (format-colored segments) ─────────────────────
 function DiscogsArtistBars({ artists, max }: {
   artists: {
-    name: string; total: number
+    name: string; discogsArtistId: number | null; total: number
     formatCounts: Record<DiscogsFmt, number>
-    releases: { title: string; year: number | null; fmt: DiscogsFmt; date_added: string | null }[]
+    releases: { title: string; year: number | null; fmt: DiscogsFmt; date_added: string | null; releaseId: number }[]
   }[]
   max: number
 }) {
@@ -576,8 +576,14 @@ function DiscogsArtistBars({ artists, max }: {
         return (
           <div key={artist.name} className="flex items-center gap-2 py-0.5">
             <div className="w-32 md:w-40 flex items-center justify-end gap-1 flex-shrink-0 min-w-0">
-              <span className="text-xs text-primary truncate text-right" title={artist.name}>{artist.name}</span>
-            </div>
+              {artist.discogsArtistId ? (
+                <a href={`https://www.discogs.com/artist/${artist.discogsArtistId}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-primary hover:opacity-80 hover:underline truncate text-right transition-opacity"
+                  title={artist.name}>{artist.name}</a>
+              ) : (
+                <span className="text-xs text-primary truncate text-right" title={artist.name}>{artist.name}</span>
+              )}
             <div className="flex-1 relative">
               <div className="h-5 bg-muted/40 rounded-full overflow-hidden flex">
                 <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
@@ -1023,32 +1029,36 @@ function ProfileHeaderCard({ header, readOnly, discogsCount }: { header: Profile
                 {sinceYear && (<><span className="text-border">·</span><span className="font-medium" style={{ color: TEAL }}>{sinceYear}</span></>)}
               </div>
               {showSpotifyStats && (
-                <div className="flex items-center gap-1.5 mt-1.5 text-sm flex-wrap">
-                  <SpotifyIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span className="font-semibold text-foreground">{header.spotify_song_count?.toLocaleString()}</span><span className="text-muted-foreground">songs</span>
-                  {(header.spotify_artist_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_artist_count?.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
-                  {(header.spotify_album_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_album_count?.toLocaleString()}</span><span className="text-muted-foreground">albums</span></>)}
-                  {header.spotify_since_year && (<><span className="text-border">·</span><span className="font-medium" style={{ color: SPOTIFY_GREEN }}>since {header.spotify_since_year}</span></>)}
+                <div className="flex items-center justify-between gap-2 mt-1.5">
+                  <div className="flex items-center gap-1.5 text-sm flex-wrap">
+                    <SpotifyIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="font-semibold text-foreground">{header.spotify_song_count?.toLocaleString()}</span><span className="text-muted-foreground">songs</span>
+                    {(header.spotify_artist_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_artist_count?.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
+                    {(header.spotify_album_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_album_count?.toLocaleString()}</span><span className="text-muted-foreground">albums</span></>)}
+                    {header.spotify_since_year && (<><span className="text-border">·</span><span className="font-medium" style={{ color: SPOTIFY_GREEN }}>since {header.spotify_since_year}</span></>)}
+                  </div>
                   {header.spotify_user_id && (
                     <a href={`https://open.spotify.com/user/${header.spotify_user_id}`} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex-shrink-0"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity flex-shrink-0"
                       style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)' }}>
-                      <SpotifyIcon className="w-2.5 h-2.5" />Profile ↗
+                      <SpotifyIcon className="w-3 h-3" />Spotify
                     </a>
                   )}
                 </div>
               )}
               {header.discogs_connected && (
-                <div className="flex items-center gap-1.5 mt-1 text-sm flex-wrap">
-                  <DiscogsIcon className="w-3.5 h-3.5 flex-shrink-0 text-orange-400" />
-                  {(discogsCount ?? 0) > 0 && (
-                    <><span className="font-semibold text-foreground">{discogsCount?.toLocaleString()}</span><span className="text-muted-foreground">records</span></>
-                  )}
+                <div className="flex items-center justify-between gap-2 mt-1">
+                  <div className="flex items-center gap-1.5 text-sm flex-wrap">
+                    <DiscogsIcon className="w-3.5 h-3.5 flex-shrink-0 text-orange-400" />
+                    {(discogsCount ?? 0) > 0 && (
+                      <><span className="font-semibold text-foreground">{discogsCount?.toLocaleString()}</span><span className="text-muted-foreground">records</span></>
+                    )}
+                  </div>
                   {header.discogs_username && (
                     <a href={`https://www.discogs.com/user/${header.discogs_username}`} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex-shrink-0"
-                      style={{ background: 'rgba(249,115,22,0.12)', color: DISCOGS_COLOR, border: '1px solid rgba(249,115,22,0.3)' }}>
-                      <DiscogsIcon className="w-2.5 h-2.5" />Profile ↗
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity flex-shrink-0"
+                      style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)' }}>
+                      <DiscogsIcon className="w-3 h-3" />Discogs
                     </a>
                   )}
                 </div>
@@ -1147,6 +1157,7 @@ export default function MyGrooveprintClient({
   const [showAllDiscogsArtists, setShowAllDiscogsArtists] = useState(false)
   const [discogsFmtFilter, setDiscogsFmtFilter]           = useState<DiscogsFmt | 'all'>('all')
   const [expandedDiscogsArtists, setExpandedDiscogsArtists] = useState<Set<string>>(new Set())
+  const [discogsView, setDiscogsView]                     = useState<'artists' | 'years'>('artists')
 
   // Unadded CTA — own profile only
   const [unaddedArtists, setUnaddedArtists]         = useState<UnaddedArtist[]>([])
@@ -1489,6 +1500,34 @@ export default function MyGrooveprintClient({
       a.releases.some(r => r.title.toLowerCase().includes(q))
     )
   }, [topDiscogsArtists, discogsFmtFilter, filterText])
+
+  // GP-118: aggregate releases by release year (sorted by total desc for "Top Years" ranking)
+  const topDiscogsYears = useMemo(() => {
+    if (discogsReleases.length === 0) return [] as typeof filteredDiscogsArtists
+    const map: Record<string, {
+      name: string; discogsArtistId: null; total: number
+      formatCounts: Record<DiscogsFmt, number>
+      releases: { title: string; year: number | null; fmt: DiscogsFmt; date_added: string | null; releaseId: number }[]
+    }> = {}
+    for (const r of discogsReleases) {
+      const fmt = getDiscogsFmt(r.formats)
+      const key = r.year ? String(r.year) : 'Unknown'
+      if (!map[key]) map[key] = { name: key, discogsArtistId: null, total: 0, formatCounts: { vinyl: 0, cd: 0, cassette: 0, other: 0 }, releases: [] }
+      map[key].total++
+      map[key].formatCounts[fmt]++
+      map[key].releases.push({ title: r.title, year: r.year, fmt, date_added: r.date_added, releaseId: r.discogs_release_id })
+    }
+    return Object.values(map).sort((a, b) => b.total - a.total)
+  }, [discogsReleases])
+
+  const filteredDiscogsYears = useMemo(() => {
+    const fmtFiltered = discogsFmtFilter === 'all'
+      ? topDiscogsYears
+      : topDiscogsYears.filter(y => y.formatCounts[discogsFmtFilter] > 0)
+    if (!filterText.trim()) return fmtFiltered
+    const q = filterText.toLowerCase()
+    return fmtFiltered.filter(y => y.releases.some(r => r.title.toLowerCase().includes(q)))
+  }, [topDiscogsYears, discogsFmtFilter, filterText])
 
   // GP-112: Day-level data — computed when selectedMonth is set in Spotify mode
   const dayTimelineData = useMemo(() => {
@@ -2854,7 +2893,7 @@ export default function MyGrooveprintClient({
                     {viewMode === 'spotify'
                       ? (spotifyLibraryView === 'albums' ? 'Top Albums in Your Library' : 'Top Artists in Your Library')
                       : viewMode === 'discogs'
-                      ? 'Top Artists in Your Collection'
+                      ? (discogsView === 'years' ? 'Top Years in Your Collection' : 'Top Artists in Your Collection')
                       : (chartSection === 'artists' ? 'Top Artists' : 'Top Venues')}
                     {selectedYear && <span className="ml-2 text-sm font-normal text-muted-foreground">· {selectedYear}</span>}
                   </h2>
@@ -2864,8 +2903,20 @@ export default function MyGrooveprintClient({
                       <button onClick={() => setSpotifyReleaseFocus(null)} className="hover:opacity-70 leading-none">×</button>
                     </span>
                   )}
-                  {/* GP-93/111: Artists/Albums toggle in Spotify mode; hidden in Discogs mode; Artists/Venues toggle in concert modes */}
-                  {viewMode === 'discogs' ? null : viewMode === 'spotify' ? (
+                  {/* GP-93/111/118: Artists/Albums toggle in Spotify mode; Artists/Years in Discogs mode; hidden in Discogs mode; Artists/Venues toggle in concert modes */}
+                  {viewMode === 'discogs' ? (
+                    <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
+                      {(['artists', 'years'] as const).map((v, i) => (
+                        <button key={v}
+                          onClick={() => { setDiscogsView(v); setShowAllDiscogsArtists(false) }}
+                          className={`px-2.5 py-1 capitalize transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                            discogsView === v ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'
+                          }`}>
+                          {v.charAt(0).toUpperCase() + v.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  ) : viewMode === 'discogs' ? null : viewMode === 'spotify' ? (
                     <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                       {(['artists', 'albums'] as const).map((v, i) => (
                         <button key={v} onClick={() => setSpotifyLibraryView(v)}
@@ -2890,29 +2941,33 @@ export default function MyGrooveprintClient({
                   )}
                 </div>
 
-                {/* GP-93/111/118: Discogs artist bars; Spotify Albums → SpotifyAlbumBars; Spotify Artists → SpotifyArtistBars; concert → existing */}
-                {viewMode === 'discogs' ? (
-                  discogsLoading && discogsReleases.length === 0 ? (
+                {/* GP-93/111/118: Discogs artist/year bars; Spotify Albums → SpotifyAlbumBars; Spotify Artists → SpotifyArtistBars; concert → existing */}
+                {viewMode === 'discogs' ? (() => {
+                  if (discogsLoading && discogsReleases.length === 0) return (
                     <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
                       <div className="w-4 h-4 border-2 border-muted-foreground/40 border-t-primary rounded-full animate-spin" />
                       Loading your Discogs collection…
                     </div>
-                  ) : filteredDiscogsArtists.length === 0 ? (
+                  )
+                  const discogsData = discogsView === 'years' ? filteredDiscogsYears : filteredDiscogsArtists
+                  const label = discogsView === 'years' ? 'years' : 'artists'
+                  if (discogsData.length === 0) return (
                     <p className="text-sm text-muted-foreground italic">No collection data.</p>
-                  ) : (
+                  )
+                  return (
                     <>
                       <DiscogsArtistBars
-                        artists={filteredDiscogsArtists.slice(0, showAllDiscogsArtists ? undefined : 10)}
-                        max={filteredDiscogsArtists[0]?.total ?? 1}
+                        artists={discogsData.slice(0, showAllDiscogsArtists ? undefined : 10)}
+                        max={discogsData[0]?.total ?? 1}
                       />
-                      {filteredDiscogsArtists.length > 10 && (
+                      {discogsData.length > 10 && (
                         <button onClick={() => setShowAllDiscogsArtists(v => !v)} className="mt-3 text-xs text-primary hover:opacity-80 font-medium">
-                          {showAllDiscogsArtists ? '← Show less' : `View all ${filteredDiscogsArtists.length} artists \u2192`}
+                          {showAllDiscogsArtists ? '← Show less' : `View all ${discogsData.length} ${label} \u2192`}
                         </button>
                       )}
                     </>
                   )
-                ) : viewMode === 'spotify' && spotifyLibraryView === 'albums' ? (
+                })() : viewMode === 'spotify' && spotifyLibraryView === 'albums' ? (
                   spotifyLoading && spotifySongs.length === 0 ? (
                     <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
                       <div className="w-4 h-4 border-2 border-muted-foreground/40 border-t-primary rounded-full animate-spin" />
@@ -3333,14 +3388,14 @@ export default function MyGrooveprintClient({
                         </div>
                         {isExpanded && (
                           <div className="border-t border-border/40 bg-background/50">
-                            <div className="grid px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider bg-muted/30 border-b border-border/30"
-                              style={{ gridTemplateColumns: 'minmax(0, 1fr) 60px 72px', color: TEAL }}>
-                              <span className="pl-2">Title</span><span className="text-center">Year</span><span className="text-right">Format</span>
-                            </div>
-                            <div className="max-h-48 overflow-y-auto divide-y divide-border/10" style={{ scrollbarGutter: 'stable' }}>
+                            <div className="max-h-48 overflow-y-auto divide-y divide-border/10">
+                              <div className="grid sticky top-0 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider bg-muted/60 border-b border-border/30 z-10"
+                                style={{ gridTemplateColumns: 'minmax(0, 1fr) 52px 60px', color: TEAL }}>
+                                <span className="pl-2">Title</span><span>Year</span><span>Format</span>
+                              </div>
                               {artist.releases.sort((a, b) => (b.year ?? 0) - (a.year ?? 0)).map((rel, j) => (
                                 <div key={j} className="grid items-center px-4 py-2 hover:bg-muted/20 transition-colors"
-                                  style={{ gridTemplateColumns: 'minmax(0, 1fr) 60px 72px' }}>
+                                  style={{ gridTemplateColumns: 'minmax(0, 1fr) 52px 60px' }}>
                                   <div className="min-w-0 pl-2 pr-3">
                                     <a href={`https://www.discogs.com/release/${rel.releaseId}`}
                                       target="_blank" rel="noopener noreferrer"
@@ -3348,8 +3403,8 @@ export default function MyGrooveprintClient({
                                       {rel.title}
                                     </a>
                                   </div>
-                                  <span className="text-xs text-foreground/50 tabular-nums text-center">{rel.year ?? '—'}</span>
-                                  <span className="text-xs tabular-nums text-right" style={{ color: DISCOGS_FMT_META[rel.fmt].color }}>
+                                  <span className="text-xs text-foreground/50 tabular-nums">{rel.year ?? '—'}</span>
+                                  <span className="text-xs tabular-nums" style={{ color: DISCOGS_FMT_META[rel.fmt].color }}>
                                     {DISCOGS_FMT_META[rel.fmt].label}
                                   </span>
                                 </div>
