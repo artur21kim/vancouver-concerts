@@ -984,7 +984,11 @@ function SpotifyAlbumBars({ albums, max, onAlbumClick }: {
 }
 
 // ── GP-114: Profile header card ───────────────────────────────────────────────
-function ProfileHeaderCard({ header, readOnly, discogsCount }: { header: ProfileHeader; readOnly: boolean; discogsCount?: number }) {
+function ProfileHeaderCard({ header, readOnly, discogsStats }: {
+  header: ProfileHeader
+  readOnly: boolean
+  discogsStats?: { count: number; artistCount: number; sinceYear: number | null } | null
+}) {
   const router = useRouter()
   const supabase = createClient()
   const [actionLoading, setActionLoading] = useState(false)
@@ -1018,7 +1022,23 @@ function ProfileHeaderCard({ header, readOnly, discogsCount }: { header: Profile
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
-              <h2 className="text-lg font-bold text-primary truncate">@{header.username}</h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-bold text-primary">@{header.username}</h2>
+                {header.spotify_user_id && (
+                  <a href={`https://open.spotify.com/user/${header.spotify_user_id}`} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
+                    style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)' }}>
+                    <SpotifyIcon className="w-3 h-3" />Spotify
+                  </a>
+                )}
+                {header.discogs_connected && header.discogs_username && (
+                  <a href={`https://www.discogs.com/user/${header.discogs_username}`} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
+                    style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)' }}>
+                    <DiscogsIcon className="w-3 h-3" />Discogs
+                  </a>
+                )}
+              </div>
               {header.bio && <p className="text-sm text-muted-foreground mt-0.5 max-w-sm leading-relaxed">{header.bio}</p>}
               <div className="flex items-center gap-1.5 mt-1.5 text-sm flex-wrap">
                 <span className="font-semibold text-foreground">{header.confirmed_shows}</span><span className="text-muted-foreground">shows</span>
@@ -1030,38 +1050,24 @@ function ProfileHeaderCard({ header, readOnly, discogsCount }: { header: Profile
                 {sinceYear && (<><span className="text-border">·</span><span className="font-medium" style={{ color: TEAL }}>{sinceYear}</span></>)}
               </div>
               {showSpotifyStats && (
-                <div className="flex items-center justify-between gap-2 mt-1.5">
-                  <div className="flex items-center gap-1.5 text-sm flex-wrap">
-                    <SpotifyIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span className="font-semibold text-foreground">{header.spotify_song_count?.toLocaleString()}</span><span className="text-muted-foreground">songs</span>
-                    {(header.spotify_artist_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_artist_count?.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
-                    {(header.spotify_album_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_album_count?.toLocaleString()}</span><span className="text-muted-foreground">albums</span></>)}
-                    {header.spotify_since_year && (<><span className="text-border">·</span><span className="font-medium" style={{ color: SPOTIFY_GREEN }}>since {header.spotify_since_year}</span></>)}
-                  </div>
-                  {header.spotify_user_id && (
-                    <a href={`https://open.spotify.com/user/${header.spotify_user_id}`} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity flex-shrink-0"
-                      style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)' }}>
-                      <SpotifyIcon className="w-3 h-3" />Spotify
-                    </a>
-                  )}
+                <div className="flex items-center gap-1.5 mt-1.5 text-sm flex-wrap">
+                  <SpotifyIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="font-semibold text-foreground">{header.spotify_song_count?.toLocaleString()}</span><span className="text-muted-foreground">songs</span>
+                  {(header.spotify_artist_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_artist_count?.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
+                  {(header.spotify_album_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_album_count?.toLocaleString()}</span><span className="text-muted-foreground">albums</span></>)}
+                  {header.spotify_since_year && (<><span className="text-border">·</span><span className="font-medium" style={{ color: SPOTIFY_GREEN }}>since {header.spotify_since_year}</span></>)}
                 </div>
               )}
               {header.discogs_connected && (
-                <div className="flex items-center justify-between gap-2 mt-1">
-                  <div className="flex items-center gap-1.5 text-sm flex-wrap">
-                    <DiscogsIcon className="w-3.5 h-3.5 flex-shrink-0 text-orange-400" />
-                    {(discogsCount ?? 0) > 0 && (
-                      <><span className="font-semibold text-foreground">{discogsCount?.toLocaleString()}</span><span className="text-muted-foreground">records</span></>
-                    )}
-                  </div>
-                  {header.discogs_username && (
-                    <a href={`https://www.discogs.com/user/${header.discogs_username}`} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity flex-shrink-0"
-                      style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)' }}>
-                      <DiscogsIcon className="w-3 h-3" />Discogs
-                    </a>
-                  )}
+                <div className="flex items-center gap-1.5 mt-1 text-sm flex-wrap">
+                  <DiscogsIcon className="w-3.5 h-3.5 flex-shrink-0 text-orange-400" />
+                  {discogsStats ? (
+                    <>
+                      <span className="font-semibold text-foreground">{discogsStats.count.toLocaleString()}</span><span className="text-muted-foreground">records</span>
+                      {discogsStats.artistCount > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{discogsStats.artistCount.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
+                      {discogsStats.sinceYear && (<><span className="text-border">·</span><span className="font-medium" style={{ color: DISCOGS_COLOR }}>since {discogsStats.sinceYear}</span></>)}
+                    </>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -1529,6 +1535,22 @@ export default function MyGrooveprintClient({
     const q = filterText.toLowerCase()
     return fmtFiltered.filter(y => y.releases.some(r => r.title.toLowerCase().includes(q)))
   }, [topDiscogsYears, discogsFmtFilter, filterText])
+
+  // GP-118: summary stats for ProfileHeaderCard — computed from loaded releases
+  const discogsStats = useMemo(() => {
+    if (discogsReleases.length === 0) return null
+    const nonVarious = new Set(discogsReleases.flatMap(r =>
+      r.discogs_artist_names.filter(n => {
+        const nl = n.toLowerCase()
+        return nl !== 'various' && nl !== 'various artists'
+      })
+    ))
+    const years = discogsReleases
+      .filter(r => r.date_added)
+      .map(r => new Date(r.date_added!).getFullYear())
+    const sinceYear = years.length > 0 ? Math.min(...years) : null
+    return { count: discogsReleases.length, artistCount: nonVarious.size, sinceYear }
+  }, [discogsReleases])
 
   // GP-112: Day-level data — computed when selectedMonth is set in Spotify mode
   const dayTimelineData = useMemo(() => {
@@ -2247,11 +2269,7 @@ export default function MyGrooveprintClient({
             <ProfileHeaderCard
               header={profileHeader}
               readOnly={readOnly}
-              discogsCount={
-                (!readOnly && discogsReleases.length > 0)
-                  ? discogsReleases.length
-                  : (profileHeader.discogs_release_count ?? undefined)
-              }
+              discogsStats={!readOnly ? discogsStats : null}
             />
           )}
 
