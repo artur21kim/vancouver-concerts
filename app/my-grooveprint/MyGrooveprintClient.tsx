@@ -243,11 +243,11 @@ function SpotifyIcon({ className = 'w-3 h-3', fill = SPOTIFY_GREEN }: { classNam
   )
 }
 
-// ── Discogs icon — concentric rings (vinyl record) ────────────────────────────
+// ── Discogs icon — official D-in-circle brand mark ───────────────────────────
 function DiscogsIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 16.5a6.5 6.5 0 110-13 6.5 6.5 0 010 13zm0-9.5a3 3 0 100 6 3 3 0 000-6zm0 4a1 1 0 110-2 1 1 0 010 2z"/>
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" xmlns="http://www.w3.org/2000/svg">
+      <path fillRule="evenodd" d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm-.37 17.5H8.13V6.5h3.5c3.314 0 6 2.239 6 5.5s-2.686 5.5-6 5.5zm0-9.5H9.63v8h1.999c2.485 0 4.501-1.79 4.501-4s-2.016-4-4.501-4z" />
     </svg>
   )
 }

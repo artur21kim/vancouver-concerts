@@ -237,8 +237,8 @@ export default function Navigation() {
                               {/* Discogs — brand icon, currentColor = theme-adaptive (white in dark mode) */}
                               {navProfile.discogsConnected && (
                                 <a href="/my-grooveprint?tab=discogs" className="flex items-center gap-2.5 px-3 py-2 rounded-md hover:bg-muted transition-colors">
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="flex-shrink-0 text-foreground">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 16.5a6.5 6.5 0 110-13 6.5 6.5 0 010 13zm0-9.5a3 3 0 100 6 3 3 0 000-6zm0 4a1 1 0 110-2 1 1 0 010 2z"/>
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" className="flex-shrink-0 text-foreground">
+                                    <path fillRule="evenodd" d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm-.37 17.5H8.13V6.5h3.5c3.314 0 6 2.239 6 5.5s-2.686 5.5-6 5.5zm0-9.5H9.63v8h1.999c2.485 0 4.501-1.79 4.501-4s-2.016-4-4.501-4z"/>
                                   </svg>
                                   <span className="text-sm text-foreground">Discogs</span>
                                 </a>
