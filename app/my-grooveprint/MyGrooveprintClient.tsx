@@ -1028,14 +1028,14 @@ function ProfileHeaderCard({ header, readOnly, discogsStats }: {
                   <a href={`https://open.spotify.com/user/${header.spotify_user_id}`} target="_blank" rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
                     style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)' }}>
-                    <SpotifyIcon className="w-3 h-3" />Spotify{header.spotify_since_year ? ` · '${String(header.spotify_since_year).slice(-2)}` : ''}
+                    <SpotifyIcon className="w-3 h-3" />Spotify{header.spotify_since_year ? ` · ${header.spotify_since_year}` : ''}
                   </a>
                 )}
                 {header.discogs_connected && header.discogs_username && (
                   <a href={`https://www.discogs.com/user/${header.discogs_username}`} target="_blank" rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
                     style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)' }}>
-                    <DiscogsIcon className="w-3 h-3" />Discogs{discogsStats?.sinceYear ? ` · '${String(discogsStats.sinceYear).slice(-2)}` : ''}
+                    <DiscogsIcon className="w-3 h-3" />Discogs{discogsStats?.sinceYear ? ` · ${discogsStats.sinceYear}` : ''}
                   </a>
                 )}
               </div>
@@ -1059,7 +1059,7 @@ function ProfileHeaderCard({ header, readOnly, discogsStats }: {
               )}
               {header.discogs_connected && (
                 <div className="flex items-center gap-1.5 mt-1 text-sm flex-wrap">
-                  <DiscogsIcon className="w-3.5 h-3.5 flex-shrink-0 text-foreground/60" />
+                  <DiscogsIcon className="w-3.5 h-3.5 flex-shrink-0 text-foreground" />
                   {discogsStats ? (
                     <>
                       <span className="font-semibold text-foreground">{discogsStats.count.toLocaleString()}</span><span className="text-muted-foreground">records</span>
