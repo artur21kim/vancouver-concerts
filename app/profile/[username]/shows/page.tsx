@@ -8,7 +8,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps) {
   const { username } = await params
-  return { title: `${username}'s Shows | Grooveprint` }
+  return { title: `${username}'s Grooveprint | Grooveprint` }
 }
 
 export default async function FriendShowsPage({ params }: PageProps) {
