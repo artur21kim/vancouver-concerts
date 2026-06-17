@@ -1953,8 +1953,8 @@ export default function MyGrooveprintClient({
                     <YAxis tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} width={28} />
                     <Tooltip content={<YearTip viewMode={viewMode} />} />
                     <Area type="monotone" dataKey="shows" stroke={chartLineColor} fill={`${chartLineColor}30`} strokeWidth={2} dot={yearTimelineData.length < 30}
-                      activeDot={{ r: 4, fill: chartLineColor, cursor: viewMode !== 'spotify' ? 'pointer' : 'default' }}
-                      onClick={(d: any) => { if (viewMode !== 'spotify' && d?.activePayload?.[0]?.payload?.year) handleYearSegmentClick(d, d.activePayload[0].payload.year) }} />
+                      activeDot={{ r: 4, fill: chartLineColor, cursor: 'pointer' }}
+                      onClick={(d: any) => { if (d?.activePayload?.[0]?.payload?.year) handleYearSegmentClick(d, d.activePayload[0].payload.year) }} />
                   </ComposedChart>
                 )}
               </ResponsiveContainer>
