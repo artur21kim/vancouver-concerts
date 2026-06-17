@@ -1000,6 +1000,8 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
   const showSpotifyStats = (header.is_own_profile || header.show_spotify_stats) && header.spotify_connected && (header.spotify_song_count ?? 0) > 0
   // Grooveprint badge date: month+year from RPC when available, falls back to year-only from profile
   const grooveprintDate = grooveprintSince ?? (header.first_show_year ? String(header.first_show_year) : null)
+  // Year-only for badge — "Dec 2008" → "2008"; full date still shown in Concert Timeline
+  const grooveprintYear = grooveprintDate?.split(' ').at(-1) ?? null
 
   const handleAddFriend = async () => { setActionLoading(true); await supabase.rpc('send_friend_request', { target_user_id: header.user_id }); router.refresh(); setActionLoading(false) }
   const handleCancelRequest = async () => { setActionLoading(true); await supabase.rpc('cancel_friend_request', { target_user_id: header.user_id }); router.refresh(); setActionLoading(false) }
@@ -1032,10 +1034,10 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
 
               {/* Concert stats — First Show badge anchors the row */}
               <div className="flex items-center gap-1.5 mt-1.5 text-sm flex-wrap">
-                {header.confirmed_shows > 0 && grooveprintDate && (
+                {header.confirmed_shows > 0 && grooveprintYear && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium mr-0.5"
-                    style={{ background: 'rgba(0,191,168,0.12)', color: '#00BFA8', border: '1px solid rgba(0,191,168,0.3)' }}>
-                    First Show · {grooveprintDate}
+                    style={{ background: 'rgba(0,191,168,0.12)', color: '#00BFA8', border: '1px solid rgba(0,191,168,0.3)', minWidth: '9rem', justifyContent: 'center' }}>
+                    First Show · {grooveprintYear}
                   </span>
                 )}
                 <span className="font-semibold text-foreground">{header.confirmed_shows}</span><span className="text-muted-foreground">shows</span>
@@ -1052,7 +1054,7 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                   {header.spotify_user_id && (
                     <a href={`https://open.spotify.com/user/${header.spotify_user_id}`} target="_blank" rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity mr-0.5"
-                      style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)' }}>
+                      style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)', minWidth: '9rem', justifyContent: 'center' }}>
                       <SpotifyIcon className="w-3 h-3" />Spotify{header.spotify_since_year ? ` · ${header.spotify_since_year}` : ''}
                     </a>
                   )}
@@ -1068,7 +1070,7 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                   {header.discogs_connected && header.discogs_username && (
                     <a href={`https://www.discogs.com/user/${header.discogs_username}`} target="_blank" rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity mr-0.5"
-                      style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)' }}>
+                      style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)', minWidth: '9rem', justifyContent: 'center' }}>
                       <DiscogsIcon className="w-3 h-3" />Discogs{discogsStats?.sinceYear ? ` · ${discogsStats.sinceYear}` : ''}
                     </a>
                   )}
