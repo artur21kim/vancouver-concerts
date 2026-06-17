@@ -1932,12 +1932,18 @@ export default function MyGrooveprintClient({
                     <Area type="monotone" dataKey="shows" stroke={SPOTIFY_GREEN} fill={`${SPOTIFY_GREEN}30`} strokeWidth={2} dot={false} activeDot={{ r: 4, fill: SPOTIFY_GREEN }} />
                   </ComposedChart>
                 ) : selectedYear || viewMode === 'spotify' || viewMode === 'festivals' ? (
-                  <ComposedChart data={monthTimelineData} margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
+                  <ComposedChart data={monthTimelineData} margin={{ top: 4, right: 4, bottom: 4, left: 0 }}
+                    onClick={(data: any) => {
+                      if (viewMode === 'spotify' && data?.activePayload) {
+                        const monthIdx = MONTHS.indexOf(data.activePayload[0]?.payload?.month ?? '')
+                        if (monthIdx >= 0) setSelectedMonth(prev => prev === monthIdx ? null : monthIdx)
+                      }
+                    }}
+                    style={{ cursor: viewMode === 'spotify' ? 'pointer' : 'default' }}>
                     <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} width={28} />
                     <Tooltip content={<MonthTip viewMode={viewMode} />} />
-                    <Area type="monotone" dataKey="shows" stroke={chartLineColor} fill={`${chartLineColor}30`} strokeWidth={2} dot={false} activeDot={{ r: 4, fill: chartLineColor }}
-                      onClick={(d: any, i: number) => { if (viewMode === 'spotify') setSelectedMonth(prev => prev === i ? null : i) }} />
+                    <Area type="monotone" dataKey="shows" stroke={chartLineColor} fill={`${chartLineColor}30`} strokeWidth={2} dot={false} activeDot={{ r: 4, fill: chartLineColor }} />
                     {drilldownHasSpotify && <Line type="monotone" dataKey="songs" stroke={SPOTIFY_GREEN} strokeWidth={1.5} dot={false} activeDot={{ r: 3, fill: SPOTIFY_GREEN }} />}
                   </ComposedChart>
                 ) : (
