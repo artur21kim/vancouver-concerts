@@ -61,6 +61,7 @@ export type ProfileHeader = {
   show_spotify_stats:    boolean
   spotify_user_id:       string | null
   spotify_album_count:   number | null
+  spotify_since_year:    number | null
   discogs_connected:     boolean
   discogs_username:      string | null
   discogs_release_count: number | null
@@ -893,6 +894,7 @@ function ProfileHeaderCard({ header, readOnly }: { header: ProfileHeader; readOn
                   <span className="font-semibold text-foreground">{header.spotify_song_count?.toLocaleString()}</span><span className="text-muted-foreground">songs</span>
                   {(header.spotify_artist_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_artist_count?.toLocaleString()}</span><span className="text-muted-foreground">artists</span></>)}
                   {(header.spotify_album_count ?? 0) > 0 && (<><span className="text-border">·</span><span className="font-semibold text-foreground">{header.spotify_album_count?.toLocaleString()}</span><span className="text-muted-foreground">albums</span></>)}
+                  {header.spotify_since_year && (<><span className="text-border">·</span><span className="font-medium" style={{ color: SPOTIFY_GREEN }}>since {header.spotify_since_year}</span></>)}
                 </div>
               )}
               {header.discogs_connected && (header.discogs_release_count ?? 0) > 0 && (
