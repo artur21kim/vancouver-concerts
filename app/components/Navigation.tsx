@@ -220,19 +220,18 @@ export default function Navigation() {
                         {myGPHover && (
                           // pt-1.5 bridges the gap so mousing into the card doesn't un-hover
                           <div className="absolute top-full left-1/2 -translate-x-1/2 pt-1.5 z-50">
-                            <div className="bg-card border border-border rounded-lg shadow-xl py-1.5 px-1.5 flex flex-col gap-0.5 min-w-max">
+                            <div className="bg-card border border-border rounded-lg shadow-xl py-1 px-1 flex flex-col min-w-[140px]">
                               {tabs.map(tab => (
                                 <a
                                   key={tab.href}
                                   href={tab.href}
-                                  className="flex items-center px-3 py-1.5 rounded-md hover:bg-muted transition-colors"
+                                  className="flex items-center gap-2.5 px-3 py-2 rounded-md hover:bg-muted transition-colors"
                                 >
                                   <span
-                                    className="px-2.5 py-0.5 rounded-full text-xs font-semibold text-white"
+                                    className="w-2 h-2 rounded-full flex-shrink-0"
                                     style={{ backgroundColor: tab.color }}
-                                  >
-                                    {tab.label}
-                                  </span>
+                                  />
+                                  <span className="text-sm text-foreground">{tab.label}</span>
                                 </a>
                               ))}
                             </div>
