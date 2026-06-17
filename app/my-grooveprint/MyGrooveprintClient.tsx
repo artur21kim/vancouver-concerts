@@ -1026,11 +1026,11 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
-              {/* Username row — clean, no badges */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg font-bold text-primary">@{header.username}</h2>
+              {/* Username + bio inline — bio flows alongside username on the same baseline */}
+              <div className="flex items-baseline gap-2.5 flex-wrap">
+                <h2 className="text-lg font-bold text-primary shrink-0">@{header.username}</h2>
+                {header.bio && <p className="text-sm text-muted-foreground leading-relaxed">{header.bio}</p>}
               </div>
-              {header.bio && <p className="text-sm text-muted-foreground mt-0.5 max-w-sm leading-relaxed">{header.bio}</p>}
 
               {/* Source-anchored stat rows: CSS grid sizes badge column to widest badge automatically */}
               <div className="mt-1.5" style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', rowGap: '0.375rem', columnGap: '0.375rem', alignItems: 'center' }}>
@@ -1038,8 +1038,8 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                 {/* Row 1: concert stats anchored by First Show badge */}
                 <div>
                   {header.confirmed_shows > 0 && grooveprintYear && (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
-                      style={{ background: 'rgba(0,191,168,0.12)', color: '#00BFA8', border: '1px solid rgba(0,191,168,0.3)' }}>
+                    <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                      style={{ background: 'rgba(0,191,168,0.12)', color: '#00BFA8', border: '1px solid rgba(0,191,168,0.3)', justifyContent: 'center' }}>
                       First Show · {grooveprintYear}
                     </span>
                   )}
@@ -1059,8 +1059,8 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                     <div>
                       {header.spotify_user_id && (
                         <a href={`https://open.spotify.com/user/${header.spotify_user_id}`} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
-                          style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)' }}>
+                          className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
+                          style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)', justifyContent: 'center' }}>
                           <SpotifyIcon className="w-3 h-3" />Spotify{header.spotify_since_year ? ` · ${header.spotify_since_year}` : ''}
                         </a>
                       )}
@@ -1079,8 +1079,8 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                     <div>
                       {header.discogs_connected && header.discogs_username && (
                         <a href={`https://www.discogs.com/user/${header.discogs_username}`} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
-                          style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)' }}>
+                          className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
+                          style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)', justifyContent: 'center' }}>
                           <DiscogsIcon className="w-3 h-3" />Discogs{discogsStats?.sinceYear ? ` · ${discogsStats.sinceYear}` : ''}
                         </a>
                       )}
