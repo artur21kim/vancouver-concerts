@@ -1038,7 +1038,7 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                 {/* Row 1: concerts */}
                 <div>
                   {header.confirmed_shows > 0 && grooveprintYear && (
-                    <span className="flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                    <span className="flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium tabular-nums"
                       style={{ background: 'rgba(0,191,168,0.12)', color: '#00BFA8', border: '1px solid rgba(0,191,168,0.3)' }}>
                       First Show {grooveprintYear}
                     </span>
@@ -1058,7 +1058,7 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                   <div>
                     {header.spotify_user_id && (
                       <a href={`https://open.spotify.com/user/${header.spotify_user_id}`} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
+                        className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium tabular-nums hover:opacity-80 transition-opacity"
                         style={{ background: 'rgba(29,185,84,0.12)', color: SPOTIFY_GREEN, border: '1px solid rgba(29,185,84,0.3)' }}>
                         <SpotifyIcon className="w-3 h-3" />Spotify{header.spotify_since_year ? ` ${header.spotify_since_year}` : ''}
                       </a>
@@ -1076,7 +1076,7 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                   <div>
                     {header.discogs_connected && header.discogs_username && (
                       <a href={`https://www.discogs.com/user/${header.discogs_username}`} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition-opacity"
+                        className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium tabular-nums hover:opacity-80 transition-opacity"
                         style={{ background: 'rgba(20,20,20,0.9)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.18)' }}>
                         <DiscogsIcon className="w-3 h-3" />Discogs{discogsStats?.sinceYear ? ` ${discogsStats.sinceYear}` : ''}
                       </a>
@@ -1090,7 +1090,7 @@ function ProfileHeaderCard({ header, readOnly, discogsStats, grooveprintSince }:
                         {discogsStats.lastAdded && (
                           <><span className="text-border">·</span>
                           <span className="text-foreground">
-                            last added: <span className="font-semibold" style={{ color: '#00BFA8' }}>{discogsStats.lastAdded.title}{discogsStats.lastAdded.artist ? ` - ${discogsStats.lastAdded.artist}` : ''}</span>
+                            <span className="font-semibold text-foreground">last added: </span><span style={{ color: '#00BFA8' }}>{discogsStats.lastAdded.title}{discogsStats.lastAdded.artist ? ` - ${discogsStats.lastAdded.artist}` : ''}</span>
                           </span></>
                         )}
                       </>
