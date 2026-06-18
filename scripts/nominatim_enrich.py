@@ -23,8 +23,8 @@ Usage:
     # Limit to a specific city (useful post-ingestion per city):
     python scripts/nominatim_enrich.py --live --city Seattle
 
-    # Lower the confidence threshold (default 0.4):
-    python scripts/nominatim_enrich.py --live --threshold 0.3
+    # Lower the confidence threshold (default 0.3 — use 0.4+ for stricter matching):
+    python scripts/nominatim_enrich.py --live --threshold 0.4
 
     # Re-process venues that already have coordinates:
     python scripts/nominatim_enrich.py --live --force
@@ -56,7 +56,7 @@ SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 NOMINATIM_URL      = "https://nominatim.openstreetmap.org/search"
 NOMINATIM_HEADERS  = {"User-Agent": "Grooveprint/1.0 (grooveprint.app)"}
 REQUEST_INTERVAL   = 1.1   # Nominatim ToS: max 1 req/sec
-DEFAULT_THRESHOLD  = 0.4   # importance score below this → review CSV, not auto-write
+DEFAULT_THRESHOLD  = 0.3   # importance score below this → review CSV, not auto-write
 EXPORTS_DIR        = Path("exports")
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -195,7 +195,7 @@ def run(
 
     # ── Load venues ───────────────────────────────────────────────────────────
     params: dict = {
-        "select": "venue_id,venue_name,city,state,country,latitude,longitude",
+        "select": "venue_id,venue_name,city,state,country,latitude,longitude,other_names",
     }
     if not force:
         params["latitude"] = "is.null"
@@ -247,9 +247,23 @@ def run(
             stats["skipped"] += 1
             continue
 
+        # Parse other_names for fallback queries (e.g. "The Plaza Club, Venue" for The Pearl)
+        other_names_raw = (venue.get("other_names") or "")
+        alt_names = [n.strip() for n in other_names_raw.split(",") if n.strip() and n.strip() != venue_name]
+
         log.debug("[%d/%d] %s, %s", i, total, venue_name, city_val)
 
         result = geocode_venue(venue_name, city_val, state_val, country_val)
+
+        # Fallback: try other_names if primary name got no result
+        matched_via = venue_name
+        if result is None and alt_names:
+            for alt in alt_names[:3]:  # try up to 3 alt names
+                result = geocode_venue(alt, city_val, state_val, country_val)
+                if result is not None:
+                    matched_via = alt
+                    log.debug("Matched via other_name '%s'", alt)
+                    break
 
         if result is None:
             log.info(
@@ -281,9 +295,10 @@ def run(
         if importance >= threshold:
             # High confidence — auto-write
             action = "[DRY-RUN]" if dry_run else "[WRITE]  "
+            alt_note = f" (via '{matched_via}')" if matched_via != venue_name else ""
             log.info(
-                "%s [%d/%d] %-40s → %.5f, %.5f  (importance=%.3f)",
-                action, i, total, venue_name[:40], lat, lon, importance,
+                "%s [%d/%d] %-40s → %.5f, %.5f  (importance=%.3f)%s",
+                action, i, total, venue_name[:40], lat, lon, importance, alt_note,
             )
             if not dry_run:
                 try:
@@ -296,9 +311,10 @@ def run(
                 stats["written"] += 1
         else:
             # Low confidence — flag for manual review
+            alt_note = f" (via '{matched_via}')" if matched_via != venue_name else ""
             log.info(
-                "[REVIEW] [%d/%d] %-40s → %.5f, %.5f  (importance=%.3f — below threshold)",
-                i, total, venue_name[:40], lat, lon, importance,
+                "[REVIEW] [%d/%d] %-40s → %.5f, %.5f  (importance=%.3f — below threshold)%s",
+                i, total, venue_name[:40], lat, lon, importance, alt_note,
             )
             stats["review"] += 1
             review_rows.append({
