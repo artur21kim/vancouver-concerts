@@ -13,11 +13,17 @@ Respects the same daily cap as fetch_setlist_api.py via shared counter file.
 Covers both US and Canadian expansion cities.
 
 Usage:
+    # Check secondary cities around a primary metro:
     python scripts/find_secondary_cities.py
     python scripts/find_secondary_cities.py --threshold 500
     python scripts/find_secondary_cities.py --output exports/secondary_cities.csv
     python scripts/find_secondary_cities.py --city "Toronto" --city "Montreal"
-    python scripts/find_secondary_cities.py --city "New York" --city "Los Angeles"
+
+    # Province-wide standalone city sweep (GP-96):
+    python scripts/find_secondary_cities.py --state BC --country CA
+    python scripts/find_secondary_cities.py --state ON --country CA
+    python scripts/find_secondary_cities.py --state BC --country CA --threshold 500 --output exports/secondary_cities_bc.csv
+    python scripts/find_secondary_cities.py --state ON --country CA --threshold 500 --output exports/secondary_cities_on.csv
 
 Output:
     Console table + CSV with columns:
@@ -46,11 +52,8 @@ BASE_URL      = "https://api.setlist.fm/rest/1.0"
 PROGRESS_DIR  = Path("exports") / ".fetch_progress"
 
 # ---------------------------------------------------------------------------
-# Metro area definitions
+# Metro area definitions (secondary city candidates around primary metros)
 # Format: "Primary City" → list of (city_name, state_code, country_code, note)
-# state_code: 2-letter US state, or province (BC, ON, etc.)
-# country_code: ISO 2-letter (US, CA)
-# note: why this city matters / key venues
 # ---------------------------------------------------------------------------
 
 METRO_AREAS: dict[str, list[tuple[str, str, str, str]]] = {
@@ -213,8 +216,6 @@ METRO_AREAS: dict[str, list[tuple[str, str, str, str]]] = {
     ],
 
     # ── Canadian cities ───────────────────────────────────────────────────────
-    # Note: Hamilton is a primary city in the expansion plan — standalone fetch,
-    # not a Toronto secondary. It is not listed here.
     "Toronto": [
         ("Mississauga", "ON", "CA", "Larger suburban venues, Living Arts Centre"),
         ("Brampton",    "ON", "CA", "Rose Theatre, growing market"),
@@ -228,8 +229,6 @@ METRO_AREAS: dict[str, list[tuple[str, str, str, str]]] = {
         ("Brossard",    "QC", "CA", "Place Bell spillover area"),
     ],
     "Vancouver": [
-        # Note: verify which shows setlist.fm logs under Vancouver vs suburb
-        # given existing YVR scrape already covers some of this area
         ("Burnaby",     "BC", "CA", "Deer Lake Park, Swangard Stadium"),
         ("Surrey",      "BC", "CA", "Hard Rock Casino Vancouver"),
         ("Richmond",    "BC", "CA", "River Rock Casino"),
@@ -248,13 +247,63 @@ METRO_AREAS: dict[str, list[tuple[str, str, str, str]]] = {
         ("St. Albert",    "AB", "CA", "Arden Theatre, probably low count"),
         ("Sherwood Park", "AB", "CA", "Jubilee Auditorium area"),
     ],
-    "Winnipeg":    [],  # Metro is compact — city fetch captures most shows
-    "Victoria":    [],  # Island geography, minimal secondary activity
+    "Winnipeg":    [],
+    "Victoria":    [],
     "Quebec City": [
         ("Levis",       "QC", "CA", "South shore, probably low count"),
     ],
     "Halifax": [
         ("Dartmouth",   "NS", "CA", "Probably minimal but worth checking"),
+    ],
+}
+
+# ---------------------------------------------------------------------------
+# Province-wide sweep definitions (GP-96)
+# Standalone cities NOT already covered as secondaries of a metro above.
+# Format: (state_code, country_code) → list of (city, state, country, note)
+# ---------------------------------------------------------------------------
+
+PROVINCE_SWEEP: dict[tuple[str, str], list[tuple[str, str, str, str]]] = {
+    # British Columbia — standalone cities not in METRO_AREAS["Vancouver"]
+    # (Burnaby, Surrey, Richmond, Abbotsford, Langley, Coquitlam are covered there)
+    ("BC", "CA"): [
+        ("Victoria",      "BC", "CA", "Capital city; McPherson Playhouse, Save-On-Foods Memorial Centre"),
+        ("Kelowna",       "BC", "CA", "Okanagan hub; Prospera Place, Kelowna Community Theatre"),
+        ("Nanaimo",       "BC", "CA", "Mid-Island; Port Theatre, Beban Park"),
+        ("Kamloops",      "BC", "CA", "Interior hub; Sandman Centre"),
+        ("Prince George", "BC", "CA", "Northern hub; CN Centre"),
+        ("Squamish",      "BC", "CA", "Festival/outdoor scene, Constellation Festival"),
+        ("Whistler",      "BC", "CA", "Resort venue; outdoor festival history"),
+        ("Chilliwack",    "BC", "CA", "Fraser Valley; Prospera Centre"),
+        ("Vernon",        "BC", "CA", "Okanagan secondary; Performing Arts Centre"),
+        ("Penticton",     "BC", "CA", "Okanagan; South Okanagan Events Centre"),
+        ("Campbell River","BC", "CA", "Northern Island; Tidemark Theatre"),
+        ("Fort St. John", "BC", "CA", "Northeast BC; North Peace Cultural Centre"),
+        ("Terrace",       "BC", "CA", "Northwest BC hub"),
+        ("Cranbrook",     "BC", "CA", "East Kootenay"),
+    ],
+
+    # Ontario — standalone cities not in METRO_AREAS["Toronto"]
+    # (Mississauga, Brampton, Markham, Oakville, Vaughan are covered there)
+    # Note: Hamilton is planned as a primary city — included here to get its count
+    ("ON", "CA"): [
+        ("Ottawa",        "ON", "CA", "Capital; Canadian Tire Centre, NAC, Bluesfest"),
+        ("Hamilton",      "ON", "CA", "Steel city; FirstOntario Centre — planned as Grooveprint primary"),
+        ("London",        "ON", "CA", "CAUTION: may match London UK on setlist.fm — verify results manually"),
+        ("Kingston",      "ON", "CA", "University town; Leon's Centre"),
+        ("Kitchener",     "ON", "CA", "Waterloo region; Centre in the Square"),
+        ("Waterloo",      "ON", "CA", "Twin city with Kitchener; Bingemans"),
+        ("Windsor",       "ON", "CA", "Border city; WFCU Centre"),
+        ("Barrie",        "ON", "CA", "Southern ON hub; Sadlon Arena"),
+        ("Sudbury",       "ON", "CA", "Northern ON hub; Sudbury Arena"),
+        ("Thunder Bay",   "ON", "CA", "Northwestern ON; Fort William Gardens"),
+        ("St. Catharines","ON", "CA", "Niagara region; Meridian Centre"),
+        ("Guelph",        "ON", "CA", "Sleeman Centre, River Run Centre"),
+        ("Peterborough",  "ON", "CA", "Trent University market; Memorial Centre"),
+        ("Oshawa",        "ON", "CA", "East GTA — may overlap Whitby, Ajax"),
+        ("Burlington",    "ON", "CA", "Between Hamilton and Toronto"),
+        ("Sault Ste. Marie","ON","CA","Northern ON; Essar Centre"),
+        ("North Bay",     "ON", "CA", "Northeast ON; Memorial Gardens"),
     ],
 }
 
@@ -294,11 +343,6 @@ def get_city_show_count(
     counter: dict,
     delay: float = 0.6,
 ) -> int | None:
-    """
-    Returns total show count for a city from the setlist.fm API.
-    Uses only one request (page 1) — the total is in the response root.
-    Returns None on error.
-    """
     params: dict = {
         "cityName":    city_name,
         "countryCode": country_code,
@@ -335,6 +379,254 @@ def get_city_show_count(
 
 
 # ---------------------------------------------------------------------------
+# Province-sweep mode (GP-96)
+# ---------------------------------------------------------------------------
+
+def enumerate_province_cities(
+    state_code: str,
+    country_code: str,
+    counter: dict,
+    delay: float,
+) -> list[tuple[str, str, str]]:
+    """
+    Query the setlist.fm /search/cities endpoint to get every city it knows
+    about in a province/state. Returns list of (city_name, state_code, country_code).
+
+    Costs ceil(total_cities / 20) API requests — typically 5–20 for a province.
+    This is the correct approach vs a manually-maintained city list: it discovers
+    every city setlist.fm has ever logged a show in, including small towns.
+    """
+    cities: list[tuple[str, str, str]] = []
+    page = 1
+    total_pages = None
+
+    print(f"  Enumerating cities from setlist.fm API for {state_code}, {country_code}…", flush=True)
+
+    while True:
+        if 1440 - counter["count"] <= 0:
+            print(f"  ⚠️  Daily cap reached during city enumeration — {len(cities)} cities found so far.")
+            break
+
+        params: dict = {
+            "countryCode": country_code,
+            "stateCode":   state_code,
+            "p":           page,
+        }
+
+        try:
+            resp = requests.get(
+                f"{BASE_URL}/search/cities",
+                headers={"x-api-key": API_KEY, "Accept": "application/json"},
+                params=params,
+                timeout=15,
+            )
+            counter["count"] += 1
+            save_counter(counter)
+            time.sleep(delay)
+
+            if resp.status_code == 404:
+                break
+            if resp.status_code == 429:
+                wait = int(resp.headers.get("Retry-After", 60))
+                print(f"  ⚠️  Rate limited — waiting {wait}s …")
+                time.sleep(wait)
+                counter["count"] -= 1   # don't charge for the failed request
+                continue
+            resp.raise_for_status()
+
+            data = resp.json()
+            page_cities = data.get("cities") or []
+
+            if total_pages is None:
+                total   = int(data.get("total") or 0)
+                per_page = int(data.get("itemsPerPage") or 20)
+                total_pages = max(1, (total + per_page - 1) // per_page)
+                print(f"  Found {total:,} cities across {total_pages} pages…", flush=True)
+
+            for c in page_cities:
+                name = (c.get("name") or "").strip()
+                if name:
+                    cities.append((name, state_code, country_code))
+
+            if not page_cities or page >= (total_pages or 1):
+                break
+            page += 1
+
+        except Exception as e:
+            print(f"  ⚠️  Error enumerating cities page {page}: {e}")
+            break
+
+    # Deduplicate (API can return a city on multiple pages in rare cases)
+    seen: set[str] = set()
+    unique: list[tuple[str, str, str]] = []
+    for name, s, c in cities:
+        if name.lower() not in seen:
+            seen.add(name.lower())
+            unique.append((name, s, c))
+
+    print(f"  Enumeration complete: {len(unique)} unique cities  "
+          f"[{counter['count']} API requests used today]")
+    return unique
+
+
+def run_province_sweep(
+    state_code: str,
+    country_code: str,
+    threshold: int,
+    output_path: Path,
+    delay: float,
+    counter: dict,
+    use_cached_list: bool = False,
+) -> None:
+    """
+    Discover every city in a province/state with show data on setlist.fm.
+
+    Default: enumerates cities from the setlist.fm /search/cities API first,
+    then queries show counts for each — true province-wide discovery.
+
+    --use-cached-list: falls back to the hardcoded PROVINCE_SWEEP dict (faster
+    but incomplete; only checks cities explicitly listed in this script).
+    """
+    state_up   = state_code.upper()
+    country_up = country_code.upper()
+
+    # Build candidate list
+    if use_cached_list:
+        sweep_key  = (state_up, country_up)
+        cached     = PROVINCE_SWEEP.get(sweep_key)
+        if cached is None:
+            print(f"ERROR: No cached list for {state_up}/{country_up}. "
+                  f"Remove --use-cached-list to use the API-enumerated approach.")
+            sys.exit(1)
+        candidates_raw = [(city, st, co) for city, st, co, _ in cached]
+        notes_map      = {city: note for city, _, _, note in cached}
+        source_label   = f"cached list ({len(candidates_raw)} cities)"
+    else:
+        candidates_raw = enumerate_province_cities(state_up, country_up, counter, delay)
+        notes_map      = {}
+        source_label   = f"setlist.fm API ({len(candidates_raw)} cities enumerated)"
+
+    # ── Resume support ───────────────────────────────────────────────────────
+    CSV_FIELDS = ["primary_city", "secondary_city", "state", "country_code",
+                  "total_shows", "fetch_recommended", "note"]
+    existing_results: list[dict] = []
+    already_done: set[str] = set()
+
+    if output_path.exists():
+        try:
+            with open(output_path, newline="", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    existing_results.append(row)
+                    already_done.add(row["secondary_city"].lower())
+            if existing_results:
+                print(f"  Resuming: {len(existing_results)} cities already in "
+                      f"{output_path.name} — skipping those.")
+        except Exception as e:
+            print(f"  ⚠️  Could not read existing CSV ({e}) — starting fresh.")
+            existing_results, already_done = [], set()
+
+    remaining_candidates = [
+        (city, st, co) for city, st, co in candidates_raw
+        if city.lower() not in already_done
+    ]
+
+    print("=" * 64)
+    print(f"Grooveprint — Province-Wide City Discovery")
+    print(f"Province:       {state_up}, {country_up}")
+    print(f"Source:         {source_label}")
+    print(f"Fetch threshold:{threshold:,} total shows")
+    print(f"API budget:     {1440 - counter['count']} / 1440 remaining today")
+    print(f"Output:         {output_path}")
+    if existing_results:
+        print(f"Progress:       {len(existing_results)} done / "
+              f"{len(candidates_raw)} total ({len(remaining_candidates)} remaining)")
+    print("=" * 64)
+
+    remaining_budget = 1440 - counter["count"]
+    if remaining_budget < len(remaining_candidates):
+        print(
+            f"\n⚠️  Only {remaining_budget} requests remaining today "
+            f"but need {len(remaining_candidates)} for remaining cities. "
+            f"Re-run with the same --output path tomorrow to continue."
+        )
+
+    new_results: list[dict] = []
+
+    print(f"\n── Querying show counts for {len(remaining_candidates)} cities… " + "─" * 20)
+    for city, state, country in remaining_candidates:
+        if 1440 - counter["count"] <= 0:
+            print(f"  ⚠️  Daily cap reached — {len(new_results)} new cities queried this run.")
+            print(f"  Re-run with the same --output path tomorrow to continue.")
+            break
+
+        total = get_city_show_count(city, state, country, counter, delay)
+        recommended = (total is not None) and (total >= threshold)
+        flag = "✅  FETCH" if recommended else ("❓  no data" if total is None else "—  below threshold")
+        note = notes_map.get(city, "")
+
+        print(f"  {city:<25} {str(total or '?'):>8} shows   {flag}")
+        if note and "CAUTION" in note:
+            print(f"    ⚠️  {note}")
+
+        new_results.append({
+            "primary_city":      f"{state_up}-{country_up} sweep",
+            "secondary_city":    city,
+            "state":             state,
+            "country_code":      country,
+            "total_shows":       total if total is not None else "",
+            "fetch_recommended": "yes" if recommended else "no",
+            "note":              note,
+        })
+
+    # Write combined results (existing + new) to CSV
+    all_results = existing_results + new_results
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+        writer.writeheader()
+        writer.writerows(all_results)
+
+    # Summary
+    recommended_list = [r for r in results if r["fetch_recommended"] == "yes"]
+    review_list = [
+        r for r in results
+        if r["fetch_recommended"] == "no"
+        and isinstance(r["total_shows"], int)
+        and r["total_shows"] >= 100
+    ]
+    print(f"\n{'=' * 64}")
+    print(f"Results: {len(results)} cities checked")
+    print(f"Recommended for ingestion (≥{threshold:,} shows): {len(recommended_list)}")
+    if review_list:
+        print(f"Worth manual review (100–{threshold-1} shows): {len(review_list)}")
+
+    print(f"\n  City                      Shows   Recommendation")
+    print(f"  {'─'*54}")
+    for r in sorted(results, key=lambda x: x["total_shows"] if isinstance(x["total_shows"], int) else -1, reverse=True):
+        total_str = f"{r['total_shows']:,}" if isinstance(r["total_shows"], int) else "?"
+        rec = "✅ FETCH" if r["fetch_recommended"] == "yes" else (
+            "❓ Review" if isinstance(r["total_shows"], int) and r["total_shows"] >= 100 else "Skip"
+        )
+        print(f"  {r['secondary_city']:<25} {total_str:>8}   {rec}")
+
+    print(f"\nFull results: {output_path}")
+    print(f"API requests used today: {counter['count']} / 1440")
+    print("=" * 64)
+
+    if recommended_list:
+        print("\nNext step — fetch recommended cities:")
+        for r in recommended_list:
+            slug = r['secondary_city'].lower().replace(' ', '_').replace('.', '')
+            total_str = f"{r['total_shows']:,}" if isinstance(r['total_shows'], int) else "?"
+            print(f"  # {r['secondary_city']} ({total_str} shows)")
+            print(f"  python scripts/fetch_setlist_api.py \\")
+            print(f"      --city \"{r['secondary_city']}\" --state {r['state']} --country {r['country_code']} \\")
+            print(f"      --year-range 1900 2025 \\")
+            print(f"      --output exports/{r['state'].lower()}-{slug}/{slug}_1900-2025_api.csv")
+            print()
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -349,16 +641,30 @@ def main() -> None:
         help="Minimum total shows to flag a city as worth fetching (default: 1000)",
     )
     ap.add_argument(
-        "--output", default="exports/secondary_cities.csv",
-        help="Output CSV path (default: exports/secondary_cities.csv)",
+        "--output", default="",
+        help="Output CSV path (default: exports/secondary_cities.csv or exports/secondary_cities_{state}.csv)",
     )
     ap.add_argument(
         "--city", action="append", dest="cities", metavar="CITY",
         help="Limit to specific primary city/cities (can repeat). Default: all.",
     )
     ap.add_argument(
+        "--state", default="",
+        help="Province/state code for province-wide sweep (e.g. BC, ON, WA). "
+             "Use with --country to run sweep mode instead of metro-secondary mode.",
+    )
+    ap.add_argument(
+        "--country", default="",
+        help="Country code for province-wide sweep (e.g. CA, US). Use with --state.",
+    )
+    ap.add_argument(
         "--delay", type=float, default=0.6,
         help="Seconds between API requests (default: 0.6)",
+    )
+    ap.add_argument(
+        "--use-cached-list", action="store_true", default=False,
+        help="Province-sweep mode: use the hardcoded PROVINCE_SWEEP city list instead "
+             "of enumerating from the setlist.fm API. Faster but incomplete.",
     )
     args = ap.parse_args()
 
@@ -366,6 +672,29 @@ def main() -> None:
         print("ERROR: SETLIST_API_KEY not set in .env")
         sys.exit(1)
 
+    counter = load_counter()
+
+    # ── Province-sweep mode (GP-96) ──────────────────────────────────────────
+    if args.state and args.country:
+        if args.cities:
+            print("ERROR: --state/--country sweep mode cannot be combined with --city filtering.")
+            sys.exit(1)
+        state_up   = args.state.upper()
+        country_up = args.country.upper()
+        default_out = f"exports/secondary_cities_{state_up.lower()}.csv"
+        output_path = Path(args.output) if args.output else Path(default_out)
+        run_province_sweep(
+            state_code=state_up,
+            country_code=country_up,
+            threshold=args.threshold,
+            output_path=output_path,
+            delay=args.delay,
+            counter=counter,
+            use_cached_list=args.use_cached_list,
+        )
+        return
+
+    # ── Metro secondary mode (original behaviour) ────────────────────────────
     targets = args.cities or list(METRO_AREAS.keys())
     missing = [c for c in targets if c not in METRO_AREAS]
     if missing:
@@ -374,7 +703,7 @@ def main() -> None:
         sys.exit(1)
 
     total_candidates = sum(len(METRO_AREAS[c]) for c in targets)
-    counter = load_counter()
+    output_path = Path(args.output) if args.output else Path("exports/secondary_cities.csv")
 
     print("=" * 64)
     print("Grooveprint — Secondary City Discovery")
@@ -382,7 +711,7 @@ def main() -> None:
     print(f"Total candidates:   {total_candidates}")
     print(f"Fetch threshold:    {args.threshold:,} total shows")
     print(f"API budget:         {1440 - counter['count']} / 1440 remaining today")
-    print(f"Output:             {args.output}")
+    print(f"Output:             {output_path}")
     print("=" * 64)
 
     if 1440 - counter["count"] < total_candidates:
@@ -422,7 +751,6 @@ def main() -> None:
             })
 
     # Write CSV
-    output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=[

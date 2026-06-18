@@ -1370,6 +1370,31 @@ def main() -> None:
         inserted=inserted, fuzzy_blocked=fuzzy_blocked, dry_run=False,
     )
 
+    # ── 8. Post-insert housekeeping (live runs only) ─────────────────────────
+    if not args.dry_run and (inserted > 0 or genuinely_new_venues):
+        # Auto-update venue statuses (GP-99)
+        print("\nRunning auto_update_venue_status()…", end=" ", flush=True)
+        resp = requests.post(
+            f"{SUPABASE_URL}/rest/v1/rpc/auto_update_venue_status",
+            headers=_headers("return=minimal"),
+            json={},
+        )
+        if resp.ok:
+            print("✅")
+        else:
+            print(
+                f"⚠️  Failed ({resp.status_code}) — "
+                f"run manually: SELECT auto_update_venue_status();"
+            )
+
+        # MusicBrainz enrichment reminder for new artists (GP-97)
+        if genuinely_new_artists:
+            print(
+                f"\n  💡  {len(genuinely_new_artists)} new artist(s) added — "
+                f"run MusicBrainz enrichment when ready:\n"
+                f"  python scripts/musicbrainz_enrich.py --new-only --live"
+            )
+
 
 if __name__ == "__main__":
     main()
