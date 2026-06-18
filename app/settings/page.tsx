@@ -16,6 +16,7 @@ type ProfileSettings = {
   discogs_username: string | null
   preferred_cities: string[] | null
   preferred_tab: string | null
+  show_discogs_stats: boolean | null
 }
 
 type DiscogsImportProgress = {
@@ -61,6 +62,7 @@ export default function SettingsPage() {
   const [bio, setBio] = useState('')
   const [visibility, setVisibility] = useState<'public' | 'friends' | 'private'>('public')
   const [showSpotifyStats, setShowSpotifyStats] = useState(false)
+  const [showDiscogsStats, setShowDiscogsStats] = useState(true)
   const [discogsConnected, setDiscogsConnected] = useState(false)
   const [discogsFlash, setDiscogsFlash] = useState<'connected' | 'error' | null>(null)
   const [pageLoading, setPageLoading] = useState(true)
@@ -160,7 +162,7 @@ export default function SettingsPage() {
           .from('user_profiles')
           .select(
             'username, bio, profile_visibility, spotify_connected, show_spotify_stats, ' +
-            'discogs_connected, discogs_username, preferred_cities, preferred_tab'
+            'discogs_connected, discogs_username, preferred_cities, preferred_tab, show_discogs_stats'
           )
           .eq('user_id', user.id)
           .single(),
@@ -182,6 +184,7 @@ export default function SettingsPage() {
       setVisibility((p.profile_visibility ?? 'public') as typeof visibility)
       setShowSpotifyStats(p.show_spotify_stats ?? false)
       setDiscogsConnected(p.discogs_connected ?? false)
+      setShowDiscogsStats(p.show_discogs_stats ?? true)
       // null in DB → [] in state → "all cities"
       setPreferredCities(p.preferred_cities ?? [])
       setPreferredTab((p.preferred_tab as 'shows' | 'spotify' | 'discogs') ?? 'shows')
@@ -217,6 +220,7 @@ export default function SettingsPage() {
         bio: bio.trim() || null,
         profile_visibility: visibility,
         show_spotify_stats: showSpotifyStats,
+        show_discogs_stats: showDiscogsStats,
         // [] → null ("all cities"); non-empty → explicit allowlist
         preferred_cities: preferredCities.length > 0 ? preferredCities : null,
         // 'shows' is the default → store null; other tabs stored explicitly
@@ -383,6 +387,7 @@ export default function SettingsPage() {
                       <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
                     </svg>
                     <h2 className="text-base font-semibold text-foreground">Spotify</h2>
+                    <span className="text-xs font-medium text-green-500">Connected</span>
                   </div>
 
                   {/* Show Spotify stats toggle */}
@@ -469,7 +474,33 @@ export default function SettingsPage() {
 
                 {discogsConnected ? (
                   <div className="space-y-3">
+                    {/* Show Discogs stats toggle */}
                     <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">
+                          Show Discogs stats on profile
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Display your Discogs collection stats on your public profile
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setShowDiscogsStats(v => !v)}
+                        role="switch"
+                        aria-checked={showDiscogsStats}
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background ${
+                          showDiscogsStats ? 'bg-primary' : 'bg-muted'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${
+                            showDiscogsStats ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4 border-t border-border pt-3">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-foreground">Vinyl collection</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
