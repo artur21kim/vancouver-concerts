@@ -1387,7 +1387,7 @@ def main() -> None:
             print(
                 f"\n  💡  {len(genuinely_new_artists)} new artist(s) added — "
                 f"run MusicBrainz enrichment when ready:\n"
-                f"  python scripts/musicbrainz_enrich.py --new-only --live"
+                f"  python scripts/musicbrainz_artist_enrich.py --new-only --live"
             )
 
 
