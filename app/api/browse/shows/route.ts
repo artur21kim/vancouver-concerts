@@ -18,6 +18,10 @@ export async function GET(request: Request) {
   const page     = Math.max(1, parseInt(searchParams.get('page') || '1'))
   const sort     = searchParams.get('sort') || 'date'
   const dir      = searchParams.get('dir')  || 'desc'
+  // GP-127: comma-separated city list passed from Browse page when user has a preference
+  // e.g. ?cities=Vancouver,Seattle  — null means all cities
+  const citiesParam = searchParams.get('cities')
+  const preferredCities = citiesParam ? citiesParam.split(',').filter(Boolean) : null
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,15 +30,17 @@ export async function GET(request: Request) {
 
   // Shared RPC params
   const rpcBase = {
-    p_decade:    decade,
-    p_year:      year     ? parseInt(year)     : null,
-    p_month:     month    ? parseInt(month)    : null,
-    p_artist_id: artistId ? parseInt(artistId) : null,
-    p_venue_id:  venueId  ? parseInt(venueId)  : null,
-    p_show_type: showType || null,
-    p_festival:  festival || null,
-    p_capacity:  (capacity && capacity !== 'all') ? capacity : null,
-    p_status:    (status   && status   !== 'all') ? status   : null,
+    p_decade:            decade,
+    p_year:              year     ? parseInt(year)     : null,
+    p_month:             month    ? parseInt(month)    : null,
+    p_artist_id:         artistId ? parseInt(artistId) : null,
+    p_venue_id:          venueId  ? parseInt(venueId)  : null,
+    p_show_type:         showType || null,
+    p_festival:          festival || null,
+    p_capacity:          (capacity && capacity !== 'all') ? capacity : null,
+    p_status:            (status   && status   !== 'all') ? status   : null,
+    // GP-127: city preference filter — null = show all cities (default)
+    p_preferred_cities:  preferredCities,
   }
 
   // Run shows + stats in parallel

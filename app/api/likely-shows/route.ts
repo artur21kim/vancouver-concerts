@@ -78,13 +78,28 @@ export async function GET(request: Request) {
 
     console.log(`📊 ${matchedArtists.length} artists matched with >= 2 liked songs`);
 
+    // GP-127: Fetch city preference + first_concert_year in parallel
     const { data: profile } = await supabase
       .from('user_profiles')
-      .select('first_concert_year')
+      .select('first_concert_year, preferred_cities')
       .eq('user_id', user.id)
       .single();
 
     const firstConcertYear = profile?.first_concert_year || 2000;
+    const preferredCities: string[] | null = (profile as any)?.preferred_cities ?? null
+
+    // GP-127: Resolve city preference to allowed venue IDs
+    // Uses venue_id set (not .in() on shows) to stay within PostgREST URL limits
+    let allowedVenueIds: Set<number> | null = null
+    if (preferredCities && preferredCities.length > 0) {
+      const { data: venueData } = await supabase
+        .from('dim_venue')
+        .select('venue_id')
+        .in('city', preferredCities)
+      if (venueData) {
+        allowedVenueIds = new Set(venueData.map((v: any) => v.venue_id as number))
+      }
+    }
 
     // Use RPC to fetch shows server-side — avoids .in() URL length limits which
     // silently truncate large artist ID arrays, causing missing artists in results.
@@ -135,8 +150,14 @@ export async function GET(request: Request) {
     console.log(`🚫 Excluding ${excludedShowIds.size} shows (${(attendedResult.data || []).length} attended, ${(skippedResult.data || []).length} skipped)`);
 
     // Transform and filter — RPC already joins artist/venue so shape is flat
+    // GP-127: allowedVenueIds filter applied here alongside existing noVenueIds check
     const transformedShows = shows
-      .filter((show: any) => !noVenueIds.has(show.venue_id) && !excludedShowIds.has(show.show_id))
+      .filter((show: any) => {
+        if (noVenueIds.has(show.venue_id)) return false
+        if (excludedShowIds.has(show.show_id)) return false
+        if (allowedVenueIds && !allowedVenueIds.has(show.venue_id)) return false
+        return true
+      })
       .map((show: any) => ({
         show_id: show.show_id,
         date: show.date,
@@ -235,7 +256,7 @@ export async function GET(request: Request) {
     const stretchShows = showsWithScores.filter((s: any) => s.tier === 'stretch');
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`✅ LIKELY SHOWS COMPLETE — ${mainShows.length} main, ${lessLikelyShows.length} less likely, ${stretchShows.length} stretch (${excludedShowIds.size} excluded) in ${duration}s`);
+    console.log(`✅ LIKELY SHOWS COMPLETE — ${mainShows.length} main, ${lessLikelyShows.length} less likely, ${stretchShows.length} stretch (${excludedShowIds.size} excluded)${preferredCities ? ` [cities: ${preferredCities.join(', ')}]` : ''} in ${duration}s`);
 
     await supabase
       .from('user_profiles')

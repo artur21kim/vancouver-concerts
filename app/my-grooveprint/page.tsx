@@ -43,7 +43,8 @@ export default async function MyGrooveprintPage() {
                         venue_id,
                         venue_name,
                         capacity,
-                        capacity_category
+                        capacity_category,
+                        city
                     )
                 )
             `)
@@ -51,7 +52,7 @@ export default async function MyGrooveprintPage() {
             .order('added_at', { ascending: false }),
         supabase
             .from('user_profiles')
-            .select('username, bio, avatar_url, spotify_connected, show_spotify_stats, spotify_user_id, discogs_connected, discogs_username, discogs_release_count')
+            .select('username, bio, avatar_url, spotify_connected, show_spotify_stats, spotify_user_id, discogs_connected, discogs_username, discogs_release_count, preferred_cities, preferred_tab')
             .eq('user_id', user.id)
             .single(),
         // GP-124: returns {song_count, artist_count, album_count} — 3 numbers instead of ~10k rows
@@ -98,6 +99,7 @@ export default async function MyGrooveprintPage() {
             notes:         null,
             source:        us.source,
             match_score:   scoreMap[artist.artist_id] ?? null,
+            city:          venue.city ?? null,
             artist: {
                 artist_id:         artist.artist_id,
                 artist_name:       artist.artist_name,
@@ -123,20 +125,26 @@ export default async function MyGrooveprintPage() {
     const spotifySinceYear    = spotifyStats?.spotify_since_year
                                   ? Number(spotifyStats.spotify_since_year) : null
 
+    // ── GP-127: Apply city preference filter ─────────────────────────────────
+    const preferredCities: string[] | null = (profileRow as any)?.preferred_cities ?? null
+    const filteredShows = preferredCities && preferredCities.length > 0
+        ? shows.filter((s: any) => s?.city && preferredCities.includes(s.city))
+        : shows
+
     // ── Build profileHeader from fetched data ─────────────────────────────────
     let profileHeader: ProfileHeader | undefined
 
     if (profileRow) {
-        // Stats derived from the shows array (mirrors what get_user_profile computes via SQL)
-        const confirmedShows   = new Set(shows.map((s: any) => `${s.date}__${s.venue.venue_id}`)).size
-        const uniqueArtists    = new Set(shows.map((s: any) => s.artist.artist_id)).size
-        const uniqueVenues     = new Set(shows.map((s: any) => s.venue.venue_id)).size
+        // Stats derived from filteredShows (respects city preference)
+        const confirmedShows   = new Set(filteredShows.map((s: any) => `${s.date}__${s.venue.venue_id}`)).size
+        const uniqueArtists    = new Set(filteredShows.map((s: any) => s.artist.artist_id)).size
+        const uniqueVenues     = new Set(filteredShows.map((s: any) => s.venue.venue_id)).size
         const festivalCount    = new Set(
-            shows
+            filteredShows
                 .filter((s: any) => s.festival_name)
                 .map((s: any) => `${s.festival_name}::${s.date.split('-')[0]}`)
         ).size
-        const showYears        = shows.map((s: any) => parseInt(s.date.split('-')[0])).filter(Boolean)
+        const showYears        = filteredShows.map((s: any) => parseInt(s.date.split('-')[0])).filter(Boolean)
         const firstShowYear    = showYears.length > 0 ? Math.min(...showYears) : null
         const lastShowYear     = showYears.length > 0 ? Math.max(...showYears) : null
 
@@ -166,12 +174,13 @@ export default async function MyGrooveprintPage() {
             friendship_status:     null,
             request_direction:     null,
             request_id:            null,
+            preferred_tab:         (profileRow as any).preferred_tab ?? null,
         }
     }
 
     return (
         <MyGrooveprintClient
-            shows={shows as any}
+            shows={filteredShows as any}
             spotifySongs={[]}
             profileHeader={profileHeader}
         />

@@ -82,6 +82,7 @@ export type ProfileHeader = {
   friendship_status:     'accepted' | 'pending' | null
   request_direction:     'incoming' | 'outgoing' | null
   request_id:            number | null
+  preferred_tab:         string | null
 }
 
 type SortField     = 'date' | 'artist' | 'venue' | 'added_at'
@@ -1165,13 +1166,16 @@ export default function MyGrooveprintClient({
   const [viewMode, setViewMode] = useState<ViewMode>('shows')
 
   // GP-125: read ?tab= on mount to support nav tab jump links
+  // GP-127: fall back to user's preferred_tab setting when no URL param present
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const tab = params.get('tab')
     if (tab === 'spotify' || tab === 'discogs') {
       setViewMode(tab as 'spotify' | 'discogs')
+    } else if (profileHeader?.preferred_tab === 'spotify' || profileHeader?.preferred_tab === 'discogs') {
+      setViewMode(profileHeader.preferred_tab as 'spotify' | 'discogs')
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [setsSubView, setSetsSubView]           = useState<SetsSubView>('card')
   const [sortField, setSortField]               = useState<SortField>('date')
   const [sortDir, setSortDir]                   = useState<SortDir>('desc')

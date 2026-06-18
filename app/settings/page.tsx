@@ -176,7 +176,7 @@ export default function SettingsPage() {
         return
       }
 
-      const p = profileResult.data as ProfileSettings
+      const p = profileResult.data as unknown as ProfileSettings
       setSettings(p)
       setBio(p.bio ?? '')
       setVisibility((p.profile_visibility ?? 'public') as typeof visibility)

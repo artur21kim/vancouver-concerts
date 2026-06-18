@@ -17,19 +17,26 @@ export async function GET(request: Request) {
     console.log(`🎯 Fetching upcoming shows for user: ${user.id} (scope: ${scope})`);
     const startTime = Date.now();
 
-    // Get today's date in Vancouver time
-    const todayVancouver = new Date().toLocaleDateString('en-CA', {
-      timeZone: 'America/Vancouver',
-    });
+    // GP-127: Fetch city preference alongside matched artists
+    const [
+      { data: matchedArtists, error: artistsError },
+      { data: prefData },
+    ] = await Promise.all([
+      supabase.rpc('get_user_matched_artists', { p_user_id: user.id, p_min_song_count: 1 }),
+      supabase.from('user_profiles').select('preferred_cities').eq('user_id', user.id).single(),
+    ]);
 
-    // Use RPC to get matched artists — avoids .in() URL length limits with large Spotify libraries
-    const { data: matchedArtists, error: artistsError } = await supabase
-      .rpc('get_user_matched_artists', { p_user_id: user.id, p_min_song_count: 1 });
+    const preferredCities: string[] | null = (prefData as any)?.preferred_cities ?? null
 
     if (artistsError) {
       console.error('Matched artists RPC error:', artistsError);
       return NextResponse.json({ error: 'Failed to match artists' }, { status: 500 });
     }
+
+    // Get today's date in Vancouver time
+    const todayVancouver = new Date().toLocaleDateString('en-CA', {
+      timeZone: 'America/Vancouver',
+    });
 
     // Build lookup maps from RPC results
     const matchedArtistIds = (matchedArtists || []).map((a: any) => a.artist_id);
@@ -50,14 +57,16 @@ export async function GET(request: Request) {
 
     let shows: any[] = [];
 
-    // SCRUM-84: latitude + longitude added to dim_venue select for map view
+    // GP-127: city added to dim_venue select for city preference filtering
+    // SCRUM-84: latitude + longitude added for map view
     const venueSelect = `
       venue_id,
       venue_name,
       capacity,
       capacity_category,
       latitude,
-      longitude
+      longitude,
+      city
     `;
 
     if (scope === 'all') {
@@ -161,6 +170,7 @@ export async function GET(request: Request) {
         capacity_category: venue.capacity_category || null,
         latitude:          venue.latitude          ?? null,
         longitude:         venue.longitude         ?? null,
+        city:              venue.city              ?? null,
         ticketmaster_url:  show.ticketmaster_url   || null,
         status:            (reviewStatusMap[show.show_id] || 'pending') as 'pending' | 'added' | 'skipped',
         is_spotify_match:  isSpotifyMatch,
@@ -198,14 +208,19 @@ export async function GET(request: Request) {
       vancouver_show_count: artistMatchScores[show.artist_id]?.vancouver_show_count || 0,
     }));
 
+    // GP-127: Apply city preference filter (null preference = all cities)
+    const cityFiltered = preferredCities && preferredCities.length > 0
+      ? showsWithScores.filter((s: any) => s.city && preferredCities.includes(s.city))
+      : showsWithScores
+
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`✅ UPCOMING SHOWS COMPLETE — ${showsWithScores.length} shows in ${duration}s (scope: ${scope})`);
+    console.log(`✅ UPCOMING SHOWS COMPLETE — ${cityFiltered.length} shows${preferredCities ? ` (filtered to ${preferredCities.join(', ')})` : ''} in ${duration}s (scope: ${scope})`);
 
     return NextResponse.json({
       success: true,
       data: {
-        shows:           showsWithScores,
-        total_shows:     showsWithScores.length,
+        shows:           cityFiltered,
+        total_shows:     cityFiltered.length,
         matched_artists: matchedArtistIds.length,
         scope,
       }
