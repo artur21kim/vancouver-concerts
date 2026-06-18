@@ -30,7 +30,8 @@ SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 TM_API_KEY = os.environ["TM_API_KEY"]
 
-TM_EVENTS_URL = "https://app.ticketmaster.com/discovery/v2/events.json"
+TM_EVENTS_URL  = "https://app.ticketmaster.com/discovery/v2/events.json"
+TM_VENUES_URL  = "https://app.ticketmaster.com/discovery/v2/venues/{}.json"
 TM_RATE_LIMIT_DELAY = 0.25  # 4 requests/sec, well under 5/sec limit
 
 # Supabase REST API headers
@@ -90,6 +91,91 @@ def sb_patch(table: str, match_params: dict, data: dict) -> None:
         json=data,
     )
     resp.raise_for_status()
+
+
+# ---------------------------------------------------------------------------
+# TM venue coordinate enrichment (GP-98)
+# ---------------------------------------------------------------------------
+
+def get_venues_needing_coords() -> list:
+    """Venues with a TM mapping but no lat/long yet."""
+    url = f"{SUPABASE_URL}/rest/v1/dim_venue"
+    resp = requests.get(url, headers=SUPABASE_HEADERS, params={
+        "select":      "venue_id,venue_name,tm_venue_id",
+        "tm_venue_id": "not.is.null",
+        "latitude":    "is.null",
+    })
+    resp.raise_for_status()
+    return resp.json()
+
+
+def fetch_tm_venue_coords(tm_venue_id: str) -> tuple[float, float] | None:
+    """
+    Call the TM venue details endpoint and return (latitude, longitude).
+    Returns None if the venue has no location data.
+    """
+    url = TM_VENUES_URL.format(tm_venue_id)
+    try:
+        resp = requests.get(
+            url,
+            params={"apikey": TM_API_KEY},
+            timeout=10,
+        )
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        data = resp.json()
+        loc = data.get("location") or {}
+        lat_s = loc.get("latitude")
+        lon_s = loc.get("longitude")
+        if lat_s and lon_s:
+            return float(lat_s), float(lon_s)
+    except Exception as e:
+        print(f"    ⚠️  TM venue coords error for tm_id={tm_venue_id}: {e}")
+    return None
+
+
+def write_venue_coords(venue_id: int, lat: float, lon: float) -> None:
+    sb_patch(
+        "dim_venue",
+        {"venue_id": f"eq.{venue_id}"},
+        {"latitude": lat, "longitude": lon},
+    )
+
+
+def enrich_venue_coords() -> None:
+    """
+    Pass 1 (GP-98): populate lat/long for all TM-mapped venues that are
+    missing coordinates. Runs before the events loop so every future
+    Ticketmaster URL enrichment run also keeps coordinates up to date.
+    """
+    venues = get_venues_needing_coords()
+    if not venues:
+        print("  Venue coords: all TM-mapped venues already have lat/long — skipping.\n")
+        return
+
+    print(f"  Fetching coordinates for {len(venues)} TM-mapped venue(s)…")
+    written = 0
+    skipped = 0
+
+    for v in venues:
+        venue_id    = v["venue_id"]
+        venue_name  = v["venue_name"]
+        tm_venue_id = v["tm_venue_id"]
+
+        coords = fetch_tm_venue_coords(tm_venue_id)
+        time.sleep(TM_RATE_LIMIT_DELAY)
+
+        if coords:
+            lat, lon = coords
+            write_venue_coords(venue_id, lat, lon)
+            print(f"    ✅ {venue_name:<40} → {lat:.5f}, {lon:.5f}")
+            written += 1
+        else:
+            print(f"    —  {venue_name:<40}  (no location in TM)")
+            skipped += 1
+
+    print(f"\n  Venue coords: {written} written, {skipped} skipped (no TM location data)\n")
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +346,11 @@ def main():
 
     venues = get_mapped_venues()
     print(f"\nFound {len(venues)} venues with TM mapping\n")
+
+    # ── Pass 1: Populate missing lat/long from TM venue details (GP-98) ──────
+    enrich_venue_coords()
+
+    # ── Pass 2: Match upcoming events → ticketmaster_url ─────────────────────
 
     total_matched = 0
     total_unmatched = 0
