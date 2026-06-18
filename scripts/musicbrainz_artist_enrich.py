@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-scripts/musicbrainz_enrich.py
-SCRUM-83 — Enrich dim_artist.official_website_url via MusicBrainz Search API.
+scripts/musicbrainz_artist_enrich.py
+SCRUM-83 — Enrich dim_artist with MBIDs and official website URLs via MusicBrainz.
+
+Renamed from musicbrainz_enrich.py. Artist enrichment only.
+For venue enrichment see scripts/musicbrainz_venue_enrich.py (GP-129).
 
 MusicBrainz data is CC0 licensed — no attribution required.
 Rate limit: 1 req/sec max (enforced internally).
@@ -15,22 +18,26 @@ logged to exports/musicbrainz_review_YYYY-MM-DD.csv for manual review.
 
 Usage:
     # Preflight — no DB writes (default):
-    python scripts/musicbrainz_enrich.py --limit 20
+    python scripts/musicbrainz_artist_enrich.py --limit 20
 
     # Live run — commits to DB:
-    python scripts/musicbrainz_enrich.py --live
+    python scripts/musicbrainz_artist_enrich.py --live
 
     # Full overnight run (~8 hrs for ~12k artists):
-    python scripts/musicbrainz_enrich.py --live --verbose
+    python scripts/musicbrainz_artist_enrich.py --live --verbose
+
+    # New artists only (post-ingestion — triggered by refresh_shows.py reminder):
+    python scripts/musicbrainz_artist_enrich.py --new-only --live
 
     # Re-process artists that already have a URL set:
-    python scripts/musicbrainz_enrich.py --live --force
+    python scripts/musicbrainz_artist_enrich.py --live --force
 
 Prerequisites:
     pip install requests supabase python-dotenv --break-system-packages
 
     Schema migration (run once in Supabase SQL editor before first --live run):
         ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS official_website_url text;
+        -- musicbrainz_artist_id column present after GP-129 rename migration
 
 Env vars (resolved from .env.local if present, else from environment):
     NEXT_PUBLIC_SUPABASE_URL
@@ -169,7 +176,7 @@ def mb_get_official_url(mbid: str) -> Optional[str]:
 
 # ── Core run ──────────────────────────────────────────────────────────────────
 
-def run(dry_run: bool, limit: Optional[int], force: bool) -> None:
+def run(dry_run: bool, limit: Optional[int], force: bool, new_only: bool = False) -> None:
     supabase_url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or os.environ["SUPABASE_URL"]
     supabase_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
     db = create_client(supabase_url, supabase_key)
@@ -178,6 +185,8 @@ def run(dry_run: bool, limit: Optional[int], force: bool) -> None:
     q = db.from_("dim_artist").select("artist_id, artist_name, official_website_url")
     if not force:
         q = q.is_("official_website_url", None)
+    if new_only:
+        q = q.is_("musicbrainz_artist_id", None)
     if limit:
         q = q.limit(limit)
     artists = (q.execute()).data or []
@@ -267,7 +276,7 @@ def run(dry_run: bool, limit: Optional[int], force: bool) -> None:
 
             if not dry_run:
                 db.from_("dim_artist").update(
-                    {"official_website_url": official_url, "musicbrainz_id": mbid}
+                    {"official_website_url": official_url, "musicbrainz_artist_id": mbid}
                 ).eq("artist_id", artist_id).execute()
 
             stats["enriched"] += 1
@@ -331,6 +340,12 @@ def main() -> None:
         help="Re-process artists that already have official_website_url set",
     )
     parser.add_argument(
+        "--new-only",
+        action="store_true",
+        default=False,
+        help="Only process artists with no musicbrainz_artist_id (for post-ingestion catch-up)",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         default=False,
@@ -341,7 +356,7 @@ def main() -> None:
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    run(dry_run=not args.live, limit=args.limit, force=args.force)
+    run(dry_run=not args.live, limit=args.limit, force=args.force, new_only=args.new_only)
 
 
 if __name__ == "__main__":
