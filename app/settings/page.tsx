@@ -14,6 +14,8 @@ type ProfileSettings = {
   show_spotify_stats: boolean
   discogs_connected: boolean | null
   discogs_username: string | null
+  preferred_cities: string[] | null
+  preferred_tab: string | null
 }
 
 type DiscogsImportProgress = {
@@ -44,6 +46,12 @@ const VISIBILITY_OPTIONS: {
   },
 ]
 
+const TAB_OPTIONS: { value: 'shows' | 'spotify' | 'discogs'; label: string }[] = [
+  { value: 'shows',   label: 'Shows'   },
+  { value: 'spotify', label: 'Spotify' },
+  { value: 'discogs', label: 'Discogs' },
+]
+
 export default function SettingsPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
@@ -59,6 +67,12 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // GP-127: Preferences state
+  // preferredCities: [] = null in DB = "all cities"; non-empty = explicit list
+  const [availableCities, setAvailableCities] = useState<string[]>([])
+  const [preferredCities, setPreferredCities] = useState<string[]>([])
+  const [preferredTab, setPreferredTab] = useState<'shows' | 'spotify' | 'discogs'>('shows')
 
   // Avatar refresh state
   const [avatarRefreshing, setAvatarRefreshing] = useState(false)
@@ -137,28 +151,47 @@ export default function SettingsPage() {
     }
   }, [runDiscogsImport])
 
-  // Load current settings
+  // Load current settings + available cities (parallel fetch)
   useEffect(() => {
     if (!user) return
     const fetchSettings = async () => {
-      const { data, error: fetchError } = await supabase
-        .from('user_profiles')
-        .select('username, bio, profile_visibility, spotify_connected, show_spotify_stats, discogs_connected, discogs_username')
-        .eq('user_id', user.id)
-        .single()
+      const [profileResult, cityResult] = await Promise.all([
+        supabase
+          .from('user_profiles')
+          .select(
+            'username, bio, profile_visibility, spotify_connected, show_spotify_stats, ' +
+            'discogs_connected, discogs_username, preferred_cities, preferred_tab'
+          )
+          .eq('user_id', user.id)
+          .single(),
+        supabase
+          .from('dim_venue')
+          .select('city')
+          .not('city', 'is', null),
+      ])
 
-      if (fetchError || !data) {
+      if (profileResult.error || !profileResult.data) {
         setError('Failed to load settings.')
         setPageLoading(false)
         return
       }
 
-      const p = data as ProfileSettings
+      const p = profileResult.data as ProfileSettings
       setSettings(p)
       setBio(p.bio ?? '')
       setVisibility((p.profile_visibility ?? 'public') as typeof visibility)
       setShowSpotifyStats(p.show_spotify_stats ?? false)
       setDiscogsConnected(p.discogs_connected ?? false)
+      // null in DB → [] in state → "all cities"
+      setPreferredCities(p.preferred_cities ?? [])
+      setPreferredTab((p.preferred_tab as 'shows' | 'spotify' | 'discogs') ?? 'shows')
+
+      if (cityResult.data) {
+        const cities = [
+          ...new Set(cityResult.data.map((r: { city: string }) => r.city)),
+        ].sort() as string[]
+        setAvailableCities(cities)
+      }
 
       // SCRUM-81: Fetch referral count in the same load cycle
       const { count: refCount } = await supabase
@@ -184,6 +217,10 @@ export default function SettingsPage() {
         bio: bio.trim() || null,
         profile_visibility: visibility,
         show_spotify_stats: showSpotifyStats,
+        // [] → null ("all cities"); non-empty → explicit allowlist
+        preferred_cities: preferredCities.length > 0 ? preferredCities : null,
+        // 'shows' is the default → store null; other tabs stored explicitly
+        preferred_tab: preferredTab !== 'shows' ? preferredTab : null,
         updated_at: new Date().toISOString(),
       })
       .eq('user_id', user.id)
@@ -241,6 +278,28 @@ export default function SettingsPage() {
       setDeleting(false)
     }
   }
+
+  // GP-127: Toggle a city in/out of the preference list.
+  // State invariant: [] means "all cities" (stored as NULL in DB).
+  // You can never deselect the last city — use the "Select all" button to reset instead.
+  const toggleCity = (city: string) => {
+    if (preferredCities.length === 0) {
+      // Currently "all" — deselecting one switches to explicit list of everything else
+      setPreferredCities(availableCities.filter(c => c !== city))
+    } else {
+      const next = preferredCities.includes(city)
+        ? preferredCities.filter(c => c !== city)
+        : [...preferredCities, city]
+      if (next.length === 0) return // guard: can't deselect last city
+      // If all cities are manually re-checked, reset to null/"all"
+      setPreferredCities(next.length === availableCities.length ? [] : next)
+    }
+  }
+
+  // Show Preferences section when city filter or tab preference is relevant
+  const showPreferences =
+    availableCities.length > 1 ||
+    !!(settings?.spotify_connected || settings?.discogs_connected)
 
   if (authLoading || !user) return null
 
@@ -463,6 +522,115 @@ export default function SettingsPage() {
                   </div>
                 )}
               </section>
+
+              {/* ── GP-127: Preferences section ── */}
+              {showPreferences && (
+                <section className="bg-card rounded-lg shadow p-5 space-y-5">
+                  <h2 className="text-base font-semibold text-foreground">Preferences</h2>
+
+                  {/* City / Market filter — only shown when multiple cities are ingested */}
+                  {availableCities.length > 1 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-sm font-medium text-foreground">Cities</label>
+                        {preferredCities.length > 0 && (
+                          <button
+                            onClick={() => setPreferredCities([])}
+                            className="text-xs text-primary hover:underline transition-colors"
+                          >
+                            Select all
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Choose which cities appear in Browse, Discover, and My Grooveprint.
+                        Applies to all cities automatically as new markets are added.
+                      </p>
+                      <div className="mt-2 space-y-2">
+                        {availableCities.map(city => {
+                          const checked =
+                            preferredCities.length === 0 || preferredCities.includes(city)
+                          return (
+                            <label
+                              key={city}
+                              className="flex items-center gap-3 cursor-pointer group"
+                            >
+                              <div
+                                onClick={() => toggleCity(city)}
+                                className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer ${
+                                  checked
+                                    ? 'bg-primary border-primary'
+                                    : 'border-border group-hover:border-primary/50'
+                                }`}
+                              >
+                                {checked && (
+                                  <svg
+                                    className="w-2.5 h-2.5 text-primary-foreground"
+                                    fill="none"
+                                    viewBox="0 0 12 12"
+                                    stroke="currentColor"
+                                    strokeWidth="2.5"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d="M2 6l3 3 5-5"
+                                    />
+                                  </svg>
+                                )}
+                              </div>
+                              <span
+                                onClick={() => toggleCity(city)}
+                                className="text-sm text-foreground select-none"
+                              >
+                                {city}
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                      {preferredCities.length > 0 && (
+                        <p className="text-xs text-muted-foreground pt-1">
+                          {preferredCities.length} of {availableCities.length} cities selected
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Default tab — only shown when Spotify or Discogs connected */}
+                  {(settings?.spotify_connected || settings?.discogs_connected) && (
+                    <div className={`space-y-2 ${availableCities.length > 1 ? 'border-t border-border pt-5' : ''}`}>
+                      <label className="block text-sm font-medium text-foreground">
+                        Default tab in My Grooveprint
+                      </label>
+                      <p className="text-xs text-muted-foreground">
+                        Which tab opens by default when you visit My Grooveprint
+                      </p>
+                      <div className="flex rounded-lg border border-border overflow-hidden text-sm font-semibold mt-2">
+                        {TAB_OPTIONS.filter(opt => {
+                          if (opt.value === 'spotify') return !!settings?.spotify_connected
+                          if (opt.value === 'discogs') return !!settings?.discogs_connected
+                          return true // 'shows' always visible
+                        }).map((opt, i) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => setPreferredTab(opt.value)}
+                            className={`flex-1 px-3 py-2.5 transition-colors ${
+                              i > 0 ? 'border-l border-border' : ''
+                            } ${
+                              preferredTab === opt.value
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-card text-muted-foreground hover:bg-muted'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
 
               {/* ── SCRUM-81: Referrals section ── */}
               <section className="bg-card rounded-lg shadow p-5 space-y-3">
