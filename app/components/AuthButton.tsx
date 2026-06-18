@@ -109,24 +109,6 @@ export default function AuthButton() {
                     <button
                         onClick={() => {
                             setShowUserMenu(false)
-                            if (username) router.push(`/profile/${username}`)
-                        }}
-                        className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted"
-                    >
-                        My Profile
-                    </button>
-                    <button
-                        onClick={() => {
-                            setShowUserMenu(false)
-                            router.push('/my-grooveprint')
-                        }}
-                        className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted"
-                    >
-                        My Grooveprint
-                    </button>
-                    <button
-                        onClick={() => {
-                            setShowUserMenu(false)
                             router.push('/settings')
                         }}
                         className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted"
