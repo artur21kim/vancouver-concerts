@@ -796,23 +796,20 @@ def detect_venue_changes(
     for r in show_records:
         new_by_key[(r["artist_id"], r["date"])] = r
 
-    # Fetch existing fact_shows for the same artists + dates (batched).
-    # Filtering on both columns client-side keeps the query simple and
-    # avoids complex multi-column IN clauses that PostgREST doesn't support.
+    # Fetch existing fact_shows for the same artists (batched by artist_id to
+    # stay under PostgREST URL length limits).  Date filtering is done client-
+    # side below via new_by_key, which avoids building a huge date IN() list.
     unique_artist_ids = list({r["artist_id"] for r in show_records})
-    unique_dates      = list({r["date"]      for r in show_records})
 
     all_existing: list[dict] = []
     ID_BATCH = 50    # keep URLs short
     for i in range(0, len(unique_artist_ids), ID_BATCH):
-        ids_str   = ",".join(str(x) for x in unique_artist_ids[i: i + ID_BATCH])
-        dates_str = ",".join(f'"{d}"' for d in unique_dates)
+        ids_str = ",".join(str(x) for x in unique_artist_ids[i: i + ID_BATCH])
         rows = sb_get_all(
             "fact_shows",
             {
                 "select":    "show_id,artist_id,date,venue_id,setlist_url",
                 "artist_id": f"in.({ids_str})",
-                "date":      f"in.({dates_str})",
             },
         )
         all_existing.extend(rows)
