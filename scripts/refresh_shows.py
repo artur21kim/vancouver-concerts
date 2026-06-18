@@ -1316,16 +1316,14 @@ def main() -> None:
             continue
 
         record: dict = {
-            "date":        show["date"],
-            "artist_id":   artist_id,
-            "venue_id":    venue_id,
-            "setlist_url": show["setlist_url"],
-            "show_type":   show["show_type"],
+            "date":          show["date"],
+            "artist_id":     artist_id,
+            "venue_id":      venue_id,
+            "setlist_url":   show["setlist_url"],
+            "show_type":     show["show_type"],
+            "festival_name": show.get("festival_name") or None,
+            "tour_name":     show.get("tour_name") or None,
         }
-        if show.get("festival_name"):
-            record["festival_name"] = show["festival_name"]
-        if show.get("tour_name"):
-            record["tour_name"] = show["tour_name"]
         show_records.append(record)
 
     if unresolved:
