@@ -82,7 +82,7 @@ export type ProfileHeader = {
   friendship_status:     'accepted' | 'pending' | null
   request_direction:     'incoming' | 'outgoing' | null
   request_id:            number | null
-  preferred_tab:         string | null
+  preferred_tab?:        string | null
 }
 
 type SortField     = 'date' | 'artist' | 'venue' | 'added_at'

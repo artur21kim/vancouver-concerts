@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import BrowseClient from './BrowseClient'
 
 export const dynamic = 'force-dynamic'
@@ -35,16 +36,34 @@ export default async function BrowsePage({ searchParams }: PageProps) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
+  // GP-127: Fetch city preference for logged-in users; anon users see all cities
+  let preferredCities: string[] | null = null
+  try {
+    const serverSupabase = await createServerClient()
+    const { data: { user } } = await serverSupabase.auth.getUser()
+    if (user) {
+      const { data: prefData } = await serverSupabase
+        .from('user_profiles')
+        .select('preferred_cities')
+        .eq('user_id', user.id)
+        .single()
+      preferredCities = (prefData as any)?.preferred_cities ?? null
+    }
+  } catch {
+    // Non-fatal — fall back to showing all cities
+  }
+
   const rpcBase = {
-    p_decade:    decade,
-    p_year:      year     ? parseInt(year)     : null,
-    p_month:     month    ? parseInt(month)    : null,
-    p_artist_id: artistId ? parseInt(artistId) : null,
-    p_venue_id:  venueId  ? parseInt(venueId)  : null,
-    p_show_type: showType || null,
-    p_festival:  festival || null,
-    p_capacity:  (capacity && capacity !== 'all') ? capacity : null,
-    p_status:    (status   && status   !== 'all') ? status   : null,
+    p_decade:            decade,
+    p_year:              year     ? parseInt(year)     : null,
+    p_month:             month    ? parseInt(month)    : null,
+    p_artist_id:         artistId ? parseInt(artistId) : null,
+    p_venue_id:          venueId  ? parseInt(venueId)  : null,
+    p_show_type:         showType || null,
+    p_festival:          festival || null,
+    p_capacity:          (capacity && capacity !== 'all') ? capacity : null,
+    p_status:            (status   && status   !== 'all') ? status   : null,
+    p_preferred_cities:  preferredCities,
   }
 
   // Parallel: shows, stats, venues, and artist name lookup (if needed)
