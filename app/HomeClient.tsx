@@ -50,12 +50,12 @@ const CAPACITY_DISPLAY_NAMES: Record<CapacityBucket, string> = {
   small: 'Small', medium: 'Medium', large: 'Large', xlarge: 'X-Large', unknown: 'Unknown'
 }
 
-// Inline badge styles for venue rows (keyed by capacity_category string from RPC)
-const CAPACITY_BADGE: Record<string, { bg: string; label: string }> = {
-  'Small (<500)':      { bg: 'rgba(139,92,246,0.85)',  label: 'S'  },
-  'Medium (500-1.5K)': { bg: 'rgba(58,143,189,0.85)',  label: 'M'  },
-  'Large (1.5K-10K)':  { bg: 'rgba(234,88,12,0.85)',   label: 'L'  },
-  'X-Large (10K+)':    { bg: 'rgba(225,29,72,0.85)',   label: 'XL' },
+// Inline badge styles for venue rows — matches VenueMap.tsx Discover page style
+const CAPACITY_BADGE: Record<string, { bg: string; color: string; label: string }> = {
+  'Small (<500)':      { bg: 'rgba(139,92,246,0.18)', color: '#a78bfa', label: 'S'  },
+  'Medium (500-1.5K)': { bg: 'rgba(58,143,189,0.18)', color: '#3A8FBD', label: 'M'  },
+  'Large (1.5K-10K)':  { bg: 'rgba(234,88,12,0.18)',  color: '#f97316', label: 'L'  },
+  'X-Large (10K+)':    { bg: 'rgba(225,29,72,0.18)',  color: '#fb7185', label: 'XL' },
 }
 
 // ── Artist city breakdown row (lazy-loaded on expand) ────────
@@ -145,6 +145,7 @@ export default function HomeClient({
   const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all')
   const [showAllArtists, setShowAllArtists] = useState(false)
   const [showAllVenues,  setShowAllVenues]  = useState(false)
+  const [showAllCities,  setShowAllCities]  = useState(false)
 
   // ── GP-132/133: city stats + expand state ─────────────────
   const [expandedProvinces, setExpandedProvinces] = useState<Set<string>>(new Set())
@@ -807,9 +808,15 @@ export default function HomeClient({
                         )}
                         {venue.capacity_category && CAPACITY_BADGE[venue.capacity_category] && (
                           <span
-                            className="hidden sm:inline-flex text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap flex-shrink-0 leading-none font-bold text-white"
-                            style={{ backgroundColor: CAPACITY_BADGE[venue.capacity_category].bg }}
-                            title={venue.capacity_category}
+                            className="hidden sm:inline-flex text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap flex-shrink-0 leading-none font-bold"
+                            style={{
+                              backgroundColor: CAPACITY_BADGE[venue.capacity_category].bg,
+                              color: CAPACITY_BADGE[venue.capacity_category].color,
+                            }}
+                            title={venue.capacity != null
+                              ? `${venue.capacity.toLocaleString()} capacity`
+                              : venue.capacity_category
+                            }
                           >
                             {CAPACITY_BADGE[venue.capacity_category].label}
                           </span>
@@ -847,14 +854,14 @@ export default function HomeClient({
                 Top Cities
               </h2>
               <div className="space-y-1">
-                {initialCityStats.map((city, idx) => {
+                {initialCityStats.slice(0, showAllCities ? 25 : 10).map((city, idx) => {
                   const maxCount = Number(initialCityStats[0]?.show_count ?? 1)
                   const pct      = Math.round((Number(city.show_count) / maxCount) * 100)
                   return (
                     <div
                       key={`${city.city}-${city.state}`}
                       className="flex items-center justify-between py-1 px-1 rounded"
-                      style={{ background: `linear-gradient(to right, rgba(13,148,136,0.15) ${pct}%, transparent ${pct}%)` }}
+                      style={{ background: `linear-gradient(to right, rgba(0,191,168,0.22) ${pct}%, transparent ${pct}%)` }}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-xs font-bold w-4 md:w-5 flex-shrink-0 text-right" style={{ color: '#0d9488' }}>
@@ -876,12 +883,20 @@ export default function HomeClient({
                   )
                 })}
               </div>
+              {initialCityStats.length > 10 && (
+                <button
+                  onClick={() => setShowAllCities(!showAllCities)}
+                  className="mt-3 text-primary hover:opacity-80 text-xs md:text-sm font-medium"
+                >
+                  {showAllCities ? '← Show less' : 'View more →'}
+                </button>
+              )}
             </div>
 
             {/* Top Provinces / States */}
             <div className="bg-card rounded-lg shadow-lg p-4 md:p-5">
               <h2 className="text-xl md:text-2xl font-bold text-foreground mb-3 md:mb-4">
-                Provinces &amp; States
+                Top Provinces &amp; States
               </h2>
               <div className="space-y-0.5">
                 {provinceStats.map(prov => {
@@ -892,7 +907,7 @@ export default function HomeClient({
                       <button
                         onClick={() => toggleProvince(prov.state)}
                         className="w-full flex items-center justify-between py-1.5 rounded px-1 transition-colors"
-                        style={{ background: `linear-gradient(to right, rgba(13,148,136,0.15) ${pct}%, transparent ${pct}%)` }}
+                        style={{ background: `linear-gradient(to right, rgba(0,191,168,0.22) ${pct}%, transparent ${pct}%)` }}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <svg

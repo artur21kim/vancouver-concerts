@@ -26,6 +26,7 @@ export type TopVenue = {
   venue_id:          number
   venue_name:        string
   capacity_category: string | null
+  capacity:          number | null
   show_count:        number
   city:              string | null
   state:             string | null
