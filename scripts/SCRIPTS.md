@@ -9,12 +9,15 @@ All data pipeline and enrichment scripts live in `vancouver-concerts/scripts/`.
 | Script | Purpose | Trigger | Frequency | Env vars required |
 |--------|---------|---------|-----------|-------------------|
 | `refresh_shows.py` | Load fetched setlist data into Supabase after alias review | Manual | Per city import | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
-| `fetch_setlist_api.py` | Pull show data from setlist.fm API for a city/year range | Manual (GitHub Actions planned — SCRUM-95) | Daily delta + historical backfill | `SETLIST_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
+| `fetch_setlist_api.py` | Pull show data from setlist.fm API for a city/year range | Manual (GitHub Actions planned — GP-95) | Daily delta + historical backfill | `SETLIST_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
 | `find_secondary_cities.py` | Discover additional cities in a province/state by show volume | Manual | One-off per region | `SETLIST_API_KEY` |
-| `musicbrainz_enrich.py` | Enrich `dim_artist` with MBIDs from MusicBrainz | Manual (auto-trigger planned — SCRUM-97) | Post-ingestion | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
+| `musicbrainz_artist_enrich.py` | Enrich `dim_artist` with MBIDs and official website URLs | Manual (auto-trigger planned — GP-97) | Post-ingestion | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `musicbrainz_venue_enrich.py` | Enrich `dim_venue` with MBIDs, open/close dates, lat/long, and URLs | Manual | Post-ingestion, per city catch-up | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `tm_enrichment/tm_enrichment.py` | Enrich `fact_shows` with Ticketmaster URLs; enrich `dim_venue` with lat/long for TM-mapped venues | Manual | Per city, after import | `TM_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
+| `nominatim_enrich.py` | Geocode `dim_venue` lat/long via OpenStreetMap Nominatim (fallback after TM + MB) | Manual | Post-ingestion | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
 | `spotify_matching/spotify_matcher_fixed.py` | Match artists against Spotify library for initial data load | Manual | One-off / as needed | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
 | `spotify_matching/merge_spotify_data.py` | Merge Spotify match output files | Manual | One-off | — |
-| `tm_enrichment/tm_enrichment.py` | Enrich `fact_shows` with Ticketmaster URLs and venue lat/long | Manual | Per city, after import | `TM_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
+| `combine_city_csvs.py` | Merge multiple per-year-range CSVs into a single combined file | Manual | Per city import | — |
 | `backfill-albums-admin.ts` | One-off TypeScript admin script to backfill Spotify album data | Manual | One-off | Supabase service key |
 
 ---
@@ -35,7 +38,7 @@ python scripts/refresh_shows.py --city Vancouver --state BC --country CA
 python scripts/refresh_shows.py --city Vancouver --state BC --country CA --no-interactive
 ```
 
-**Note:** `--city`, `--state`, `--country` are all required. Run `auto_update_venue_status()` in Supabase after each import.
+**Note:** `--city`, `--state`, `--country` are all required. `auto_update_venue_status()` runs automatically after each live insert.
 
 ---
 
@@ -44,20 +47,18 @@ Fetches raw show data from the setlist.fm API. Supports resume across sessions.
 
 ```bash
 # Full historical fetch for a new city
-python scripts/fetch_setlist_api.py --city Toronto --state ON --country CA \
-  --start-year 1900 --end-year 2025
+python scripts/fetch_setlist_api.py --city Toronto --state ON --country CA --year-range 1900 2025
 
 # Resume an interrupted fetch
-python scripts/fetch_setlist_api.py --city Toronto --state ON --country CA \
-  --start-year 1980 --end-year 2021 --resume
+python scripts/fetch_setlist_api.py --city Toronto --state ON --country CA --year-range 1980 2021 --resume
 
 # Daily delta (current year only)
-python scripts/fetch_setlist_api.py --city Vancouver --state BC --country CA --no-interactive
+python scripts/fetch_setlist_api.py --city Vancouver --state BC --country CA --year 2026
 ```
 
 **Rate limit:** 2 req/sec, 1,440 req/day (basic tier). Resets ~11:19 AM PST.  
 **Output:** Airport-code named CSV files (e.g. `yvr_2026-06-09.csv`).  
-**GitHub Actions:** Planned at 19:30 UTC daily (SCRUM-95), Vancouver-only until rate limit upgrade confirmed.
+**GitHub Actions:** Planned at 19:30 UTC daily (GP-95), Vancouver-only until rate limit upgrade confirmed.
 
 ---
 
@@ -65,34 +66,74 @@ python scripts/fetch_setlist_api.py --city Vancouver --state BC --country CA --n
 Discovers cities in a province/state that exceed a show volume threshold.
 
 ```bash
-# BC province-wide
+# Province-wide sweep (GP-96) — enumerates cities from setlist.fm API
 python scripts/find_secondary_cities.py --state BC --country CA
-
-# Ontario province-wide
 python scripts/find_secondary_cities.py --state ON --country CA
+
+# Resume interrupted sweep (re-run same command with same --output path)
+python scripts/find_secondary_cities.py --state SK --country CA --output exports/secondary_cities_sk.csv
 ```
 
-**Threshold:** >500 shows = ingestion candidate; 100–500 = manual review.
+**Threshold:** >1,000 shows (default) = ingestion candidate; adjust with `--threshold 500` for smaller provinces.
 
 ---
 
-### `musicbrainz_enrich.py`
-Looks up MBIDs for artists in `dim_artist` and writes them back to Supabase.
+### `musicbrainz_artist_enrich.py`
+Looks up MBIDs and official website URLs for artists in `dim_artist`.
 
 ```bash
-# Enrich all artists missing an MBID
-python scripts/musicbrainz_enrich.py --new-only
+# Preflight — no DB writes
+python scripts/musicbrainz_artist_enrich.py --limit 20
 
-# Full re-run (all artists)
-python scripts/musicbrainz_enrich.py
+# Live run — new artists only (post-ingestion):
+python scripts/musicbrainz_artist_enrich.py --new-only --live
+
+# Full overnight run:
+python scripts/musicbrainz_artist_enrich.py --live --verbose
 ```
 
-**Note:** Auto-trigger after new artist ingestion is planned (SCRUM-97).
+**Note:** Renamed from `musicbrainz_enrich.py` (GP-129). Uses `musicbrainz_artist_id` column.
+
+---
+
+### `musicbrainz_venue_enrich.py`
+Looks up MBIDs, open/close dates, coordinates, and official URLs for venues in `dim_venue`.
+
+```bash
+# Preflight — no DB writes
+python scripts/musicbrainz_venue_enrich.py --limit 20
+
+# Live run — all unenriched venues
+python scripts/musicbrainz_venue_enrich.py --live
+
+# Limit to a single city (useful for post-ingestion catch-up)
+python scripts/musicbrainz_venue_enrich.py --live --city Toronto
+python scripts/musicbrainz_venue_enrich.py --live --city Vancouver
+python scripts/musicbrainz_venue_enrich.py --live --city Seattle
+
+# Overnight catch-up run
+python scripts/musicbrainz_venue_enrich.py --live --verbose
+
+# Re-process already-enriched venues
+python scripts/musicbrainz_venue_enrich.py --live --force
+```
+
+**Coordinate write policy:** lat/long is only written if the venue has no existing coordinates (TM coords are preserved). Use `--overwrite-coords` to override.  
+**Output:** `exports/musicbrainz_venue_review_YYYY-MM-DD.csv` — venues with disambiguation notes or partial data.
+
+**Prerequisites — schema migration (run once in Supabase SQL editor):**
+```sql
+ALTER TABLE dim_venue ADD COLUMN IF NOT EXISTS musicbrainz_place_id text;
+ALTER TABLE dim_venue ADD COLUMN IF NOT EXISTS begin_date date;
+ALTER TABLE dim_venue ADD COLUMN IF NOT EXISTS end_date date;
+ALTER TABLE dim_venue ADD COLUMN IF NOT EXISTS official_website_url text;
+```
 
 ---
 
 ### `tm_enrichment/tm_enrichment.py`
-Matches upcoming shows to Ticketmaster events and writes `ticketmaster_url` to `fact_shows`. Also planned to capture `latitude`/`longitude` for `dim_venue` (SCRUM-98).
+Matches upcoming shows to Ticketmaster events and writes `ticketmaster_url` to `fact_shows`.  
+Also populates `latitude`/`longitude` for TM-mapped venues (Pass 1, GP-98).
 
 ```bash
 cd scripts/tm_enrichment
@@ -100,6 +141,26 @@ python tm_enrichment.py
 ```
 
 Requires `dim_venue.tm_venue_id` to be populated for each venue first.
+
+---
+
+### `nominatim_enrich.py`
+Geocodes `dim_venue` rows missing lat/long via OpenStreetMap Nominatim.  
+**Run after TM and MusicBrainz enrichment** — this is the fallback for venues not found in either.
+
+```bash
+# Preflight
+python scripts/nominatim_enrich.py --limit 20
+
+# Live run
+python scripts/nominatim_enrich.py --live
+
+# Limit to a specific city
+python scripts/nominatim_enrich.py --live --city Seattle
+
+# Review CSV: exports/nominatim_review_YYYY-MM-DD.csv
+# Low-confidence matches require manual verification in Google Maps
+```
 
 ---
 
@@ -121,7 +182,8 @@ Each script subfolder has its own `.env` file (gitignored). Copy `.env.example` 
 |----------|---------|
 | `SETLIST_API_KEY` | `fetch_setlist_api.py`, `find_secondary_cities.py` |
 | `SUPABASE_URL` | All Supabase-connected scripts |
-| `SUPABASE_SERVICE_KEY` | All Supabase-connected scripts |
+| `SUPABASE_SERVICE_KEY` | `refresh_shows.py`, `nominatim_enrich.py`, `tm_enrichment.py` |
+| `SUPABASE_SERVICE_ROLE_KEY` | `musicbrainz_artist_enrich.py`, `musicbrainz_venue_enrich.py` |
 | `TM_API_KEY` | `tm_enrichment.py` |
 | `SPOTIFY_CLIENT_ID` | `spotify_matcher_fixed.py` |
 | `SPOTIFY_CLIENT_SECRET` | `spotify_matcher_fixed.py` |
@@ -132,7 +194,9 @@ Each script subfolder has its own `.env` file (gitignored). Copy `.env.example` 
 
 1. `fetch_setlist_api.py` — pull historical data (multi-day)
 2. `refresh_shows.py --dry-run` — preview alias candidates
-3. `refresh_shows.py` — interactive alias review + live insert
-4. `musicbrainz_enrich.py --new-only` — enrich new artists
-5. `tm_enrichment.py` — enrich upcoming shows with TM URLs
-6. Run `SELECT auto_update_venue_status();` in Supabase SQL editor
+3. `refresh_shows.py` — interactive alias review + live insert  
+   ↳ `auto_update_venue_status()` runs automatically after insert
+4. `musicbrainz_artist_enrich.py --new-only --live` — enrich new artists
+5. `tm_enrichment.py` — lat/long for TM-mapped venues; upcoming show TM URLs
+6. `musicbrainz_venue_enrich.py --live --city <city>` — MBID, dates, lat/long for MB-known venues
+7. `nominatim_enrich.py --live --city <city>` — fallback geocoding for remaining venues

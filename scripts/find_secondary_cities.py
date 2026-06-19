@@ -586,26 +586,30 @@ def run_province_sweep(
         writer.writeheader()
         writer.writerows(all_results)
 
-    # Summary
-    recommended_list = [r for r in results if r["fetch_recommended"] == "yes"]
+    # Summary — FIX: use all_results (not undefined 'results') ──────────────
+    recommended_list = [r for r in all_results if r["fetch_recommended"] == "yes"]
     review_list = [
-        r for r in results
+        r for r in all_results
         if r["fetch_recommended"] == "no"
-        and isinstance(r["total_shows"], int)
-        and r["total_shows"] >= 100
+        and str(r["total_shows"]).isdigit()
+        and int(r["total_shows"]) >= 100
     ]
     print(f"\n{'=' * 64}")
-    print(f"Results: {len(results)} cities checked")
+    print(f"Results: {len(all_results)} cities checked")
     print(f"Recommended for ingestion (≥{threshold:,} shows): {len(recommended_list)}")
     if review_list:
         print(f"Worth manual review (100–{threshold-1} shows): {len(review_list)}")
 
     print(f"\n  City                      Shows   Recommendation")
     print(f"  {'─'*54}")
-    for r in sorted(results, key=lambda x: x["total_shows"] if isinstance(x["total_shows"], int) else -1, reverse=True):
-        total_str = f"{r['total_shows']:,}" if isinstance(r["total_shows"], int) else "?"
+    for r in sorted(
+        all_results,
+        key=lambda x: int(x["total_shows"]) if str(x["total_shows"]).isdigit() else -1,
+        reverse=True,
+    ):
+        total_str = f"{int(r['total_shows']):,}" if str(r["total_shows"]).isdigit() else "?"
         rec = "✅ FETCH" if r["fetch_recommended"] == "yes" else (
-            "❓ Review" if isinstance(r["total_shows"], int) and r["total_shows"] >= 100 else "Skip"
+            "❓ Review" if str(r["total_shows"]).isdigit() and int(r["total_shows"]) >= 100 else "Skip"
         )
         print(f"  {r['secondary_city']:<25} {total_str:>8}   {rec}")
 
@@ -617,7 +621,7 @@ def run_province_sweep(
         print("\nNext step — fetch recommended cities:")
         for r in recommended_list:
             slug = r['secondary_city'].lower().replace(' ', '_').replace('.', '')
-            total_str = f"{r['total_shows']:,}" if isinstance(r['total_shows'], int) else "?"
+            total_str = f"{int(r['total_shows']):,}" if str(r["total_shows"]).isdigit() else "?"
             print(f"  # {r['secondary_city']} ({total_str} shows)")
             print(f"  python scripts/fetch_setlist_api.py \\")
             print(f"      --city \"{r['secondary_city']}\" --state {r['state']} --country {r['country_code']} \\")
