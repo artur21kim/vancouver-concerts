@@ -50,6 +50,14 @@ const CAPACITY_DISPLAY_NAMES: Record<CapacityBucket, string> = {
   small: 'Small', medium: 'Medium', large: 'Large', xlarge: 'X-Large', unknown: 'Unknown'
 }
 
+// Inline badge styles for venue rows (keyed by capacity_category string from RPC)
+const CAPACITY_BADGE: Record<string, { bg: string; label: string }> = {
+  'Small (<500)':      { bg: 'rgba(139,92,246,0.85)',  label: 'S'  },
+  'Medium (500-1.5K)': { bg: 'rgba(58,143,189,0.85)',  label: 'M'  },
+  'Large (1.5K-10K)':  { bg: 'rgba(234,88,12,0.85)',   label: 'L'  },
+  'X-Large (10K+)':    { bg: 'rgba(225,29,72,0.85)',   label: 'XL' },
+}
+
 // ── Artist city breakdown row (lazy-loaded on expand) ────────
 type ArtistCityRow = { city: string; state: string | null; show_count: number }
 
@@ -651,7 +659,7 @@ export default function HomeClient({
               </div>
             ) : artists.length > 0 ? (
               <>
-                <div className="space-y-1 md:space-y-1.5">
+                <div className="space-y-2 md:space-y-3">
                   {artists.slice(0, showAllArtists ? 25 : 10).map((artist, index) => (
                     <div key={artist.artist_id} className="py-0.5">
                       {/* Main row */}
@@ -797,6 +805,15 @@ export default function HomeClient({
                             {venue.city}, {venue.state}
                           </span>
                         )}
+                        {venue.capacity_category && CAPACITY_BADGE[venue.capacity_category] && (
+                          <span
+                            className="hidden sm:inline-flex text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap flex-shrink-0 leading-none font-bold text-white"
+                            style={{ backgroundColor: CAPACITY_BADGE[venue.capacity_category].bg }}
+                            title={venue.capacity_category}
+                          >
+                            {CAPACITY_BADGE[venue.capacity_category].label}
+                          </span>
+                        )}
                       </div>
                       <span className="text-xs md:text-base text-muted-foreground font-medium whitespace-nowrap ml-2">
                         {venue.show_count.toLocaleString()} shows
@@ -837,7 +854,7 @@ export default function HomeClient({
                     <div
                       key={`${city.city}-${city.state}`}
                       className="flex items-center justify-between py-1 px-1 rounded"
-                      style={{ background: `linear-gradient(to right, rgba(13,148,136,0.07) ${pct}%, transparent ${pct}%)` }}
+                      style={{ background: `linear-gradient(to right, rgba(13,148,136,0.15) ${pct}%, transparent ${pct}%)` }}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-xs font-bold w-4 md:w-5 flex-shrink-0 text-right" style={{ color: '#0d9488' }}>
@@ -875,7 +892,7 @@ export default function HomeClient({
                       <button
                         onClick={() => toggleProvince(prov.state)}
                         className="w-full flex items-center justify-between py-1.5 rounded px-1 transition-colors"
-                        style={{ background: `linear-gradient(to right, rgba(13,148,136,0.07) ${pct}%, transparent ${pct}%)` }}
+                        style={{ background: `linear-gradient(to right, rgba(13,148,136,0.15) ${pct}%, transparent ${pct}%)` }}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <svg
