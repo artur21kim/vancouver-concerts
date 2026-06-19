@@ -13,7 +13,7 @@ import {
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
 import { useTheme } from 'next-themes'
-import type { ChartRow, TopArtist, TopVenue, HomeStats, DrillStats } from './page'
+import type { ChartRow, TopArtist, TopVenue, CityStats, HomeStats, DrillStats } from './page'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -49,6 +49,23 @@ const CAPACITY_BUTTON_ORDER: CapacityFilter[]         = ['all', 'small', 'medium
 const CAPACITY_DISPLAY_NAMES: Record<CapacityBucket, string> = {
   small: 'Small', medium: 'Medium', large: 'Large', xlarge: 'X-Large', unknown: 'Unknown'
 }
+
+// ── Artist city breakdown row (lazy-loaded on expand) ────────
+type ArtistCityRow = { city: string; state: string | null; show_count: number }
+
+// ── Province/state full names ─────────────────────────────────
+const STATE_NAMES: Record<string, string> = {
+  BC: 'British Columbia', ON: 'Ontario',    QC: 'Quebec',            AB: 'Alberta',
+  MB: 'Manitoba',         SK: 'Saskatchewan', NS: 'Nova Scotia',     NB: 'New Brunswick',
+  NL: 'Newfoundland & Labrador', PE: 'Prince Edward Island',
+  NT: 'Northwest Territories',   YT: 'Yukon',                        NU: 'Nunavut',
+  WA: 'Washington',       OR: 'Oregon',     CA: 'California',        NY: 'New York',
+  IL: 'Illinois',         TX: 'Texas',      FL: 'Florida',           MI: 'Michigan',
+  CO: 'Colorado',         OH: 'Ohio',       PA: 'Pennsylvania',      GA: 'Georgia',
+  TN: 'Tennessee',        MA: 'Massachusetts', NV: 'Nevada',         AZ: 'Arizona',
+  MN: 'Minnesota',        NC: 'North Carolina', MO: 'Missouri',      WI: 'Wisconsin',
+}
+const COUNTRY_FLAGS: Record<string, string> = { CA: '🇨🇦', US: '🇺🇸' }
 
 const DECADES: Decade[] = ['all', '1900s', '1910s', '1920s', '1930s', '1940s', '1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s']
 const MONTH_NAMES       = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -101,11 +118,13 @@ export default function HomeClient({
   initialChart,
   initialArtists,
   initialVenues,
+  initialCityStats,
 }: {
-  initialStats:   HomeStats
-  initialChart:   ChartRow[]
-  initialArtists: TopArtist[]
-  initialVenues:  TopVenue[]
+  initialStats:     HomeStats
+  initialChart:     ChartRow[]
+  initialArtists:   TopArtist[]
+  initialVenues:    TopVenue[]
+  initialCityStats: CityStats[]
 }) {
   const router = useRouter()
   const { resolvedTheme } = useTheme()
@@ -118,6 +137,12 @@ export default function HomeClient({
   const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all')
   const [showAllArtists, setShowAllArtists] = useState(false)
   const [showAllVenues,  setShowAllVenues]  = useState(false)
+
+  // ── GP-132/133: city stats + expand state ─────────────────
+  const [expandedProvinces, setExpandedProvinces] = useState<Set<string>>(new Set())
+  const [expandedArtists,   setExpandedArtists]   = useState<Set<number>>(new Set())
+  const [artistCityData,    setArtistCityData]     = useState<Record<number, ArtistCityRow[]>>({})
+  const [loadingArtistCity, setLoadingArtistCity]  = useState<Set<number>>(new Set())
 
   // ── Drill-down data state ─────────────────────────────────
   const [chartRows,   setChartRows]   = useState<ChartRow[]>(initialChart)
@@ -178,6 +203,43 @@ export default function HomeClient({
     fetchDrillData('all', null, null)
   }, [fetchDrillData])
 
+  // ── GP-132: province/state expand toggle ─────────────────
+  const toggleProvince = useCallback((state: string) => {
+    setExpandedProvinces(prev => {
+      const next = new Set(prev)
+      if (next.has(state)) next.delete(state)
+      else next.add(state)
+      return next
+    })
+  }, [])
+
+  // ── GP-133: artist row expand + lazy city breakdown ──────
+  const toggleArtistExpand = useCallback(async (artistId: number) => {
+    const isExpanding = !expandedArtists.has(artistId)
+    setExpandedArtists(prev => {
+      const next = new Set(prev)
+      if (isExpanding) next.add(artistId)
+      else next.delete(artistId)
+      return next
+    })
+    if (isExpanding && !artistCityData[artistId] && !loadingArtistCity.has(artistId)) {
+      setLoadingArtistCity(prev => new Set([...prev, artistId]))
+      try {
+        const res  = await fetch(`/api/home/artist-city?artist_id=${artistId}`)
+        const data = await res.json()
+        setArtistCityData(prev => ({ ...prev, [artistId]: data.cities ?? [] }))
+      } catch (e) {
+        console.error('Artist city breakdown fetch error:', e)
+      } finally {
+        setLoadingArtistCity(prev => {
+          const next = new Set(prev)
+          next.delete(artistId)
+          return next
+        })
+      }
+    }
+  }, [expandedArtists, artistCityData, loadingArtistCity])
+
   // ── Decade click ─────────────────────────────────────────
   const handleDecadeClick = useCallback((decade: Decade) => {
     setSelectedDecade(decade)
@@ -228,6 +290,23 @@ export default function HomeClient({
     () => filterVenues(venues, capacityFilter),
     [venues, capacityFilter]
   )
+
+  // ── GP-132: province/state rollup (client-side from city stats) ──
+  const provinceStats = useMemo(() => {
+    const map = new Map<string, { state: string; country: string; total: number; cities: CityStats[] }>()
+    for (const city of initialCityStats) {
+      const key = city.state ?? '__none__'
+      if (!map.has(key)) {
+        map.set(key, { state: city.state ?? '', country: city.country ?? '', total: 0, cities: [] })
+      }
+      const entry = map.get(key)!
+      entry.total += Number(city.show_count)
+      entry.cities.push(city)
+    }
+    return Array.from(map.values())
+      .filter(p => p.state)
+      .sort((a, b) => b.total - a.total)
+  }, [initialCityStats])
 
   // ── Stats ─────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -572,23 +651,92 @@ export default function HomeClient({
               </div>
             ) : artists.length > 0 ? (
               <>
-                <div className="space-y-2 md:space-y-3">
+                <div className="space-y-1 md:space-y-1.5">
                   {artists.slice(0, showAllArtists ? 25 : 10).map((artist, index) => (
-                    <div key={artist.artist_id} className="flex items-center justify-between py-0.5">
-                      <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                        <span className="text-base md:text-lg font-semibold text-muted-foreground w-4 md:w-6 flex-shrink-0">
-                          {index + 1}
-                        </span>
-                        <button
-                          onClick={() => router.push(`/browse?artist_id=${artist.artist_id}`)}
-                          className="text-sm md:text-base text-primary hover:opacity-80 hover:underline text-left truncate"
-                        >
-                          {artist.artist_name}
-                        </button>
+                    <div key={artist.artist_id} className="py-0.5">
+                      {/* Main row */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 md:gap-2 min-w-0 flex-1">
+                          <span className="text-base md:text-lg font-semibold text-muted-foreground w-4 md:w-6 flex-shrink-0">
+                            {index + 1}
+                          </span>
+                          <button
+                            onClick={() => router.push(`/browse?artist_id=${artist.artist_id}`)}
+                            className="text-sm md:text-base text-primary hover:opacity-80 hover:underline text-left truncate"
+                          >
+                            {artist.artist_name}
+                          </button>
+                          {artist.spotify_url && (
+                            <a
+                              href={artist.spotify_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Open on Spotify"
+                              onClick={e => e.stopPropagation()}
+                              className="flex-shrink-0 opacity-50 hover:opacity-100 transition-opacity"
+                            >
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="#1DB954">
+                                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                              </svg>
+                            </a>
+                          )}
+                          {/* State pills — only when artist spans multiple states */}
+                          {artist.state_counts && artist.state_counts.length > 1 && (
+                            <div className="hidden sm:flex gap-1 flex-shrink-0">
+                              {artist.state_counts.slice(0, 3).map(sc => (
+                                <span
+                                  key={sc.state}
+                                  className="text-[10px] text-muted-foreground bg-muted px-1 py-0.5 rounded leading-none"
+                                >
+                                  {sc.state}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <span className="text-xs md:text-base text-muted-foreground font-medium whitespace-nowrap ml-2">
+                            {artist.show_count.toLocaleString()} shows
+                          </span>
+                          {/* Expand chevron — only when multi-city */}
+                          {artist.state_counts && artist.state_counts.length > 0 && (
+                            <button
+                              onClick={() => toggleArtistExpand(artist.artist_id)}
+                              title={expandedArtists.has(artist.artist_id) ? 'Collapse' : 'Show city breakdown'}
+                              className="text-muted-foreground hover:text-foreground p-0.5 transition-colors"
+                            >
+                              <svg
+                                width="10" height="10" viewBox="0 0 10 10" fill="currentColor"
+                                style={{ transform: expandedArtists.has(artist.artist_id) ? 'rotate(90deg)' : 'none', transition: 'transform 150ms' }}
+                              >
+                                <path d="M3 2l4 3-4 3V2z"/>
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <span className="text-xs md:text-base text-muted-foreground font-medium whitespace-nowrap ml-2">
-                        {artist.show_count.toLocaleString()} shows
-                      </span>
+                      {/* Expanded city breakdown */}
+                      {expandedArtists.has(artist.artist_id) && (
+                        <div className="mt-1 ml-5 md:ml-7 space-y-0.5">
+                          {loadingArtistCity.has(artist.artist_id) ? (
+                            <p className="text-xs text-muted-foreground py-1">Loading…</p>
+                          ) : (
+                            (artistCityData[artist.artist_id] ?? []).map(row => (
+                              <div
+                                key={`${row.city}-${row.state}`}
+                                className="flex items-center justify-between py-0.5"
+                              >
+                                <span className="text-xs text-muted-foreground">
+                                  {row.city}{row.state ? `, ${row.state}` : ''}
+                                </span>
+                                <span className="text-xs text-muted-foreground font-medium ml-4 whitespace-nowrap">
+                                  {Number(row.show_count).toLocaleString()} shows
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -625,7 +773,7 @@ export default function HomeClient({
                 <div className="space-y-2 md:space-y-3">
                   {filteredVenues.slice(0, showAllVenues ? 25 : 10).map((venue, index) => (
                     <div key={venue.venue_id} className="flex items-center justify-between py-0.5">
-                      <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                      <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <span className="text-base md:text-lg font-semibold text-muted-foreground w-4 md:w-6 flex-shrink-0">
                           {index + 1}
                         </span>
@@ -635,6 +783,11 @@ export default function HomeClient({
                         >
                           {venue.venue_name}
                         </button>
+                        {venue.city && venue.state && (
+                          <span className="hidden sm:inline-flex text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded whitespace-nowrap flex-shrink-0 leading-none">
+                            {venue.city}, {venue.state}
+                          </span>
+                        )}
                       </div>
                       <span className="text-xs md:text-base text-muted-foreground font-medium whitespace-nowrap ml-2">
                         {venue.show_count.toLocaleString()} shows
@@ -657,6 +810,102 @@ export default function HomeClient({
           </div>
 
         </div>
+
+        {/* ── GP-132: Top Cities + Provinces/States ───────────────── */}
+        {initialCityStats.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mt-4 md:mt-6">
+
+            {/* Top Cities */}
+            <div className="bg-card rounded-lg shadow-lg p-4 md:p-5">
+              <h2 className="text-xl md:text-2xl font-bold text-foreground mb-3 md:mb-4">
+                Top Cities
+              </h2>
+              <div className="space-y-1.5">
+                {initialCityStats.map((city, idx) => (
+                  <div
+                    key={`${city.city}-${city.state}`}
+                    className="flex items-center justify-between py-0.5"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-base font-semibold text-muted-foreground w-4 md:w-6 flex-shrink-0">
+                        {idx + 1}
+                      </span>
+                      <span className="text-sm font-medium text-foreground truncate">
+                        {city.city}{city.state ? `, ${city.state}` : ''}
+                      </span>
+                      {city.country && COUNTRY_FLAGS[city.country] && (
+                        <span className="text-xs flex-shrink-0" title={city.country}>
+                          {COUNTRY_FLAGS[city.country]}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs md:text-sm text-muted-foreground font-medium whitespace-nowrap ml-2">
+                      {Number(city.show_count).toLocaleString()} shows
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Top Provinces / States */}
+            <div className="bg-card rounded-lg shadow-lg p-4 md:p-5">
+              <h2 className="text-xl md:text-2xl font-bold text-foreground mb-3 md:mb-4">
+                Provinces &amp; States
+              </h2>
+              <div className="space-y-0.5">
+                {provinceStats.map(prov => (
+                  <div key={prov.state}>
+                    <button
+                      onClick={() => toggleProvince(prov.state)}
+                      className="w-full flex items-center justify-between py-1.5 rounded px-1 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <svg
+                          width="8" height="8" viewBox="0 0 8 8" fill="currentColor"
+                          className="text-muted-foreground flex-shrink-0"
+                          style={{
+                            transform: expandedProvinces.has(prov.state) ? 'rotate(90deg)' : 'none',
+                            transition: 'transform 150ms',
+                          }}
+                        >
+                          <path d="M2 1.5l4 2.5-4 2.5V1.5z"/>
+                        </svg>
+                        <span className="text-sm font-medium text-foreground">
+                          {STATE_NAMES[prov.state] ?? prov.state}
+                        </span>
+                        {prov.country && COUNTRY_FLAGS[prov.country] && (
+                          <span className="text-xs" title={prov.country}>
+                            {COUNTRY_FLAGS[prov.country]}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs md:text-sm text-muted-foreground font-medium whitespace-nowrap ml-2">
+                        {prov.total.toLocaleString()} shows
+                      </span>
+                    </button>
+                    {expandedProvinces.has(prov.state) && (
+                      <div className="ml-5 mb-1 space-y-0.5">
+                        {prov.cities.map(city => (
+                          <div
+                            key={city.city}
+                            className="flex items-center justify-between py-0.5"
+                          >
+                            <span className="text-xs text-muted-foreground pl-1">{city.city}</span>
+                            <span className="text-xs text-muted-foreground font-medium ml-4 whitespace-nowrap">
+                              {Number(city.show_count).toLocaleString()} shows
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        )}
+
       </div>
     </main>
   )
