@@ -857,11 +857,15 @@ export default function HomeClient({
                 {initialCityStats.slice(0, showAllCities ? 25 : 10).map((city, idx) => {
                   const maxCount = Number(initialCityStats[0]?.show_count ?? 1)
                   const pct      = Math.round((Number(city.show_count) / maxCount) * 100)
+                  const sharePct = initialStats.total_shows > 0
+                    ? ((Number(city.show_count) / initialStats.total_shows) * 100).toFixed(1)
+                    : '0'
                   return (
                     <div
                       key={`${city.city}-${city.state}`}
                       className="flex items-center justify-between py-1 px-1 rounded"
                       style={{ background: `linear-gradient(to right, rgba(0,191,168,0.22) ${pct}%, transparent ${pct}%)` }}
+                      title={`${city.city}${city.state ? `, ${city.state}` : ''}: ${Number(city.show_count).toLocaleString()} shows · ${sharePct}% of total`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-xs font-bold w-4 md:w-5 flex-shrink-0 text-right" style={{ color: '#0d9488' }}>
@@ -876,7 +880,7 @@ export default function HomeClient({
                           </span>
                         )}
                       </div>
-                      <span className="text-xs md:text-sm text-muted-foreground font-medium whitespace-nowrap ml-2">
+                      <span className="text-xs md:text-sm font-semibold whitespace-nowrap ml-2 text-foreground">
                         {Number(city.show_count).toLocaleString()} shows
                       </span>
                     </div>
@@ -900,14 +904,18 @@ export default function HomeClient({
               </h2>
               <div className="space-y-0.5">
                 {provinceStats.map(prov => {
-                  const maxTotal = provinceStats[0]?.total ?? 1
-                  const pct      = Math.round((prov.total / maxTotal) * 100)
+                  const maxTotal  = provinceStats[0]?.total ?? 1
+                  const pct       = Math.round((prov.total / maxTotal) * 100)
+                  const sharePct  = initialStats.total_shows > 0
+                    ? ((prov.total / initialStats.total_shows) * 100).toFixed(1)
+                    : '0'
                   return (
                     <div key={prov.state}>
                       <button
                         onClick={() => toggleProvince(prov.state)}
                         className="w-full flex items-center justify-between py-1.5 rounded px-1 transition-colors"
                         style={{ background: `linear-gradient(to right, rgba(0,191,168,0.22) ${pct}%, transparent ${pct}%)` }}
+                        title={`${STATE_NAMES[prov.state] ?? prov.state}: ${prov.total.toLocaleString()} shows · ${sharePct}% of total`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <svg
@@ -930,7 +938,7 @@ export default function HomeClient({
                             </span>
                           )}
                         </div>
-                        <span className="text-xs md:text-sm text-muted-foreground font-medium whitespace-nowrap ml-2">
+                        <span className="text-xs md:text-sm font-semibold whitespace-nowrap ml-2 text-foreground">
                           {prov.total.toLocaleString()} shows
                         </span>
                       </button>
