@@ -92,10 +92,14 @@ log = logging.getLogger(__name__)
 _QUERY_TEMPLATE = """
 SELECT ?place ?mbid ?capacity WHERE {{
   VALUES ?mbid {{ {values} }}
-  ?place wdt:P6366 ?mbid .
+  ?place wdt:P966 ?mbid .
   OPTIONAL {{ ?place wdt:P1083 ?capacity . }}
 }}
 """
+# Wikidata property reference:
+#   P966  = MusicBrainz place ID  (venues, arenas, clubs — what dim_venue holds)
+#   P1083 = maximum capacity
+#   P434  = MusicBrainz artist ID (different entity type — not used here)
 
 
 def _build_query(mbids: list[str]) -> str:
