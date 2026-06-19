@@ -92,12 +92,13 @@ log = logging.getLogger(__name__)
 _QUERY_TEMPLATE = """
 SELECT ?place ?mbid ?capacity WHERE {{
   VALUES ?mbid {{ {values} }}
-  ?place wdt:P966 ?mbid .
+  ?place wdt:P1004 ?mbid .
   OPTIONAL {{ ?place wdt:P1083 ?capacity . }}
 }}
 """
 # Wikidata property reference:
-#   P966  = MusicBrainz place ID  (venues, arenas, clubs — what dim_venue holds)
+#   P1004 = MusicBrainz place ID  (venues, arenas, clubs — confirmed via Commodore Ballroom)
+#   P966  = MusicBrainz area ID   (cities/regions — NOT for venues)
 #   P1083 = maximum capacity
 #   P434  = MusicBrainz artist ID (different entity type — not used here)
 
@@ -156,6 +157,7 @@ def query_wikidata_batch(mbids: list[str], retries: int = 3) -> dict[str, Option
 
             resp.raise_for_status()
             data = resp.json()
+            log.debug("SPARQL raw response: %s", data)
             break
 
         except requests.RequestException as exc:
@@ -251,6 +253,8 @@ def run(
         batch   = mbid_list[i: i + BATCH_SIZE]
         batch_n = i // BATCH_SIZE + 1
         log.info("  Batch %d/%d (%d MBIDs)…", batch_n, total_batches, len(batch))
+        log.debug("  First MBID in batch: %s", batch[0] if batch else "n/a")
+        log.debug("  SPARQL query:\n%s", _build_query(batch[:2]))  # show query with first 2 MBIDs
         results = query_wikidata_batch(batch)
         all_results.update(results)
         log.info(
