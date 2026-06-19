@@ -84,7 +84,7 @@ MB_HEADERS = {
 }
 
 MIN_SCORE        = 85   # minimum MB search confidence score to accept a result
-REQUEST_INTERVAL = 1.1  # seconds between API calls (MB enforces 1 req/sec)
+REQUEST_INTERVAL = 1.5  # seconds between API calls (MB enforces 1 req/sec; 1.5s gives headroom)
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -120,7 +120,7 @@ def mb_get(path: str, params: dict, retries: int = 3) -> dict:
         try:
             resp = requests.get(url, params=params, headers=MB_HEADERS, timeout=15)
             if resp.status_code == 503:
-                wait = 5 * (attempt + 1)
+                wait = 15 * (attempt + 1)
                 log.warning(
                     "503 from MusicBrainz — waiting %ds before retry %d/%d",
                     wait, attempt + 1, retries,
@@ -139,39 +139,30 @@ def mb_get(path: str, params: dict, retries: int = 3) -> dict:
 
 def mb_search_place(venue_name: str, city: str) -> Optional[dict]:
     """
-    Search MusicBrainz for a place (venue) by name, scoped to a city.
+    Search MusicBrainz for a place (venue) by name, city-scoped only.
 
-    Strategy:
-      1. City-scoped query: place:"{name}" AND area:"{city}"
-         Tight geographic scope — correct for venues in known cities.
-      2. Name-only fallback: place:"{name}"
-         Catches venues where MB uses a different area name (e.g. 'Greater Vancouver').
+    Uses ONLY the city-scoped query: place:"{name}" AND area:"{city}"
+    A name-only fallback was previously tried but removed — it caused dangerous
+    cross-city false positives (e.g. "Beacon Theatre" matching NYC when searching
+    for Vancouver venues, "Open Space" matching Michigan).
 
     Returns the top result dict if score >= MIN_SCORE, else None.
-    The caller is responsible for logging disambiguation notes.
     """
-    queries = [
-        f'place:"{venue_name}" AND area:"{city}"',
-        f'place:"{venue_name}"',
-    ]
+    try:
+        data = mb_get(
+            "place/",
+            {"query": f'place:"{venue_name}" AND area:"{city}"', "fmt": "json", "limit": 5},
+        )
+    except requests.HTTPError:
+        return None
 
-    for query in queries:
-        try:
-            data = mb_get("place/", {"query": query, "fmt": "json", "limit": 5})
-        except requests.HTTPError:
-            continue
+    places = data.get("places", [])
+    if not places:
+        return None
 
-        places = data.get("places", [])
-        if not places:
-            continue
-
-        top   = places[0]
-        score = int(top.get("score", 0))
-
-        if score >= MIN_SCORE:
-            return top
-
-    return None
+    top   = places[0]
+    score = int(top.get("score", 0))
+    return top if score >= MIN_SCORE else None
 
 
 def mb_get_place_details(mbid: str) -> dict:
