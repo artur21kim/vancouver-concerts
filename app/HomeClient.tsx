@@ -673,7 +673,7 @@ export default function HomeClient({
                               rel="noopener noreferrer"
                               title="Open on Spotify"
                               onClick={e => e.stopPropagation()}
-                              className="flex-shrink-0 opacity-50 hover:opacity-100 transition-opacity"
+                              className="flex-shrink-0 hover:opacity-75 transition-opacity"
                             >
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="#1DB954">
                                 <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
@@ -686,7 +686,8 @@ export default function HomeClient({
                               {artist.state_counts.slice(0, 3).map(sc => (
                                 <span
                                   key={sc.state}
-                                  className="text-[10px] text-muted-foreground bg-muted px-1 py-0.5 rounded leading-none"
+                                  className="text-[10px] px-1 py-0.5 rounded leading-none font-medium"
+                                  style={{ backgroundColor: 'rgba(13,148,136,0.12)', color: '#0d9488' }}
                                 >
                                   {sc.state}
                                 </span>
@@ -719,7 +720,14 @@ export default function HomeClient({
                       {expandedArtists.has(artist.artist_id) && (
                         <div className="mt-1 ml-5 md:ml-7 space-y-0.5">
                           {loadingArtistCity.has(artist.artist_id) ? (
-                            <p className="text-xs text-muted-foreground py-1">Loading…</p>
+                            <div className="space-y-1.5 py-0.5">
+                              {[55, 40, 28].map(w => (
+                                <div key={w} className="flex items-center justify-between">
+                                  <div className="h-2.5 rounded animate-pulse bg-muted" style={{ width: `${w}%` }} />
+                                  <div className="h-2.5 rounded animate-pulse bg-muted w-14 ml-4" />
+                                </div>
+                              ))}
+                            </div>
                           ) : (
                             (artistCityData[artist.artist_id] ?? []).map(row => (
                               <div
@@ -784,7 +792,8 @@ export default function HomeClient({
                           {venue.venue_name}
                         </button>
                         {venue.city && venue.state && (
-                          <span className="hidden sm:inline-flex text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded whitespace-nowrap flex-shrink-0 leading-none">
+                          <span className="hidden sm:inline-flex text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap flex-shrink-0 leading-none font-medium"
+                            style={{ backgroundColor: 'rgba(13,148,136,0.12)', color: '#0d9488' }}>
                             {venue.city}, {venue.state}
                           </span>
                         )}
@@ -820,30 +829,35 @@ export default function HomeClient({
               <h2 className="text-xl md:text-2xl font-bold text-foreground mb-3 md:mb-4">
                 Top Cities
               </h2>
-              <div className="space-y-1.5">
-                {initialCityStats.map((city, idx) => (
-                  <div
-                    key={`${city.city}-${city.state}`}
-                    className="flex items-center justify-between py-0.5"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-base font-semibold text-muted-foreground w-4 md:w-6 flex-shrink-0">
-                        {idx + 1}
-                      </span>
-                      <span className="text-sm font-medium text-foreground truncate">
-                        {city.city}{city.state ? `, ${city.state}` : ''}
-                      </span>
-                      {city.country && COUNTRY_FLAGS[city.country] && (
-                        <span className="text-xs flex-shrink-0" title={city.country}>
-                          {COUNTRY_FLAGS[city.country]}
+              <div className="space-y-1">
+                {initialCityStats.map((city, idx) => {
+                  const maxCount = Number(initialCityStats[0]?.show_count ?? 1)
+                  const pct      = Math.round((Number(city.show_count) / maxCount) * 100)
+                  return (
+                    <div
+                      key={`${city.city}-${city.state}`}
+                      className="flex items-center justify-between py-1 px-1 rounded"
+                      style={{ background: `linear-gradient(to right, rgba(13,148,136,0.07) ${pct}%, transparent ${pct}%)` }}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs font-bold w-4 md:w-5 flex-shrink-0 text-right" style={{ color: '#0d9488' }}>
+                          {idx + 1}
                         </span>
-                      )}
+                        <span className="text-sm font-medium text-foreground truncate">
+                          {city.city}{city.state ? `, ${city.state}` : ''}
+                        </span>
+                        {city.country && COUNTRY_FLAGS[city.country] && (
+                          <span className="text-xs flex-shrink-0" title={city.country}>
+                            {COUNTRY_FLAGS[city.country]}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs md:text-sm text-muted-foreground font-medium whitespace-nowrap ml-2">
+                        {Number(city.show_count).toLocaleString()} shows
+                      </span>
                     </div>
-                    <span className="text-xs md:text-sm text-muted-foreground font-medium whitespace-nowrap ml-2">
-                      {Number(city.show_count).toLocaleString()} shows
-                    </span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
 
@@ -853,53 +867,59 @@ export default function HomeClient({
                 Provinces &amp; States
               </h2>
               <div className="space-y-0.5">
-                {provinceStats.map(prov => (
-                  <div key={prov.state}>
-                    <button
-                      onClick={() => toggleProvince(prov.state)}
-                      className="w-full flex items-center justify-between py-1.5 rounded px-1 hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <svg
-                          width="8" height="8" viewBox="0 0 8 8" fill="currentColor"
-                          className="text-muted-foreground flex-shrink-0"
-                          style={{
-                            transform: expandedProvinces.has(prov.state) ? 'rotate(90deg)' : 'none',
-                            transition: 'transform 150ms',
-                          }}
-                        >
-                          <path d="M2 1.5l4 2.5-4 2.5V1.5z"/>
-                        </svg>
-                        <span className="text-sm font-medium text-foreground">
-                          {STATE_NAMES[prov.state] ?? prov.state}
-                        </span>
-                        {prov.country && COUNTRY_FLAGS[prov.country] && (
-                          <span className="text-xs" title={prov.country}>
-                            {COUNTRY_FLAGS[prov.country]}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs md:text-sm text-muted-foreground font-medium whitespace-nowrap ml-2">
-                        {prov.total.toLocaleString()} shows
-                      </span>
-                    </button>
-                    {expandedProvinces.has(prov.state) && (
-                      <div className="ml-5 mb-1 space-y-0.5">
-                        {prov.cities.map(city => (
-                          <div
-                            key={city.city}
-                            className="flex items-center justify-between py-0.5"
+                {provinceStats.map(prov => {
+                  const maxTotal = provinceStats[0]?.total ?? 1
+                  const pct      = Math.round((prov.total / maxTotal) * 100)
+                  return (
+                    <div key={prov.state}>
+                      <button
+                        onClick={() => toggleProvince(prov.state)}
+                        className="w-full flex items-center justify-between py-1.5 rounded px-1 transition-colors"
+                        style={{ background: `linear-gradient(to right, rgba(13,148,136,0.07) ${pct}%, transparent ${pct}%)` }}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <svg
+                            width="8" height="8" viewBox="0 0 8 8" fill="currentColor"
+                            style={{
+                              color: '#0d9488',
+                              transform: expandedProvinces.has(prov.state) ? 'rotate(90deg)' : 'none',
+                              transition: 'transform 150ms',
+                              flexShrink: 0,
+                            }}
                           >
-                            <span className="text-xs text-muted-foreground pl-1">{city.city}</span>
-                            <span className="text-xs text-muted-foreground font-medium ml-4 whitespace-nowrap">
-                              {Number(city.show_count).toLocaleString()} shows
+                            <path d="M2 1.5l4 2.5-4 2.5V1.5z"/>
+                          </svg>
+                          <span className="text-sm font-medium text-foreground">
+                            {STATE_NAMES[prov.state] ?? prov.state}
+                          </span>
+                          {prov.country && COUNTRY_FLAGS[prov.country] && (
+                            <span className="text-xs" title={prov.country}>
+                              {COUNTRY_FLAGS[prov.country]}
                             </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                          )}
+                        </div>
+                        <span className="text-xs md:text-sm text-muted-foreground font-medium whitespace-nowrap ml-2">
+                          {prov.total.toLocaleString()} shows
+                        </span>
+                      </button>
+                      {expandedProvinces.has(prov.state) && (
+                        <div className="ml-5 mb-1 space-y-0.5">
+                          {prov.cities.map(city => (
+                            <div
+                              key={city.city}
+                              className="flex items-center justify-between py-0.5"
+                            >
+                              <span className="text-xs pl-1" style={{ color: '#0d9488' }}>{city.city}</span>
+                              <span className="text-xs text-muted-foreground font-medium ml-4 whitespace-nowrap">
+                                {Number(city.show_count).toLocaleString()} shows
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
