@@ -224,18 +224,27 @@ def parse_tm_venue(tm_venue: dict) -> dict:
     state_obj= tm_venue.get("state")    or {}
     country_obj = tm_venue.get("country") or {}
 
-    lat = loc.get("latitude")
-    lon = loc.get("longitude")
+    lat_raw      = loc.get("latitude")
+    lon_raw      = loc.get("longitude")
+    country_code = country_obj.get("countryCode", "")
+
+    lat = float(lat_raw) if lat_raw else None
+    lon = float(lon_raw) if lon_raw else None
+
+    # Guard: North American venues must have negative longitude.
+    # TM occasionally stores positive longitudes for US/CA venues (data error).
+    if country_code in ("US", "CA") and lon is not None and lon > 0:
+        lat, lon = None, None
 
     return {
-        "tm_id":    tm_venue.get("id", ""),
-        "tm_name":  tm_venue.get("name", ""),
-        "tm_city":  city_obj.get("name", ""),
-        "tm_state": state_obj.get("stateCode") or state_obj.get("name", ""),
-        "tm_country": country_obj.get("countryCode", ""),
+        "tm_id":      tm_venue.get("id", ""),
+        "tm_name":    tm_venue.get("name", ""),
+        "tm_city":    city_obj.get("name", ""),
+        "tm_state":   state_obj.get("stateCode") or state_obj.get("name", ""),
+        "tm_country": country_code,
         "tm_address": address.get("line1", ""),
-        "lat":      float(lat) if lat else None,
-        "lon":      float(lon) if lon else None,
+        "lat":        lat,
+        "lon":        lon,
     }
 
 
@@ -345,6 +354,40 @@ def run(
                 continue
 
             label = f"{venue_name[:30]}, {city_val}"[:44]
+
+            # State validation: if we queried with a stateCode and TM matched a
+            # venue in a different state, move to review regardless of name score.
+            # Catches cross-country matches (Blood Brothers Brewing → New Orleans,
+            # Christ Episcopal Church → Tacoma WA, etc.)
+            state_mismatch = (
+                state_val
+                and best["tm_state"]
+                and best["tm_state"].upper() != state_val.upper()
+            )
+            if state_mismatch:
+                log.info(
+                    "[REVIEW] [%d/%d] %-44s → %-40s score=%.2f  "
+                    "(state mismatch: queried %s, TM returned %s)",
+                    i, total, label, best["tm_name"][:40], best_score,
+                    state_val.upper(), best["tm_state"].upper(),
+                )
+                stats["review"] += 1
+                review_rows.append({
+                    "venue_id":    venue_id,
+                    "venue_name":  venue_name,
+                    "city":        city_val,
+                    "state":       state_val,
+                    "country":     country_val,
+                    "reason":      "state_mismatch",
+                    "tm_id":       best["tm_id"],
+                    "tm_name":     best["tm_name"],
+                    "tm_city":     best["tm_city"],
+                    "tm_address":  best["tm_address"],
+                    "similarity":  f"{best_score:.3f}",
+                    "lat":         best["lat"] if best["lat"] else "",
+                    "lon":         best["lon"] if best["lon"] else "",
+                })
+                continue
 
             if best_score >= threshold:
                 # High confidence — write tm_venue_id + coords
