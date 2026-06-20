@@ -13,6 +13,7 @@ All data pipeline and enrichment scripts live in `vancouver-concerts/scripts/`.
 | `find_secondary_cities.py` | Discover additional cities in a province/state by show volume | Manual | One-off per region | `SETLIST_API_KEY` |
 | `musicbrainz_artist_enrich.py` | Enrich `dim_artist` with MBIDs and official website URLs | Manual (auto-trigger planned — GP-97) | Post-ingestion | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `musicbrainz_venue_enrich.py` | Enrich `dim_venue` with MBIDs, open/close dates, lat/long, and URLs | Manual | Post-ingestion, per city catch-up | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `wikidata_capacity_enrich.py` | Populate `dim_venue.capacity` via Wikidata P1083 (max capacity), using `musicbrainz_place_id` as lookup key | Manual | Post-MB-enrichment, per city catch-up | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `tm_enrichment/tm_enrichment.py` | Enrich `fact_shows` with Ticketmaster URLs; enrich `dim_venue` with lat/long for TM-mapped venues | Manual | Per city, after import | `TM_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
 | `nominatim_enrich.py` | Geocode `dim_venue` lat/long via OpenStreetMap Nominatim (fallback after TM + MB) | Manual | Post-ingestion | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
 | `spotify_matching/spotify_matcher_fixed.py` | Match artists against Spotify library for initial data load | Manual | One-off / as needed | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
@@ -131,6 +132,33 @@ ALTER TABLE dim_venue ADD COLUMN IF NOT EXISTS official_website_url text;
 
 ---
 
+### `wikidata_capacity_enrich.py`
+Populates `dim_venue.capacity` via Wikidata SPARQL. Uses `musicbrainz_place_id` (Wikidata property P1004) to look up each venue's Wikidata item, then extracts P1083 (maximum capacity). No API key required — Wikidata SPARQL is free and CC0.
+
+Run **after** `musicbrainz_venue_enrich.py` — requires `musicbrainz_place_id` to be populated first.
+
+```bash
+# Preflight — no DB writes
+python scripts/wikidata_capacity_enrich.py --limit 200
+
+# Live run — all venues with MBID but no capacity
+python scripts/wikidata_capacity_enrich.py --live
+
+# Limit to a single city
+python scripts/wikidata_capacity_enrich.py --live --city Vancouver
+python scripts/wikidata_capacity_enrich.py --live --city Seattle
+python scripts/wikidata_capacity_enrich.py --live --city Toronto
+
+# Re-process venues that already have a capacity value
+python scripts/wikidata_capacity_enrich.py --live --force
+```
+
+**Important:** `dim_venue.capacity_category` is a `GENERATED ALWAYS` computed column — it auto-derives from `capacity` and cannot be written to directly. Only write to `capacity`.  
+**Output:** `exports/wikidata_capacity_review_YYYY-MM-DD.csv` — outlier values (< 100 or > 200,000) flagged for manual verification.  
+**Prerequisites:** `musicbrainz_place_id` must be populated. Run `musicbrainz_venue_enrich.py` first.
+
+---
+
 ### `tm_enrichment/tm_enrichment.py`
 Matches upcoming shows to Ticketmaster events and writes `ticketmaster_url` to `fact_shows`.  
 Also populates `latitude`/`longitude` for TM-mapped venues (Pass 1, GP-98).
@@ -183,7 +211,7 @@ Each script subfolder has its own `.env` file (gitignored). Copy `.env.example` 
 | `SETLIST_API_KEY` | `fetch_setlist_api.py`, `find_secondary_cities.py` |
 | `SUPABASE_URL` | All Supabase-connected scripts |
 | `SUPABASE_SERVICE_KEY` | `refresh_shows.py`, `nominatim_enrich.py`, `tm_enrichment.py` |
-| `SUPABASE_SERVICE_ROLE_KEY` | `musicbrainz_artist_enrich.py`, `musicbrainz_venue_enrich.py` |
+| `SUPABASE_SERVICE_ROLE_KEY` | `musicbrainz_artist_enrich.py`, `musicbrainz_venue_enrich.py`, `wikidata_capacity_enrich.py` |
 | `TM_API_KEY` | `tm_enrichment.py` |
 | `SPOTIFY_CLIENT_ID` | `spotify_matcher_fixed.py` |
 | `SPOTIFY_CLIENT_SECRET` | `spotify_matcher_fixed.py` |
@@ -200,3 +228,4 @@ Each script subfolder has its own `.env` file (gitignored). Copy `.env.example` 
 5. `tm_enrichment.py` — lat/long for TM-mapped venues; upcoming show TM URLs
 6. `musicbrainz_venue_enrich.py --live --city <city>` — MBID, dates, lat/long for MB-known venues
 7. `nominatim_enrich.py --live --city <city>` — fallback geocoding for remaining venues
+8. `wikidata_capacity_enrich.py --live --city <city>` — capacity from Wikidata for MB-matched venues
