@@ -652,7 +652,7 @@ function DiscogsArtistBars({ artists, max }: {
 function SpotifyArtistBars({ artists, max, onYearClick }: {
   artists: {
     name: string; count: number; spotifyId: string; hasAlbumData: boolean
-    albums: { name: string | null; year: string | null; releaseDate: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
+    albums: { name: string | null; year: string | null; releaseDate: string | null; imageUrl: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
   }[]
   max: number
   onYearClick?: (artistName: string, year: string, spotifyId: string) => void
@@ -661,18 +661,52 @@ function SpotifyArtistBars({ artists, max, onYearClick }: {
     artist: string; year: string | null; albumNames: string[]; count: number; x: number
   } | null>(null)
 
+  // GP-106: extract dominant color from album artwork via node-vibrant
+  // Falls back to SPOTIFY_PALETTE while loading or if image unavailable.
+  const [extractedColors, setExtractedColors] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    const imageUrls = new Set<string>()
+    for (const artist of artists) {
+      for (const album of artist.albums) {
+        if (album.imageUrl) imageUrls.add(album.imageUrl)
+      }
+    }
+    if (imageUrls.size === 0) return
+
+    ;(async () => {
+      try {
+        const { default: Vibrant } = await import('node-vibrant')
+        const urlArray = Array.from(imageUrls).slice(0, 100) // cap safety
+        const CHUNK = 10
+        for (let i = 0; i < urlArray.length; i += CHUNK) {
+          await Promise.all(urlArray.slice(i, i + CHUNK).map(async (url) => {
+            try {
+              const palette = await Vibrant.from(url).getPalette()
+              const swatch = palette.Vibrant ?? palette.Muted ?? palette.DarkVibrant
+              if (swatch?.hex) {
+                setExtractedColors(prev => ({ ...prev, [url]: swatch.hex }))
+              }
+            } catch { /* fall back to palette color */ }
+          }))
+        }
+      } catch { /* node-vibrant unavailable — use fixed palette throughout */ }
+    })()
+  }, [artists]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="w-full space-y-1.5">
       {artists.map((artist) => {
         const totalWidth = max > 0 ? (artist.count / max) * 100 : 0
 
         // Aggregate albums → year buckets
-        const yearMap = new Map<string, { year: string | null; albumNames: string[]; count: number }>()
+        const yearMap = new Map<string, { year: string | null; albumNames: string[]; firstImageUrl: string | null; count: number }>()
         for (const album of artist.albums) {
           const key = album.year ?? '__null__'
-          if (!yearMap.has(key)) yearMap.set(key, { year: album.year, albumNames: [], count: 0 })
+          if (!yearMap.has(key)) yearMap.set(key, { year: album.year, albumNames: [], firstImageUrl: album.imageUrl ?? null, count: 0 })
           const bucket = yearMap.get(key)!
           if (album.name) bucket.albumNames.push(album.name)
+          if (!bucket.firstImageUrl && album.imageUrl) bucket.firstImageUrl = album.imageUrl
           bucket.count += album.songs.length
         }
 
@@ -701,7 +735,9 @@ function SpotifyArtistBars({ artists, max, onYearClick }: {
                 <div className="h-full flex" style={{ width: `${totalWidth}%` }}>
                   {yearBuckets.map((bucket, i) => {
                     const widthPct = (bucket.count / artist.count) * 100
-                    const color = SPOTIFY_PALETTE[i % SPOTIFY_PALETTE.length]
+                    const color = (bucket.firstImageUrl && extractedColors[bucket.firstImageUrl])
+                      ? extractedColors[bucket.firstImageUrl]
+                      : SPOTIFY_PALETTE[i % SPOTIFY_PALETTE.length]
                     const isFirst = i === 0
                     const isLast = i === yearBuckets.length - 1
                     // Absolute width check: segment must be ≥5% of the max-width bar to show a label.
@@ -1149,7 +1185,7 @@ export default function MyGrooveprintClient({
   profileHeader,
 }: {
   shows: Show[]
-  spotifySongs: { added_at: string; spotify_artist_id: string | null; artist_name: string; track_name: string; spotify_album_name: string | null; spotify_album_release_date: string | null; spotify_track_id: string | null }[]
+  spotifySongs: { added_at: string; spotify_artist_id: string | null; artist_name: string; track_name: string; spotify_album_name: string | null; spotify_album_release_date: string | null; spotify_track_id: string | null; spotify_album_image_url: string | null }[]
   discogsReleases?: DiscogsRelease[]
   readOnly?: boolean
   username?: string
@@ -1272,6 +1308,38 @@ export default function MyGrooveprintClient({
 
   useEffect(() => { checkUnaddedArtists() }, [])
   useEffect(() => { if (sessionShowsModified) { checkUnaddedArtists(); setSessionShowsModified(false) } }, [sessionShowsModified])
+  // GP-62: silently page through /api/spotify/backfill-albums in the background
+  // when the user has rows missing spotify_album_image_url. Fire-and-forget —
+  // reloads spotifySongs on completion so colors appear without a page refresh.
+  const runAlbumBackfillSilently = useCallback(async () => {
+    let cursor: string | undefined
+    let pages = 0
+    const MAX_PAGES = 300 // safety cap (~15k tracks)
+    while (pages < MAX_PAGES) {
+      try {
+        const res = await fetch('/api/spotify/backfill-albums', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cursor ? { cursor } : {}),
+        })
+        if (!res.ok) break
+        const json = await res.json()
+        if (!json.next_url) {
+          // Backfill complete — reload songs to surface new image URLs
+          const { data } = await supabase
+            .from('user_spotify_songs')
+            .select('added_at, spotify_artist_id, artist_name, track_name, spotify_album_name, spotify_album_release_date, spotify_track_id, spotify_album_image_url')
+            .not('added_at', 'is', null)
+          if (data) setSpotifySongs(data as typeof initialSpotifySongs)
+          break
+        }
+        cursor = json.next_url
+        pages++
+        await new Promise(r => setTimeout(r, 3000))
+      } catch { break }
+    }
+  }, [supabase]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // GP-124: lazy-load Spotify songs on first Spotify tab click; cache in state
   useEffect(() => {
     if (viewMode !== 'spotify') return
@@ -1280,10 +1348,15 @@ export default function MyGrooveprintClient({
     setSpotifyLoading(true)
     supabase
       .from('user_spotify_songs')
-      .select('added_at, spotify_artist_id, artist_name, track_name, spotify_album_name, spotify_album_release_date, spotify_track_id')
+      .select('added_at, spotify_artist_id, artist_name, track_name, spotify_album_name, spotify_album_release_date, spotify_track_id, spotify_album_image_url')
       .not('added_at', 'is', null)
       .then(({ data, error }) => {
-        if (!error && data) setSpotifySongs(data as typeof initialSpotifySongs)
+        if (!error && data) {
+          setSpotifySongs(data as typeof initialSpotifySongs)
+          // GP-62: silently backfill album image URLs for rows that are missing them
+          const needsBackfill = data.some((s: any) => !s.spotify_album_image_url)
+          if (needsBackfill) runAlbumBackfillSilently()
+        }
         setSpotifyLoaded(true)
         setSpotifyLoading(false)
       })
@@ -1406,7 +1479,7 @@ export default function MyGrooveprintClient({
       : spotifySongs
     const raw: Record<string, {
       name: string; count: number; spotifyId: string
-      songList: { track_name: string; album_name: string | null; release_year: string | null; release_date: string | null; track_id: string | null; added_at: string }[]
+      songList: { track_name: string; album_name: string | null; album_image_url: string | null; release_year: string | null; release_date: string | null; track_id: string | null; added_at: string }[]
     }> = {}
     for (const song of src) {
       if (!song.spotify_artist_id) continue
@@ -1420,12 +1493,13 @@ export default function MyGrooveprintClient({
       }
       raw[song.spotify_artist_id].count++
       raw[song.spotify_artist_id].songList.push({
-        track_name:   song.track_name,
-        album_name:   song.spotify_album_name ?? null,
-        release_year: song.spotify_album_release_date ? song.spotify_album_release_date.substring(0, 4) : null,
-        release_date: song.spotify_album_release_date ?? null,
-        track_id:     song.spotify_track_id ?? null,
-        added_at:     song.added_at,
+        track_name:      song.track_name,
+        album_name:      song.spotify_album_name ?? null,
+        album_image_url: song.spotify_album_image_url ?? null,
+        release_year:    song.spotify_album_release_date ? song.spotify_album_release_date.substring(0, 4) : null,
+        release_date:    song.spotify_album_release_date ?? null,
+        track_id:        song.spotify_track_id ?? null,
+        added_at:        song.added_at,
       })
     }
     return Object.values(raw)
@@ -1434,10 +1508,10 @@ export default function MyGrooveprintClient({
       .map(artist => {
         const sorted = [...artist.songList].sort((a, b) => b.added_at.localeCompare(a.added_at))
         const hasAlbumData = sorted.some(s => s.album_name)
-        const albumMap: Record<string, { name: string | null; year: string | null; releaseDate: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }> = {}
+        const albumMap: Record<string, { name: string | null; year: string | null; releaseDate: string | null; imageUrl: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }> = {}
         for (const song of sorted) {
           const key = song.album_name ?? '__null__'
-          if (!albumMap[key]) albumMap[key] = { name: song.album_name, year: song.release_year, releaseDate: song.release_date ?? null, songs: [] }
+          if (!albumMap[key]) albumMap[key] = { name: song.album_name, year: song.release_year, releaseDate: song.release_date ?? null, imageUrl: song.album_image_url ?? null, songs: [] }
           albumMap[key].songs.push({ track_name: song.track_name, track_id: song.track_id, added_at: song.added_at })
         }
         // Sort albums: year desc (newest first for expandable list), null-named albums last
