@@ -188,8 +188,9 @@ export async function POST(request: Request) {
 
     const transformStartTime = Date.now();
 
-    // SCRUM-59: Transform songs for database — capture album_id and release_date
-    // from the liked-tracks response (album is included at no extra API cost)
+    // SCRUM-59: Transform songs for database — capture album_id, release_date,
+    // album_name, and album_image_url from the liked-tracks response
+    // (album object is included at no extra API cost)
     const songsToInsert = songsInChunk.flatMap(item => {
       const track = item.track;
       return track.artists.map((artist: any) => ({
@@ -202,6 +203,7 @@ export async function POST(request: Request) {
         spotify_album_id: track.album?.id ?? null,
         spotify_album_name: track.album?.name ?? null,
         spotify_album_release_date: track.album?.release_date ?? null,
+        spotify_album_image_url: track.album?.images?.[1]?.url ?? track.album?.images?.[0]?.url ?? null,
       }));
     });
 

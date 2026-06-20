@@ -100,6 +100,7 @@ export async function POST(request: Request) {
           spotify_album_id: track.album?.id ?? null,
           spotify_album_name: track.album?.name ?? null,
           spotify_album_release_date: track.album?.release_date ?? null,
+          spotify_album_image_url: track.album?.images?.[1]?.url ?? track.album?.images?.[0]?.url ?? null,
         })
         .eq('user_id', user.id)
         .eq('spotify_track_id', track.id)
