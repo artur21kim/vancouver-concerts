@@ -349,7 +349,10 @@ def run(
             if best_score >= threshold:
                 # High confidence — write tm_venue_id + coords
                 update: dict = {"tm_venue_id": best["tm_id"]}
-                has_coords = best["lat"] is not None and best["lon"] is not None
+                has_coords = (
+                    best["lat"] is not None and best["lon"] is not None
+                    and not (best["lat"] == 0.0 and best["lon"] == 0.0)
+                )
                 if has_coords:
                     update["latitude"]  = best["lat"]
                     update["longitude"] = best["lon"]
