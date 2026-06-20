@@ -661,8 +661,8 @@ function SpotifyArtistBars({ artists, max, onYearClick }: {
     artist: string; year: string | null; albumNames: string[]; count: number; x: number
   } | null>(null)
 
-  // GP-106: extract dominant color from album artwork via node-vibrant
-  // Falls back to SPOTIFY_PALETTE while loading or if image unavailable.
+  // GP-106: extract dominant vibrant color from album artwork via Canvas API.
+  // Falls back to SPOTIFY_PALETTE while extracting or if image unavailable.
   const [extractedColors, setExtractedColors] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -674,23 +674,43 @@ function SpotifyArtistBars({ artists, max, onYearClick }: {
     }
     if (imageUrls.size === 0) return
 
+    const extractColor = (url: string): Promise<void> => new Promise((resolve) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = 50; canvas.height = 50
+          const ctx = canvas.getContext('2d')
+          if (!ctx) { resolve(); return }
+          ctx.drawImage(img, 0, 0, 50, 50)
+          const { data } = ctx.getImageData(0, 0, 50, 50)
+          // Find most saturated non-dark, non-washed-out pixel
+          let best = { r: 0, g: 0, b: 0, sat: 0 }
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i], g = data[i + 1], b = data[i + 2]
+            const max = Math.max(r, g, b), min = Math.min(r, g, b)
+            const lightness = (max + min) / 510
+            if (lightness < 0.15 || lightness > 0.85) continue
+            const sat = max === 0 ? 0 : (max - min) / max
+            if (sat > best.sat) best = { r, g, b, sat }
+          }
+          if (best.sat > 0.25) {
+            setExtractedColors(prev => ({ ...prev, [url]: `rgb(${best.r},${best.g},${best.b})` }))
+          }
+        } catch { /* ignore, fall back to palette */ }
+        resolve()
+      }
+      img.onerror = () => resolve()
+      img.src = url
+    })
+
+    const urlArray = Array.from(imageUrls).slice(0, 100)
+    const CHUNK = 10
     ;(async () => {
-      try {
-        const { default: Vibrant } = await import('node-vibrant')
-        const urlArray = Array.from(imageUrls).slice(0, 100) // cap safety
-        const CHUNK = 10
-        for (let i = 0; i < urlArray.length; i += CHUNK) {
-          await Promise.all(urlArray.slice(i, i + CHUNK).map(async (url) => {
-            try {
-              const palette = await Vibrant.from(url).getPalette()
-              const swatch = palette.Vibrant ?? palette.Muted ?? palette.DarkVibrant
-              if (swatch?.hex) {
-                setExtractedColors(prev => ({ ...prev, [url]: swatch.hex }))
-              }
-            } catch { /* fall back to palette color */ }
-          }))
-        }
-      } catch { /* node-vibrant unavailable — use fixed palette throughout */ }
+      for (let i = 0; i < urlArray.length; i += CHUNK) {
+        await Promise.all(urlArray.slice(i, i + CHUNK).map(extractColor))
+      }
     })()
   }, [artists]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1314,7 +1334,7 @@ export default function MyGrooveprintClient({
   const runAlbumBackfillSilently = useCallback(async () => {
     let cursor: string | undefined
     let pages = 0
-    const MAX_PAGES = 300 // safety cap (~15k tracks)
+    const MAX_PAGES = 300
     while (pages < MAX_PAGES) {
       try {
         const res = await fetch('/api/spotify/backfill-albums', {
@@ -1325,7 +1345,6 @@ export default function MyGrooveprintClient({
         if (!res.ok) break
         const json = await res.json()
         if (!json.next_url) {
-          // Backfill complete — reload songs to surface new image URLs
           const { data } = await supabase
             .from('user_spotify_songs')
             .select('added_at, spotify_artist_id, artist_name, track_name, spotify_album_name, spotify_album_release_date, spotify_track_id, spotify_album_image_url')
@@ -1353,7 +1372,6 @@ export default function MyGrooveprintClient({
       .then(({ data, error }) => {
         if (!error && data) {
           setSpotifySongs(data as typeof initialSpotifySongs)
-          // GP-62: silently backfill album image URLs for rows that are missing them
           const needsBackfill = data.some((s: any) => !s.spotify_album_image_url)
           if (needsBackfill) runAlbumBackfillSilently()
         }
