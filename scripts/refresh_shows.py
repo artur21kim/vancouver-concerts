@@ -7,13 +7,15 @@ Ingests a raw setlist.fm API export into Supabase.
 Uses setlist_url as the deduplication key — existing shows are never overwritten.
 
 Venue resolution chain:
-  1. Exact match → dim_venue (name, city, state) composite key
+  1. Exact match → dim_venue (name, city, state, country) composite key
   2. Exact match → venue_aliases table
   3. Fuzzy match  → interactive review (live) or blocked with SQL (--no-interactive)
   4. No match     → auto-create
 
   (GP-134: venue matching uses (name, city, state) composite key to prevent
    cross-city collisions — same venue name in different cities gets distinct venue_ids)
+  (GP-136: extended to (name, city, state, country) 4-tuple to prevent collisions
+   for European cities where stateCode is absent)
 
 Artist resolution chain (no city dimension):
   1. Exact match → dim_artist.artist_name
@@ -218,27 +220,31 @@ def find_fuzzy_venue_match(
     name_map: dict[tuple, str],
     city: Optional[str] = None,
     state: Optional[str] = None,
+    country: Optional[str] = None,
 ) -> Optional[tuple[str, int, float]]:
     """Fuzzy-match a venue name against existing venues.
 
-    id_map and name_map are keyed by (name, city, state) tuples — all lowercase.
-    City/state filtering uses the tuple key directly; no separate location_map needed.
+    id_map and name_map are keyed by (name, city, state, country) tuples — all lowercase.
+    City/state/country filtering uses the tuple key directly; no separate location_map needed.
 
-    Candidates are restricted to the same city+state before scoring to prevent
+    Candidates are restricted to the same city+state+country before scoring to prevent
     cross-city false positives (e.g. 'Royal Room, Seattle' matching 'The Royal,
     Vancouver', or 'The Edge, Vancouver BC' matching 'The Edge, Toronto ON').
     """
     norm = normalize_venue(name)
     if not norm:
         return None
-    city_l  = (city  or "").lower()
-    state_l = (state or "").lower()
+    city_l    = (city    or "").lower()
+    state_l   = (state   or "").lower()
+    country_l = (country or "").lower()
     best_score, best_key = 0.0, None
     for key in id_map:
-        key_name, key_city, key_state = key
-        if city_l  and key_city  != city_l:
+        key_name, key_city, key_state, key_country = key
+        if city_l    and key_city    != city_l:
             continue
-        if state_l and key_state != state_l:
+        if state_l   and key_state   != state_l:
+            continue
+        if country_l and key_country != country_l:
             continue
         nk = normalize_venue(key_name)
         if norm == nk:
@@ -420,23 +426,25 @@ def load_existing_artists() -> tuple[dict[str, int], dict[str, str]]:
 
 
 def load_existing_venues() -> tuple[dict[tuple, int], dict[tuple, str], dict[str, tuple]]:
-    """Load dim_venue into (name, city, state) tuple-keyed dicts.
+    """Load dim_venue into (name, city, state, country) tuple-keyed dicts.
 
     GP-134: composite (name, city, state) key prevents cross-city venue collisions.
-    Same venue name in different cities gets distinct lookup keys, so Toronto's
-    'The Edge' and Vancouver's 'The Edge' never alias each other on ingest.
+    GP-136: extended to (name, city, state, country) 4-tuple to prevent collisions
+    for European cities where stateCode is absent — e.g. 'The Roundhouse' in London
+    vs 'The Roundhouse' in another country with no stateCode both map to the same
+    3-tuple without this fix.
 
     Returns:
-        id_map:       (name, city, state) → venue_id
-        name_map:     (name, city, state) → canonical_name
+        id_map:       (name, city, state, country) → venue_id
+        name_map:     (name, city, state, country) → canonical_name
         location_map: canonical_name.lower() → (city, state, country)
                       (string-keyed; used only for display in alias review prompts)
 
     other_names (historical renames at the same location) share the venue's
-    city/state and are indexed under the same tuple structure.
+    city/state/country and are indexed under the same tuple structure.
 
-    Future: add UNIQUE(venue_name, city, state) constraint to dim_venue to make
-    the DB enforce this composite key at the storage layer (GP-134 follow-up).
+    Future: add UNIQUE(venue_name, city, state, country) constraint to dim_venue to make
+    the DB enforce this composite key at the storage layer (GP-136 follow-up).
     """
     print("  Existing venues …", end=" ", flush=True)
     rows = sb_get_all("dim_venue", {"select": "venue_id,venue_name,other_names,city,state,country"})
@@ -450,9 +458,10 @@ def load_existing_venues() -> tuple[dict[tuple, int], dict[tuple, str], dict[str
         vid       = r["venue_id"]
         city_l    = (r.get("city")    or "").lower()
         state_l   = (r.get("state")   or "").lower()
+        country_l = (r.get("country") or "").lower()
         vloc      = (r.get("city") or "", r.get("state") or "", r.get("country") or "")
 
-        ckey = (canonical.lower(), city_l, state_l)
+        ckey = (canonical.lower(), city_l, state_l, country_l)
         id_map[ckey]                    = vid
         name_map[ckey]                  = canonical
         location_map[canonical.lower()] = vloc
@@ -460,9 +469,9 @@ def load_existing_venues() -> tuple[dict[tuple, int], dict[tuple, str], dict[str
         for alt in (r.get("other_names") or "").split(","):
             alt = alt.strip()
             if len(alt) >= 4:
-                akey = (alt.lower(), city_l, state_l)
-                id_map[akey]        = vid
-                name_map[akey]      = canonical
+                akey = (alt.lower(), city_l, state_l, country_l)
+                id_map[akey]              = vid
+                name_map[akey]            = canonical
                 location_map[alt.lower()] = vloc
 
     print(f"{len(id_map):,}  ({len(rows):,} venues + other_names)")
@@ -756,8 +765,8 @@ def _summary(
 def _build_reverse_maps(
     existing_artists: dict[str, int],
     artist_name_map:  dict[str, str],
-    existing_venues:  dict[tuple, int],   # tuple-keyed (name, city, state)
-    venue_name_map:   dict[tuple, str],   # tuple-keyed (name, city, state)
+    existing_venues:  dict[tuple, int],   # tuple-keyed (name, city, state, country)
+    venue_name_map:   dict[tuple, str],   # tuple-keyed (name, city, state, country)
 ) -> tuple[dict[int, str], dict[int, str]]:
     """Invert the name→id maps so IDs can be displayed as names."""
     artist_id_to_name: dict[int, str] = {}
@@ -1085,18 +1094,19 @@ def main() -> None:
             else:
                 genuinely_new_artists[show["artist_name"]] = None
 
-        # ── Venue resolution — composite (name, city, state) key (GP-134) ─
+        # ── Venue resolution — composite (name, city, state, country) key (GP-136) ─
         vtkey      = (
             show["venue_name"].lower(),
-            (show.get("city")  or "").lower(),
-            (show.get("state") or "").lower(),
+            (show.get("city")    or "").lower(),
+            (show.get("state")   or "").lower(),
+            (show.get("country") or "").lower(),
         )
         v_resolved = vtkey in existing_venues or show["venue_name"].lower() in venue_aliases
         if not v_resolved and show["venue_name"] not in fuzzy_venue_suggestions \
                           and show["venue_name"] not in genuinely_new_venues:
             s = find_fuzzy_venue_match(
                 show["venue_name"], existing_venues, venue_name_map,
-                show.get("city"), show.get("state"),
+                show.get("city"), show.get("state"), show.get("country"),
             )
             if s:
                 fuzzy_venue_suggestions[show["venue_name"]] = s
@@ -1241,14 +1251,15 @@ def main() -> None:
         ]
         count = create_and_resolve("dim_venue", records, "venue_name", "venue_id", existing_venues)
 
-        # Fix up: create_and_resolve writes string keys; replace with (name, city, state) tuple keys
-        # so the Apply loop below can find newly created venues with the same vtkey lookup used
-        # for all other venue lookups.
+        # Fix up: create_and_resolve writes string keys; replace with (name, city, state, country)
+        # tuple keys so the Apply loop below can find newly created venues with the same vtkey
+        # lookup used for all other venue lookups.
         for name_str, loc in genuinely_new_venues.items():
-            name_lower  = name_str.lower()
-            city_lower  = (loc.get("city")  or "").lower()
-            state_lower = (loc.get("state") or "").lower()
-            tkey = (name_lower, city_lower, state_lower)
+            name_lower    = name_str.lower()
+            city_lower    = (loc.get("city")    or "").lower()
+            state_lower   = (loc.get("state")   or "").lower()
+            country_lower = (loc.get("country") or "").lower()
+            tkey = (name_lower, city_lower, state_lower, country_lower)
             if name_lower in existing_venues:
                 existing_venues[tkey] = existing_venues.pop(name_lower)
 
@@ -1269,8 +1280,9 @@ def main() -> None:
 
         vtkey    = (
             show["venue_name"].lower(),
-            (show.get("city")  or "").lower(),
-            (show.get("state") or "").lower(),
+            (show.get("city")    or "").lower(),
+            (show.get("state")   or "").lower(),
+            (show.get("country") or "").lower(),
         )
         venue_id = existing_venues.get(vtkey) or venue_aliases.get(show["venue_name"].lower())
 
