@@ -1332,10 +1332,23 @@ export default function MyGrooveprintClient({
   // when the user has rows missing spotify_album_image_url. Fire-and-forget —
   // reloads spotifySongs on completion so colors appear without a page refresh.
   const runAlbumBackfillSilently = useCallback(async () => {
+    // Pause the loop if the tab is hidden — resumes automatically when visible again
+    const waitWhileHidden = () => new Promise<void>(resolve => {
+      if (document.visibilityState !== 'hidden') { resolve(); return }
+      const handler = () => {
+        if (document.visibilityState === 'visible') {
+          document.removeEventListener('visibilitychange', handler)
+          resolve()
+        }
+      }
+      document.addEventListener('visibilitychange', handler)
+    })
+
     let cursor: string | undefined
     let pages = 0
     const MAX_PAGES = 300
     while (pages < MAX_PAGES) {
+      await waitWhileHidden()
       try {
         const res = await fetch('/api/spotify/backfill-albums', {
           method: 'POST',
@@ -1354,7 +1367,7 @@ export default function MyGrooveprintClient({
         }
         cursor = json.next_url
         pages++
-        await new Promise(r => setTimeout(r, 3000))
+        await new Promise(r => setTimeout(r, 1500))
       } catch { break }
     }
   }, [supabase]) // eslint-disable-line react-hooks/exhaustive-deps
