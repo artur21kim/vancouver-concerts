@@ -1484,7 +1484,7 @@ export default function MyGrooveprintClient({
   const topSpotifyArtists = useMemo(() => {
     if (spotifySongs.length === 0) return [] as {
       name: string; count: number; spotifyId: string; hasAlbumData: boolean
-      albums: { name: string | null; year: string | null; releaseDate: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
+      albums: { name: string | null; year: string | null; releaseDate: string | null; imageUrl: string | null; songs: { track_name: string; track_id: string | null; added_at: string }[] }[]
     }[]
     // GP-113: filter by year AND month (when selectedMonth is set for day drilldown)
     const src = selectedYear
