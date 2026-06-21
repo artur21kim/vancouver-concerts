@@ -74,6 +74,7 @@ export default function SettingsPage() {
   // preferredCities: [] = null in DB = "all cities"; non-empty = explicit list
   const [availableCities, setAvailableCities] = useState<string[]>([])
   const [preferredCities, setPreferredCities] = useState<string[]>([])
+  const [cityHierarchy, setCityHierarchy] = useState<Record<string, Record<string, string[]>>>({})
   const [preferredTab, setPreferredTab] = useState<'shows' | 'spotify' | 'discogs'>('shows')
 
   // Avatar refresh state
@@ -168,7 +169,7 @@ export default function SettingsPage() {
           .single(),
         supabase
           .from('dim_venue')
-          .select('city')
+          .select('city, state, country')
           .not('city', 'is', null),
       ])
 
@@ -194,6 +195,20 @@ export default function SettingsPage() {
           ...new Set(cityResult.data.map((r: { city: string }) => r.city)),
         ].sort() as string[]
         setAvailableCities(cities)
+
+        // Build country → province/state → cities hierarchy
+        const hierarchy: Record<string, Record<string, string[]>> = {}
+        for (const row of cityResult.data as { city: string; state: string; country: string }[]) {
+          const { city, state, country } = row
+          if (!city || !state || !country) continue
+          if (!hierarchy[country]) hierarchy[country] = {}
+          if (!hierarchy[country][state]) hierarchy[country][state] = []
+          if (!hierarchy[country][state].includes(city)) hierarchy[country][state].push(city)
+        }
+        for (const country of Object.keys(hierarchy))
+          for (const state of Object.keys(hierarchy[country]))
+            hierarchy[country][state].sort()
+        setCityHierarchy(hierarchy)
       }
 
       // SCRUM-81: Fetch referral count in the same load cycle
@@ -296,6 +311,48 @@ export default function SettingsPage() {
         : [...preferredCities, city]
       if (next.length === 0) return // guard: can't deselect last city
       // If all cities are manually re-checked, reset to null/"all"
+      setPreferredCities(next.length === availableCities.length ? [] : next)
+    }
+  }
+
+  const PROVINCE_NAMES: Record<string, string> = {
+    BC: 'British Columbia', ON: 'Ontario', QC: 'Quebec',
+    AB: 'Alberta', MB: 'Manitoba', SK: 'Saskatchewan', NS: 'Nova Scotia',
+    NB: 'New Brunswick', NL: 'Newfoundland', PE: 'Prince Edward Island',
+    WA: 'Washington', CA: 'California', NY: 'New York', OR: 'Oregon',
+    IL: 'Illinois', TX: 'Texas', CO: 'Colorado', MA: 'Massachusetts',
+  }
+
+  const toggleProvince = (country: string, province: string) => {
+    const provinceCities = cityHierarchy[country]?.[province] ?? []
+    const allChecked = provinceCities.every(c =>
+      preferredCities.length === 0 || preferredCities.includes(c)
+    )
+    if (allChecked) {
+      const base = preferredCities.length === 0 ? availableCities : preferredCities
+      const next = base.filter(c => !provinceCities.includes(c))
+      if (next.length === 0) return
+      setPreferredCities(next)
+    } else {
+      if (preferredCities.length === 0) return
+      const next = [...new Set([...preferredCities, ...provinceCities])]
+      setPreferredCities(next.length === availableCities.length ? [] : next)
+    }
+  }
+
+  const toggleCountry = (country: string) => {
+    const countryCities = Object.values(cityHierarchy[country] ?? {}).flat()
+    const allChecked = countryCities.every(c =>
+      preferredCities.length === 0 || preferredCities.includes(c)
+    )
+    if (allChecked) {
+      const base = preferredCities.length === 0 ? availableCities : preferredCities
+      const next = base.filter(c => !countryCities.includes(c))
+      if (next.length === 0) return
+      setPreferredCities(next)
+    } else {
+      if (preferredCities.length === 0) return
+      const next = [...new Set([...preferredCities, ...countryCities])]
       setPreferredCities(next.length === availableCities.length ? [] : next)
     }
   }
@@ -577,46 +634,102 @@ export default function SettingsPage() {
                         Choose which cities appear in Browse, Discover, and My Grooveprint.
                         Applies to all cities automatically as new markets are added.
                       </p>
-                      <div className="mt-2 space-y-2">
-                        {availableCities.map(city => {
-                          const checked =
-                            preferredCities.length === 0 || preferredCities.includes(city)
+                      <div className="mt-2 space-y-1">
+                        {Object.keys(cityHierarchy).sort().map(country => {
+                          const countryCities = Object.values(cityHierarchy[country]).flat()
+                          const selectedCount = countryCities.filter(c =>
+                            preferredCities.length === 0 || preferredCities.includes(c)
+                          ).length
+                          const countryChecked = selectedCount === countryCities.length
+                          const countryPartial = selectedCount > 0 && selectedCount < countryCities.length
                           return (
-                            <label
-                              key={city}
-                              className="flex items-center gap-3 cursor-pointer group"
-                            >
-                              <div
-                                onClick={() => toggleCity(city)}
-                                className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer ${
-                                  checked
-                                    ? 'bg-primary border-primary'
-                                    : 'border-border group-hover:border-primary/50'
-                                }`}
-                              >
-                                {checked && (
-                                  <svg
-                                    className="w-2.5 h-2.5 text-primary-foreground"
-                                    fill="none"
-                                    viewBox="0 0 12 12"
-                                    stroke="currentColor"
-                                    strokeWidth="2.5"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      d="M2 6l3 3 5-5"
-                                    />
-                                  </svg>
-                                )}
-                              </div>
-                              <span
-                                onClick={() => toggleCity(city)}
-                                className="text-sm text-foreground select-none"
-                              >
-                                {city}
-                              </span>
-                            </label>
+                            <div key={country}>
+                              {/* Country row */}
+                              <label className="flex items-center gap-3 cursor-pointer group py-1">
+                                <div
+                                  onClick={() => toggleCountry(country)}
+                                  className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer ${
+                                    countryChecked || countryPartial
+                                      ? 'bg-primary border-primary'
+                                      : 'border-border group-hover:border-primary/50'
+                                  }`}
+                                >
+                                  {countryChecked && (
+                                    <svg className="w-2.5 h-2.5 text-primary-foreground" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="2.5">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+                                    </svg>
+                                  )}
+                                  {countryPartial && (
+                                    <svg className="w-2.5 h-2.5 text-primary-foreground" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="3">
+                                      <path strokeLinecap="round" d="M2 6h8" />
+                                    </svg>
+                                  )}
+                                </div>
+                                <span onClick={() => toggleCountry(country)} className="text-sm font-semibold text-foreground select-none">
+                                  {country}
+                                </span>
+                              </label>
+                              {/* Province/State rows */}
+                              {Object.keys(cityHierarchy[country]).sort().map(province => {
+                                const provinceCities = cityHierarchy[country][province]
+                                const provSelected = provinceCities.filter(c =>
+                                  preferredCities.length === 0 || preferredCities.includes(c)
+                                ).length
+                                const provChecked = provSelected === provinceCities.length
+                                const provPartial = provSelected > 0 && provSelected < provinceCities.length
+                                return (
+                                  <div key={province} className="ml-6">
+                                    <label className="flex items-center gap-3 cursor-pointer group py-1">
+                                      <div
+                                        onClick={() => toggleProvince(country, province)}
+                                        className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer ${
+                                          provChecked || provPartial
+                                            ? 'bg-primary border-primary'
+                                            : 'border-border group-hover:border-primary/50'
+                                        }`}
+                                      >
+                                        {provChecked && (
+                                          <svg className="w-2.5 h-2.5 text-primary-foreground" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="2.5">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+                                          </svg>
+                                        )}
+                                        {provPartial && (
+                                          <svg className="w-2.5 h-2.5 text-primary-foreground" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="3">
+                                            <path strokeLinecap="round" d="M2 6h8" />
+                                          </svg>
+                                        )}
+                                      </div>
+                                      <span onClick={() => toggleProvince(country, province)} className="text-sm font-medium text-foreground select-none">
+                                        {PROVINCE_NAMES[province] ?? province}
+                                      </span>
+                                    </label>
+                                    {/* City rows */}
+                                    {provinceCities.map(city => {
+                                      const checked = preferredCities.length === 0 || preferredCities.includes(city)
+                                      return (
+                                        <label key={city} className="flex items-center gap-3 cursor-pointer group py-0.5 ml-6">
+                                          <div
+                                            onClick={() => toggleCity(city)}
+                                            className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer ${
+                                              checked ? 'bg-primary border-primary' : 'border-border group-hover:border-primary/50'
+                                            }`}
+                                          >
+                                            {checked && (
+                                              <svg className="w-2.5 h-2.5 text-primary-foreground" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="2.5">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+                                              </svg>
+                                            )}
+                                          </div>
+                                          <span onClick={() => toggleCity(city)} className="text-sm text-muted-foreground select-none">
+                                            {city}
+                                          </span>
+                                        </label>
+                                      )
+                                    })}
+                                  </div>
+                                )
+                              })}
+                            </div>
                           )
                         })}
                       </div>
