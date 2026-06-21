@@ -11,7 +11,8 @@ All data pipeline and enrichment scripts live in `vancouver-concerts/scripts/`.
 | `refresh_shows.py` | Load fetched setlist data into Supabase after alias review | Manual | Per city import | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
 | `fetch_setlist_api.py` | Pull show data from setlist.fm API for a city/year range | Manual (GitHub Actions planned — GP-95) | Daily delta + historical backfill | `SETLIST_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
 | `find_secondary_cities.py` | Discover additional cities in a province/state by show volume | Manual | One-off per region | `SETLIST_API_KEY` |
-| `musicbrainz_artist_enrich.py` | Enrich `dim_artist` with MBIDs and official website URLs | Manual (auto-trigger planned — GP-97) | Post-ingestion | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `musicbrainz_artist_enrich.py` | Enrich `dim_artist` with MBIDs, official website URLs, artist type, and life-span years | Manual (auto-trigger planned — GP-97) | Post-ingestion | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `comedian_enrich.py` | Enrich `dim_artist` with `comedy_type='standup'` and birth/death years via Dead Frog comedian database fuzzy-match | Manual | One-off | `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `musicbrainz_venue_enrich.py` | Enrich `dim_venue` with MBIDs, open/close dates, lat/long, and URLs | Manual | Post-ingestion, per city catch-up | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `wikidata_capacity_enrich.py` | Populate `dim_venue.capacity` via Wikidata P1083 (max capacity), using `musicbrainz_place_id` as lookup key | Manual | Post-MB-enrichment, per city catch-up | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `tm_enrichment/tm_enrichment.py` | Enrich `fact_shows` with Ticketmaster URLs; enrich `dim_venue` with lat/long for TM-mapped venues | Manual | Per city, after import | `TM_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
@@ -80,7 +81,7 @@ python scripts/find_secondary_cities.py --state SK --country CA --output exports
 ---
 
 ### `musicbrainz_artist_enrich.py`
-Looks up MBIDs and official website URLs for artists in `dim_artist`.
+Looks up MBIDs, official website URLs, artist type, and life-span years for artists in `dim_artist`.
 
 ```bash
 # Preflight — no DB writes
@@ -89,11 +90,55 @@ python scripts/musicbrainz_artist_enrich.py --limit 20
 # Live run — new artists only (post-ingestion):
 python scripts/musicbrainz_artist_enrich.py --new-only --live
 
+# Backfill artist_type / begin_year / end_year for already-enriched artists:
+python scripts/musicbrainz_artist_enrich.py --meta-only --live
+
 # Full overnight run:
 python scripts/musicbrainz_artist_enrich.py --live --verbose
 ```
 
 **Note:** Renamed from `musicbrainz_enrich.py` (GP-129). Uses `musicbrainz_artist_id` column.
+
+---
+
+### `comedian_enrich.py`
+Fuzzy-matches comedian names from the Dead Frog database against `dim_artist.artist_name`. Writes `comedy_type = 'standup'` for confident matches, and optionally backfills `begin_year`/`end_year` for dead comedians. Music-comedy acts (Flight of the Conchords, Tim Minchin, etc.) are excluded and must be tagged manually.
+
+```bash
+# Preflight — no DB writes (default):
+python scripts/comedian_enrich.py \
+    --all   exports/dead_frog_all_comedians.xlsx \
+    --dead  exports/dead_frog_dead_comedians.xlsx
+
+# Live run:
+python scripts/comedian_enrich.py \
+    --all   exports/dead_frog_all_comedians.xlsx \
+    --dead  exports/dead_frog_dead_comedians.xlsx \
+    --live
+
+# Adjust threshold (default 0.85):
+python scripts/comedian_enrich.py \
+    --all exports/dead_frog_all_comedians.xlsx \
+    --dead exports/dead_frog_dead_comedians.xlsx \
+    --threshold 0.90 --live
+```
+
+**After a live run**, backfill `show_type` for comedy shows:
+```sql
+UPDATE fact_shows
+SET show_type = 'comedy'
+WHERE show_type = 'music'
+  AND artist_id IN (SELECT artist_id FROM dim_artist WHERE comedy_type IS NOT NULL);
+```
+
+**Music-comedy acts** — tag manually after the run:
+```sql
+UPDATE dim_artist SET comedy_type = 'music-comedy'
+WHERE artist_name IN ('Flight of the Conchords', 'Tim Minchin', 'Stephen Lynch', 'Bridget Everett');
+```
+
+**Output:** `exports/comedian_review_YYYY-MM-DD.csv` — matches between 0.70–0.95 similarity for manual verification.  
+**Prerequisites:** `openpyxl` (`pip install openpyxl --break-system-packages`). XLSX files from Dead Frog database with columns: `Title | Title_URL | Image` (all comedians) and `Title | Title_URL | Image | Field` (dead comedians, where Field = "YYYY - YYYY").
 
 ---
 
@@ -211,7 +256,7 @@ Each script subfolder has its own `.env` file (gitignored). Copy `.env.example` 
 | `SETLIST_API_KEY` | `fetch_setlist_api.py`, `find_secondary_cities.py` |
 | `SUPABASE_URL` | All Supabase-connected scripts |
 | `SUPABASE_SERVICE_KEY` | `refresh_shows.py`, `nominatim_enrich.py`, `tm_enrichment.py` |
-| `SUPABASE_SERVICE_ROLE_KEY` | `musicbrainz_artist_enrich.py`, `musicbrainz_venue_enrich.py`, `wikidata_capacity_enrich.py` |
+| `SUPABASE_SERVICE_ROLE_KEY` | `musicbrainz_artist_enrich.py`, `comedian_enrich.py`, `musicbrainz_venue_enrich.py`, `wikidata_capacity_enrich.py` |
 | `TM_API_KEY` | `tm_enrichment.py` |
 | `SPOTIFY_CLIENT_ID` | `spotify_matcher_fixed.py` |
 | `SPOTIFY_CLIENT_SECRET` | `spotify_matcher_fixed.py` |
@@ -225,7 +270,8 @@ Each script subfolder has its own `.env` file (gitignored). Copy `.env.example` 
 3. `refresh_shows.py` — interactive alias review + live insert  
    ↳ `auto_update_venue_status()` runs automatically after insert
 4. `musicbrainz_artist_enrich.py --new-only --live` — enrich new artists
-5. `tm_enrichment.py` — lat/long for TM-mapped venues; upcoming show TM URLs
-6. `musicbrainz_venue_enrich.py --live --city <city>` — MBID, dates, lat/long for MB-known venues
-7. `nominatim_enrich.py --live --city <city>` — fallback geocoding for remaining venues
-8. `wikidata_capacity_enrich.py --live --city <city>` — capacity from Wikidata for MB-matched venues
+5. `tm_enrichment/tm_venue_search.py --live --city <city>` — discover and write `tm_venue_id` + lat/long for TM-mapped venues
+6. `tm_enrichment/tm_enrichment.py` — upcoming show TM URLs
+7. `musicbrainz_venue_enrich.py --live --city <city>` — MBID, dates, lat/long for MB-known venues
+8. `nominatim_enrich.py --live --city <city>` — fallback geocoding for remaining venues
+9. `wikidata_capacity_enrich.py --live --city <city>` — capacity from Wikidata for MB-matched venues
