@@ -250,7 +250,7 @@ export default function FriendsPage() {
                           <>
                             <span className="text-xs text-primary font-medium">Friends ✓</span>
                             <a
-                              href={`/profile/${result.username}`}
+                              href={`/profile/${result.username}/shows`}
                               className="px-3 py-1 text-xs font-semibold rounded-md border border-border text-muted-foreground hover:text-foreground transition"
                             >
                               View Profile
@@ -336,7 +336,7 @@ export default function FriendsPage() {
                         Grooveprint
                       </a>
                       <a
-                        href={`/profile/${friend.username}?compare=true`}
+                        href={`/profile/${friend.username}/shows?compare=true`}
                         className="px-3 py-1 text-xs font-semibold rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition"
                       >
                         Compare
