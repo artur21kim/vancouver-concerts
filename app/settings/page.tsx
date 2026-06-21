@@ -75,6 +75,10 @@ export default function SettingsPage() {
   const [availableCities, setAvailableCities] = useState<string[]>([])
   const [preferredCities, setPreferredCities] = useState<string[]>([])
   const [cityHierarchy, setCityHierarchy] = useState<Record<string, Record<string, string[]>>>({})
+  const [expanded, setExpanded] = useState<string[]>([]) // default collapsed; keys: country or "country::province"
+
+  const toggleExpand = (key: string) =>
+    setExpanded(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
   const [preferredTab, setPreferredTab] = useState<'shows' | 'spotify' | 'discogs'>('shows')
 
   // Avatar refresh state
@@ -636,6 +640,8 @@ export default function SettingsPage() {
                       </p>
                       <div className="mt-2 space-y-1">
                         {Object.keys(cityHierarchy).sort().map(country => {
+                          const countryKey = country
+                          const countryExpanded = expanded.includes(countryKey)
                           const countryCities = Object.values(cityHierarchy[country]).flat()
                           const selectedCount = countryCities.filter(c =>
                             preferredCities.length === 0 || preferredCities.includes(c)
@@ -645,13 +651,19 @@ export default function SettingsPage() {
                           return (
                             <div key={country}>
                               {/* Country row */}
-                              <label className="flex items-center gap-3 cursor-pointer group py-1">
+                              <div className="flex items-center gap-1 py-1">
+                                <button
+                                  onClick={() => toggleExpand(countryKey)}
+                                  className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                                >
+                                  <svg className={`w-3 h-3 transition-transform ${countryExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="2.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 2l4 4-4 4" />
+                                  </svg>
+                                </button>
                                 <div
                                   onClick={() => toggleCountry(country)}
                                   className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer ${
-                                    countryChecked || countryPartial
-                                      ? 'bg-primary border-primary'
-                                      : 'border-border group-hover:border-primary/50'
+                                    countryChecked || countryPartial ? 'bg-primary border-primary' : 'border-border hover:border-primary/50'
                                   }`}
                                 >
                                   {countryChecked && (
@@ -665,12 +677,19 @@ export default function SettingsPage() {
                                     </svg>
                                   )}
                                 </div>
-                                <span onClick={() => toggleCountry(country)} className="text-sm font-semibold text-foreground select-none">
-                                  {country}
-                                </span>
-                              </label>
+                                <button onClick={() => toggleExpand(countryKey)} className="flex items-center gap-2 min-w-0 ml-2">
+                                  <span className="text-sm font-semibold text-foreground select-none">{country}</span>
+                                  {!countryExpanded && (
+                                    <span className="text-xs text-muted-foreground select-none">
+                                      · {selectedCount} of {countryCities.length}
+                                    </span>
+                                  )}
+                                </button>
+                              </div>
                               {/* Province/State rows */}
-                              {Object.keys(cityHierarchy[country]).sort().map(province => {
+                              {countryExpanded && Object.keys(cityHierarchy[country]).sort().map(province => {
+                                const provKey = `${country}::${province}`
+                                const provExpanded = expanded.includes(provKey)
                                 const provinceCities = cityHierarchy[country][province]
                                 const provSelected = provinceCities.filter(c =>
                                   preferredCities.length === 0 || preferredCities.includes(c)
@@ -678,14 +697,20 @@ export default function SettingsPage() {
                                 const provChecked = provSelected === provinceCities.length
                                 const provPartial = provSelected > 0 && provSelected < provinceCities.length
                                 return (
-                                  <div key={province} className="ml-6">
-                                    <label className="flex items-center gap-3 cursor-pointer group py-1">
+                                  <div key={province} className="ml-5">
+                                    <div className="flex items-center gap-1 py-1">
+                                      <button
+                                        onClick={() => toggleExpand(provKey)}
+                                        className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                                      >
+                                        <svg className={`w-3 h-3 transition-transform ${provExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="2.5">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 2l4 4-4 4" />
+                                        </svg>
+                                      </button>
                                       <div
                                         onClick={() => toggleProvince(country, province)}
                                         className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer ${
-                                          provChecked || provPartial
-                                            ? 'bg-primary border-primary'
-                                            : 'border-border group-hover:border-primary/50'
+                                          provChecked || provPartial ? 'bg-primary border-primary' : 'border-border hover:border-primary/50'
                                         }`}
                                       >
                                         {provChecked && (
@@ -699,15 +724,23 @@ export default function SettingsPage() {
                                           </svg>
                                         )}
                                       </div>
-                                      <span onClick={() => toggleProvince(country, province)} className="text-sm font-medium text-foreground select-none">
-                                        {PROVINCE_NAMES[province] ?? province}
-                                      </span>
-                                    </label>
+                                      <button onClick={() => toggleExpand(provKey)} className="flex items-center gap-2 min-w-0 ml-2">
+                                        <span className="text-sm font-medium text-foreground select-none">
+                                          {PROVINCE_NAMES[province] ?? province}
+                                        </span>
+                                        {!provExpanded && (
+                                          <span className="text-xs text-muted-foreground select-none">
+                                            · {provSelected} of {provinceCities.length}
+                                          </span>
+                                        )}
+                                      </button>
+                                    </div>
                                     {/* City rows */}
-                                    {provinceCities.map(city => {
+                                    {provExpanded && provinceCities.map(city => {
                                       const checked = preferredCities.length === 0 || preferredCities.includes(city)
                                       return (
-                                        <label key={city} className="flex items-center gap-3 cursor-pointer group py-0.5 ml-6">
+                                        <label key={city} className="flex items-center gap-1 cursor-pointer group py-0.5 ml-5">
+                                          <div className="w-5 h-5 flex-shrink-0" />
                                           <div
                                             onClick={() => toggleCity(city)}
                                             className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer ${
@@ -720,7 +753,7 @@ export default function SettingsPage() {
                                               </svg>
                                             )}
                                           </div>
-                                          <span onClick={() => toggleCity(city)} className="text-sm text-muted-foreground select-none">
+                                          <span onClick={() => toggleCity(city)} className="text-sm text-muted-foreground select-none ml-2">
                                             {city}
                                           </span>
                                         </label>
