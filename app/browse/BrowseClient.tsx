@@ -899,7 +899,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 210px 130px minmax(120px,1fr) 72px 76px`, columnGap: '8px' }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 190px 240px 130px minmax(120px,1fr) 72px 76px`, columnGap: '8px' }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -965,7 +965,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 210px 130px minmax(120px,1fr) 72px 76px`, columnGap: '8px' }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 190px 240px 130px minmax(120px,1fr) 72px 76px`, columnGap: '8px' }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
