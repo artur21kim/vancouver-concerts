@@ -628,45 +628,7 @@ function BrowseContent({
 
             {/* Row 1: dropdowns */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Show Type</label>
-                <select
-                  value={showType}
-                  onChange={e => handleShowTypeChange(e.target.value)}
-                  className={`w-full px-3 py-1.5 md:py-2 text-sm text-foreground bg-card rounded-md focus:outline-none focus:ring-2 focus:ring-ring transition-colors ${showType ? 'border-[1.5px] border-primary' : 'border border-border'}`}
-                >
-                  <option value="">All Shows</option>
-                  <option value="music">Music</option>
-                  <option value="comedy">Comedy</option>
-                  <option value="festival">Festival</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Location</label>
-                <select
-                  value={province}
-                  onChange={e => handleProvinceChange(e.target.value)}
-                  className={`w-full px-3 py-1.5 md:py-2 text-sm text-foreground bg-card rounded-md focus:outline-none focus:ring-2 focus:ring-ring transition-colors ${province ? 'border-[1.5px] border-primary' : 'border border-border'}`}
-                >
-                  <option value="">All Locations</option>
-                  {Array.from(
-                    availableLocations.reduce((acc, loc) => {
-                      if (!acc.has(loc.country)) acc.set(loc.country, [])
-                      acc.get(loc.country)!.push(loc.state)
-                      return acc
-                    }, new Map<string, string[]>())
-                  ).map(([country, states]) => (
-                    <optgroup key={country} label={COUNTRY_DISPLAY[country] ?? country}>
-                      {states.map(s => (
-                        <option key={s} value={s}>{PROVINCE_NAMES[s] ?? s}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-
-              {/* Unified search: Artists, Venues, Festivals */}
+              {/* Unified search: Artists, Venues, Festivals — first and prominent */}
               <div className="col-span-2 md:col-span-1 relative" ref={browseSearchRef}>
                 <label className="block text-sm font-medium text-foreground mb-2">Search</label>
                 <div className="relative">
@@ -734,13 +696,7 @@ function BrowseContent({
                       <>
                         <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-teal-400 uppercase tracking-wider">Venues</div>
                         {filteredVenueResults.map(v => {
-                          const cat = (v.capacity_category ?? '').toLowerCase()
-                          const vLabel = cat.includes('small') ? 'S' : cat.includes('x-large') || cat.includes('xlarge') ? 'XL' : cat.includes('large') ? 'L' : cat.includes('medium') ? 'M' : null
-                          const vStyle = cat.includes('small') ? { backgroundColor: 'rgba(139,92,246,0.85)', color: '#fff' }
-                                       : cat.includes('medium') ? { backgroundColor: 'rgba(58,143,189,0.85)', color: '#fff' }
-                                       : (cat.includes('large') && !cat.includes('x')) ? { backgroundColor: 'rgba(234,88,12,0.85)', color: '#fff' }
-                                       : (cat.includes('xlarge') || cat.includes('x-large')) ? { backgroundColor: 'rgba(225,29,72,0.85)', color: '#fff' }
-                                       : null
+                          const loc = venueCityMap.get(v.venue_id)
                           return (
                             <button
                               key={v.venue_id}
@@ -748,10 +704,8 @@ function BrowseContent({
                               className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center justify-between gap-2"
                             >
                               <span className="truncate">{v.venue_name}</span>
-                              {vLabel && vStyle && (
-                                <span style={{ ...vStyle, fontSize: '9px', padding: '1px 4px', borderRadius: '3px', fontWeight: 700, flexShrink: 0 }}>
-                                  {vLabel}
-                                </span>
+                              {loc?.city && loc?.state && (
+                                <span className="text-xs text-muted-foreground flex-shrink-0">{loc.city}, {loc.state}</span>
                               )}
                             </button>
                           )
@@ -779,6 +733,44 @@ function BrowseContent({
                     )}
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Location</label>
+                <select
+                  value={province}
+                  onChange={e => handleProvinceChange(e.target.value)}
+                  className={`w-full px-3 py-1.5 md:py-2 text-sm text-foreground bg-card rounded-md focus:outline-none focus:ring-2 focus:ring-ring transition-colors ${province ? 'border-[1.5px] border-primary' : 'border border-border'}`}
+                >
+                  <option value="">All Locations</option>
+                  {Array.from(
+                    availableLocations.reduce((acc, loc) => {
+                      if (!acc.has(loc.country)) acc.set(loc.country, [])
+                      acc.get(loc.country)!.push(loc.state)
+                      return acc
+                    }, new Map<string, string[]>())
+                  ).map(([country, states]) => (
+                    <optgroup key={country} label={COUNTRY_DISPLAY[country] ?? country}>
+                      {states.map(s => (
+                        <option key={s} value={s}>{PROVINCE_NAMES[s] ?? s}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Show Type</label>
+                <select
+                  value={showType}
+                  onChange={e => handleShowTypeChange(e.target.value)}
+                  className={`w-full px-3 py-1.5 md:py-2 text-sm text-foreground bg-card rounded-md focus:outline-none focus:ring-2 focus:ring-ring transition-colors ${showType ? 'border-[1.5px] border-primary' : 'border border-border'}`}
+                >
+                  <option value="">All Shows</option>
+                  <option value="music">Music</option>
+                  <option value="comedy">Comedy</option>
+                  <option value="festival">Festival</option>
+                </select>
               </div>
             </div>
 
