@@ -51,7 +51,7 @@ type Stats = {
 type SelectOption = { value: number | string; label: string }
 type CapacityFilter = 'all' | 'small' | 'medium' | 'large' | 'xlarge' | 'unknown'
 type StatusFilter = 'all' | 'open' | 'closed'
-type SortField = 'date' | 'artist' | 'venue' | 'festival'
+type SortField = 'date' | 'artist' | 'venue' | 'festival' | 'city' | 'tour'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const DECADES = ['All Time', '1900s', '1910s', '1920s', '1930s', '1940s', '1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s']
@@ -895,7 +895,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 200px 175px 90px 130px minmax(80px,1fr) 72px 76px`, columnGap: '8px' }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 175px 90px 160px minmax(80px,1fr) 72px 76px`, columnGap: '8px' }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -906,8 +906,12 @@ function BrowseContent({
                 <button onClick={() => handleSort('venue')} className={thSortable}>
                   Venue {sortField === 'venue' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
-                <div className={thBase}>City</div>
-                <div className={thBase}>Tour</div>
+                <button onClick={() => handleSort('city')} className={thSortable}>
+                  City {sortField === 'city' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                </button>
+                <button onClick={() => handleSort('tour')} className={thSortable}>
+                  Tour {sortField === 'tour' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                </button>
                 <button onClick={() => handleSort('festival')} className={thSortable}>
                   Festival {sortField === 'festival' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
@@ -960,7 +964,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 200px 175px 90px 130px minmax(80px,1fr) 72px 76px`, columnGap: '8px' }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 175px 90px 160px minmax(80px,1fr) 72px 76px`, columnGap: '8px' }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
