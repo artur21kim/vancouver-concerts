@@ -899,7 +899,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 210px 90px minmax(120px,1fr) 72px 76px`, columnGap: '8px' }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 210px 130px minmax(120px,1fr) 72px 76px`, columnGap: '8px' }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -965,7 +965,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 210px 90px minmax(120px,1fr) 72px 76px`, columnGap: '8px' }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 210px 130px minmax(120px,1fr) 72px 76px`, columnGap: '8px' }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
@@ -1018,18 +1018,22 @@ function BrowseContent({
                         </div>
 
                         {/* City */}
-                        <div className="flex items-center px-3 py-3">
+                        <div className="flex items-center gap-1 px-3 py-3 overflow-hidden">
                           {(() => {
                             const loc = venueCityMap.get(show.venue_id)
-                            return loc?.city && loc?.state
-                              ? <button
-                                  onClick={() => handleProvinceChange(loc.state!)}
-                                  className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors whitespace-nowrap text-left"
-                                  title={`Filter: ${PROVINCE_NAMES[loc.state!] ?? loc.state}`}
-                                >
-                                  {loc.city}, {loc.state}{loc.country && FLAG_EMOJI[loc.country] ? ` ${FLAG_EMOJI[loc.country]}` : ''}
-                                </button>
-                              : <span className="text-sm text-muted-foreground">–</span>
+                            if (!loc?.city || !loc?.state) return <span className="text-sm text-muted-foreground">–</span>
+                            return <>
+                              <button
+                                onClick={() => handleProvinceChange(loc.state!)}
+                                className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors text-left truncate min-w-0"
+                                title={`Filter: ${PROVINCE_NAMES[loc.state!] ?? loc.state}`}
+                              >
+                                {loc.city}, {loc.state}
+                              </button>
+                              {loc.country && FLAG_EMOJI[loc.country] && (
+                                <span className="flex-shrink-0 text-sm leading-none">{FLAG_EMOJI[loc.country]}</span>
+                              )}
+                            </>
                           })()}
                         </div>
 
