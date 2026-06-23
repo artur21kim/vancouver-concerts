@@ -588,30 +588,29 @@ function BrowseContent({
         <div className="max-w-7xl mx-auto">
           <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-4 md:mb-6">{pageTitle}</h1>
 
-          {/* Stats Cards */}
-          <div className="mb-4 md:mb-8">
-            <div className="grid grid-cols-4 md:grid-cols-3 gap-2 md:gap-4 mb-2 md:mb-4">
-              <StatCard label="Shows"   value={stats.total_shows.toLocaleString()} />
-              <StatCard label="Artists" value={stats.unique_artists.toLocaleString()} />
-              <StatCard label="Venues"  value={stats.unique_venues.toLocaleString()} />
-              {dateRangeDisplay && (
-                <div className="md:hidden bg-card rounded-lg shadow p-2">
-                  <p className="text-[10px] text-muted-foreground mb-0.5 leading-tight">Date Range</p>
-                  <p className="text-sm font-bold text-foreground break-words leading-tight">{dateRangeDisplayMobile}</p>
-                </div>
-              )}
-            </div>
-            {dateRangeDisplay && (
-              <div className="hidden md:grid md:grid-cols-3 gap-4">
-                <StatCard label="Date Range" value={dateRangeDisplay} />
-                {artistId && (shows[0]?.monthly_listeners != null) && (
-                  <StatCard label="Monthly Listeners" value={shows[0].monthly_listeners!.toLocaleString()} />
-                )}
-                {venueId && (shows[0]?.capacity != null) && (
-                  <StatCard label="Capacity" value={shows[0].capacity!.toLocaleString()} />
-                )}
+          {/* Stats mega card */}
+          <div className="bg-card rounded-lg shadow-lg mb-4 md:mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4">
+              <div className="p-3 md:p-5 border-r border-b md:border-b-0 border-border">
+                <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 leading-tight uppercase tracking-wide">Shows</p>
+                <p className="text-xl md:text-3xl font-bold text-foreground leading-tight">{stats.total_shows.toLocaleString()}</p>
               </div>
-            )}
+              <div className="p-3 md:p-5 border-b md:border-b-0 md:border-r border-border">
+                <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 leading-tight uppercase tracking-wide">Artists</p>
+                <p className="text-xl md:text-3xl font-bold text-foreground leading-tight">{stats.unique_artists.toLocaleString()}</p>
+              </div>
+              <div className="p-3 md:p-5 border-r border-border">
+                <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 leading-tight uppercase tracking-wide">Venues</p>
+                <p className="text-xl md:text-3xl font-bold text-foreground leading-tight">{stats.unique_venues.toLocaleString()}</p>
+              </div>
+              <div className="p-3 md:p-5">
+                <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 leading-tight uppercase tracking-wide">Date Range</p>
+                <p className="text-sm md:text-xl font-bold text-foreground leading-tight">
+                  <span className="md:hidden">{dateRangeDisplayMobile ?? '–'}</span>
+                  <span className="hidden md:block">{dateRangeDisplay ?? '–'}</span>
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Filters */}
@@ -831,7 +830,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 200px 175px 90px minmax(80px,1fr) 72px 76px` }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 200px 175px 90px minmax(80px,1fr) 72px 76px`, columnGap: '8px' }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -895,7 +894,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 200px 175px 90px minmax(80px,1fr) 72px 76px` }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 200px 175px 90px minmax(80px,1fr) 72px 76px`, columnGap: '8px' }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
@@ -937,7 +936,11 @@ function BrowseContent({
                             {show.venue_name}
                           </button>
                           {capLabel && capStyle && (
-                            <span style={capStyle} className="inline-flex items-center px-1 py-px rounded text-[9px] font-bold flex-shrink-0">
+                            <span
+                              style={capStyle}
+                              className="inline-flex items-center px-1 py-px rounded text-[9px] font-bold flex-shrink-0 cursor-default"
+                              title={show.capacity ? `${show.capacity.toLocaleString()} capacity` : undefined}
+                            >
                               {capLabel}
                             </span>
                           )}
@@ -1019,7 +1022,11 @@ function BrowseContent({
                               {show.venue_name}
                             </button>
                             {capLabel && capStyle && (
-                              <span style={capStyle} className="inline-flex items-center px-1 py-px rounded text-[8px] font-bold flex-shrink-0">
+                              <span
+                                style={capStyle}
+                                className="inline-flex items-center px-1 py-px rounded text-[8px] font-bold flex-shrink-0 cursor-default"
+                                title={show.capacity ? `${show.capacity.toLocaleString()} capacity` : undefined}
+                              >
                                 {capLabel}
                               </span>
                             )}
