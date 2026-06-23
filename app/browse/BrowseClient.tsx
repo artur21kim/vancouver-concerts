@@ -86,6 +86,10 @@ const COUNTRY_DISPLAY: Record<string, string> = {
   CA: 'Canada', US: 'United States',
 }
 
+const FLAG_EMOJI: Record<string, string> = {
+  CA: '🇨🇦', US: '🇺🇸',
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function decadeToParam(label: string): string {
   return label === 'All Time' ? 'all' : label
@@ -271,8 +275,8 @@ function BrowseContent({
   }, [venues])
 
   const venueCityMap = useMemo(() => {
-    const map = new Map<number, { city: string | null; state: string | null }>()
-    for (const v of venues) map.set(v.venue_id, { city: v.city ?? null, state: v.state ?? null })
+    const map = new Map<number, { city: string | null; state: string | null; country: string | null }>()
+    for (const v of venues) map.set(v.venue_id, { city: v.city ?? null, state: v.state ?? null, country: v.country ?? null })
     return map
   }, [venues])
 
@@ -895,7 +899,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 175px 90px minmax(120px,1fr) 72px 76px`, columnGap: '8px' }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 210px 90px minmax(120px,1fr) 72px 76px`, columnGap: '8px' }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -909,7 +913,9 @@ function BrowseContent({
                 <button onClick={() => handleSort('city')} className={thSortable}>
                   City {sortField === 'city' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
-                <div className={thBase}>Tour / Festival</div>
+                <button onClick={() => handleSort('festival')} className={thSortable}>
+                  Tour / Festival {sortField === 'festival' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                </button>
                 <div className={thCenter}>Tickets</div>
                 <div className={thCenter}>Setlist</div>
               </div>
@@ -959,7 +965,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 175px 90px minmax(120px,1fr) 72px 76px`, columnGap: '8px' }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 210px 90px minmax(120px,1fr) 72px 76px`, columnGap: '8px' }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
@@ -1021,7 +1027,7 @@ function BrowseContent({
                                   className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors whitespace-nowrap text-left"
                                   title={`Filter: ${PROVINCE_NAMES[loc.state!] ?? loc.state}`}
                                 >
-                                  {loc.city}, {loc.state}
+                                  {loc.city}, {loc.state}{loc.country && FLAG_EMOJI[loc.country] ? ` ${FLAG_EMOJI[loc.country]}` : ''}
                                 </button>
                               : <span className="text-sm text-muted-foreground">–</span>
                           })()}
@@ -1030,11 +1036,18 @@ function BrowseContent({
                         {/* Tour / Festival */}
                         <div className="flex items-center px-3 py-3 min-w-0">
                           {show.tour_name
-                            ? <span className="text-sm text-muted-foreground truncate" title={show.tour_name}>{show.tour_name}</span>
+                            ? <span
+                                className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium truncate cursor-default"
+                                style={{ backgroundColor: 'rgba(13,148,136,0.12)', color: '#0d9488', border: '1px solid rgba(13,148,136,0.25)' }}
+                                title={show.tour_name}
+                              >
+                                {show.tour_name}
+                              </span>
                             : show.festival_name
                               ? <button
                                   onClick={() => handleBrowseSearchSelect('festival', show.festival_name!, show.festival_name!)}
-                                  className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors text-left truncate"
+                                  className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium truncate hover:opacity-75 transition-opacity"
+                                  style={{ backgroundColor: 'rgba(13,148,136,0.12)', color: '#0d9488', border: '1px solid rgba(13,148,136,0.25)' }}
                                   title={`Filter by ${show.festival_name}`}
                                 >
                                   {show.festival_name}
@@ -1108,7 +1121,7 @@ function BrowseContent({
                           {(() => {
                             const loc = venueCityMap.get(show.venue_id)
                             return loc?.city && loc?.state
-                              ? <span className="text-[9px] text-muted-foreground/60 leading-tight">{loc.city}, {loc.state}</span>
+                              ? <span className="text-[9px] text-muted-foreground/60 leading-tight">{loc.city}, {loc.state}{loc.country && FLAG_EMOJI[loc.country] ? ` ${FLAG_EMOJI[loc.country]}` : ''}</span>
                               : null
                           })()}
                           {(show.tour_name || show.festival_name) && (
