@@ -16,14 +16,14 @@ Usage:
     # Check secondary cities around a primary metro:
     python scripts/find_secondary_cities.py
     python scripts/find_secondary_cities.py --threshold 500
-    python scripts/find_secondary_cities.py --output exports/secondary_cities.csv
+    python scripts/find_secondary_cities.py --output exports/secondary_cities/metro.csv
     python scripts/find_secondary_cities.py --city "Toronto" --city "Montreal"
 
     # Province-wide standalone city sweep (GP-96):
     python scripts/find_secondary_cities.py --state BC --country CA
     python scripts/find_secondary_cities.py --state ON --country CA
-    python scripts/find_secondary_cities.py --state BC --country CA --threshold 500 --output exports/secondary_cities_bc.csv
-    python scripts/find_secondary_cities.py --state ON --country CA --threshold 500 --output exports/secondary_cities_on.csv
+    python scripts/find_secondary_cities.py --state BC --country CA --threshold 500 --output exports/secondary_cities/bc.csv
+    python scripts/find_secondary_cities.py --state ON --country CA --threshold 500 --output exports/secondary_cities/on.csv
 
 Output:
     Console table + CSV with columns:
@@ -646,7 +646,7 @@ def main() -> None:
     )
     ap.add_argument(
         "--output", default="",
-        help="Output CSV path (default: exports/secondary_cities.csv or exports/secondary_cities_{state}.csv)",
+        help="Output CSV path (default: exports/secondary_cities/{state}.csv or exports/secondary_cities/metro.csv)",
     )
     ap.add_argument(
         "--city", action="append", dest="cities", metavar="CITY",
@@ -685,7 +685,7 @@ def main() -> None:
             sys.exit(1)
         state_up   = args.state.upper()
         country_up = args.country.upper()
-        default_out = f"exports/secondary_cities_{state_up.lower()}.csv"
+        default_out = f"exports/secondary_cities/{state_up.lower()}.csv"
         output_path = Path(args.output) if args.output else Path(default_out)
         run_province_sweep(
             state_code=state_up,
@@ -707,7 +707,7 @@ def main() -> None:
         sys.exit(1)
 
     total_candidates = sum(len(METRO_AREAS[c]) for c in targets)
-    output_path = Path(args.output) if args.output else Path("exports/secondary_cities.csv")
+    output_path = Path(args.output) if args.output else Path("exports/secondary_cities/metro.csv")
 
     print("=" * 64)
     print("Grooveprint — Secondary City Discovery")

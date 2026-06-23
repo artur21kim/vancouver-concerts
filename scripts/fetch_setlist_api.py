@@ -49,10 +49,10 @@ Usage:
     python scripts/fetch_setlist_api.py \
         --city Vancouver --state BC --country CA --year 2026
 
-    # Default output now writes to exports/{city}/ subfolder automatically:
-    #   exports/seattle/seattle_2025_api.csv
-    #   exports/toronto/toronto_2024_api.csv
-    #   exports/seattle-tacoma/tacoma_2024_api.csv  (use --output for secondaries)
+    # Default output now writes to exports/_{COUNTRY}/{STATE}/{city}/ automatically:
+    #   exports/_US/WA/seattle/seattle_2025_api.csv
+    #   exports/_CA/ON/toronto/toronto_2024_api.csv
+    #   exports/_CA/AB/calgary/calgary_1900-2025_api.csv  (use --output for secondaries)
 
 Then feed into the pipeline as normal:
     python scripts/refresh_shows.py \
@@ -447,7 +447,7 @@ def main() -> None:
                     help="Inclusive year range, e.g. --year-range 1900 1992 "
                          "(use instead of --years for long spans — works in any shell)")
     ap.add_argument("--output",  default="",
-                    help="Output CSV path (default: exports/{city}/{city}_{years}_api.csv)")
+                    help="Output CSV path (default: exports/_{COUNTRY}/{STATE}/{city}/{city}_{years}_api.csv)")
     ap.add_argument("--resume",  action="store_true",
                     help="Resume an interrupted run from saved progress files")
     args = ap.parse_args()
@@ -478,10 +478,12 @@ def main() -> None:
         year_slug = "_".join(str(y) for y in years)
     city_slug   = args.city.lower().replace(" ", "_")
 
-    # Default: exports/{city_slug}/{city_slug}_{year_slug}_api.csv
-    # Secondary cities should use --output exports/{parent}-{secondary}/{filename}
+    # Default: exports/_{COUNTRY}/{STATE}/{city_slug}/{city_slug}_{year_slug}_api.csv
+    # Secondary cities should use --output exports/_CA/AB/calgary-airdrie/filename
+    country_up  = args.country.upper() if args.country else "XX"
+    state_up    = args.state.upper()   if args.state   else "XX"
     output_path = Path(args.output) if args.output else (
-        Path("exports") / city_slug / f"{city_slug}_{year_slug}_api.csv"
+        Path("exports") / f"_{country_up}" / state_up / city_slug / f"{city_slug}_{year_slug}_api.csv"
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

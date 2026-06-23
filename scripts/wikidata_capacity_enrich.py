@@ -267,7 +267,7 @@ def run(
             time.sleep(REQUEST_DELAY)
 
     # ── Process results ───────────────────────────────────────────────────────
-    csv_path    = Path("exports") / f"wikidata_capacity_review_{date.today().isoformat()}.csv"
+    csv_path    = Path("exports") / "pipeline_reviews" / f"wikidata_capacity_review_{date.today().isoformat()}.csv"
     review_rows: list[dict] = []
 
     stats = {
@@ -344,7 +344,7 @@ def run(
 
     # ── Write review CSV ───────────────────────────────────────────────────────
     if review_rows:
-        csv_path.parent.mkdir(exist_ok=True)
+        csv_path.parent.mkdir(parents=True, exist_ok=True)
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=[
                 "venue_id", "venue_name", "city", "mbid",

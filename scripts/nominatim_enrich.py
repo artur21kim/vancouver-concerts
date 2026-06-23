@@ -221,9 +221,9 @@ def run(
     log.info("Confidence threshold: %.2f (below = review CSV, not auto-write)", threshold)
 
     # ── Output paths ──────────────────────────────────────────────────────────
-    EXPORTS_DIR.mkdir(exist_ok=True)
     today = date.today().isoformat()
-    review_csv_path = EXPORTS_DIR / f"nominatim_review_{today}.csv"
+    review_csv_path = EXPORTS_DIR / "pipeline_reviews" / f"nominatim_review_{today}.csv"
+    review_csv_path.parent.mkdir(parents=True, exist_ok=True)
     review_rows: list[dict] = []
 
     # ── Stats ─────────────────────────────────────────────────────────────────

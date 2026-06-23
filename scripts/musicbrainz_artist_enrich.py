@@ -322,7 +322,7 @@ def run(
     if dry_run:
         log.info("No DB writes will occur — pass --live to commit.")
 
-    csv_path = Path("exports") / f"musicbrainz_review_{date.today().isoformat()}.csv"
+    csv_path = Path("exports") / "pipeline_reviews" / f"musicbrainz_review_{date.today().isoformat()}.csv"
     review_rows: list[dict] = []
 
     stats = {"enriched": 0, "no_url": 0, "no_match": 0, "error": 0}
@@ -430,7 +430,7 @@ def run(
 
     # ── Write review CSV ───────────────────────────────────────────────────────
     if review_rows:
-        csv_path.parent.mkdir(exist_ok=True)
+        csv_path.parent.mkdir(parents=True, exist_ok=True)
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(
                 f,

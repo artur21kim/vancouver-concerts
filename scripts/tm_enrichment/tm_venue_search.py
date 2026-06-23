@@ -288,10 +288,10 @@ def run(
     log.info("Confidence threshold: %.2f", threshold)
 
     # ── Review CSV ────────────────────────────────────────────────────────────
-    EXPORTS_DIR.mkdir(exist_ok=True)
     today = date.today().isoformat()
     city_slug = city.lower().replace(" ", "_") if city else "all"
-    review_path = EXPORTS_DIR / f"tm_venue_search_review_{city_slug}_{today}.csv"
+    review_path = EXPORTS_DIR / "pipeline_reviews" / f"tm_venue_search_review_{city_slug}_{today}.csv"
+    review_path.parent.mkdir(parents=True, exist_ok=True)
     review_rows: list[dict] = []
 
     stats = {

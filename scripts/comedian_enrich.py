@@ -231,8 +231,8 @@ def run(
         len(comedians), len(artist_lookup), threshold,
     )
 
-    EXPORTS_DIR.mkdir(exist_ok=True)
-    review_path = EXPORTS_DIR / f"comedian_review_{date.today().isoformat()}.csv"
+    review_path = EXPORTS_DIR / "pipeline_reviews" / f"comedian_review_{date.today().isoformat()}.csv"
+    review_path.parent.mkdir(parents=True, exist_ok=True)
     review_rows: list[dict] = []
 
     stats = {"written": 0, "already_tagged": 0, "review": 0, "no_match": 0}

@@ -59,7 +59,7 @@ python scripts/fetch_setlist_api.py --city Vancouver --state BC --country CA --y
 ```
 
 **Rate limit:** 2 req/sec, 1,440 req/day (basic tier). Resets ~11:19 AM PST.  
-**Output:** Airport-code named CSV files (e.g. `yvr_2026-06-09.csv`).  
+**Output:** `exports/_{COUNTRY}/{STATE}/{city}/{city}_{year}.csv` (e.g. `exports/_CA/AB/calgary/calgary_1900-2025_api.csv`).  
 **GitHub Actions:** Planned at 19:30 UTC daily (GP-95), Vancouver-only until rate limit upgrade confirmed.
 
 ---
@@ -73,10 +73,11 @@ python scripts/find_secondary_cities.py --state BC --country CA
 python scripts/find_secondary_cities.py --state ON --country CA
 
 # Resume interrupted sweep (re-run same command with same --output path)
-python scripts/find_secondary_cities.py --state SK --country CA --output exports/secondary_cities_sk.csv
+python scripts/find_secondary_cities.py --state SK --country CA --output exports/secondary_cities/sk.csv
 ```
 
-**Threshold:** >1,000 shows (default) = ingestion candidate; adjust with `--threshold 500` for smaller provinces.
+**Threshold:** >1,000 shows (default) = ingestion candidate; adjust with `--threshold 500` for smaller provinces.  
+**Output:** `exports/secondary_cities/{state}.csv` (e.g. `exports/secondary_cities/ab.csv`).
 
 ---
 
@@ -97,7 +98,8 @@ python scripts/musicbrainz_artist_enrich.py --meta-only --live
 python scripts/musicbrainz_artist_enrich.py --live --verbose
 ```
 
-**Note:** Renamed from `musicbrainz_enrich.py` (GP-129). Uses `musicbrainz_artist_id` column.
+**Note:** Renamed from `musicbrainz_enrich.py` (GP-129). Uses `musicbrainz_artist_id` column.  
+**Output:** `exports/pipeline_reviews/musicbrainz_review_YYYY-MM-DD.csv` — artists with low-confidence or multiple MBID matches.
 
 ---
 
@@ -137,7 +139,7 @@ UPDATE dim_artist SET comedy_type = 'music-comedy'
 WHERE artist_name IN ('Flight of the Conchords', 'Tim Minchin', 'Stephen Lynch', 'Bridget Everett');
 ```
 
-**Output:** `exports/comedian_review_YYYY-MM-DD.csv` — matches between 0.70–0.95 similarity for manual verification.  
+**Output:** `exports/pipeline_reviews/comedian_review_YYYY-MM-DD.csv` — matches between 0.70–0.95 similarity for manual verification.  
 **Prerequisites:** `openpyxl` (`pip install openpyxl --break-system-packages`). XLSX files from Dead Frog database with columns: `Title | Title_URL | Image` (all comedians) and `Title | Title_URL | Image | Field` (dead comedians, where Field = "YYYY - YYYY").
 
 ---
@@ -165,7 +167,7 @@ python scripts/musicbrainz_venue_enrich.py --live --force
 ```
 
 **Coordinate write policy:** lat/long is only written if the venue has no existing coordinates (TM coords are preserved). Use `--overwrite-coords` to override.  
-**Output:** `exports/musicbrainz_venue_review_YYYY-MM-DD.csv` — venues with disambiguation notes or partial data.
+**Output:** `exports/pipeline_reviews/musicbrainz_venue_review_YYYY-MM-DD.csv` — venues with disambiguation notes or partial data.
 
 **Prerequisites — schema migration (run once in Supabase SQL editor):**
 ```sql
@@ -199,7 +201,7 @@ python scripts/wikidata_capacity_enrich.py --live --force
 ```
 
 **Important:** `dim_venue.capacity_category` is a `GENERATED ALWAYS` computed column — it auto-derives from `capacity` and cannot be written to directly. Only write to `capacity`.  
-**Output:** `exports/wikidata_capacity_review_YYYY-MM-DD.csv` — outlier values (< 100 or > 200,000) flagged for manual verification.  
+**Output:** `exports/pipeline_reviews/wikidata_capacity_review_YYYY-MM-DD.csv` — outlier values (< 100 or > 200,000) flagged for manual verification.  
 **Prerequisites:** `musicbrainz_place_id` must be populated. Run `musicbrainz_venue_enrich.py` first.
 
 ---
@@ -231,7 +233,7 @@ python scripts/nominatim_enrich.py --live
 # Limit to a specific city
 python scripts/nominatim_enrich.py --live --city Seattle
 
-# Review CSV: exports/nominatim_review_YYYY-MM-DD.csv
+# Review CSV: exports/pipeline_reviews/nominatim_review_YYYY-MM-DD.csv
 # Low-confidence matches require manual verification in Google Maps
 ```
 
