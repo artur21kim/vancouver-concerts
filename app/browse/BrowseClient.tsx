@@ -895,7 +895,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 175px 90px 160px minmax(80px,1fr) 72px 76px`, columnGap: '8px' }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 175px 90px minmax(120px,1fr) 72px 76px`, columnGap: '8px' }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -909,12 +909,7 @@ function BrowseContent({
                 <button onClick={() => handleSort('city')} className={thSortable}>
                   City {sortField === 'city' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
-                <button onClick={() => handleSort('tour')} className={thSortable}>
-                  Tour {sortField === 'tour' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
-                </button>
-                <button onClick={() => handleSort('festival')} className={thSortable}>
-                  Festival {sortField === 'festival' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
-                </button>
+                <div className={thBase}>Tour / Festival</div>
                 <div className={thCenter}>Tickets</div>
                 <div className={thCenter}>Setlist</div>
               </div>
@@ -964,7 +959,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 175px 90px 160px minmax(80px,1fr) 72px 76px`, columnGap: '8px' }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 220px 175px 90px minmax(120px,1fr) 72px 76px`, columnGap: '8px' }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
@@ -1032,25 +1027,19 @@ function BrowseContent({
                           })()}
                         </div>
 
-                        {/* Tour */}
+                        {/* Tour / Festival */}
                         <div className="flex items-center px-3 py-3 min-w-0">
                           {show.tour_name
                             ? <span className="text-sm text-muted-foreground truncate" title={show.tour_name}>{show.tour_name}</span>
-                            : null
-                          }
-                        </div>
-
-                        {/* Festival */}
-                        <div className="flex items-center px-3 py-3 min-w-0">
-                          {show.festival_name
-                            ? <button
-                                onClick={() => handleBrowseSearchSelect('festival', show.festival_name!, show.festival_name!)}
-                                className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors text-left truncate"
-                                title={`Filter by ${show.festival_name}`}
-                              >
-                                {show.festival_name}
-                              </button>
-                            : null
+                            : show.festival_name
+                              ? <button
+                                  onClick={() => handleBrowseSearchSelect('festival', show.festival_name!, show.festival_name!)}
+                                  className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors text-left truncate"
+                                  title={`Filter by ${show.festival_name}`}
+                                >
+                                  {show.festival_name}
+                                </button>
+                              : null
                           }
                         </div>
 
@@ -1122,8 +1111,10 @@ function BrowseContent({
                               ? <span className="text-[9px] text-muted-foreground/60 leading-tight">{loc.city}, {loc.state}</span>
                               : null
                           })()}
-                          {show.tour_name && (
-                            <span className="text-[9px] text-muted-foreground/50 leading-tight truncate" title={show.tour_name}>{show.tour_name}</span>
+                          {(show.tour_name || show.festival_name) && (
+                            <span className="text-[9px] text-muted-foreground/50 leading-tight truncate" title={show.tour_name ?? show.festival_name ?? undefined}>
+                              {show.tour_name ?? show.festival_name}
+                            </span>
                           )}
                         </div>
                         <div className="flex items-center justify-start gap-2">
