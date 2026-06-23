@@ -27,6 +27,7 @@ export default async function BrowsePage({ searchParams }: PageProps) {
   const festival = getString(params.festival)
   const capacity = getString(params.capacity)
   const status   = getString(params.status)
+  const state    = getString(params.state)      // province/state filter (e.g. 'BC', 'WA')
   const page     = getString(params.page)     || '1'
   const sort     = getString(params.sort)     || 'date'
   const dir      = getString(params.dir)      || 'desc'
@@ -63,6 +64,7 @@ export default async function BrowsePage({ searchParams }: PageProps) {
     p_festival:          festival || null,
     p_capacity:          (capacity && capacity !== 'all') ? capacity : null,
     p_status:            (status   && status   !== 'all') ? status   : null,
+    p_state:             state    || null,                // GP-151: province/state filter
     p_preferred_cities:  preferredCities,
   }
 
@@ -76,9 +78,10 @@ export default async function BrowsePage({ searchParams }: PageProps) {
       p_per_page: SHOWS_PER_PAGE,
     }),
     supabase.rpc('get_shows_stats', rpcBase),
+    // GP-151: include city, state, country for Location filter and City column
     supabase
       .from('dim_venue')
-      .select('venue_id, venue_name, capacity, capacity_category, status, other_names')
+      .select('venue_id, venue_name, capacity, capacity_category, status, other_names, city, state, country')
       .order('venue_name')
       .then(r => r.data || []),
     artistId
@@ -141,7 +144,7 @@ export default async function BrowsePage({ searchParams }: PageProps) {
       venues={venuesRes as any}
       initialParams={{
         decade, year, month, artistId, venueId,
-        showType, festival, capacity, status,
+        showType, festival, capacity, status, state,
         page: parseInt(page), sort, dir,
       }}
       initialArtistName={artistRes?.artist_name ?? null}

@@ -15,6 +15,7 @@ export async function GET(request: Request) {
   const festival = searchParams.get('festival')
   const capacity = searchParams.get('capacity')
   const status   = searchParams.get('status')
+  const state    = searchParams.get('state')    // GP-151: province/state filter (e.g. 'BC', 'WA')
   const page     = Math.max(1, parseInt(searchParams.get('page') || '1'))
   const sort     = searchParams.get('sort') || 'date'
   const dir      = searchParams.get('dir')  || 'desc'
@@ -39,6 +40,7 @@ export async function GET(request: Request) {
     p_festival:          festival || null,
     p_capacity:          (capacity && capacity !== 'all') ? capacity : null,
     p_status:            (status   && status   !== 'all') ? status   : null,
+    p_state:             state    || null,               // GP-151: province/state filter
     // GP-127: city preference filter — null = show all cities (default)
     p_preferred_cities:  preferredCities,
   }

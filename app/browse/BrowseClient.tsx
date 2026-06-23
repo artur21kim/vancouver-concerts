@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useTransition, Suspense } from 'react'
+import { useState, useEffect, useCallback, useTransition, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import AsyncSelect from 'react-select/async'
 import Select from 'react-select'
@@ -36,6 +36,9 @@ type Venue = {
   capacity_category: string | null
   status: string | null
   other_names: string | null
+  city: string | null
+  state: string | null
+  country: string | null
 }
 
 type Stats = {
@@ -71,6 +74,18 @@ const STATUS_BUTTONS: { key: StatusFilter; label: string }[] = [
 
 const MONTH_NAMES_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const TEAL = '#00BFA8'
+
+const PROVINCE_NAMES: Record<string, string> = {
+  BC: 'British Columbia', ON: 'Ontario', QC: 'Quebec', AB: 'Alberta',
+  MB: 'Manitoba', SK: 'Saskatchewan', NS: 'Nova Scotia', NB: 'New Brunswick',
+  NL: 'Newfoundland and Labrador', PE: 'Prince Edward Island',
+  NT: 'Northwest Territories', NU: 'Nunavut', YT: 'Yukon',
+  WA: 'Washington', OR: 'Oregon', CA: 'California', ID: 'Idaho', MT: 'Montana',
+}
+
+const COUNTRY_DISPLAY: Record<string, string> = {
+  CA: 'Canada', US: 'United States',
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function decadeToParam(label: string): string {
@@ -117,7 +132,7 @@ function BrowseContent({
   initialParams: {
     decade: string; year?: string; month?: string
     artistId?: string; venueId?: string; showType?: string
-    festival?: string; capacity?: string; status?: string
+    festival?: string; capacity?: string; status?: string; state?: string
     page: number; sort: string; dir: string
   }
   initialArtistName: string | null
@@ -157,6 +172,7 @@ function BrowseContent({
   const [festival,  setFestival]  = useState<SelectOption | null>(null)
   const [capacity,  setCapacity]  = useState<CapacityFilter>((initialParams.capacity as CapacityFilter) || 'all')
   const [status,    setStatus]    = useState<StatusFilter>((initialParams.status as StatusFilter) || 'all')
+  const [province,  setProvince]  = useState<string>(initialParams.state || '')
   const [page,      setPage]      = useState(initialParams.page)
   const [pageInput, setPageInput] = useState(String(initialParams.page))
   const [sortField, setSortField] = useState<SortField>((initialParams.sort as SortField) || 'date')
@@ -190,6 +206,27 @@ function BrowseContent({
 
   // ── Festival options (loaded server-side, no client fetch needed) ────────
   const [festivalOptions] = useState<SelectOption[]>(initialFestivals)
+
+  // ── Location data derived from venues ────────────────────────────────────
+  const availableLocations = useMemo(() => {
+    const seen = new Set<string>()
+    const result: { state: string; country: string }[] = []
+    for (const v of venues) {
+      if (!v.state || !v.country) continue
+      const key = `${v.state}:${v.country}`
+      if (!seen.has(key)) { seen.add(key); result.push({ state: v.state, country: v.country }) }
+    }
+    return result.sort((a, b) => {
+      if (a.country !== b.country) return a.country === 'CA' ? -1 : b.country === 'CA' ? 1 : a.country.localeCompare(b.country)
+      return (PROVINCE_NAMES[a.state] ?? a.state).localeCompare(PROVINCE_NAMES[b.state] ?? b.state)
+    })
+  }, [venues])
+
+  const venueCityMap = useMemo(() => {
+    const map = new Map<number, { city: string | null; state: string | null }>()
+    for (const v of venues) map.set(v.venue_id, { city: v.city ?? null, state: v.state ?? null })
+    return map
+  }, [venues])
 
   // ── Artist async search ───────────────────────────────────────────────────
   const loadArtistOptions = useCallback(
@@ -225,7 +262,7 @@ function BrowseContent({
   const fetchData = useCallback(async (params: {
     decade: string; year?: string; month?: string
     artistId?: string; venueId?: string; showType?: string
-    festival?: string; capacity?: string; status?: string
+    festival?: string; capacity?: string; status?: string; province?: string
     page: number; sort: string; dir: string
   }) => {
     setLoading(true)
@@ -240,6 +277,7 @@ function BrowseContent({
     if (params.festival) qs.set('festival',  params.festival)
     if (params.capacity && params.capacity !== 'all') qs.set('capacity', params.capacity)
     if (params.status && params.status !== 'all')     qs.set('status',   params.status)
+    if (params.province)                               qs.set('state',    params.province)
     qs.set('page', String(params.page))
     qs.set('sort', params.sort)
     qs.set('dir',  params.dir)
@@ -282,7 +320,7 @@ function BrowseContent({
     decade, year, month, artistId, venueId,
     showType: showType || undefined,
     festival: (festival?.value as string) || undefined,
-    capacity, status, page, sort: sortField, dir: sortDir,
+    capacity, status, province: province || undefined, page, sort: sortField, dir: sortDir,
   })
 
   const applyFilter = (overrides: Partial<ReturnType<typeof currentParams>>) => {
@@ -350,6 +388,11 @@ function BrowseContent({
     applyFilter({ status: s })
   }
 
+  const handleProvinceChange = (val: string) => {
+    setProvince(val)
+    applyFilter({ province: val || undefined })
+  }
+
   const handleClearAll = () => {
     setDecade('2020s'); setYear(undefined); setMonth(undefined)
     setArtistId(undefined); setArtistOption(null)
@@ -358,6 +401,7 @@ function BrowseContent({
     setFestival(null)
     setCapacity('all')
     setStatus('all')
+    setProvince('')
     setSortField('date'); setSortDir('desc')
     fetchData({ decade: '2020s', page: 1, sort: 'date', dir: 'desc' })
   }
@@ -583,7 +627,7 @@ function BrowseContent({
             </div>
 
             {/* Row 1: dropdowns */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-6">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Show Type</label>
                 <select
@@ -640,6 +684,30 @@ function BrowseContent({
                   className="text-sm"
                   styles={customSelectStyles}
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Location</label>
+                <select
+                  value={province}
+                  onChange={e => handleProvinceChange(e.target.value)}
+                  className={`w-full px-3 py-1.5 md:py-2 text-sm text-foreground bg-card rounded-md focus:outline-none focus:ring-2 focus:ring-ring transition-colors ${province ? 'border-[1.5px] border-primary' : 'border border-border'}`}
+                >
+                  <option value="">All Locations</option>
+                  {Array.from(
+                    availableLocations.reduce((acc, loc) => {
+                      if (!acc.has(loc.country)) acc.set(loc.country, [])
+                      acc.get(loc.country)!.push(loc.state)
+                      return acc
+                    }, new Map<string, string[]>())
+                  ).map(([country, states]) => (
+                    <optgroup key={country} label={COUNTRY_DISPLAY[country] ?? country}>
+                      {states.map(s => (
+                        <option key={s} value={s}>{PROVINCE_NAMES[s] ?? s}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -763,7 +831,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(0,1fr) minmax(0,1fr) 130px 72px 76px` }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(0,1fr) minmax(0,1fr) 96px 130px 72px 76px` }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -774,6 +842,7 @@ function BrowseContent({
                 <button onClick={() => handleSort('venue')} className={thSortable}>
                   Venue {sortField === 'venue' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
+                <div className={thBase}>City</div>
                 <button onClick={() => handleSort('festival')} className={thSortable}>
                   Festival {sortField === 'festival' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </button>
@@ -826,7 +895,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(0,1fr) minmax(0,1fr) 130px 72px 76px` }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(0,1fr) minmax(0,1fr) 96px 130px 72px 76px` }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
@@ -872,6 +941,22 @@ function BrowseContent({
                               {capLabel}
                             </span>
                           )}
+                        </div>
+
+                        {/* City */}
+                        <div className="flex items-center px-3 py-3">
+                          {(() => {
+                            const loc = venueCityMap.get(show.venue_id)
+                            return loc?.city && loc?.state
+                              ? <button
+                                  onClick={() => handleProvinceChange(loc.state!)}
+                                  className="text-xs text-muted-foreground hover:text-primary hover:underline transition-colors whitespace-nowrap text-left"
+                                  title={`Filter: ${PROVINCE_NAMES[loc.state!] ?? loc.state}`}
+                                >
+                                  {loc.city}, {loc.state}
+                                </button>
+                              : <span className="text-xs text-muted-foreground">–</span>
+                          })()}
                         </div>
 
                         {/* Festival */}
@@ -946,6 +1031,12 @@ function BrowseContent({
                               >F</button>
                             )}
                           </div>
+                          {(() => {
+                            const loc = venueCityMap.get(show.venue_id)
+                            return loc?.city && loc?.state
+                              ? <span className="text-[9px] text-muted-foreground/60 leading-tight">{loc.city}, {loc.state}</span>
+                              : null
+                          })()}
                         </div>
                         <div className="flex items-center justify-start gap-2">
                           {show.ticketmaster_url && (
