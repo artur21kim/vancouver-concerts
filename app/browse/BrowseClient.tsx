@@ -1,9 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useTransition, useMemo, Suspense } from 'react'
+import { useState, useEffect, useCallback, useTransition, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import AsyncSelect from 'react-select/async'
-import Select from 'react-select'
 import { useAuth } from '../providers/AuthProvider'
 import { createClient } from '@/lib/supabase/client'
 import Navigation from '../components/Navigation'
@@ -194,18 +192,67 @@ function BrowseContent({
     fetchUserShows()
   }, [user])
 
-  // ── Venues list (passed from server, used for venue dropdown) ─────────────
-  const venueOptions: SelectOption[] = venues.map(v => ({
-    value: v.venue_id,
-    label: v.venue_name,
-  }))
-
-  const selectedVenueOption = venueId
-    ? venueOptions.find(o => o.value === parseInt(venueId)) ?? null
-    : null
-
   // ── Festival options (loaded server-side, no client fetch needed) ────────
   const [festivalOptions] = useState<SelectOption[]>(initialFestivals)
+
+  // ── Unified search state ──────────────────────────────────────────────────
+  const getInitialSearchQuery = () => {
+    if (initialParams.artistId && initialArtistName) return initialArtistName
+    if (initialParams.venueId) {
+      const v = venues.find(v => String(v.venue_id) === initialParams.venueId)
+      return v?.venue_name ?? ''
+    }
+    if (initialParams.festival) return initialParams.festival
+    return ''
+  }
+  const [browseSearchQuery,   setBrowseSearchQuery]   = useState<string>(getInitialSearchQuery)
+  const [browseSearchOpen,    setBrowseSearchOpen]    = useState(false)
+  const [browseSearchLoading, setBrowseSearchLoading] = useState(false)
+  const [browseArtistResults, setBrowseArtistResults] = useState<SelectOption[]>([])
+  const browseSearchRef = useRef<HTMLDivElement>(null)
+
+  // Debounced artist search
+  useEffect(() => {
+    if (!browseSearchQuery.trim()) { setBrowseArtistResults([]); setBrowseSearchLoading(false); return }
+    setBrowseSearchLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/browse/artists/search?q=${encodeURIComponent(browseSearchQuery)}`)
+        const data = await res.json()
+        setBrowseArtistResults(data.artists || [])
+      } catch { setBrowseArtistResults([]) }
+      finally { setBrowseSearchLoading(false) }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [browseSearchQuery])
+
+  // Close on outside click, revert to active selection
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (browseSearchRef.current && !browseSearchRef.current.contains(e.target as Node)) {
+        setBrowseSearchOpen(false)
+        const activeLabel = artistOption?.label ||
+          (venueId ? venues.find(v => String(v.venue_id) === venueId)?.venue_name : null) ||
+          festival?.label || ''
+        setBrowseSearchQuery(activeLabel)
+      }
+    }
+    if (browseSearchOpen) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [browseSearchOpen, artistOption, venueId, festival, venues])
+
+  // Venue + festival results filtered client-side from loaded data
+  const filteredVenueResults = useMemo(() => {
+    if (!browseSearchQuery.trim()) return []
+    const q = browseSearchQuery.toLowerCase()
+    return venues.filter(v => v.venue_name.toLowerCase().includes(q)).slice(0, 5)
+  }, [browseSearchQuery, venues])
+
+  const filteredFestivalResults = useMemo(() => {
+    if (!browseSearchQuery.trim()) return []
+    const q = browseSearchQuery.toLowerCase()
+    return festivalOptions.filter(f => f.label.toLowerCase().includes(q)).slice(0, 5)
+  }, [browseSearchQuery, festivalOptions])
 
   // ── Location data derived from venues ────────────────────────────────────
   const availableLocations = useMemo(() => {
@@ -228,35 +275,6 @@ function BrowseContent({
     return map
   }, [venues])
 
-  // ── Artist async search ───────────────────────────────────────────────────
-  const loadArtistOptions = useCallback(
-    async (inputValue: string) => {
-      if (inputValue.length < 1) return []
-      const res = await fetch(`/api/browse/artists/search?q=${encodeURIComponent(inputValue)}`)
-      const data = await res.json()
-      return data.artists || []
-    },
-    []
-  )
-
-  // If we have an initial artistId from URL, resolve the name
-  useEffect(() => {
-    if (initialParams.artistId && artistOption?.label === '...') {
-      fetch(`/api/browse/artists/search?q=`)
-        .then(() => {})
-        .catch(() => {})
-      // Fetch the specific artist name
-      const supabase = createClient()
-      supabase
-        .from('dim_artist')
-        .select('artist_id, artist_name')
-        .eq('artist_id', parseInt(initialParams.artistId))
-        .single()
-        .then(({ data }) => {
-          if (data) setArtistOption({ value: data.artist_id, label: data.artist_name })
-        })
-    }
-  }, [])
 
   // ── Core: push URL + fetch new data ──────────────────────────────────────
   const fetchData = useCallback(async (params: {
@@ -355,27 +373,41 @@ function BrowseContent({
     applyFilter({ decade: newDecade, year: String(y), month: undefined })
   }
 
-  const handleArtistChange = (option: SelectOption | null) => {
-    setArtistOption(option)
-    const id = option ? String(option.value) : undefined
-    setArtistId(id)
-    applyFilter({ artistId: id })
+  const handleBrowseSearchSelect = (
+    type: 'artist' | 'venue' | 'festival',
+    id: number | string,
+    label: string
+  ) => {
+    setBrowseSearchQuery(label)
+    setBrowseSearchOpen(false)
+    setBrowseArtistResults([])
+    if (type === 'artist') {
+      const newId = String(id)
+      setArtistId(newId); setArtistOption({ value: id as number, label })
+      setVenueId(undefined); setFestival(null)
+      applyFilter({ artistId: newId, venueId: undefined, festival: undefined })
+    } else if (type === 'venue') {
+      const newId = String(id)
+      setVenueId(newId)
+      setArtistId(undefined); setArtistOption(null); setFestival(null)
+      applyFilter({ venueId: newId, artistId: undefined, festival: undefined })
+    } else {
+      const opt = { value: id as string, label }
+      setFestival(opt)
+      setArtistId(undefined); setArtistOption(null); setVenueId(undefined)
+      applyFilter({ festival: id as string, artistId: undefined, venueId: undefined })
+    }
   }
 
-  const handleVenueChange = (option: SelectOption | null) => {
-    const id = option ? String(option.value) : undefined
-    setVenueId(id)
-    applyFilter({ venueId: id })
+  const handleBrowseSearchClear = () => {
+    setBrowseSearchQuery(''); setBrowseArtistResults([]); setBrowseSearchOpen(false)
+    setArtistId(undefined); setArtistOption(null); setVenueId(undefined); setFestival(null)
+    applyFilter({ artistId: undefined, venueId: undefined, festival: undefined })
   }
 
   const handleShowTypeChange = (val: string) => {
     setShowType(val)
     applyFilter({ showType: val || undefined })
-  }
-
-  const handleFestivalChange = (option: SelectOption | null) => {
-    setFestival(option)
-    applyFilter({ festival: (option?.value as string) || undefined })
   }
 
   const handleCapacityClick = (cap: CapacityFilter) => {
@@ -402,6 +434,7 @@ function BrowseContent({
     setCapacity('all')
     setStatus('all')
     setProvince('')
+    setBrowseSearchQuery(''); setBrowseArtistResults([]); setBrowseSearchOpen(false)
     setSortField('date'); setSortDir('desc')
     fetchData({ decade: '2020s', page: 1, sort: 'date', dir: 'desc' })
   }
@@ -523,37 +556,6 @@ function BrowseContent({
     return y1 === y2 ? y1 : `${y1}–${y2}`
   })()
 
-  // ── react-select styles ───────────────────────────────────────────────────
-  const customSelectStyles = {
-    control: (base: any, state: any) => ({
-      ...base,
-      fontSize: '0.875rem',
-      backgroundColor: isDark ? 'oklch(0.200 0.03 260)' : 'oklch(0.951 0.02 85)',
-      borderColor: state.hasValue ? TEAL : isDark ? 'oklch(0.248 0.03 260)' : 'oklch(0.873 0.02 85)',
-      borderWidth: state.hasValue ? '1.5px' : '1px',
-      boxShadow: 'none',
-      '&:hover': { borderColor: state.hasValue ? TEAL : isDark ? 'oklch(0.38 0.03 260)' : 'oklch(0.820 0.02 85)' }
-    }),
-    menu: (base: any) => ({
-      ...base,
-      backgroundColor: isDark ? 'oklch(0.200 0.03 260)' : 'oklch(0.951 0.02 85)',
-      borderColor: isDark ? 'oklch(0.248 0.03 260)' : 'oklch(0.873 0.02 85)',
-    }),
-    singleValue:       (base: any) => ({ ...base, color: isDark ? 'oklch(0.95 0 0)' : 'oklch(0.145 0 0)' }),
-    placeholder:       (base: any) => ({ ...base, color: isDark ? 'oklch(0.55 0.04 220)' : 'oklch(0.45 0.02 85)' }),
-    option:            (base: any, state: any) => ({
-      ...base,
-      backgroundColor: state.isFocused ? (isDark ? 'oklch(0.228 0.03 260)' : 'oklch(0.910 0.02 85)') : (isDark ? 'oklch(0.200 0.03 260)' : 'oklch(0.951 0.02 85)'),
-      color: isDark ? 'oklch(0.95 0 0)' : 'oklch(0.145 0 0)',
-    }),
-    input:             (base: any) => ({ ...base, color: isDark ? 'oklch(0.95 0 0)' : 'oklch(0.145 0 0)' }),
-    indicatorSeparator:(base: any) => ({ ...base, backgroundColor: isDark ? 'oklch(0.248 0.03 260)' : 'oklch(0.873 0.02 85)' }),
-    dropdownIndicator: (base: any) => ({ ...base, color: isDark ? 'oklch(0.55 0.04 220)' : 'oklch(0.45 0.02 85)' }),
-    clearIndicator:    (base: any) => ({ ...base, color: isDark ? 'oklch(0.55 0.04 220)' : 'oklch(0.45 0.02 85)' }),
-    loadingMessage:    (base: any) => ({ ...base, color: isDark ? 'oklch(0.55 0.04 220)' : 'oklch(0.45 0.02 85)' }),
-    noOptionsMessage:  (base: any) => ({ ...base, color: isDark ? 'oklch(0.55 0.04 220)' : 'oklch(0.45 0.02 85)' }),
-  }
-
   // Capacity badge config — inline styles to avoid Tailwind purge
   const capBadgeStyle: Record<string, React.CSSProperties> = {
     'small (<500)':      isDark ? { background: 'rgba(168,85,247,0.2)', color: '#c4b5fd' } : { background: '#f3e8ff', color: '#7e22ce' },
@@ -605,9 +607,8 @@ function BrowseContent({
               </div>
               <div className="p-3 md:p-5">
                 <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 leading-tight uppercase tracking-wide">Date Range</p>
-                <p className="text-sm md:text-xl font-bold text-foreground leading-tight">
-                  <span className="md:hidden">{dateRangeDisplayMobile ?? '–'}</span>
-                  <span className="hidden md:block">{dateRangeDisplay ?? '–'}</span>
+                <p className="text-xl md:text-3xl font-bold text-foreground leading-tight">
+                  {dateRangeDisplayMobile ?? '–'}
                 </p>
               </div>
             </div>
@@ -626,7 +627,7 @@ function BrowseContent({
             </div>
 
             {/* Row 1: dropdowns */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Show Type</label>
                 <select
@@ -639,50 +640,6 @@ function BrowseContent({
                   <option value="comedy">Comedy</option>
                   <option value="festival">Festival</option>
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Artist</label>
-                <AsyncSelect
-                  instanceId="artist-select"
-                  loadOptions={loadArtistOptions}
-                  value={artistOption}
-                  onChange={handleArtistChange}
-                  isClearable
-                  placeholder="Search artists..."
-                  noOptionsMessage={({ inputValue }) => inputValue.length < 1 ? 'Type to search…' : 'No artists found'}
-                  loadingMessage={() => 'Searching…'}
-                  className="text-sm"
-                  styles={customSelectStyles}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Venue</label>
-                <Select
-                  instanceId="venue-select"
-                  options={venueOptions}
-                  value={selectedVenueOption}
-                  onChange={handleVenueChange}
-                  isClearable
-                  placeholder="All venues..."
-                  className="text-sm"
-                  styles={customSelectStyles}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Festival</label>
-                <Select
-                  instanceId="festival-select"
-                  options={festivalOptions}
-                  value={festival}
-                  onChange={handleFestivalChange}
-                  isClearable
-                  placeholder="All festivals..."
-                  className="text-sm"
-                  styles={customSelectStyles}
-                />
               </div>
 
               <div>
@@ -707,6 +664,121 @@ function BrowseContent({
                     </optgroup>
                   ))}
                 </select>
+              </div>
+
+              {/* Unified search: Artists, Venues, Festivals */}
+              <div className="col-span-2 md:col-span-1 relative" ref={browseSearchRef}>
+                <label className="block text-sm font-medium text-foreground mb-2">Search</label>
+                <div className="relative">
+                  <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={browseSearchQuery}
+                    onChange={e => {
+                      setBrowseSearchQuery(e.target.value)
+                      setBrowseSearchOpen(true)
+                      if (!e.target.value.trim()) handleBrowseSearchClear()
+                    }}
+                    onFocus={() => setBrowseSearchOpen(true)}
+                    placeholder="Artists, venues, festivals…"
+                    className={`w-full pl-8 pr-7 py-1.5 md:py-2 text-sm text-foreground bg-card rounded-md focus:outline-none focus:ring-2 focus:ring-ring transition-colors ${(artistId || venueId || festival) ? 'border-[1.5px] border-primary' : 'border border-border'}`}
+                  />
+                  {(browseSearchQuery || artistId || venueId || festival) && (
+                    <button
+                      onClick={handleBrowseSearchClear}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      title="Clear"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+
+                {/* Results dropdown */}
+                {browseSearchOpen && browseSearchQuery.trim().length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-card border border-border rounded-md shadow-xl max-h-72 overflow-y-auto">
+                    {browseSearchLoading && (
+                      <div className="flex items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground">
+                        <div className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin flex-shrink-0" />
+                        Searching…
+                      </div>
+                    )}
+
+                    {!browseSearchLoading && browseArtistResults.length > 0 && (
+                      <>
+                        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-teal-400 uppercase tracking-wider">Artists</div>
+                        {browseArtistResults.map(a => (
+                          <button
+                            key={a.value}
+                            onMouseDown={e => { e.preventDefault(); handleBrowseSearchSelect('artist', a.value as number, a.label) }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center justify-between gap-2"
+                          >
+                            <span className="truncate">{a.label}</span>
+                            {(a as any).monthly_listeners && (
+                              <span className="text-xs text-muted-foreground flex-shrink-0">
+                                {(a as any).monthly_listeners >= 1_000_000
+                                  ? `${((a as any).monthly_listeners / 1_000_000).toFixed(1)}M`
+                                  : `${Math.round((a as any).monthly_listeners / 1000)}K`}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </>
+                    )}
+
+                    {filteredVenueResults.length > 0 && (
+                      <>
+                        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-teal-400 uppercase tracking-wider">Venues</div>
+                        {filteredVenueResults.map(v => {
+                          const cat = (v.capacity_category ?? '').toLowerCase()
+                          const vLabel = cat.includes('small') ? 'S' : cat.includes('x-large') || cat.includes('xlarge') ? 'XL' : cat.includes('large') ? 'L' : cat.includes('medium') ? 'M' : null
+                          const vStyle = cat.includes('small') ? { backgroundColor: 'rgba(139,92,246,0.85)', color: '#fff' }
+                                       : cat.includes('medium') ? { backgroundColor: 'rgba(58,143,189,0.85)', color: '#fff' }
+                                       : (cat.includes('large') && !cat.includes('x')) ? { backgroundColor: 'rgba(234,88,12,0.85)', color: '#fff' }
+                                       : (cat.includes('xlarge') || cat.includes('x-large')) ? { backgroundColor: 'rgba(225,29,72,0.85)', color: '#fff' }
+                                       : null
+                          return (
+                            <button
+                              key={v.venue_id}
+                              onMouseDown={e => { e.preventDefault(); handleBrowseSearchSelect('venue', v.venue_id, v.venue_name) }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center justify-between gap-2"
+                            >
+                              <span className="truncate">{v.venue_name}</span>
+                              {vLabel && vStyle && (
+                                <span style={{ ...vStyle, fontSize: '9px', padding: '1px 4px', borderRadius: '3px', fontWeight: 700, flexShrink: 0 }}>
+                                  {vLabel}
+                                </span>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </>
+                    )}
+
+                    {filteredFestivalResults.length > 0 && (
+                      <>
+                        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-teal-400 uppercase tracking-wider">Festivals</div>
+                        {filteredFestivalResults.map(f => (
+                          <button
+                            key={f.value as string}
+                            onMouseDown={e => { e.preventDefault(); handleBrowseSearchSelect('festival', f.value as string, f.label) }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </>
+                    )}
+
+                    {!browseSearchLoading && browseArtistResults.length === 0 && filteredVenueResults.length === 0 && filteredFestivalResults.length === 0 && (
+                      <div className="px-3 py-3 text-sm text-muted-foreground">No results for "{browseSearchQuery}"</div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -905,7 +977,7 @@ function BrowseContent({
                         {/* Artist */}
                         <div className="min-w-0 flex items-center gap-1.5 px-3 py-3">
                           <button
-                            onClick={() => handleArtistChange({ value: show.artist_id, label: show.artist_name })}
+                            onClick={() => handleBrowseSearchSelect('artist', show.artist_id, show.artist_name)}
                             className="text-sm font-medium text-primary hover:opacity-80 hover:underline text-left truncate"
                             title={show.artist_name}
                           >
@@ -929,7 +1001,7 @@ function BrowseContent({
                         {/* Venue */}
                         <div className="min-w-0 flex items-center gap-1.5 px-3 py-3">
                           <button
-                            onClick={() => handleVenueChange({ value: show.venue_id, label: show.venue_name })}
+                            onClick={() => handleBrowseSearchSelect('venue', show.venue_id, show.venue_name)}
                             className="text-sm text-muted-foreground hover:text-primary hover:underline text-left truncate"
                             title={venueTooltip}
                           >
@@ -966,7 +1038,7 @@ function BrowseContent({
                         <div className="flex items-center px-3 py-3">
                           {show.festival_name
                             ? <button
-                                onClick={() => handleFestivalChange({ value: show.festival_name!, label: show.festival_name! })}
+                                onClick={() => handleBrowseSearchSelect('festival', show.festival_name!, show.festival_name!)}
                                 className={festivalBadgeClass}
                                 title={`Filter by ${show.festival_name}`}
                               >
@@ -999,7 +1071,7 @@ function BrowseContent({
                         <div className="min-w-0">
                           <div className="flex items-center gap-1 mb-0.5">
                             <button
-                              onClick={() => handleArtistChange({ value: show.artist_id, label: show.artist_name })}
+                              onClick={() => handleBrowseSearchSelect('artist', show.artist_id, show.artist_name)}
                               className="text-[11px] font-medium text-primary hover:opacity-80 hover:underline text-left truncate leading-snug"
                               title={show.artist_name}
                             >
@@ -1015,7 +1087,7 @@ function BrowseContent({
                           </div>
                           <div className="flex items-center gap-1 mt-0.5">
                             <button
-                              onClick={() => handleVenueChange({ value: show.venue_id, label: show.venue_name })}
+                              onClick={() => handleBrowseSearchSelect('venue', show.venue_id, show.venue_name)}
                               className="text-[10px] text-muted-foreground hover:text-primary hover:underline text-left truncate leading-snug min-w-0"
                               title={venueTooltip}
                             >
@@ -1032,7 +1104,7 @@ function BrowseContent({
                             )}
                             {show.festival_name && (
                               <button
-                                onClick={() => handleFestivalChange({ value: show.festival_name!, label: show.festival_name! })}
+                                onClick={() => handleBrowseSearchSelect('festival', show.festival_name!, show.festival_name!)}
                                 className={festivalBadgeMobileClass}
                                 title={`Filter by ${show.festival_name}`}
                               >F</button>
