@@ -76,6 +76,7 @@ export async function GET(request: Request) {
     setlist_url:       row.setlist_url,
     show_type:         row.show_type,
     festival_name:     row.festival_name,
+    tour_name:         row.tour_name         ?? null,
     artist_id:         row.artist_id,
     venue_id:          row.venue_id,
     artist_name:       row.artist_name        ?? '',
