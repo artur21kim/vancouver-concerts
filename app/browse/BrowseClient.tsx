@@ -831,7 +831,7 @@ function BrowseContent({
           {!loading && (
             <div className="rounded-lg shadow-lg overflow-hidden">
               {/* Desktop header */}
-              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(0,1fr) minmax(0,1fr) 96px 130px 72px 76px` }}>
+              <div className="hidden md:grid bg-muted border-b border-border" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 200px 175px 90px minmax(80px,1fr) 72px 76px` }}>
                 {user && <div className="w-12" />}
                 <button onClick={() => handleSort('date')} className={thSortable}>
                   Date {sortField === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -895,7 +895,7 @@ function BrowseContent({
                   return (
                     <div key={show.show_id} className="hover:bg-muted/30 transition-colors">
                       {/* Desktop row */}
-                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}120px minmax(0,1fr) minmax(0,1fr) 96px 130px 72px 76px` }}>
+                      <div className="hidden md:grid items-center" style={{ gridTemplateColumns: `${user ? '48px ' : ''}110px 200px 175px 90px minmax(80px,1fr) 72px 76px` }}>
                         {user && <div className="w-12 flex items-center pl-3">{heartButton}</div>}
 
                         {/* Date */}
@@ -950,12 +950,12 @@ function BrowseContent({
                             return loc?.city && loc?.state
                               ? <button
                                   onClick={() => handleProvinceChange(loc.state!)}
-                                  className="text-xs text-muted-foreground hover:text-primary hover:underline transition-colors whitespace-nowrap text-left"
+                                  className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors whitespace-nowrap text-left"
                                   title={`Filter: ${PROVINCE_NAMES[loc.state!] ?? loc.state}`}
                                 >
                                   {loc.city}, {loc.state}
                                 </button>
-                              : <span className="text-xs text-muted-foreground">–</span>
+                              : <span className="text-sm text-muted-foreground">–</span>
                           })()}
                         </div>
 
