@@ -110,6 +110,17 @@ def sb_update_venue_coords(venue_id: int, lat: float, lon: float) -> None:
     resp.raise_for_status()
 
 
+def sb_update_city_coords(city_id: int, lat: float, lon: float) -> None:
+    url = f"{SUPABASE_URL}/rest/v1/dim_city"
+    resp = requests.patch(
+        url,
+        headers=_headers("return=minimal"),
+        params={"city_id": f"eq.{city_id}"},
+        json={"latitude": lat, "longitude": lon},
+    )
+    resp.raise_for_status()
+
+
 # ── Nominatim geocoding ───────────────────────────────────────────────────────
 
 _last_request_at: float = 0.0
@@ -180,18 +191,164 @@ def geocode_venue(
     return None
 
 
+# ── City-dimension coordinate backfill (GP-153) ───────────────────────────────
+
+# Same country bounding boxes used by the dim_city seed SQL (Step 3). A geocode
+# that lands outside its country's box is rejected, never written — the city
+# dimension must not absorb the kind of stray match that corrupted the venue AVGs.
+def _within_country_box(lat: float, lon: float, country: str) -> bool:
+    c = (country or "").lower()
+    if "canada" in c:
+        return 42.0 <= lat <= 60.0 and -141.0 <= lon <= -52.0
+    if "united states" in c:
+        return 24.0 <= lat <= 50.0 and -125.0 <= lon <= -66.0
+    # Unknown country (e.g. future European data) — no box defined; allow but note it.
+    log.debug("No bounding box for country '%s' — writing city coord unvalidated.", country)
+    return True
+
+
+def geocode_city(
+    city: str,
+    state: str,
+    country: str,
+    retries: int = 3,
+) -> Optional[dict]:
+    """Geocode a city *centre* (not a venue). Returns lat/lon/importance dict or None.
+
+    Result keys: lat, lon, importance, display_name, query_used
+    """
+    if not city:
+        return None
+    queries = [
+        f"{city}, {state}, {country}".strip(", "),
+        f"{city}, {country}".strip(", "),   # fallback without state
+    ]
+    for query in queries:
+        for attempt in range(retries):
+            _throttle()
+            try:
+                resp = requests.get(
+                    NOMINATIM_URL,
+                    headers=NOMINATIM_HEADERS,
+                    params={
+                        "q":              query,
+                        "format":         "json",
+                        "limit":          1,
+                        "addressdetails": 1,
+                    },
+                    timeout=10,
+                )
+                resp.raise_for_status()
+                results = resp.json()
+                if results:
+                    r = results[0]
+                    return {
+                        "lat":          float(r["lat"]),
+                        "lon":          float(r["lon"]),
+                        "importance":   float(r.get("importance") or 0),
+                        "display_name": r.get("display_name", ""),
+                        "query_used":   query,
+                    }
+            except requests.RequestException as exc:
+                if attempt < retries - 1:
+                    log.warning("Nominatim city error (attempt %d/%d): %s", attempt + 1, retries, exc)
+                    time.sleep(2)
+                else:
+                    log.error("Nominatim city geocode failed for '%s': %s", query, exc)
+    return None
+
+
+def backfill_dim_city_coords(
+    dry_run:   bool,
+    only_city: Optional[str],
+    verbose:   bool = False,
+) -> dict:
+    """Fill dim_city.latitude/longitude for rows missing coords by geocoding the city name.
+
+    Runs at the end of a venue pass (scoped to --city) and standalone via --cities-only.
+    Geocodes the city itself for a proper centre point, validates against the country
+    bounding box, and writes only on pass — out-of-box and no-result rows are logged and
+    left NULL (no map bubble until resolved), never written with a bad coordinate.
+    """
+    params: dict = {"select": "city_id,city,state,country,latitude", "latitude": "is.null"}
+    if only_city:
+        params["city"] = f"eq.{only_city}"
+    cities = sb_get_all("dim_city", params)
+
+    stats = {"written": 0, "out_of_box": 0, "no_result": 0}
+    scope = f" (city={only_city})" if only_city else ""
+    if not cities:
+        log.info("dim_city backfill — no cities missing coordinates%s.", scope)
+        return stats
+
+    log.info("dim_city backfill — %d city/cities missing coordinates%s", len(cities), scope)
+    for c in cities:
+        city_id = c["city_id"]
+        city    = (c.get("city")    or "").strip()
+        state   = (c.get("state")   or "").strip()
+        country = (c.get("country") or "").strip()
+        if not city:
+            continue
+
+        result = geocode_city(city, state, country)
+        if result is None:
+            log.info("[CITY no_result] %s, %s, %s", city, state, country)
+            stats["no_result"] += 1
+            continue
+
+        lat, lon = result["lat"], result["lon"]
+        if not _within_country_box(lat, lon, country):
+            log.warning(
+                "[CITY out_of_box] %s, %s → %.5f, %.5f  (rejected — outside %s box)",
+                city, state, lat, lon, country,
+            )
+            stats["out_of_box"] += 1
+            continue
+
+        action = "[DRY-RUN]" if dry_run else "[WRITE]  "
+        log.info(
+            "%s [CITY] %-28s → %.5f, %.5f  (importance=%.3f)",
+            action, f"{city}, {state}", lat, lon, result["importance"],
+        )
+        if not dry_run:
+            try:
+                sb_update_city_coords(city_id, lat, lon)
+                stats["written"] += 1
+            except Exception as exc:
+                log.error("dim_city write failed for city_id=%d: %s", city_id, exc)
+        else:
+            stats["written"] += 1
+
+    log.info(
+        "dim_city backfill done — written: %d | out_of_box: %d | no_result: %d",
+        stats["written"], stats["out_of_box"], stats["no_result"],
+    )
+    return stats
+
+
 # ── Core run ──────────────────────────────────────────────────────────────────
 
 def run(
-    dry_run:   bool,
-    limit:     Optional[int],
-    city:      Optional[str],
-    threshold: float,
-    force:     bool,
-    verbose:   bool,
+    dry_run:    bool,
+    limit:      Optional[int],
+    city:       Optional[str],
+    threshold:  float,
+    force:      bool,
+    verbose:    bool,
+    cities_only: bool = False,
 ) -> None:
     if verbose:
         log.setLevel(logging.DEBUG)
+
+    # ── dim_city-only mode (GP-153): skip the venue pass entirely ─────────────
+    if cities_only:
+        log.info(
+            "Mode: %s | dim_city coordinate backfill only%s",
+            "DRY-RUN" if dry_run else "LIVE",
+            f" (city={city})" if city else "",
+        )
+        backfill_dim_city_coords(dry_run=dry_run, only_city=city, verbose=verbose)
+        return
 
     # ── Load venues ───────────────────────────────────────────────────────────
     params: dict = {
@@ -360,6 +517,13 @@ def run(
         log.info("     UPDATE dim_venue SET latitude = <lat>, longitude = <lon>")
         log.info("     WHERE venue_id = <id>;")
 
+    # ── dim_city coordinate backfill (GP-153) ─────────────────────────────────
+    # After the venue pass, fill any dim_city rows still missing coords — scoped
+    # to --city so `nominatim_enrich.py --live --city Ottawa` also gives Ottawa
+    # its city-centre point in the same run.
+    log.info("")
+    backfill_dim_city_coords(dry_run=dry_run, only_city=city, verbose=verbose)
+
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -401,6 +565,12 @@ def main() -> None:
         help="Re-process venues that already have lat/long set",
     )
     parser.add_argument(
+        "--cities-only",
+        action="store_true",
+        default=False,
+        help="Skip the venue pass; only backfill dim_city coordinates (geocode city centres)",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         default=False,
@@ -415,6 +585,7 @@ def main() -> None:
         threshold=args.threshold,
         force=args.force,
         verbose=args.verbose,
+        cities_only=args.cities_only,
     )
 
 
