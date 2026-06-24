@@ -310,7 +310,12 @@ def extract_venue_info(venue_full: str) -> tuple[str, str, str, str]:
         name    = ", ".join(parts[:-3])
         return name, city, state, country
     if len(parts) == 3:
-        return parts[0], parts[1], "", parts[2]
+        last = parts[-1]
+        # If last part is a 2-letter state/province code (e.g. "WA", "ON"), country is absent
+        if len(last) == 2 and last.upper() == last and last.isalpha():
+            return parts[0], parts[1], last, ""
+        # Otherwise treat as "Venue, City, Country" with no state
+        return parts[0], parts[1], "", last
     if len(parts) == 2:
         return parts[0], parts[1], "", ""
     return venue_full, "", "", ""
