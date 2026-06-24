@@ -1,7 +1,9 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/app/providers/AuthProvider'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -16,6 +18,8 @@ import { useTheme } from 'next-themes'
 import type { ChartRow, TopArtist, TopVenue, CityStats, HomeStats, DrillStats } from './page'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
+
+const ProvinceMap = dynamic(() => import('./ProvinceMap'), { ssr: false })
 
 // ── Types ─────────────────────────────────────────────────────
 type CapacityBucket = 'small' | 'medium' | 'large' | 'xlarge' | 'unknown'
@@ -136,9 +140,12 @@ export default function HomeClient({
 }) {
   const router = useRouter()
   const { resolvedTheme } = useTheme()
+  const { user } = useAuth()
   const [mounted, setMounted] = useState(false)
 
   // ── View state ────────────────────────────────────────────
+  const [viewMode,         setViewMode]         = useState<'map' | 'chart'>('map')
+  const [showSignUpBanner, setShowSignUpBanner] = useState(false)
   const [selectedDecade, setSelectedDecade] = useState<Decade>('all')
   const [selectedYear,   setSelectedYear]   = useState<number | null>(null)
   const [selectedMonth,  setSelectedMonth]  = useState<number | null>(null)
@@ -202,6 +209,15 @@ export default function HomeClient({
       setLoading(false)
     }
   }, [initialChart, initialArtists, initialVenues])
+
+  // ── Province map CTA ─────────────────────────────────────
+  const handleProvinceCta = useCallback(() => {
+    if (user) {
+      router.push('/my-grooveprint')
+    } else {
+      setShowSignUpBanner(true)
+    }
+  }, [user, router])
 
   // ── Clear all ─────────────────────────────────────────────
   const handleClearAll = useCallback(() => {
@@ -496,6 +512,45 @@ export default function HomeClient({
           )}
         </div>
 
+        {/* ── View toggle ────────────────────────────────────────── */}
+        <div className="flex justify-end mb-2 md:mb-3">
+          <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
+            <button
+              onClick={() => setViewMode('map')}
+              className={`px-4 py-2 transition-colors ${
+                viewMode === 'map'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              Map
+            </button>
+            <button
+              onClick={() => setViewMode('chart')}
+              className={`px-4 py-2 transition-colors border-l border-border ${
+                viewMode === 'chart'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              Chart
+            </button>
+          </div>
+        </div>
+
+        {/* ── Province bubble map ────────────────────────────────── */}
+        {viewMode === 'map' && (
+          <div className="bg-card rounded-lg shadow-lg overflow-hidden mb-3 md:mb-4 h-[420px] md:h-[480px]">
+            <ProvinceMap
+              provinces={provinceStats}
+              isAuthenticated={!!user}
+              onCtaClick={handleProvinceCta}
+            />
+          </div>
+        )}
+
+        {viewMode === 'chart' && (<>
+
         {/* Chart nav */}
         <div className="flex items-center justify-center gap-4 mb-2 min-h-[32px]">
           {chartNav.prev ? (
@@ -640,6 +695,8 @@ export default function HomeClient({
           </div>
 
         </div>
+
+        </>)}
 
         {/* Top tables */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
@@ -967,6 +1024,43 @@ export default function HomeClient({
         )}
 
       </div>
+
+      {/* ── Sign-up banner (triggered from province map CTA) ── */}
+      {showSignUpBanner && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowSignUpBanner(false)}
+        >
+          <div
+            className="bg-card rounded-xl shadow-2xl p-6 max-w-sm w-full"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-foreground mb-2">
+              See your concert history
+            </h3>
+            <p className="text-sm text-muted-foreground mb-5">
+              Sign up to track concerts you&apos;ve attended, discover your Spotify matches,
+              and explore which venues you&apos;ve visited across every city.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => router.push('/my-grooveprint')}
+                className="flex-1 rounded-lg py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+                style={{ background: '#00BFA8' }}
+              >
+                Sign up free →
+              </button>
+              <button
+                onClick={() => setShowSignUpBanner(false)}
+                className="px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   )
 }
