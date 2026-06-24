@@ -115,6 +115,13 @@ def convert_file(input_path: Path, output_path: Path, dry_run: bool) -> int:
             tour_name = ""
             venue     = details4  # details4 always has venue when no tour
 
+        # Normalise country variants in venue string to match setlist.fm API canonical forms
+        # Octoparse scrapes use "USA" / "UK" while the API returns full names
+        venue = (venue
+                 .replace(", USA", ", United States")
+                 .replace(", UK", ", United Kingdom")
+                 .replace(", UAE", ", United Arab Emirates"))
+
         converted.append({
             "Field":    url,
             "month":    month,
