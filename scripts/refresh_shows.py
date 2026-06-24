@@ -553,6 +553,76 @@ def create_and_resolve(
 
 
 # ---------------------------------------------------------------------------
+# City dimension (GP-153) — resolve (city, state, country) → dim_city.city_id
+# ---------------------------------------------------------------------------
+
+# setlist.fm 4-part location strings yield full country names ("Canada",
+# "United States"), but parse_row falls back to the --country arg ("CA"/"US")
+# whenever a location string omits the country. dim_city is seeded with the full
+# names, so normalize before lookup/insert — otherwise an edge-case venue would
+# mint a duplicate city row, e.g. ('Vancouver','BC','CA') beside the canonical
+# ('Vancouver','BC','Canada'). State codes (BC/WA/ON) already match both sides.
+_COUNTRY_CANON = {
+    "ca": "Canada", "can": "Canada", "canada": "Canada",
+    "us": "United States", "usa": "United States",
+    "united states": "United States",
+    "united states of america": "United States",
+}
+
+
+def _canon_country(country: str) -> str:
+    c = (country or "").strip()
+    return _COUNTRY_CANON.get(c.lower(), c)
+
+
+# Run-scoped cache: a single-city ingestion touches one (city,state,country)
+# tuple (plus the odd secondary), so this collapses to ~1 dim_city read per run.
+_city_id_cache: dict[tuple, int] = {}
+
+
+def get_or_create_city_id(city: str, state: str, country: str) -> Optional[int]:
+    """Resolve (city, state, country) → dim_city.city_id, creating the row if absent.
+
+    Country is normalized to dim_city's canonical full-name form before lookup so
+    the --country arg fallback ('CA'/'US') can't spawn duplicate city rows. New
+    rows are created with NULL coordinates — Nominatim backfills them later (Phase
+    4); until then the city simply has no map bubble, which is acceptable.
+
+    Returns None when city is blank (e.g. state-abbrev-as-city junk rows), leaving
+    the venue's city_id NULL — matching the Phase 2 backfill, which left exactly
+    those rows unmatched.
+    """
+    city = (city or "").strip()
+    if not city:
+        return None
+    state   = (state or "").strip()
+    country = _canon_country(country)
+    key = (city.lower(), state.lower(), country.lower())
+    if key in _city_id_cache:
+        return _city_id_cache[key]
+
+    rows = sb_get_page("dim_city", {
+        "select":  "city_id",
+        "city":    f"eq.{city}",
+        "state":   f"eq.{state}",
+        "country": f"eq.{country}",
+    })
+    if rows:
+        cid = rows[0]["city_id"]
+    else:
+        created = sb_insert(
+            "dim_city",
+            [{"city": city, "state": state, "country": country}],
+            return_rows=True,
+        )
+        cid = created[0]["city_id"] if created else None
+
+    if cid is not None:
+        _city_id_cache[key] = cid
+    return cid
+
+
+# ---------------------------------------------------------------------------
 # Interactive alias review
 # ---------------------------------------------------------------------------
 
@@ -1254,6 +1324,9 @@ def main() -> None:
                 "city":       loc.get("city", ""),
                 "state":      loc.get("state", ""),
                 "country":    loc.get("country", ""),
+                "city_id":    get_or_create_city_id(
+                    loc.get("city", ""), loc.get("state", ""), loc.get("country", ""),
+                ),
                 "status":     "Open",
             }
             for i, (n, loc) in enumerate(genuinely_new_venues.items())
