@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import { divIcon } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import CountryFlag from './components/CountryFlag'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 export type ProvinceData = {
@@ -42,7 +43,6 @@ const STATE_NAMES: Record<string, string> = {
   NC: 'North Carolina', MA: 'Massachusetts', NY: 'New York',
 }
 
-const COUNTRY_FLAGS: Record<string, string> = { CA: '🇨🇦', US: '🇺🇸' }
 const NA_CENTER: [number, number] = [50, -93]
 const NA_ZOOM   = 3
 const TEAL      = '#00BFA8'
@@ -209,7 +209,6 @@ export default function ProvinceMap({
   }, [selectedProvince])
 
   const stateName = selectedState ? (STATE_NAMES[selectedState] ?? selectedState) : ''
-  const flag      = selectedProvince?.country ? (COUNTRY_FLAGS[selectedProvince.country] ?? '') : ''
 
   if (visibleProvinces.length === 0) {
     return (
@@ -233,7 +232,13 @@ export default function ProvinceMap({
             borderRadius: 5, padding: '4px 9px', fontSize: 12, fontWeight: 600,
             backdropFilter: 'blur(4px)',
           }}>
-            {stateName} {flag}
+            {stateName}
+            {selectedProvince?.country && (
+              <CountryFlag
+                code={selectedProvince.country}
+                className="inline-block w-3.5 h-auto rounded-[1px] align-[-1px] ml-1.5"
+              />
+            )}
           </span>
           <button
             onClick={() => setSelectedState(null)}

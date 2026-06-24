@@ -16,6 +16,7 @@ import {
 import { Bar } from 'react-chartjs-2'
 import { useTheme } from 'next-themes'
 import type { ChartRow, TopArtist, TopVenue, CityStats, HomeStats, DrillStats } from './page'
+import CountryFlag from './components/CountryFlag'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -77,8 +78,6 @@ const STATE_NAMES: Record<string, string> = {
   TN: 'Tennessee',        MA: 'Massachusetts', NV: 'Nevada',         AZ: 'Arizona',
   MN: 'Minnesota',        NC: 'North Carolina', MO: 'Missouri',      WI: 'Wisconsin',
 }
-const COUNTRY_FLAGS: Record<string, string> = { CA: '🇨🇦', US: '🇺🇸' }
-
 const DECADES: Decade[] = ['all', '1900s', '1910s', '1920s', '1930s', '1940s', '1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s']
 const MONTH_NAMES       = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const MONTH_NAMES_FULL  = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -543,7 +542,11 @@ export default function HomeClient({
           <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
           <StatCard label="Venues"  value={stats.uniqueVenues.toLocaleString()} />
           {stats.fourthCard ? (
-            <StatCard label={stats.fourthCard.label} value={stats.fourthCard.value} />
+            <StatCard
+              label={stats.fourthCard.label}
+              value={stats.fourthCard.value}
+              compact={stats.fourthCard.label === 'Date Range'}
+            />
           ) : (
             <div />
           )}
@@ -968,10 +971,8 @@ export default function HomeClient({
                         <span className="text-sm font-medium text-foreground truncate">
                           {city.city}{city.state ? `, ${city.state}` : ''}
                         </span>
-                        {city.country && COUNTRY_FLAGS[city.country] && (
-                          <span className="text-xs flex-shrink-0" title={city.country}>
-                            {COUNTRY_FLAGS[city.country]}
-                          </span>
+                        {city.country && (
+                          <CountryFlag code={city.country} className="inline-block w-4 h-auto rounded-[1px] flex-shrink-0 align-[-2px]" />
                         )}
                       </div>
                       <span className="text-xs md:text-sm font-semibold whitespace-nowrap ml-2 text-foreground">
@@ -1026,10 +1027,8 @@ export default function HomeClient({
                           <span className="text-sm font-medium text-foreground">
                             {STATE_NAMES[prov.state] ?? prov.state}
                           </span>
-                          {prov.country && COUNTRY_FLAGS[prov.country] && (
-                            <span className="text-xs" title={prov.country}>
-                              {COUNTRY_FLAGS[prov.country]}
-                            </span>
+                          {prov.country && (
+                            <CountryFlag code={prov.country} className="inline-block w-4 h-auto rounded-[1px] align-[-2px]" />
                           )}
                         </div>
                         <span className="text-xs md:text-sm font-semibold whitespace-nowrap ml-2 text-foreground">
@@ -1102,11 +1101,11 @@ export default function HomeClient({
   )
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ label, value, compact = false }: { label: string; value: string; compact?: boolean }) {
   return (
     <div className="bg-card rounded-lg shadow p-2 md:p-4">
       <p className="text-[10px] md:text-sm text-muted-foreground mb-0.5 md:mb-1 leading-tight">{label}</p>
-      <p className="text-base md:text-2xl font-bold text-foreground">{value}</p>
+      <p className={`${compact ? 'text-xs' : 'text-base'} md:text-2xl font-bold text-foreground whitespace-nowrap`}>{value}</p>
     </div>
   )
 }
