@@ -124,6 +124,15 @@ function filterVenues(venues: TopVenue[], cap: CapacityFilter): TopVenue[] {
 }
 
 
+// ── Country code normalizer (RPC returns full names; flags map on ISO codes) ─
+function normalizeCountry(c: string | null): string | null {
+  if (!c) return c
+  const l = c.toLowerCase()
+  if (l === 'canada')                    return 'CA'
+  if (l === 'united states' || l === 'us' || l === 'usa') return 'US'
+  return c
+}
+
 // ── Main component ────────────────────────────────────────────
 export default function HomeClient({
   initialStats,
@@ -146,6 +155,9 @@ export default function HomeClient({
   // ── View state ────────────────────────────────────────────
   const [viewMode,         setViewMode]         = useState<'map' | 'chart'>('map')
   const [showSignUpBanner, setShowSignUpBanner] = useState(false)
+  const [cityStatsData,    setCityStatsData]    = useState<CityStats[]>(
+    () => initialCityStats.map(c => ({ ...c, country: normalizeCountry(c.country) }))
+  )
   const [selectedDecade, setSelectedDecade] = useState<Decade>('all')
   const [selectedYear,   setSelectedYear]   = useState<number | null>(null)
   const [selectedMonth,  setSelectedMonth]  = useState<number | null>(null)
@@ -169,6 +181,22 @@ export default function HomeClient({
 
 
   useEffect(() => { setMounted(true) }, [])
+
+  // ── City stats fallback: re-fetch client-side if ISR cache served stale empty data ──
+  useEffect(() => {
+    if (initialCityStats.length === 0) {
+      fetch('/api/home/city-stats')
+        .then(r => r.json())
+        .then(d => {
+          const stats: CityStats[] = (d.cityStats ?? []).map((c: CityStats) => ({
+            ...c,
+            country: normalizeCountry(c.country),
+          }))
+          if (stats.length) setCityStatsData(stats)
+        })
+        .catch(console.error)
+    }
+  }, [initialCityStats.length])
 
   const isDrilled       = selectedDecade !== 'all' || selectedYear !== null || selectedMonth !== null
   const hasActiveFilter = isDrilled || capacityFilter !== 'all'
@@ -319,7 +347,7 @@ export default function HomeClient({
   // ── GP-132: province/state rollup (client-side from city stats) ──
   const provinceStats = useMemo(() => {
     const map = new Map<string, { state: string; country: string; total: number; cities: CityStats[] }>()
-    for (const city of initialCityStats) {
+    for (const city of cityStatsData) {
       const key = city.state ?? '__none__'
       if (!map.has(key)) {
         map.set(key, { state: city.state ?? '', country: city.country ?? '', total: 0, cities: [] })
@@ -331,7 +359,7 @@ export default function HomeClient({
     return Array.from(map.values())
       .filter(p => p.state)
       .sort((a, b) => b.total - a.total)
-  }, [initialCityStats])
+  }, [cityStatsData])
 
   // ── Stats ─────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -902,7 +930,7 @@ export default function HomeClient({
         </div>
 
         {/* ── GP-132: Top Cities + Provinces/States ───────────────── */}
-        {initialCityStats.length > 0 && (
+        {cityStatsData.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mt-4 md:mt-6">
 
             {/* Top Cities */}
@@ -911,8 +939,8 @@ export default function HomeClient({
                 Top Cities
               </h2>
               <div className="space-y-1">
-                {initialCityStats.slice(0, showAllCities ? 25 : 10).map((city, idx) => {
-                  const maxCount = Number(initialCityStats[0]?.show_count ?? 1)
+                {cityStatsData.slice(0, showAllCities ? 25 : 10).map((city, idx) => {
+                  const maxCount = Number(cityStatsData[0]?.show_count ?? 1)
                   const pct      = Math.round((Number(city.show_count) / maxCount) * 100)
                   const sharePct = initialStats.total_shows > 0
                     ? ((Number(city.show_count) / initialStats.total_shows) * 100).toFixed(1)
@@ -944,7 +972,7 @@ export default function HomeClient({
                   )
                 })}
               </div>
-              {initialCityStats.length > 10 && (
+              {cityStatsData.length > 10 && (
                 <button
                   onClick={() => setShowAllCities(!showAllCities)}
                   className="mt-3 text-primary hover:opacity-80 text-xs md:text-sm font-medium"
