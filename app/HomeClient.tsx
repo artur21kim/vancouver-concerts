@@ -198,16 +198,6 @@ export default function HomeClient({
     }
   }, [initialCityStats.length])
 
-  // ── Chart + stats fallback: trigger all-time fetch if ISR cache was stale ──
-  useEffect(() => {
-    if (initialChart.length === 0) {
-      fetchDrillData('all', null, null)
-    }
-  }, [initialChart.length, fetchDrillData])
-
-  const isDrilled       = selectedDecade !== 'all' || selectedYear !== null || selectedMonth !== null
-  const hasActiveFilter = isDrilled || capacityFilter !== 'all'
-
   // ── Fetch drill-down data ─────────────────────────────────
   const fetchDrillData = useCallback(async (
     decade: Decade,
@@ -246,6 +236,16 @@ export default function HomeClient({
       setLoading(false)
     }
   }, [initialChart, initialArtists, initialVenues])
+
+  // ── Chart + stats fallback: trigger all-time fetch if ISR cache was stale ──
+  useEffect(() => {
+    if (initialChart.length === 0) {
+      fetchDrillData('all', null, null)
+    }
+  }, [initialChart.length, fetchDrillData])
+
+  const isDrilled       = selectedDecade !== 'all' || selectedYear !== null || selectedMonth !== null
+  const hasActiveFilter = isDrilled || capacityFilter !== 'all'
 
   // ── Province map CTA ─────────────────────────────────────
   const handleProvinceCta = useCallback(() => {
