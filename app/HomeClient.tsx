@@ -198,6 +198,13 @@ export default function HomeClient({
     }
   }, [initialCityStats.length])
 
+  // ── Chart + stats fallback: trigger all-time fetch if ISR cache was stale ──
+  useEffect(() => {
+    if (initialChart.length === 0) {
+      fetchDrillData('all', null, null)
+    }
+  }, [initialChart.length, fetchDrillData])
+
   const isDrilled       = selectedDecade !== 'all' || selectedYear !== null || selectedMonth !== null
   const hasActiveFilter = isDrilled || capacityFilter !== 'all'
 
@@ -209,14 +216,16 @@ export default function HomeClient({
   ) => {
     const isAllTime = decade === 'all' && year === null && month === null
 
-    if (isAllTime) {
-      // Restore initial server-fetched data
+    if (isAllTime && initialChart.length > 0) {
+      // Restore initial server-fetched data (ISR cache was fresh)
       setChartRows(initialChart)
       setArtists(initialArtists)
       setVenues(initialVenues)
       setDrillStats(null)
       return
     }
+    // isAllTime + initialChart.length === 0: fall through to API
+    // (stale ISR cache — fetch current all-time data from server)
 
     setLoading(true)
     const params = new URLSearchParams()
@@ -367,9 +376,9 @@ export default function HomeClient({
 
     // All-time view: use server-fetched baseline stats
     // Drilled view: use exact counts from get_home_drill_stats RPC
-    const totalShows    = isDrilled && drillStats ? drillStats.total_shows    : initialStats.total_shows
-    const uniqueArtists = isDrilled && drillStats ? drillStats.unique_artists : initialStats.unique_artists
-    const uniqueVenues  = isDrilled && drillStats ? drillStats.unique_venues  : initialStats.unique_venues
+    const totalShows    = isDrilled && drillStats ? drillStats.total_shows    : (initialStats.total_shows    > 0 ? initialStats.total_shows    : drillStats?.total_shows    ?? 0)
+    const uniqueArtists = isDrilled && drillStats ? drillStats.unique_artists : (initialStats.unique_artists > 0 ? initialStats.unique_artists : drillStats?.unique_artists ?? 0)
+    const uniqueVenues  = isDrilled && drillStats ? drillStats.unique_venues  : (initialStats.unique_venues  > 0 ? initialStats.unique_venues  : drillStats?.unique_venues  ?? 0)
 
     let fourthCard: { label: string; value: string } | null = null
     if (selectedYear && !selectedMonth) {

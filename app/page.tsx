@@ -37,6 +37,8 @@ export type CityStats = {
   state:      string | null
   country:    string | null
   show_count: number
+  latitude:   number | null
+  longitude:  number | null
 }
 
 export type HomeStats = {
