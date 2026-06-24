@@ -1020,6 +1020,10 @@ def main() -> None:
                     help="Full country name (e.g. Canada, 'United States')")
     args = ap.parse_args()
 
+    # Expand ISO country codes to full names used in setlist.fm venue strings
+    _COUNTRY_CODES = {"CA": "Canada", "US": "United States", "AU": "Australia", "UK": "United Kingdom"}
+    args.country = _COUNTRY_CODES.get(args.country.upper(), args.country)
+
     interactive = (
         not args.dry_run
         and not args.no_interactive
