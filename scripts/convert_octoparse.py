@@ -44,16 +44,32 @@ except ImportError:
 # ── City → (state, country, exports path) mapping ─────────────────────────────
 # Add new cities here as Octoparse scrapes are done.
 CITY_MAP = {
-    "toronto":      ("ON", "CA", "exports/_CA/ON/toronto"),
-    "vancouver":    ("BC", "CA", "exports/_CA/BC/vancouver"),
-    "montreal":     ("QC", "CA", "exports/_CA/QC/montreal"),
-    "calgary":      ("AB", "CA", "exports/_CA/AB/calgary"),
-    "edmonton":     ("AB", "CA", "exports/_CA/AB/edmonton"),
-    "winnipeg":     ("MB", "CA", "exports/_CA/MB/winnipeg"),
-    "ottawa":       ("ON", "CA", "exports/_CA/ON/ottawa"),
-    "halifax":      ("NS", "CA", "exports/_CA/NS/halifax"),
-    "quebec city":  ("QC", "CA", "exports/_CA/QC/quebec_city"),
-    "seattle":      ("WA", "US", "exports/_US/WA/seattle"),
+    # Canada — BC
+    "vancouver":      ("BC", "CA", "exports/_CA/BC/vancouver"),
+    "victoria":       ("BC", "CA", "exports/_CA/BC/victoria"),
+    "kelowna":        ("BC", "CA", "exports/_CA/BC/kelowna"),
+    # Canada — AB
+    "calgary":        ("AB", "CA", "exports/_CA/AB/calgary"),
+    "edmonton":       ("AB", "CA", "exports/_CA/AB/edmonton"),
+    # Canada — MB
+    "winnipeg":       ("MB", "CA", "exports/_CA/MB/winnipeg"),
+    # Canada — ON
+    "toronto":        ("ON", "CA", "exports/_CA/ON/toronto"),
+    "ottawa":         ("ON", "CA", "exports/_CA/ON/ottawa"),
+    # Canada — QC
+    "montreal":       ("QC", "CA", "exports/_CA/QC/montreal"),
+    "quebec city":    ("QC", "CA", "exports/_CA/QC/quebec_city"),
+    # Canada — NS
+    "halifax":        ("NS", "CA", "exports/_CA/NS/halifax"),
+    # United States — WA
+    "seattle":        ("WA", "US", "exports/_US/WA/seattle"),
+    # United States — OK
+    "oklahoma city":  ("OK", "US", "exports/_US/OK/oklahoma_city"),
+    # United States — AZ
+    "phoenix":        ("AZ", "US", "exports/_US/AZ/phoenix"),
+    # United States — TX
+    "austin":         ("TX", "US", "exports/_US/TX/austin"),
+    # TODO: add further cities as expansion pipeline is finalized
 }
 
 OUTPUT_FIELDNAMES = ["Field", "month", "day", "Year", "details", "details2", "details4", "tour_name"]
