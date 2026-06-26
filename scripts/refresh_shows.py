@@ -408,12 +408,34 @@ def load_file(path: str) -> list[dict]:
 # DB pre-loading
 # ---------------------------------------------------------------------------
 
-def load_existing_urls() -> set[str]:
+def load_existing_urls(input_urls: set[str]) -> set[str]:
+    """Check which of the input_urls already exist in fact_shows.
+
+    Scoped to the input batch — avoids loading the full fact_shows table via
+    offset pagination, which becomes unreliable at 300k+ rows and can produce
+    truncated snapshots that cause duplicate inserts (GP-157).
+    """
     print("  Existing shows …", end=" ", flush=True)
-    rows = sb_get_all("fact_shows", {"select": "setlist_url", "setlist_url": "not.is.null"})
-    urls = {r["setlist_url"] for r in rows if r.get("setlist_url")}
-    print(f"{len(urls):,}")
-    return urls
+    if not input_urls:
+        print("0")
+        return set()
+
+    CHUNK = 50          # 50 URLs × ~80 chars ≈ 4 KB per request, well under limits
+    url_list = list(input_urls)
+    found: set[str] = set()
+
+    for i in range(0, len(url_list), CHUNK):
+        chunk = url_list[i : i + CHUNK]
+        rows = sb_get_page("fact_shows", {
+            "select":      "setlist_url",
+            "setlist_url": "in.(" + ",".join(chunk) + ")",
+        })
+        for r in rows:
+            if r.get("setlist_url"):
+                found.add(r["setlist_url"])
+
+    print(f"{len(found):,}  (checked {len(input_urls):,} input URLs against DB)")
+    return found
 
 
 def load_existing_artists() -> tuple[dict[str, int], dict[str, str]]:
@@ -1141,7 +1163,8 @@ def main() -> None:
 
     # ── 2. Snapshot DB state ─────────────────────────────────────────────────
     print("\nLoading Supabase snapshot…")
-    existing_urls                                         = load_existing_urls()
+    input_urls    = {s["setlist_url"] for s in parsed if s.get("setlist_url")}
+    existing_urls                                         = load_existing_urls(input_urls)
     existing_artists, artist_name_map                    = load_existing_artists()
     existing_venues,  venue_name_map, venue_location_map = load_existing_venues()
     artist_aliases                                        = load_artist_aliases()
