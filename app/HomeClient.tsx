@@ -186,7 +186,10 @@ export default function HomeClient({
   useEffect(() => {
     if (initialCityStats.length === 0) {
       fetch('/api/home/city-stats')
-        .then(r => r.json())
+        .then(r => {
+          if (!r.ok) throw new Error(`city-stats ${r.status}`)
+          return r.json()
+        })
         .then(d => {
           const stats: CityStats[] = (d.cityStats ?? []).map((c: CityStats) => ({
             ...c,
@@ -194,7 +197,7 @@ export default function HomeClient({
           }))
           if (stats.length) setCityStatsData(stats)
         })
-        .catch(console.error)
+        .catch(err => console.error('[HomeClient] city-stats fallback failed:', err))
     }
   }, [initialCityStats.length])
 
@@ -238,11 +241,12 @@ export default function HomeClient({
   }, [initialChart, initialArtists, initialVenues])
 
   // ── Chart + stats fallback: trigger all-time fetch if ISR cache was stale ──
+  // Covers two failure modes: chart RPC failed (length 0) OR stats RPC failed (total 0)
   useEffect(() => {
-    if (initialChart.length === 0) {
+    if (initialChart.length === 0 || initialStats.total_shows === 0) {
       fetchDrillData('all', null, null)
     }
-  }, [initialChart.length, fetchDrillData])
+  }, [initialChart.length, initialStats.total_shows, fetchDrillData])
 
   const isDrilled       = selectedDecade !== 'all' || selectedYear !== null || selectedMonth !== null
   const hasActiveFilter = isDrilled || capacityFilter !== 'all'
