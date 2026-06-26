@@ -77,6 +77,7 @@ const STATE_NAMES: Record<string, string> = {
   CO: 'Colorado',         OH: 'Ohio',       PA: 'Pennsylvania',      GA: 'Georgia',
   TN: 'Tennessee',        MA: 'Massachusetts', NV: 'Nevada',         AZ: 'Arizona',
   MN: 'Minnesota',        NC: 'North Carolina', MO: 'Missouri',      WI: 'Wisconsin',
+  OK: 'Oklahoma',
 }
 const DECADES: Decade[] = ['all', '1900s', '1910s', '1920s', '1930s', '1940s', '1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s']
 const MONTH_NAMES       = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
