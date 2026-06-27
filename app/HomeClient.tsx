@@ -196,6 +196,7 @@ export default function HomeClient({
     if (!selectedState) {
       setStateArtists(null)
       setStateVenues(null)
+      setStateLoading(false)
       return
     }
 
@@ -207,8 +208,11 @@ export default function HomeClient({
       return
     }
 
+    const controller = new AbortController()
     setStateLoading(true)
-    fetch(`/api/home/state-drill?state=${encodeURIComponent(selectedState)}`)
+    fetch(`/api/home/state-drill?state=${encodeURIComponent(selectedState)}`, {
+      signal: controller.signal,
+    })
       .then(r => r.json())
       .then(data => {
         const artists = data.artists ?? []
@@ -217,8 +221,11 @@ export default function HomeClient({
         setStateArtists(artists)
         setStateVenues(venues)
       })
-      .catch(e => console.error('[HomeClient] state-drill error:', e))
+      .catch(e => { if (e.name !== 'AbortError') console.error('[HomeClient] state-drill error:', e) })
       .finally(() => setStateLoading(false))
+
+    // Cancel request if selectedState changes before fetch completes
+    return () => controller.abort()
   }, [selectedState])
 
   // ── City stats fallback: re-fetch client-side if ISR cache served stale empty data ──
