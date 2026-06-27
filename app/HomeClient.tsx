@@ -169,6 +169,9 @@ export default function HomeClient({
   // ── GP-132/133: city stats + expand state ─────────────────
   const [expandedProvinces, setExpandedProvinces] = useState<Set<string>>(new Set())
   const [selectedState,     setSelectedState]     = useState<string | null>(null)
+  const [stateArtists,      setStateArtists]      = useState<TopArtist[] | null>(null)
+  const [stateVenues,       setStateVenues]       = useState<TopVenue[]  | null>(null)
+  const [stateLoading,      setStateLoading]      = useState(false)
   const [expandedArtists,   setExpandedArtists]   = useState<Set<number>>(new Set())
   const [artistCityData,    setArtistCityData]     = useState<Record<number, ArtistCityRow[]>>({})
   const [loadingArtistCity, setLoadingArtistCity]  = useState<Set<number>>(new Set())
@@ -183,11 +186,27 @@ export default function HomeClient({
 
   useEffect(() => { setMounted(true) }, [])
 
-  // Reset "show all" pagination when state filter changes
+  // Fetch state-specific artists/venues on drill-down; reset pagination either way
   useEffect(() => {
     setShowAllArtists(false)
     setShowAllVenues(false)
     setShowAllCities(false)
+
+    if (!selectedState) {
+      setStateArtists(null)
+      setStateVenues(null)
+      return
+    }
+
+    setStateLoading(true)
+    fetch(`/api/home/state-drill?state=${encodeURIComponent(selectedState)}`)
+      .then(r => r.json())
+      .then(data => {
+        setStateArtists(data.artists ?? [])
+        setStateVenues(data.venues  ?? [])
+      })
+      .catch(e => console.error('[HomeClient] state-drill error:', e))
+      .finally(() => setStateLoading(false))
   }, [selectedState])
 
   // ── City stats fallback: re-fetch client-side if ISR cache served stale empty data ──
@@ -372,21 +391,14 @@ export default function HomeClient({
   // ── GP-159: State-filtered derived data (client-side from map drill-down) ──
   const displayedArtists = useMemo(() => {
     if (!selectedState) return artists
-    return artists
-      .map(a => ({ ...a, show_count: a.state_counts?.find(s => s.state === selectedState)?.cnt ?? 0 }))
-      .filter(a => a.show_count > 0)
-      .sort((a, b) => b.show_count - a.show_count)
-  }, [artists, selectedState])
+    return stateArtists ?? []
+  }, [artists, selectedState, stateArtists])
 
   const stateFilteredVenues = useMemo(() => {
     if (!selectedState) return filteredVenues
-    const stateCities = new Set(
-      cityStatsData.filter(c => c.state === selectedState).map(c => c.city)
-    )
-    return filteredVenues.filter(v =>
-      v.state === selectedState || (v.city != null && stateCities.has(v.city))
-    )
-  }, [filteredVenues, selectedState, cityStatsData])
+    if (stateVenues === null) return []
+    return filterVenues(stateVenues, capacityFilter)
+  }, [filteredVenues, selectedState, stateVenues, capacityFilter])
 
   const displayedCities = useMemo(() => {
     if (!selectedState) return cityStatsData
@@ -800,7 +812,7 @@ export default function HomeClient({
                 </span>
               )}
             </h2>
-            {loading ? (
+            {(loading || stateLoading) ? (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
               </div>
@@ -927,7 +939,7 @@ export default function HomeClient({
                 </span>
               )}
             </h2>
-            {loading ? (
+            {(loading || stateLoading) ? (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
               </div>
