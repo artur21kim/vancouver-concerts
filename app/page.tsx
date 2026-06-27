@@ -75,13 +75,6 @@ export default async function Home() {
   if (venuesRes.error)    console.error('home venues error:',     venuesRes.error)
   if (cityStatsRes.error) console.error('home city stats error:', cityStatsRes.error)
 
-  // Protect ISR cache: if all critical RPCs failed, throw so Next.js keeps the last
-  // good cached page rather than storing an empty page for the next 300 seconds.
-  // city-stats is intentionally excluded — it has a client-side fallback in HomeClient.
-  if (statsRes.error && chartRes.error && artistsRes.error && venuesRes.error) {
-    throw new Error('All critical home RPCs failed — preserving ISR cache')
-  }
-
   const stats:     HomeStats   = statsRes.data     ?? { total_shows: 0, unique_artists: 0, unique_venues: 0, min_date: null, max_date: null }
   const chart:     ChartRow[]  = chartRes.data     ?? []
   const artists:   TopArtist[] = artistsRes.data   ?? []
