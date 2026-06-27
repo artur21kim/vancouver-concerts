@@ -17,9 +17,12 @@ type Show = {
   setlist_url: string | null
   show_type: string | null
   festival_name: string | null
+  tour_name: string | null
   added_at: string
   notes: string | null
   source: string | null
+  city: string | null
+  venue_state: string | null
   artist: {
     artist_id: number
     artist_name: string
@@ -2313,7 +2316,7 @@ export default function MyGrooveprintClient({
       await supabase.from('user_shows').upsert(records, { onConflict: 'user_id,show_id' })
       const { data: newShows } = await supabase
         .from('user_shows')
-        .select(`show_id, added_at, source, fact_shows ( show_id, date, setlist_url, show_type, festival_name, dim_artist ( artist_id, artist_name, monthly_listeners, spotify_artist_id ), dim_venue ( venue_id, venue_name, capacity, capacity_category ) )`)
+        .select(`show_id, added_at, source, fact_shows ( show_id, date, setlist_url, show_type, festival_name, tour_name, dim_artist ( artist_id, artist_name, monthly_listeners, spotify_artist_id ), dim_venue ( venue_id, venue_name, capacity, capacity_category, city, state ) )`)
         .eq('user_id', user.id).order('added_at', { ascending: false })
       if (newShows) {
         const mapped = newShows.map((us: any) => {
@@ -2322,7 +2325,7 @@ export default function MyGrooveprintClient({
           const artist = Array.isArray(show.dim_artist) ? show.dim_artist[0] : show.dim_artist
           const venue  = Array.isArray(show.dim_venue)  ? show.dim_venue[0]  : show.dim_venue
           if (!artist || !venue) return null
-          return { show_id: show.show_id, date: show.date, setlist_url: show.setlist_url, show_type: show.show_type, festival_name: show.festival_name, added_at: us.added_at, notes: null, source: us.source, artist: { artist_id: artist.artist_id, artist_name: artist.artist_name, monthly_listeners: artist.monthly_listeners, spotify_artist_id: artist.spotify_artist_id }, venue: { venue_id: venue.venue_id, venue_name: venue.venue_name, capacity: venue.capacity ?? null, capacity_category: venue.capacity_category ?? null } }
+          return { show_id: show.show_id, date: show.date, setlist_url: show.setlist_url, show_type: show.show_type, festival_name: show.festival_name, tour_name: show.tour_name ?? null, added_at: us.added_at, notes: null, source: us.source, city: venue.city ?? null, venue_state: venue.state ?? null, artist: { artist_id: artist.artist_id, artist_name: artist.artist_name, monthly_listeners: artist.monthly_listeners, spotify_artist_id: artist.spotify_artist_id }, venue: { venue_id: venue.venue_id, venue_name: venue.venue_name, capacity: venue.capacity ?? null, capacity_category: venue.capacity_category ?? null } }
         }).filter(Boolean)
         setShows(mapped as Show[])
       }
@@ -3675,7 +3678,7 @@ export default function MyGrooveprintClient({
                       const n = new Set(prev); n.has(group.key) ? n.delete(group.key) : n.add(group.key); return n
                     })
                     return (
-                      <div key={group.key} className={future ? 'bg-amber-500/5' : ''}>
+                      <div key={group.key} className="">
                         <div
                           className={`group/row flex items-center gap-3 px-4 py-3 transition-colors ${canExpand ? 'cursor-pointer hover:bg-muted/30' : ''}`}
                           onClick={canExpand ? toggleExpand : undefined}
@@ -3695,7 +3698,7 @@ export default function MyGrooveprintClient({
                           </div>
                           <div className="w-24 flex-shrink-0">
                             <p className="text-sm text-foreground whitespace-nowrap">{fmtDate(group.date)}</p>
-                            {future && <span className="text-[9px] font-semibold text-amber-400">upcoming</span>}
+                            {future && <span style={{ backgroundColor: 'rgba(0,191,168,0.15)', color: '#00BFA8' }} className="text-[9px] font-semibold px-1.5 py-px rounded">upcoming</span>}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -3860,7 +3863,7 @@ export default function MyGrooveprintClient({
                           const removing = removingSet.has(show.show_id)
                           const future   = isFuture(show.date)
                           return (
-                            <div key={show.show_id} className={`hover:bg-muted/30 transition-colors ${future ? 'bg-amber-500/5' : ''}`}>
+                            <div key={show.show_id} className={`hover:bg-muted/30 transition-colors`}>
                               <div className="hidden md:grid items-center"
                                 style={{ gridTemplateColumns: readOnly ? '120px 1fr' : '40px 120px 1fr' }}>
                                 {!readOnly && (
@@ -3872,7 +3875,7 @@ export default function MyGrooveprintClient({
                                 )}
                                 <div className="px-3 py-3.5">
                                   <p className="text-sm text-foreground whitespace-nowrap">{fmtDate(show.date)}</p>
-                                  {future && <span className="text-[9px] font-semibold text-amber-400">upcoming</span>}
+                                  {future && <span style={{ backgroundColor: 'rgba(0,191,168,0.15)', color: '#00BFA8' }} className="text-[9px] font-semibold px-1.5 py-px rounded">upcoming</span>}
                                 </div>
                                 <div className="px-3 py-3.5 min-w-0">
                                   <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
@@ -3883,6 +3886,14 @@ export default function MyGrooveprintClient({
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <button onClick={() => applyFilter(show.venue.venue_name)} className="text-[13px] text-muted-foreground hover:text-primary hover:underline">{show.venue.venue_name}</button>
                                     <CapacityBadge category={show.venue.capacity_category} />
+                                    {show.city && show.venue_state && (
+                                      <span className="text-[11px] text-muted-foreground/60">{show.city}, {show.venue_state}</span>
+                                    )}
+                                    {(show.tour_name || show.festival_name) && (
+                                      <span className="text-[11px] text-muted-foreground/50 truncate" title={show.tour_name ?? show.festival_name ?? undefined}>
+                                        {show.tour_name ?? show.festival_name}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -3895,7 +3906,7 @@ export default function MyGrooveprintClient({
                                 )}
                                 <div>
                                   <p className="text-[11px] text-foreground whitespace-nowrap">{fmtDate(show.date)}</p>
-                                  {future && <span className="text-[9px] font-semibold text-amber-400">upcoming</span>}
+                                  {future && <span style={{ backgroundColor: 'rgba(0,191,168,0.15)', color: '#00BFA8' }} className="text-[9px] font-semibold px-1.5 py-px rounded">upcoming</span>}
                                 </div>
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1 mb-0.5 flex-wrap">
@@ -3906,6 +3917,9 @@ export default function MyGrooveprintClient({
                                     <button onClick={() => applyFilter(show.venue.venue_name)} className="text-[10px] text-muted-foreground hover:text-primary truncate">{show.venue.venue_name}</button>
                                     <CapacityBadge category={show.venue.capacity_category} />
                                   </div>
+                                  {show.city && show.venue_state && (
+                                    <p className="text-[9px] text-muted-foreground/60 leading-tight mt-0.5">{show.city}, {show.venue_state}</p>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -3924,17 +3938,18 @@ export default function MyGrooveprintClient({
                             <th className="px-3 py-3 text-left cursor-pointer hover:text-foreground whitespace-nowrap" onClick={() => handleSort('date')}>Date{sortArrow('date')}</th>
                             <th className="px-3 py-3 text-left cursor-pointer hover:text-foreground" onClick={() => handleSort('artist')}>Artist{sortArrow('artist')}</th>
                             <th className="px-3 py-3 text-left cursor-pointer hover:text-foreground" onClick={() => handleSort('venue')}>Venue{sortArrow('venue')}</th>
-                            <th className="px-3 py-3 text-left">Festival</th>
+                            <th className="px-3 py-3 text-left">City</th>
+                            <th className="px-3 py-3 text-left">Tour / Festival</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                           {setsFiltered.length === 0 ? (
-                            <tr><td colSpan={readOnly ? 4 : 5} className="text-center py-10 text-muted-foreground">No shows match this filter.</td></tr>
+                            <tr><td colSpan={readOnly ? 5 : 6} className="text-center py-10 text-muted-foreground">No shows match this filter.</td></tr>
                           ) : currentShows.map(show => {
                             const removing = removingSet.has(show.show_id)
                             const future   = isFuture(show.date)
                             return (
-                              <tr key={show.show_id} className={`hover:bg-muted/30 transition-colors ${future ? 'bg-amber-500/5' : ''}`}>
+                              <tr key={show.show_id} className={`hover:bg-muted/30 transition-colors`}>
                                 {!readOnly && (
                                   <td className="px-3 py-3">
                                     <button onClick={() => removeShow(show.show_id)} disabled={removing} className="focus:outline-none disabled:opacity-50">
@@ -3944,7 +3959,7 @@ export default function MyGrooveprintClient({
                                 )}
                                 <td className="px-3 py-3 whitespace-nowrap text-foreground">
                                   {fmtDate(show.date)}
-                                  {future && <span className="ml-1.5 text-[9px] font-semibold text-amber-400 bg-amber-400/15 px-1 py-px rounded">upcoming</span>}
+                                  {future && <span style={{ backgroundColor: 'rgba(0,191,168,0.15)', color: '#00BFA8' }} className="ml-1.5 text-[9px] font-semibold px-1.5 py-px rounded">upcoming</span>}
                                 </td>
                                 <td className="px-3 py-3">
                                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -3959,8 +3974,16 @@ export default function MyGrooveprintClient({
                                     <CapacityBadge category={show.venue.capacity_category} />
                                   </div>
                                 </td>
-                                <td className="px-3 py-3 text-muted-foreground">
-                                  {show.festival_name || <span className="text-muted-foreground/40">\u2014</span>}
+                                <td className="px-3 py-3 text-sm text-muted-foreground whitespace-nowrap">
+                                  {show.city && show.venue_state ? `${show.city}, ${show.venue_state}` : <span className="text-muted-foreground/40">—</span>}
+                                </td>
+                                <td className="px-3 py-3 text-sm text-muted-foreground max-w-[160px]">
+                                  {show.tour_name
+                                    ? <span className="truncate block" title={show.tour_name}>{show.tour_name}</span>
+                                    : show.festival_name
+                                    ? <span className="truncate block" title={show.festival_name}>{show.festival_name}</span>
+                                    : <span className="text-muted-foreground/40">—</span>
+                                  }
                                 </td>
                               </tr>
                             )

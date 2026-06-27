@@ -33,6 +33,7 @@ export default async function MyGrooveprintPage() {
                     setlist_url,
                     show_type,
                     festival_name,
+                    tour_name,
                     dim_artist (
                         artist_id,
                         artist_name,
@@ -44,7 +45,8 @@ export default async function MyGrooveprintPage() {
                         venue_name,
                         capacity,
                         capacity_category,
-                        city
+                        city,
+                        state
                     )
                 )
             `)
@@ -95,11 +97,13 @@ export default async function MyGrooveprintPage() {
             setlist_url:   show.setlist_url,
             show_type:     show.show_type,
             festival_name: show.festival_name,
+            tour_name:     show.tour_name     ?? null,
             added_at:      us.added_at,
             notes:         null,
             source:        us.source,
             match_score:   scoreMap[artist.artist_id] ?? null,
-            city:          venue.city ?? null,
+            city:          venue.city         ?? null,
+            venue_state:   venue.state        ?? null,
             artist: {
                 artist_id:         artist.artist_id,
                 artist_name:       artist.artist_name,
