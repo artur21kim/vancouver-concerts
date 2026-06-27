@@ -168,6 +168,7 @@ export default function HomeClient({
 
   // ── GP-132/133: city stats + expand state ─────────────────
   const [expandedProvinces, setExpandedProvinces] = useState<Set<string>>(new Set())
+  const [selectedState,     setSelectedState]     = useState<string | null>(null)
   const [expandedArtists,   setExpandedArtists]   = useState<Set<number>>(new Set())
   const [artistCityData,    setArtistCityData]     = useState<Record<number, ArtistCityRow[]>>({})
   const [loadingArtistCity, setLoadingArtistCity]  = useState<Set<number>>(new Set())
@@ -181,6 +182,13 @@ export default function HomeClient({
 
 
   useEffect(() => { setMounted(true) }, [])
+
+  // Reset "show all" pagination when state filter changes
+  useEffect(() => {
+    setShowAllArtists(false)
+    setShowAllVenues(false)
+    setShowAllCities(false)
+  }, [selectedState])
 
   // ── City stats fallback: re-fetch client-side if ISR cache served stale empty data ──
   useEffect(() => {
@@ -361,6 +369,25 @@ export default function HomeClient({
     [venues, capacityFilter]
   )
 
+  // ── GP-159: State-filtered derived data (client-side from map drill-down) ──
+  const displayedArtists = useMemo(() => {
+    if (!selectedState) return artists
+    return artists
+      .map(a => ({ ...a, show_count: a.state_counts?.find(s => s.state === selectedState)?.cnt ?? 0 }))
+      .filter(a => a.show_count > 0)
+      .sort((a, b) => b.show_count - a.show_count)
+  }, [artists, selectedState])
+
+  const stateFilteredVenues = useMemo(() => {
+    if (!selectedState) return filteredVenues
+    return filteredVenues.filter(v => v.state === selectedState)
+  }, [filteredVenues, selectedState])
+
+  const displayedCities = useMemo(() => {
+    if (!selectedState) return cityStatsData
+    return cityStatsData.filter(c => c.state === selectedState)
+  }, [cityStatsData, selectedState])
+
   // ── GP-132: province/state rollup (client-side from city stats) ──
   const provinceStats = useMemo(() => {
     const map = new Map<string, { state: string; country: string; total: number; cities: CityStats[] }>()
@@ -455,12 +482,13 @@ export default function HomeClient({
   // ── Filter context label ──────────────────────────────────
   const filterContext = useMemo(() => {
     const parts: string[] = []
-    if (selectedMonth !== null && selectedYear) parts.push(`${MONTH_NAMES[selectedMonth]} ${selectedYear}`)
-    else if (selectedYear)                       parts.push(selectedYear.toString())
-    else if (selectedDecade !== 'all')           parts.push(selectedDecade)
-    if (capacityFilter !== 'all')                parts.push(`${CAPACITY_DISPLAY_NAMES[capacityFilter as CapacityBucket]} Venues`)
+    if (selectedState)                             parts.push(STATE_NAMES[selectedState] ?? selectedState)
+    if (selectedMonth !== null && selectedYear)    parts.push(`${MONTH_NAMES[selectedMonth]} ${selectedYear}`)
+    else if (selectedYear)                         parts.push(selectedYear.toString())
+    else if (selectedDecade !== 'all')             parts.push(selectedDecade)
+    if (capacityFilter !== 'all')                  parts.push(`${CAPACITY_DISPLAY_NAMES[capacityFilter as CapacityBucket]} Venues`)
     return parts.length > 0 ? parts.join(' · ') : null
-  }, [selectedDecade, selectedYear, selectedMonth, capacityFilter])
+  }, [selectedDecade, selectedYear, selectedMonth, capacityFilter, selectedState])
 
   // ── Chart options ─────────────────────────────────────────
   const chartOptions = useMemo(() => ({
@@ -562,7 +590,12 @@ export default function HomeClient({
         </div>
 
         {/* ── View toggle ────────────────────────────────────────── */}
-        <div className="flex justify-end mb-2 md:mb-3">
+        <div className="flex justify-between items-center mb-2 md:mb-3">
+          {selectedState && viewMode === 'chart' ? (
+            <span className="text-xs text-muted-foreground italic">
+              Chart shows all regions
+            </span>
+          ) : <span />}
           <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
             <button
               onClick={() => setViewMode('map')}
@@ -594,6 +627,8 @@ export default function HomeClient({
               provinces={provinceStats}
               isAuthenticated={!!user}
               onCtaClick={handleProvinceCta}
+              selectedState={selectedState}
+              onStateChange={setSelectedState}
             />
           </div>
         )}
@@ -764,10 +799,10 @@ export default function HomeClient({
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
               </div>
-            ) : artists.length > 0 ? (
+            ) : displayedArtists.length > 0 ? (
               <>
                 <div className="space-y-2 md:space-y-3">
-                  {artists.slice(0, showAllArtists ? 25 : 10).map((artist, index) => (
+                  {displayedArtists.slice(0, showAllArtists ? 25 : 10).map((artist, index) => (
                     <div key={artist.artist_id} className="py-0.5">
                       {/* Main row */}
                       <div className="flex items-center justify-between">
@@ -863,7 +898,7 @@ export default function HomeClient({
                     </div>
                   ))}
                 </div>
-                {artists.length > 10 && (
+                {displayedArtists.length > 10 && (
                   <button
                     onClick={() => setShowAllArtists(!showAllArtists)}
                     className="mt-3 text-primary hover:opacity-80 text-xs md:text-sm font-medium"
@@ -891,10 +926,10 @@ export default function HomeClient({
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
               </div>
-            ) : filteredVenues.length > 0 ? (
+            ) : stateFilteredVenues.length > 0 ? (
               <>
                 <div className="space-y-2 md:space-y-3">
-                  {filteredVenues.slice(0, showAllVenues ? 25 : 10).map((venue, index) => (
+                  {stateFilteredVenues.slice(0, showAllVenues ? 25 : 10).map((venue, index) => (
                     <div key={venue.venue_id} className="flex items-center justify-between py-0.5">
                       <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <span className="text-base md:text-lg font-semibold text-muted-foreground w-4 md:w-6 flex-shrink-0">
@@ -934,7 +969,7 @@ export default function HomeClient({
                     </div>
                   ))}
                 </div>
-                {filteredVenues.length > 10 && (
+                {stateFilteredVenues.length > 10 && (
                   <button
                     onClick={() => setShowAllVenues(!showAllVenues)}
                     className="mt-3 text-primary hover:opacity-80 text-xs md:text-sm font-medium"
@@ -960,8 +995,8 @@ export default function HomeClient({
                 Top Cities
               </h2>
               <div className="space-y-1">
-                {cityStatsData.slice(0, showAllCities ? 25 : 10).map((city, idx) => {
-                  const maxCount = Number(cityStatsData[0]?.show_count ?? 1)
+                {displayedCities.slice(0, showAllCities ? 25 : 10).map((city, idx) => {
+                  const maxCount = Number(displayedCities[0]?.show_count ?? 1)
                   const pct      = Math.round((Number(city.show_count) / maxCount) * 100)
                   const sharePct = initialStats.total_shows > 0
                     ? ((Number(city.show_count) / initialStats.total_shows) * 100).toFixed(1)
@@ -991,7 +1026,7 @@ export default function HomeClient({
                   )
                 })}
               </div>
-              {cityStatsData.length > 10 && (
+              {displayedCities.length > 10 && (
                 <button
                   onClick={() => setShowAllCities(!showAllCities)}
                   className="mt-3 text-primary hover:opacity-80 text-xs md:text-sm font-medium"
@@ -1017,7 +1052,7 @@ export default function HomeClient({
                     <div key={prov.state}>
                       <button
                         onClick={() => toggleProvince(prov.state)}
-                        className="w-full flex items-center justify-between py-1.5 rounded px-1 transition-colors"
+                        className={`w-full flex items-center justify-between py-1.5 rounded px-1 transition-colors${prov.state === selectedState ? ' ring-1 ring-primary' : ''}`}
                         style={{ background: `linear-gradient(to right, rgba(0,191,168,0.22) ${pct}%, transparent ${pct}%)` }}
                         title={`${STATE_NAMES[prov.state] ?? prov.state}: ${prov.total.toLocaleString()} shows · ${sharePct}% of total`}
                       >

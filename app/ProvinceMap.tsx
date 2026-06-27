@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useMemo, useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import { divIcon } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -180,12 +180,15 @@ export default function ProvinceMap({
   provinces,
   isAuthenticated = false,
   onCtaClick,
+  selectedState,
+  onStateChange,
 }: {
   provinces:        ProvinceData[]
   isAuthenticated?: boolean
   onCtaClick?:      () => void
+  selectedState:    string | null
+  onStateChange:    (s: string | null) => void
 }) {
-  const [selectedState, setSelectedState] = useState<string | null>(null)
 
   // Province bubble sizing
   const { minTotal, maxTotal } = useMemo(() => {
@@ -243,7 +246,7 @@ export default function ProvinceMap({
             )}
           </span>
           <button
-            onClick={() => setSelectedState(null)}
+            onClick={() => onStateChange(null)}
             style={{
               background: TEAL, color: '#fff', border: 'none',
               borderRadius: 5, padding: '4px 10px',
@@ -275,7 +278,7 @@ export default function ProvinceMap({
             key={province.state}
             position={PROVINCE_COORDS[province.state]}
             icon={makeBubbleIcon(province.total, getRadius(province.total, minTotal, maxTotal))}
-            eventHandlers={{ click: () => setSelectedState(province.state) }}
+            eventHandlers={{ click: () => onStateChange(province.state) }}
           />
         ))}
 
