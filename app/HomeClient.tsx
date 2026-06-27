@@ -380,8 +380,13 @@ export default function HomeClient({
 
   const stateFilteredVenues = useMemo(() => {
     if (!selectedState) return filteredVenues
-    return filteredVenues.filter(v => v.state === selectedState)
-  }, [filteredVenues, selectedState])
+    const stateCities = new Set(
+      cityStatsData.filter(c => c.state === selectedState).map(c => c.city)
+    )
+    return filteredVenues.filter(v =>
+      v.state === selectedState || (v.city != null && stateCities.has(v.city))
+    )
+  }, [filteredVenues, selectedState, cityStatsData])
 
   const displayedCities = useMemo(() => {
     if (!selectedState) return cityStatsData
