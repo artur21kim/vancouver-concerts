@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/app/providers/AuthProvider'
 import {
@@ -172,6 +172,7 @@ export default function HomeClient({
   const [stateArtists,      setStateArtists]      = useState<TopArtist[] | null>(null)
   const [stateVenues,       setStateVenues]       = useState<TopVenue[]  | null>(null)
   const [stateLoading,      setStateLoading]      = useState(false)
+  const stateDrillCache = useRef<Record<string, { artists: TopArtist[]; venues: TopVenue[] }>>({})
   const [expandedArtists,   setExpandedArtists]   = useState<Set<number>>(new Set())
   const [artistCityData,    setArtistCityData]     = useState<Record<number, ArtistCityRow[]>>({})
   const [loadingArtistCity, setLoadingArtistCity]  = useState<Set<number>>(new Set())
@@ -186,7 +187,7 @@ export default function HomeClient({
 
   useEffect(() => { setMounted(true) }, [])
 
-  // Fetch state-specific artists/venues on drill-down; reset pagination either way
+  // Fetch state-specific artists/venues on drill-down; cache results for instant re-visits
   useEffect(() => {
     setShowAllArtists(false)
     setShowAllVenues(false)
@@ -198,12 +199,23 @@ export default function HomeClient({
       return
     }
 
+    // Return cached result immediately — no spinner, no network request
+    const cached = stateDrillCache.current[selectedState]
+    if (cached) {
+      setStateArtists(cached.artists)
+      setStateVenues(cached.venues)
+      return
+    }
+
     setStateLoading(true)
     fetch(`/api/home/state-drill?state=${encodeURIComponent(selectedState)}`)
       .then(r => r.json())
       .then(data => {
-        setStateArtists(data.artists ?? [])
-        setStateVenues(data.venues  ?? [])
+        const artists = data.artists ?? []
+        const venues  = data.venues  ?? []
+        stateDrillCache.current[selectedState] = { artists, venues }
+        setStateArtists(artists)
+        setStateVenues(venues)
       })
       .catch(e => console.error('[HomeClient] state-drill error:', e))
       .finally(() => setStateLoading(false))
