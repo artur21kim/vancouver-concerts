@@ -3669,7 +3669,17 @@ export default function MyGrooveprintClient({
                 <div className="divide-y divide-border">
                   {billGroups.length === 0 ? (
                     <div className="text-center py-10 text-muted-foreground">No shows match this filter.</div>
-                  ) : billGroups.map((group, idx) => {
+                  ) : (
+                    <>
+                      <div className="hidden md:flex items-center gap-3 px-4 py-2.5 bg-muted border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        {!readOnly && <div className="flex-shrink-0 w-5" />}
+                        <div className="w-10 flex-shrink-0" />
+                        <div className="w-24 flex-shrink-0">Date</div>
+                        <div className="flex-1 min-w-0">Artist / Venue</div>
+                        <div className="w-32 flex-shrink-0">City</div>
+                        <div className="w-40 flex-shrink-0">Tour / Festival</div>
+                      </div>
+                      {billGroups.map((group, idx) => {
                     const supporters = group.shows.slice(1)
                     const future = isFuture(group.date)
                     const isExpanded = expandedBills.has(group.key)
@@ -3737,6 +3747,20 @@ export default function MyGrooveprintClient({
                               <CapacityBadge category={group.capacity_category} />
                             </div>
                           </div>
+                          {/* City column — desktop only */}
+                          <div className="w-32 flex-shrink-0 hidden md:block" onClick={e => e.stopPropagation()}>
+                            {group.headliner.city && group.headliner.venue_state
+                              ? <span className="text-sm text-muted-foreground">{group.headliner.city}, {group.headliner.venue_state}</span>
+                              : <span className="text-muted-foreground/40 text-sm">—</span>}
+                          </div>
+                          {/* Tour / Festival column — desktop only */}
+                          <div className="w-40 flex-shrink-0 hidden md:block" onClick={e => e.stopPropagation()}>
+                            {group.headliner.tour_name
+                              ? <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium truncate cursor-default" style={{ backgroundColor: 'rgba(13,148,136,0.12)', color: '#0d9488', border: '1px solid rgba(13,148,136,0.25)' }} title={group.headliner.tour_name}>{group.headliner.tour_name}</span>
+                              : group.festival_name
+                              ? <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium truncate cursor-default" style={{ backgroundColor: 'rgba(13,148,136,0.12)', color: '#0d9488', border: '1px solid rgba(13,148,136,0.25)' }} title={group.festival_name}>{group.festival_name}</span>
+                              : null}
+                          </div>
                         </div>
 
                         {isExpanded && canExpand && (
@@ -3775,6 +3799,8 @@ export default function MyGrooveprintClient({
                       </div>
                     )
                   })}
+                    </>
+                  )}
                 </div>
               )}
 
@@ -3837,7 +3863,7 @@ export default function MyGrooveprintClient({
                   {setsSubView === 'card' && (
                     <>
                       <div className="hidden md:grid bg-muted border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-                        style={{ gridTemplateColumns: readOnly ? '120px 1fr' : '40px 120px 1fr' }}>
+                        style={{ gridTemplateColumns: readOnly ? '120px 1fr 130px minmax(80px,1fr)' : '40px 120px 1fr 130px minmax(80px,1fr)' }}>
                         {!readOnly && <div className="px-3 py-3" />}
                         <button className="px-3 py-3 text-left hover:text-foreground" onClick={() => handleSort('date')}>Date{sortArrow('date')}</button>
                         <div className="px-3 py-3 flex gap-3">
@@ -3845,6 +3871,8 @@ export default function MyGrooveprintClient({
                           <span className="text-muted-foreground/30">/</span>
                           <button className="hover:text-foreground" onClick={() => handleSort('venue')}>Venue{sortArrow('venue')}</button>
                         </div>
+                        <div className="px-3 py-3">City</div>
+                        <div className="px-3 py-3">Tour / Festival</div>
                       </div>
                       <div className="md:hidden grid bg-muted border-b border-border px-3 py-2"
                         style={{ gridTemplateColumns: readOnly ? '80px 1fr' : '28px 80px 1fr' }}>
@@ -3865,7 +3893,7 @@ export default function MyGrooveprintClient({
                           return (
                             <div key={show.show_id} className={`hover:bg-muted/30 transition-colors`}>
                               <div className="hidden md:grid items-center"
-                                style={{ gridTemplateColumns: readOnly ? '120px 1fr' : '40px 120px 1fr' }}>
+                                style={{ gridTemplateColumns: readOnly ? '120px 1fr 130px minmax(80px,1fr)' : '40px 120px 1fr 130px minmax(80px,1fr)' }}>
                                 {!readOnly && (
                                   <div className="px-3 py-3.5 flex items-center">
                                     <button onClick={() => removeShow(show.show_id)} disabled={removing} className="focus:outline-none disabled:opacity-50">
@@ -3886,15 +3914,19 @@ export default function MyGrooveprintClient({
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <button onClick={() => applyFilter(show.venue.venue_name)} className="text-[13px] text-muted-foreground hover:text-primary hover:underline">{show.venue.venue_name}</button>
                                     <CapacityBadge category={show.venue.capacity_category} />
-                                    {show.city && show.venue_state && (
-                                      <span className="text-[11px] text-muted-foreground/60">{show.city}, {show.venue_state}</span>
-                                    )}
-                                    {(show.tour_name || show.festival_name) && (
-                                      <span className="text-[11px] text-muted-foreground/50 truncate" title={show.tour_name ?? show.festival_name ?? undefined}>
-                                        {show.tour_name ?? show.festival_name}
-                                      </span>
-                                    )}
                                   </div>
+                                </div>
+                                <div className="px-3 py-3.5">
+                                  {show.city && show.venue_state
+                                    ? <span className="text-sm text-muted-foreground">{show.city}, {show.venue_state}</span>
+                                    : <span className="text-muted-foreground/40">—</span>}
+                                </div>
+                                <div className="px-3 py-3.5">
+                                  {show.tour_name
+                                    ? <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium truncate cursor-default" style={{ backgroundColor: 'rgba(13,148,136,0.12)', color: '#0d9488', border: '1px solid rgba(13,148,136,0.25)' }} title={show.tour_name}>{show.tour_name}</span>
+                                    : show.festival_name
+                                    ? <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium truncate cursor-default" style={{ backgroundColor: 'rgba(13,148,136,0.12)', color: '#0d9488', border: '1px solid rgba(13,148,136,0.25)' }} title={show.festival_name}>{show.festival_name}</span>
+                                    : null}
                                 </div>
                               </div>
                               <div className="md:hidden grid items-center px-3 py-2.5"
@@ -3977,11 +4009,11 @@ export default function MyGrooveprintClient({
                                 <td className="px-3 py-3 text-sm text-muted-foreground whitespace-nowrap">
                                   {show.city && show.venue_state ? `${show.city}, ${show.venue_state}` : <span className="text-muted-foreground/40">—</span>}
                                 </td>
-                                <td className="px-3 py-3 text-sm text-muted-foreground max-w-[160px]">
+                                <td className="px-3 py-3">
                                   {show.tour_name
-                                    ? <span className="truncate block" title={show.tour_name}>{show.tour_name}</span>
+                                    ? <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium truncate cursor-default" style={{ backgroundColor: 'rgba(13,148,136,0.12)', color: '#0d9488', border: '1px solid rgba(13,148,136,0.25)' }} title={show.tour_name}>{show.tour_name}</span>
                                     : show.festival_name
-                                    ? <span className="truncate block" title={show.festival_name}>{show.festival_name}</span>
+                                    ? <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium truncate cursor-default" style={{ backgroundColor: 'rgba(13,148,136,0.12)', color: '#0d9488', border: '1px solid rgba(13,148,136,0.25)' }} title={show.festival_name}>{show.festival_name}</span>
                                     : <span className="text-muted-foreground/40">—</span>
                                   }
                                 </td>
