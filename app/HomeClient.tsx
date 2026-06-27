@@ -209,16 +209,15 @@ export default function HomeClient({
   ) => {
     const isAllTime = decade === 'all' && year === null && month === null
 
-    if (isAllTime && initialChart.length > 0) {
-      // Restore initial server-fetched data (ISR cache was fresh)
+    if (isAllTime && initialChart.length > 0 && initialArtists.length > 0 && initialVenues.length > 0) {
+      // Restore initial server-fetched data (ISR cache was fully fresh)
       setChartRows(initialChart)
       setArtists(initialArtists)
       setVenues(initialVenues)
       setDrillStats(null)
       return
     }
-    // isAllTime + initialChart.length === 0: fall through to API
-    // (stale ISR cache — fetch current all-time data from server)
+    // Fall through to API if any initial data is missing (partial ISR failure)
 
     setLoading(true)
     const params = new URLSearchParams()
@@ -241,12 +240,17 @@ export default function HomeClient({
   }, [initialChart, initialArtists, initialVenues])
 
   // ── Chart + stats fallback: trigger all-time fetch if ISR cache was stale ──
-  // Covers two failure modes: chart RPC failed (length 0) OR stats RPC failed (total 0)
+  // Covers all partial failure modes: chart, stats, artists, or venues missing
   useEffect(() => {
-    if (initialChart.length === 0 || initialStats.total_shows === 0) {
+    if (
+      initialChart.length === 0   ||
+      initialStats.total_shows === 0 ||
+      initialArtists.length === 0 ||
+      initialVenues.length === 0
+    ) {
       fetchDrillData('all', null, null)
     }
-  }, [initialChart.length, initialStats.total_shows, fetchDrillData])
+  }, [initialChart.length, initialStats.total_shows, initialArtists.length, initialVenues.length, fetchDrillData])
 
   const isDrilled       = selectedDecade !== 'all' || selectedYear !== null || selectedMonth !== null
   const hasActiveFilter = isDrilled || capacityFilter !== 'all'
