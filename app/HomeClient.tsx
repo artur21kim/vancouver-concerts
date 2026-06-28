@@ -63,9 +63,6 @@ const CAPACITY_BADGE: Record<string, { bg: string; color: string; label: string 
   'X-Large (10K+)':    { bg: 'rgba(225,29,72,0.18)',  color: '#fb7185', label: 'XL' },
 }
 
-// ── Artist city breakdown row (lazy-loaded on expand) ────────
-type ArtistCityRow = { city: string; state: string | null; show_count: number }
-
 // ── Province/state full names ─────────────────────────────────
 const STATE_NAMES: Record<string, string> = {
   BC: 'British Columbia', ON: 'Ontario',    QC: 'Quebec',            AB: 'Alberta',
@@ -173,10 +170,6 @@ export default function HomeClient({
   const [stateVenues,       setStateVenues]       = useState<TopVenue[]  | null>(null)
   const [stateLoading,      setStateLoading]      = useState(false)
   const stateDrillCache = useRef<Record<string, { artists: TopArtist[]; venues: TopVenue[] }>>({})
-  const [expandedArtists,   setExpandedArtists]   = useState<Set<number>>(new Set())
-  const [artistCityData,    setArtistCityData]     = useState<Record<number, ArtistCityRow[]>>({})
-  const [loadingArtistCity, setLoadingArtistCity]  = useState<Set<number>>(new Set())
-
   // ── Drill-down data state ─────────────────────────────────
   const [chartRows,   setChartRows]   = useState<ChartRow[]>(initialChart)
   const [artists,     setArtists]     = useState<TopArtist[]>(initialArtists)
@@ -328,33 +321,6 @@ export default function HomeClient({
       return next
     })
   }, [])
-
-  // ── GP-133: artist row expand + lazy city breakdown ──────
-  const toggleArtistExpand = useCallback(async (artistId: number) => {
-    const isExpanding = !expandedArtists.has(artistId)
-    setExpandedArtists(prev => {
-      const next = new Set(prev)
-      if (isExpanding) next.add(artistId)
-      else next.delete(artistId)
-      return next
-    })
-    if (isExpanding && !artistCityData[artistId] && !loadingArtistCity.has(artistId)) {
-      setLoadingArtistCity(prev => new Set([...prev, artistId]))
-      try {
-        const res  = await fetch(`/api/home/artist-city?artist_id=${artistId}`)
-        const data = await res.json()
-        setArtistCityData(prev => ({ ...prev, [artistId]: data.cities ?? [] }))
-      } catch (e) {
-        console.error('Artist city breakdown fetch error:', e)
-      } finally {
-        setLoadingArtistCity(prev => {
-          const next = new Set(prev)
-          next.delete(artistId)
-          return next
-        })
-      }
-    }
-  }, [expandedArtists, artistCityData, loadingArtistCity])
 
   // ── Decade click ─────────────────────────────────────────
   const handleDecadeClick = useCallback((decade: Decade) => {
@@ -611,17 +577,30 @@ export default function HomeClient({
 
         {/* Stats Cards */}
         <div className="grid grid-cols-4 gap-2 md:gap-3 mb-3 md:mb-4">
-          <StatCard label="Shows"   value={stats.totalShows.toLocaleString()} />
-          <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
-          <StatCard label="Venues"  value={stats.uniqueVenues.toLocaleString()} />
-          {stats.fourthCard ? (
-            <StatCard
-              label={stats.fourthCard.label}
-              value={stats.fourthCard.value}
-              compact={stats.fourthCard.label === 'Date Range'}
-            />
+          {loading && stats.totalShows === 0 ? (
+            <>
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="bg-card rounded-lg shadow p-2 md:p-4">
+                  <div className="h-3 md:h-4 rounded animate-pulse bg-muted mb-1.5 w-16" />
+                  <div className="h-5 md:h-7 rounded animate-pulse bg-muted w-24" />
+                </div>
+              ))}
+            </>
           ) : (
-            <div />
+            <>
+              <StatCard label="Shows"   value={stats.totalShows.toLocaleString()} />
+              <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
+              <StatCard label="Venues"  value={stats.uniqueVenues.toLocaleString()} />
+              {stats.fourthCard ? (
+                <StatCard
+                  label={stats.fourthCard.label}
+                  value={stats.fourthCard.value}
+                  compact={stats.fourthCard.label === 'Date Range'}
+                />
+              ) : (
+                <div />
+              )}
+            </>
           )}
         </div>
 
@@ -885,52 +864,8 @@ export default function HomeClient({
                           <span className="text-xs md:text-base text-muted-foreground font-medium whitespace-nowrap ml-2">
                             {artist.show_count.toLocaleString()} shows
                           </span>
-                          {/* Expand chevron — only when multi-city */}
-                          {artist.state_counts && artist.state_counts.length > 0 && (
-                            <button
-                              onClick={() => toggleArtistExpand(artist.artist_id)}
-                              title={expandedArtists.has(artist.artist_id) ? 'Collapse' : 'Show city breakdown'}
-                              className="text-muted-foreground hover:text-foreground p-0.5 transition-colors"
-                            >
-                              <svg
-                                width="10" height="10" viewBox="0 0 10 10" fill="currentColor"
-                                style={{ transform: expandedArtists.has(artist.artist_id) ? 'rotate(90deg)' : 'none', transition: 'transform 150ms' }}
-                              >
-                                <path d="M3 2l4 3-4 3V2z"/>
-                              </svg>
-                            </button>
-                          )}
                         </div>
                       </div>
-                      {/* Expanded city breakdown */}
-                      {expandedArtists.has(artist.artist_id) && (
-                        <div className="mt-1 ml-5 md:ml-7 space-y-0.5">
-                          {loadingArtistCity.has(artist.artist_id) ? (
-                            <div className="space-y-1.5 py-0.5">
-                              {[55, 40, 28].map(w => (
-                                <div key={w} className="flex items-center justify-between">
-                                  <div className="h-2.5 rounded animate-pulse bg-muted" style={{ width: `${w}%` }} />
-                                  <div className="h-2.5 rounded animate-pulse bg-muted w-14 ml-4" />
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            (artistCityData[artist.artist_id] ?? []).map(row => (
-                              <div
-                                key={`${row.city}-${row.state}`}
-                                className="flex items-center justify-between py-0.5"
-                              >
-                                <span className="text-xs text-muted-foreground">
-                                  {row.city}{row.state ? `, ${row.state}` : ''}
-                                </span>
-                                <span className="text-xs text-muted-foreground font-medium ml-4 whitespace-nowrap">
-                                  {Number(row.show_count).toLocaleString()} shows
-                                </span>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
