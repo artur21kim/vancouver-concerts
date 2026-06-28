@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 type AuthModalProps = {
@@ -17,6 +17,15 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const supabase = createClient()
+
+    useEffect(() => {
+        if (isOpen) {
+            document.body.style.overflow = 'hidden'
+        }
+        return () => {
+            document.body.style.overflow = ''
+        }
+    }, [isOpen])
 
     if (!isOpen) return null
 
