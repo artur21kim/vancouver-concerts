@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 
 type AuthModalProps = {
@@ -79,8 +80,11 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
         }
     }
 
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1000]">
+    return createPortal(
+        <div
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+            style={{ zIndex: 9999 }}
+        >
             <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-2xl font-bold text-gray-900">
@@ -190,5 +194,5 @@ export default function AuthModal({ isOpen, onClose, returnPath }: AuthModalProp
                 </div>
             </div>
         </div>
-    )
+    , document.body)
 }
