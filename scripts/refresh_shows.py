@@ -1464,6 +1464,22 @@ def main() -> None:
                 f"run manually: SELECT auto_update_venue_status();"
             )
 
+        # Refresh home page materialized views so stats reflect new data
+        print("\nRefreshing home page materialized views…", end=" ", flush=True)
+        resp_mv = requests.post(
+            f"{SUPABASE_URL}/rest/v1/rpc/refresh_home_materialized_views",
+            headers=_headers("return=minimal"),
+            json={},
+            timeout=120,
+        )
+        if resp_mv.ok:
+            print("✅")
+        else:
+            print(
+                f"⚠️  Failed ({resp_mv.status_code}) — "
+                f"run manually: SELECT refresh_home_materialized_views();"
+            )
+
         if genuinely_new_artists:
             print(
                 f"\n  💡  {len(genuinely_new_artists)} new artist(s) added — "
