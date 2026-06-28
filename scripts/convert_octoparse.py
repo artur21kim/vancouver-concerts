@@ -63,12 +63,32 @@ CITY_MAP = {
     "halifax":        ("NS", "CA", "exports/_CA/NS/halifax"),
     # United States — WA
     "seattle":        ("WA", "US", "exports/_US/WA/seattle"),
+    # United States — NY
+    "new york city":  ("NY", "US", "exports/_US/NY/new_york_city"),
+    "brooklyn":       ("NY", "US", "exports/_US/NY/brooklyn"),
+    # United States — IL
+    "chicago":        ("IL", "US", "exports/_US/IL/chicago"),
+    # United States — CA
+    "los angeles":    ("CA", "US", "exports/_US/CA/los_angeles"),
+    "san francisco":  ("CA", "US", "exports/_US/CA/san_francisco"),
+    "west hollywood": ("CA", "US", "exports/_US/CA/west_hollywood"),
+    # United States — TX
+    "dallas":         ("TX", "US", "exports/_US/TX/dallas"),
+    "austin":         ("TX", "US", "exports/_US/TX/austin"),
+    # United States — NV
+    "las vegas":      ("NV", "US", "exports/_US/NV/las_vegas"),
+    # United States — PA
+    "philadelphia":   ("PA", "US", "exports/_US/PA/philadelphia"),
+    # United States — GA
+    "atlanta":        ("GA", "US", "exports/_US/GA/atlanta"),
+    # United States — KY
+    "louisville":     ("KY", "US", "exports/_US/KY/louisville"),
+    # United States — CO
+    "denver":         ("CO", "US", "exports/_US/CO/denver"),
     # United States — OK
     "oklahoma city":  ("OK", "US", "exports/_US/OK/oklahoma_city"),
     # United States — AZ
     "phoenix":        ("AZ", "US", "exports/_US/AZ/phoenix"),
-    # United States — TX
-    "austin":         ("TX", "US", "exports/_US/TX/austin"),
     # TODO: add further cities as expansion pipeline is finalized
 }
 
