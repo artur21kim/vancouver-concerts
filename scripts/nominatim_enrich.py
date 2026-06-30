@@ -146,12 +146,17 @@ def geocode_venue(
 
     Result keys: lat, lon, importance, display_name, confidence_tier
     """
-    # Build query: specific first, then broader fallback
+    # Build query: specific first, then broader fallback.
+    # State is kept in both queries — dropping it risks resolving to a
+    # same-named city in a different state (e.g. Englewood, NJ vs Englewood, CO).
+    # Only country is dropped on fallback.
     queries = []
     if venue_name and city:
         queries.append(f"{venue_name}, {city}, {state}, {country}".strip(", "))
-    if venue_name and city:
-        queries.append(f"{venue_name}, {city}")   # fallback without state/country
+    if venue_name and city and state:
+        queries.append(f"{venue_name}, {city}, {state}".strip(", "))   # fallback without country
+    elif venue_name and city:
+        queries.append(f"{venue_name}, {city}")   # only if no state on record at all
 
     for query in queries:
         for attempt in range(retries):
@@ -219,10 +224,11 @@ def geocode_city(
     """
     if not city:
         return None
-    queries = [
-        f"{city}, {state}, {country}".strip(", "),
-        f"{city}, {country}".strip(", "),   # fallback without state
-    ]
+    queries = [f"{city}, {state}, {country}".strip(", ")]
+    if state:
+        queries.append(f"{city}, {state}".strip(", "))   # fallback without country, keep state
+    else:
+        queries.append(f"{city}, {country}".strip(", "))  # only if no state on record at all
     for query in queries:
         for attempt in range(retries):
             _throttle()
@@ -389,6 +395,7 @@ def run(
         "review":        0,
         "no_result":     0,
         "skipped":       0,
+        "out_of_box":    0,
         "error":         0,
     }
 
@@ -449,6 +456,32 @@ def run(
         display    = result["display_name"]
         query_used = result["query_used"]
 
+        # Reject results outside the expected country's bounding box outright —
+        # a high-importance match in the wrong country/region is worse than a
+        # low-confidence one, since it would otherwise auto-write silently.
+        # Same box used for the dim_city backfill (GP-153).
+        if not _within_country_box(lat, lon, country_val):
+            alt_note = f" (via '{matched_via}')" if matched_via != venue_name else ""
+            log.warning(
+                "[OUT_OF_BOX] [%d/%d] %-40s → %.5f, %.5f  (rejected — outside %s box)%s",
+                i, total, venue_name[:40], lat, lon, country_val, alt_note,
+            )
+            stats["out_of_box"] += 1
+            review_rows.append({
+                "venue_id":    venue_id,
+                "venue_name":  venue_name,
+                "city":        city_val,
+                "state":       state_val,
+                "country":     country_val,
+                "reason":      "out_of_box",
+                "lat":         lat,
+                "lon":         lon,
+                "importance":  f"{importance:.4f}",
+                "display_name":display[:120],
+                "query_used":  query_used,
+            })
+            continue
+
         if importance >= threshold:
             # High confidence — auto-write
             action = "[DRY-RUN]" if dry_run else "[WRITE]  "
@@ -501,9 +534,9 @@ def run(
 
     # ── Summary ───────────────────────────────────────────────────────────────
     log.info(
-        "Done — written: %d | review: %d | no_result: %d | skipped: %d | error: %d",
+        "Done — written: %d | review: %d | no_result: %d | skipped: %d | out_of_box: %d | error: %d",
         stats["written"], stats["review"], stats["no_result"],
-        stats["skipped"], stats["error"],
+        stats["skipped"], stats["out_of_box"], stats["error"],
     )
     if dry_run and stats["written"] > 0:
         log.info("Re-run with --live to commit %d coordinate updates.", stats["written"])
