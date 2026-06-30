@@ -253,6 +253,15 @@ def build_venue_string(setlist: dict) -> str:
             (city.get("stateCode")    or "").strip(),
             (country.get("name")      or "").strip(),
         ]
+        # GP-168: venue name (parts[0]) must never be silently dropped. If it's
+        # missing, every later part shifts left when joined, and refresh_shows.py's
+        # extract_venue_info() 3-part branch (built for a genuinely missing
+        # trailing state/country) misreads city.name as the venue name and
+        # stateCode as the city — producing a corrupt venue row (e.g. a venue
+        # named "Lakewood" with city/state both "CO"). Trailing state/country
+        # can still be safely dropped; only an empty venue name forces a skip.
+        if not parts[0]:
+            return ""
         return ", ".join(p for p in parts if p)
     except Exception:
         return ""
