@@ -265,24 +265,36 @@ def geocode_city(
 
 
 def backfill_dim_city_coords(
-    dry_run:   bool,
-    only_city: Optional[str],
-    verbose:   bool = False,
+    dry_run:    bool,
+    only_city:  Optional[str],
+    only_state: Optional[str] = None,
+    verbose:    bool = False,
 ) -> dict:
     """Fill dim_city.latitude/longitude for rows missing coords by geocoding the city name.
 
-    Runs at the end of a venue pass (scoped to --city) and standalone via --cities-only.
-    Geocodes the city itself for a proper centre point, validates against the country
-    bounding box, and writes only on pass — out-of-box and no-result rows are logged and
-    left NULL (no map bubble until resolved), never written with a bad coordinate.
+    Runs at the end of a venue pass (scoped to --city, optionally --state) and standalone
+    via --cities-only. Geocodes the city itself for a proper centre point, validates against
+    the country bounding box, and writes only on pass — out-of-box and no-result rows are
+    logged and left NULL (no map bubble until resolved), never written with a bad coordinate.
+
+    --state matters whenever a city name exists in more than one state/province (e.g.
+    Lakewood, CO vs Lakewood, WA) — without it, dim_city would still resolve to the single
+    correct row by city+state combination already in the table, but --state lets the caller
+    be explicit and avoids ambiguity if a city name is ever duplicated within dim_city itself.
     """
     params: dict = {"select": "city_id,city,state,country,latitude", "latitude": "is.null"}
     if only_city:
         params["city"] = f"eq.{only_city}"
+    if only_state:
+        params["state"] = f"eq.{only_state}"
     cities = sb_get_all("dim_city", params)
 
     stats = {"written": 0, "out_of_box": 0, "no_result": 0}
-    scope = f" (city={only_city})" if only_city else ""
+    scope = ""
+    if only_city:
+        scope = f" (city={only_city}{f', state={only_state}' if only_state else ''})"
+    elif only_state:
+        scope = f" (state={only_state})"
     if not cities:
         log.info("dim_city backfill — no cities missing coordinates%s.", scope)
         return stats
@@ -338,6 +350,7 @@ def run(
     dry_run:    bool,
     limit:      Optional[int],
     city:       Optional[str],
+    state:      Optional[str],
     threshold:  float,
     force:      bool,
     verbose:    bool,
@@ -346,14 +359,18 @@ def run(
     if verbose:
         log.setLevel(logging.DEBUG)
 
+    scope_str = f" (city={city}{f', state={state}' if state else ''})" if city else (
+        f" (state={state})" if state else ""
+    )
+
     # ── dim_city-only mode (GP-153): skip the venue pass entirely ─────────────
     if cities_only:
         log.info(
             "Mode: %s | dim_city coordinate backfill only%s",
             "DRY-RUN" if dry_run else "LIVE",
-            f" (city={city})" if city else "",
+            scope_str,
         )
-        backfill_dim_city_coords(dry_run=dry_run, only_city=city, verbose=verbose)
+        backfill_dim_city_coords(dry_run=dry_run, only_city=city, only_state=state, verbose=verbose)
         return
 
     # ── Load venues ───────────────────────────────────────────────────────────
@@ -364,6 +381,8 @@ def run(
         params["latitude"] = "is.null"
     if city:
         params["city"] = f"eq.{city}"
+    if state:
+        params["state"] = f"eq.{state}"
 
     log.info("Loading venues from Supabase…")
     venues = sb_get_all("dim_venue", params)
@@ -377,7 +396,7 @@ def run(
         "DRY-RUN" if dry_run else "LIVE",
         total,
         f" (capped at --limit {limit})" if limit else "",
-        f" (city={city})" if city else "",
+        scope_str,
     )
     if dry_run:
         log.info("No DB writes will occur — pass --live to commit.")
@@ -552,10 +571,11 @@ def run(
 
     # ── dim_city coordinate backfill (GP-153) ─────────────────────────────────
     # After the venue pass, fill any dim_city rows still missing coords — scoped
-    # to --city so `nominatim_enrich.py --live --city Ottawa` also gives Ottawa
-    # its city-centre point in the same run.
+    # to --city (and --state, when given) so `nominatim_enrich.py --live --city
+    # Lakewood --state CO` also gives Lakewood, CO its city-centre point in the
+    # same run, without touching the unrelated Lakewood, WA row.
     log.info("")
-    backfill_dim_city_coords(dry_run=dry_run, only_city=city, verbose=verbose)
+    backfill_dim_city_coords(dry_run=dry_run, only_city=city, only_state=state, verbose=verbose)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -583,6 +603,13 @@ def main() -> None:
         "--city",
         default=None,
         help="Only geocode venues in this city (e.g. Seattle, Toronto)",
+    )
+    parser.add_argument(
+        "--state",
+        default=None,
+        help="Scope --city to a specific state/province (e.g. --city Lakewood --state CO). "
+             "Required when a city name exists in more than one state — without it, venues "
+             "sharing the same city name across different states are processed together.",
     )
     parser.add_argument(
         "--threshold",
@@ -615,6 +642,7 @@ def main() -> None:
         dry_run=not args.live,
         limit=args.limit,
         city=args.city,
+        state=args.state,
         threshold=args.threshold,
         force=args.force,
         verbose=args.verbose,
