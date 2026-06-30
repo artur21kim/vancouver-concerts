@@ -144,9 +144,17 @@ def convert_file(input_path: Path, output_path: Path, dry_run: bool) -> int:
             continue
 
         # Extract tour_name: when details2 starts with "Tour:", details4 holds the tour name
+        # and details6 holds the venue. GP-168: previously fell back to details4 (the tour
+        # name) when details6 was blank — that string has no commas, so extract_venue_info()
+        # in refresh_shows.py would treat the whole tour name as a venue name with no city/
+        # state/country, silently defaulting those to the --city/--state/--country CLI args
+        # and creating a garbage dim_venue row named after the tour. Skip instead.
         if "Tour:" in details2:
             tour_name = details4
-            venue     = details6 or details4  # details6 has venue; fall back to details4
+            if not details6:
+                skipped += 1
+                continue
+            venue = details6
         else:
             tour_name = ""
             venue     = details4  # details4 always has venue when no tour
