@@ -553,24 +553,52 @@ def load_venue_aliases(city: str, state: str, country: str) -> dict[str, int]:
 def create_and_resolve(
     table: str, records: list[dict],
     name_key: str, id_key: str,
-    id_map: dict,   # str-keyed for artists; caller fixes up venue tuple keys after
+    id_map: dict,
+    key_fields: Optional[list[str]] = None,
 ) -> int:
+    """Insert `records` into `table` (ignoring duplicates) and populate `id_map`.
+
+    By default id_map is keyed by name_key.lower() — correct for artists, whose
+    name is globally unique. Venues are NOT globally unique (e.g. "Private Venue"
+    exists in 16+ cities), so venue callers pass
+    key_fields=["venue_name", "city", "state", "country"] to key id_map by the same
+    composite tuple used everywhere else for venue lookups (GP-169). This lets
+    multiple same-named venues in different cities all resolve correctly within a
+    single run, instead of colliding on a name-only key.
+    """
+    def make_key(row: dict):
+        if key_fields:
+            return tuple((row.get(f) or "").lower() for f in key_fields)
+        return (row.get(name_key) or "").lower()
+
+    select_fields = f"{id_key},{name_key}"
+    if key_fields:
+        extra = [f for f in key_fields if f != name_key]
+        if extra:
+            select_fields += "," + ",".join(extra)
+
     created = 0
     for i in range(0, len(records), BATCH_SIZE):
         chunk    = records[i: i + BATCH_SIZE]
         returned = sb_insert(table, chunk, return_rows=True)
         for row in returned:
-            name = (row.get(name_key) or "").lower()
-            rid  = row.get(id_key)
-            if name and rid:
-                id_map[name] = rid   # string key; venue callers fix up to tuple after
+            rid = row.get(id_key)
+            key = make_key(row)
+            if rid and key:
+                id_map[key] = rid
                 created += 1
-    missing = [r[name_key] for r in records if r[name_key].lower() not in id_map]
-    for name in missing:
-        rows = sb_get_page(table, {"select": f"{id_key},{name_key}", f"{name_key}": f"ilike.{name}"})
+
+    missing = [r for r in records if make_key(r) not in id_map]
+    for r in missing:
+        filters = {"select": select_fields, f"{name_key}": f"ilike.{r[name_key]}"}
+        if key_fields:
+            for f in key_fields:
+                if f != name_key and r.get(f):
+                    filters[f] = f"eq.{r[f]}"
+        rows = sb_get_page(table, filters)
         for row in rows:
             if row.get(name_key) and row.get(id_key):
-                id_map[row[name_key].lower()] = row[id_key]
+                id_map[make_key(row)] = row[id_key]
     return created
 
 
@@ -726,10 +754,15 @@ def interactive_alias_review(
                     genuinely_new[input_name] = None
                 else:
                     src = blocked[0] if blocked else {}
-                    genuinely_new[input_name] = {
-                        "city":    src.get("city", city),
-                        "state":   src.get("state", state or ""),
-                        "country": src.get("country", country or ""),
+                    v_city    = src.get("city", city)
+                    v_state   = src.get("state", state or "")
+                    v_country = src.get("country", country or "")
+                    vtkey = (input_name.lower(), (v_city or "").lower(), (v_state or "").lower(), (v_country or "").lower())
+                    genuinely_new[vtkey] = {
+                        "name":    input_name,
+                        "city":    v_city,
+                        "state":   v_state,
+                        "country": v_country,
                     }
                 print(f"  →  Will create '{input_name}' as new {label.lower()} this run")
                 break
@@ -746,10 +779,15 @@ def interactive_alias_review(
                         genuinely_new[name] = None
                     else:
                         b = next((s for s in shows_list if s[show_match_key] == name), None)
-                        genuinely_new[name] = {
-                            "city":    b["city"]    if b else city,
-                            "state":   b["state"]   if b else (state or ""),
-                            "country": b["country"] if b else (country or ""),
+                        v_city    = b["city"]    if b else city
+                        v_state   = b["state"]   if b else (state or "")
+                        v_country = b["country"] if b else (country or "")
+                        vtkey = (name.lower(), (v_city or "").lower(), (v_state or "").lower(), (v_country or "").lower())
+                        genuinely_new[vtkey] = {
+                            "name":    name,
+                            "city":    v_city,
+                            "state":   v_state,
+                            "country": v_country,
                         }
                 print(f"  →  All {len(remaining)} remaining marked as new {label.lower()}(s)")
                 return
@@ -1176,7 +1214,7 @@ def main() -> None:
     duplicates:               list[dict]        = []
     to_insert:                list[dict]        = []
     genuinely_new_artists:    dict[str, None]   = {}
-    genuinely_new_venues:     dict[str, dict]   = {}
+    genuinely_new_venues:     dict[tuple, dict] = {}
     fuzzy_artist_suggestions: dict[str, tuple]  = {}
     fuzzy_venue_suggestions:  dict[str, tuple]  = {}
 
@@ -1205,7 +1243,7 @@ def main() -> None:
         )
         v_resolved = vtkey in existing_venues or show["venue_name"].lower() in venue_aliases
         if not v_resolved and show["venue_name"] not in fuzzy_venue_suggestions \
-                          and show["venue_name"] not in genuinely_new_venues:
+                          and vtkey not in genuinely_new_venues:
             s = find_fuzzy_venue_match(
                 show["venue_name"], existing_venues, venue_name_map,
                 show.get("city"), show.get("state"), show.get("country"),
@@ -1213,7 +1251,8 @@ def main() -> None:
             if s:
                 fuzzy_venue_suggestions[show["venue_name"]] = s
             else:
-                genuinely_new_venues[show["venue_name"]] = {
+                genuinely_new_venues[vtkey] = {
+                    "name":    show["venue_name"],
                     "city":    show.get("city",    ""),
                     "state":   show.get("state",   ""),
                     "country": show.get("country", ""),
@@ -1251,8 +1290,8 @@ def main() -> None:
 
     if genuinely_new_venues:
         print(f"\nNew venues to auto-create ({len(genuinely_new_venues)}):")
-        for name, loc in list(genuinely_new_venues.items())[:MAX]:
-            print(f"  + {name}  [{loc.get('city')}, {loc.get('state')}]")
+        for vtkey, loc in list(genuinely_new_venues.items())[:MAX]:
+            print(f"  + {loc['name']}  [{loc.get('city')}, {loc.get('state')}]")
 
     # ── 5. Alias resolution ───────────────────────────────────────────────────
     if args.dry_run:
@@ -1343,7 +1382,7 @@ def main() -> None:
         records = [
             {
                 "venue_id":   next_id + i,
-                "venue_name": n,
+                "venue_name": loc["name"],
                 "city":       loc.get("city", ""),
                 "state":      loc.get("state", ""),
                 "country":    loc.get("country", ""),
@@ -1352,21 +1391,16 @@ def main() -> None:
                 ),
                 "status":     "Open",
             }
-            for i, (n, loc) in enumerate(genuinely_new_venues.items())
+            for i, (vtkey, loc) in enumerate(genuinely_new_venues.items())
         ]
-        count = create_and_resolve("dim_venue", records, "venue_name", "venue_id", existing_venues)
-
-        # Fix up: create_and_resolve writes string keys; replace with (name, city, state, country)
-        # tuple keys so the Apply loop below can find newly created venues with the same vtkey
-        # lookup used for all other venue lookups.
-        for name_str, loc in genuinely_new_venues.items():
-            name_lower    = name_str.lower()
-            city_lower    = (loc.get("city")    or "").lower()
-            state_lower   = (loc.get("state")   or "").lower()
-            country_lower = (loc.get("country") or "").lower()
-            tkey = (name_lower, city_lower, state_lower, country_lower)
-            if name_lower in existing_venues:
-                existing_venues[tkey] = existing_venues.pop(name_lower)
+        # key_fields makes create_and_resolve populate existing_venues with the same
+        # (name, city, state, country) tuple keys used by every other venue lookup —
+        # multiple same-named venues across different cities now all resolve correctly
+        # within this run instead of colliding on a name-only key (GP-169).
+        count = create_and_resolve(
+            "dim_venue", records, "venue_name", "venue_id", existing_venues,
+            key_fields=["venue_name", "city", "state", "country"],
+        )
 
         print(f"✅  {count} created")
 
