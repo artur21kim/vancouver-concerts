@@ -341,6 +341,12 @@ def parse_row(
     details6 = (row.get("details6") or "").strip()
     venue_full = details4 if "Venue:" in details2 else (details6 or details4)
     venue_name, venue_city, venue_state, venue_country = extract_venue_info(venue_full)
+    # GP-169: setlist.fm uses "Private Venue" as its placeholder name when a show's
+    # location is unlisted. Grooveprint's canonical label is "Unknown Venue" — normalize
+    # at parse time (the single point every source — API fetch or Octoparse — flows
+    # through) so this never needs a manual per-city SQL rename again.
+    if venue_name.strip().lower() == "private venue":
+        venue_name = "Unknown Venue"
     if not venue_city:
         venue_city = city
     if not venue_state:
