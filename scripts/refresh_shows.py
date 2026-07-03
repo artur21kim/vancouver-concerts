@@ -75,7 +75,8 @@ DEFAULT_CITY = os.getenv("REFRESH_CITY", "Vancouver")
 
 BATCH_SIZE             = 500
 VENUE_FUZZY_THRESHOLD  = 0.82
-ARTIST_FUZZY_THRESHOLD = 0.85   # stricter — wrong link corrupts Spotify matching
+ARTIST_FUZZY_THRESHOLD = 0.90   # raised from 0.85 — 85-90% range produced too many
+                                 # false positives (distinct artists) to review reliably
 
 MONTH_MAP = {
     "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4,  "MAY": 5,  "JUN": 6,
