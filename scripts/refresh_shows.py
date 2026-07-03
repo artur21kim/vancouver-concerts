@@ -347,6 +347,17 @@ def parse_row(
     # through) so this never needs a manual per-city SQL rename again.
     if venue_name.strip().lower() == "private venue":
         venue_name = "Unknown Venue"
+    # Guard: if the parsed city field looks like a 2-letter state/province code
+    # (e.g. "TX", "CA", "ON"), extract_venue_info miscategorized a 3-part venue string
+    # where the city name was used as the venue name and the state code landed in the
+    # city slot (e.g. "Austin, TX, United States" → venue="Austin", city="TX").
+    # Normalize to Unknown Venue and clear city so the script-level city default applies.
+    if (venue_city
+            and len(venue_city) == 2
+            and venue_city.upper() == venue_city
+            and venue_city.isalpha()):
+        venue_name = "Unknown Venue"
+        venue_city = ""
     if not venue_city:
         venue_city = city
     if not venue_state:
