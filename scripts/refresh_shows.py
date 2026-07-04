@@ -368,10 +368,15 @@ def parse_row(
     if not venue_name:
         return None
     tour_name = (row.get("tour_name") or "").strip() or None
+    # GP-172: pass artist_mbid through from the CSV so the classification loop
+    # can attempt an exact MBID lookup before fuzzy name matching. Empty string
+    # for old CSVs that predate this column — falls through to name resolution.
+    artist_mbid = (row.get("artist_mbid") or "").strip()
     return {
         "setlist_url": setlist_url,
         "date":        date,
         "artist_name": artist_name,
+        "artist_mbid": artist_mbid,
         "venue_name":  venue_name,
         "show_type":   "music",
         "city":        venue_city,
@@ -456,18 +461,27 @@ def load_existing_urls(input_urls: set[str]) -> set[str]:
     return found
 
 
-def load_existing_artists() -> tuple[dict[str, int], dict[str, str]]:
+def load_existing_artists() -> tuple[dict[str, int], dict[str, str], dict[str, int]]:
+    """Return (name→id map, name→canonical_name map, mbid→id map).
+
+    The mbid map enables GP-172: exact MBID lookup against dim_artist before
+    falling back to fuzzy name matching, eliminating alias review noise for
+    any artist already enriched via MusicBrainz.
+    """
     print("  Existing artists …", end=" ", flush=True)
-    rows = sb_get_all("dim_artist", {"select": "artist_id,artist_name"})
+    rows = sb_get_all("dim_artist", {"select": "artist_id,artist_name,musicbrainz_artist_id"})
     id_map:   dict[str, int] = {}
     name_map: dict[str, str] = {}
+    mbid_map: dict[str, int] = {}
     for r in rows:
         if r.get("artist_name"):
             k = r["artist_name"].lower()
             id_map[k]   = r["artist_id"]
             name_map[k] = r["artist_name"]
+        if r.get("musicbrainz_artist_id"):
+            mbid_map[r["musicbrainz_artist_id"]] = r["artist_id"]
     print(f"{len(id_map):,}")
-    return id_map, name_map
+    return id_map, name_map, mbid_map
 
 
 def load_existing_venues() -> tuple[dict[tuple, int], dict[tuple, str], dict[str, tuple]]:
@@ -897,6 +911,8 @@ def _summary(
         if n_venue_b:  print(f"    ↳ venue:          {n_venue_b:>8,}")
     print(f"  New artists:        {len(genuinely_new_artists):>8,}")
     print(f"  New venues:         {len(genuinely_new_venues):>8,}")
+    if mbid_resolved_count:
+        print(f"  MBID-resolved:      {mbid_resolved_count:>8,}  artists bypassed fuzzy review (GP-172)")
     if fuzzy_artist_suggestions:
         print(f"  Artist aliases:     {len(fuzzy_artist_suggestions):>8,}  still pending")
     if fuzzy_venue_suggestions:
@@ -1221,7 +1237,7 @@ def main() -> None:
     print("\nLoading Supabase snapshot…")
     input_urls    = {s["setlist_url"] for s in parsed if s.get("setlist_url")}
     existing_urls                                         = load_existing_urls(input_urls)
-    existing_artists, artist_name_map                    = load_existing_artists()
+    existing_artists, artist_name_map, artist_mbid_map       = load_existing_artists()
     existing_venues,  venue_name_map, venue_location_map = load_existing_venues()
     artist_aliases                                        = load_artist_aliases()
     venue_aliases                                         = load_venue_aliases(args.city, args.state, args.country)
@@ -1235,6 +1251,7 @@ def main() -> None:
     genuinely_new_venues:     dict[tuple, dict] = {}
     fuzzy_artist_suggestions: dict[str, tuple]  = {}
     fuzzy_venue_suggestions:  dict[str, tuple]  = {}
+    mbid_resolved_count:      int               = 0   # GP-172: artists resolved by MBID
 
     for show in parsed:
         if show["setlist_url"] in existing_urls:
@@ -1242,8 +1259,17 @@ def main() -> None:
             continue
 
         # ── Artist resolution (name-only; artists are global) ─────────────
-        akey       = show["artist_name"].lower()
-        a_resolved = akey in existing_artists or akey in artist_aliases
+        akey         = show["artist_name"].lower()
+        artist_mbid  = show.get("artist_mbid", "")
+        # GP-172: exact MBID lookup before name/alias/fuzzy.  When the CSV carries
+        # an MBID and that MBID is already in dim_artist (from a prior MB enrichment
+        # run), the show is immediately resolved — no fuzzy review needed, even if
+        # setlist.fm spelled the name differently from our canonical row.
+        a_name_resolved = akey in existing_artists or akey in artist_aliases
+        a_mbid_resolved = bool(artist_mbid) and artist_mbid in artist_mbid_map
+        a_resolved      = a_name_resolved or a_mbid_resolved
+        if a_mbid_resolved and not a_name_resolved:
+            mbid_resolved_count += 1
         if not a_resolved and show["artist_name"] not in fuzzy_artist_suggestions \
                           and show["artist_name"] not in genuinely_new_artists:
             s = find_fuzzy_artist_match(show["artist_name"], existing_artists, artist_name_map)
@@ -1433,7 +1459,12 @@ def main() -> None:
             continue
 
         akey      = show["artist_name"].lower()
-        artist_id = existing_artists.get(akey) or artist_aliases.get(akey)
+        # GP-172: resolve artist_id by name → alias → MBID, in that order.
+        # MBID fallback catches shows where the setlist.fm name differs from our
+        # canonical dim_artist name but the MBID matches an already-enriched row.
+        artist_id = (existing_artists.get(akey)
+                     or artist_aliases.get(akey)
+                     or artist_mbid_map.get(show.get("artist_mbid", "")))
 
         vtkey    = (
             show["venue_name"].lower(),

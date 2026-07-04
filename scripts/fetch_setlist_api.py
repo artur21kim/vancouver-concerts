@@ -103,7 +103,7 @@ MONTH_ABBR = {
 }
 
 # Output columns must match what parse_row() in refresh_shows.py reads
-CSV_COLUMNS = ["Field", "month", "day", "Year", "details", "details2", "details4", "tour_name"]
+CSV_COLUMNS = ["Field", "month", "day", "Year", "details", "details2", "details4", "tour_name", "artist_mbid"]
 
 
 # ---------------------------------------------------------------------------
@@ -293,19 +293,25 @@ def setlist_to_row(setlist: dict) -> dict | None:
     if not artist_name:
         return None
 
+    # GP-172: capture MBID from setlist.fm artist object so refresh_shows.py can
+    # resolve by exact MBID lookup before fuzzy name matching. Empty string when
+    # setlist.fm has no MBID for the artist — falls through to name resolution.
+    artist_mbid = ((setlist.get("artist") or {}).get("mbid") or "").strip()
+
     venue_str = build_venue_string(setlist)
     if not venue_str:
         return None
 
     return {
-        "Field":     url,
-        "month":     month,
-        "day":       day,
-        "Year":      year,
-        "details":   artist_name,
-        "details2":  "Venue:",
-        "details4":  venue_str,
-        "tour_name": (setlist.get("tour") or {}).get("name", ""),
+        "Field":       url,
+        "month":       month,
+        "day":         day,
+        "Year":        year,
+        "details":     artist_name,
+        "details2":    "Venue:",
+        "details4":    venue_str,
+        "tour_name":   (setlist.get("tour") or {}).get("name", ""),
+        "artist_mbid": artist_mbid,
     }
 
 
