@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 scripts/musicbrainz_artist_enrich.py
-SCRUM-83 — Enrich dim_artist with MBIDs, official website URLs,
-           artist_type, begin_year, and end_year via MusicBrainz.
+SCRUM-83 / GP-173 — Enrich dim_artist with MBIDs, official website URLs,
+           artist_type, begin_year, end_year, Spotify/social IDs,
+           country, and genre tags via MusicBrainz.
 
 Renamed from musicbrainz_enrich.py. Artist enrichment only.
 For venue enrichment see scripts/musicbrainz_venue_enrich.py (GP-129).
@@ -11,8 +12,9 @@ MusicBrainz data is CC0 licensed — no attribution required.
 Rate limit: 1 req/sec max (enforced internally).
 
 Two requests per matched artist:
-  1. Search  /ws/2/artist/?query=artist:"name"  — accept top result if score >= 85
-  2. Lookup  /ws/2/artist/{mbid}?inc=url-rels   — extract type, life-span, official homepage
+  1. Search  /ws/2/artist/?query=artist:"name"       — accept top result if score >= 85
+  2. Lookup  /ws/2/artist/{mbid}?inc=url-rels+tags   — extract type, life-span, homepage,
+                                                         Spotify/social links, country, genres
 
 Artists with no confident match, no URL rel, or an ambiguous disambiguation are
 logged to exports/musicbrainz_review_YYYY-MM-DD.csv for manual review.
@@ -24,13 +26,14 @@ Usage:
     # Live run — commits to DB:
     python scripts/musicbrainz_artist_enrich.py --live
 
-    # Full overnight run (~8 hrs for ~12k artists):
+    # Full overnight run:
     python scripts/musicbrainz_artist_enrich.py --live --verbose
 
     # New artists only (post-ingestion):
     python scripts/musicbrainz_artist_enrich.py --new-only --live
 
-    # Backfill artist_type / begin_year / end_year for already-enriched artists:
+    # Backfill all new fields (Spotify ID, social links, country, genres) for
+    # artists that already have an MBID but are missing one or more new columns:
     python scripts/musicbrainz_artist_enrich.py --meta-only --live
 
     # Re-process artists that already have a URL set:
@@ -41,9 +44,14 @@ Prerequisites:
 
     Schema migration (run once in Supabase SQL editor before first --live run):
         ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS official_website_url text;
-        ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS artist_type  text;
-        ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS begin_year   smallint;
-        ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS end_year     smallint;
+        ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS artist_type    text;
+        ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS begin_year     smallint;
+        ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS end_year       smallint;
+        ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS country        text;
+        ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS instagram_url  text;
+        ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS twitter_url    text;
+        ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS youtube_url    text;
+        ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS genres         text[];
         -- musicbrainz_artist_id column present after GP-129 rename migration
 
 Env vars (resolved from .env.local if present, else from environment):
@@ -176,24 +184,44 @@ def mb_search(artist_name: str) -> Optional[dict]:
 
 def mb_get_artist_details(mbid: str) -> dict:
     """
-    Look up an artist MBID with url-rels included.
+    Look up an artist MBID with url-rels and tags included.
 
     Returns a dict with:
-        official_url  str | None    — 'official homepage' URL relation
-        artist_type   str | None    — mapped via TYPE_MAP (Solo/Group/Orchestra/…)
-        begin_year    int | None    — birth year (Solo) or formation year (Group)
-        end_year      int | None    — death year (Solo) or disbandment year (Group)
+        official_url  str | None       — 'official homepage' URL relation
+        spotify_id    str | None       — Spotify artist ID (from open.spotify.com/artist/ URL)
+        instagram_url str | None       — Instagram profile URL
+        twitter_url   str | None       — Twitter/X profile URL
+        youtube_url   str | None       — YouTube channel URL
+        artist_type   str | None       — mapped via TYPE_MAP (Solo/Group/Orchestra/…)
+        begin_year    int | None       — birth year (Solo) or formation year (Group)
+        end_year      int | None       — death year (Solo) or disbandment year (Group)
+        country       str | None       — area/country name from MB artist object
+        genres        list[str] | None — MB genre tags with vote count >= 3
     """
-    data = mb_get(f"artist/{mbid}", {"inc": "url-rels", "fmt": "json"})
+    data = mb_get(f"artist/{mbid}", {"inc": "url-rels tags", "fmt": "json"})
 
-    # Official homepage URL
-    official_url: Optional[str] = None
+    # Parse URL relations — extract homepage, Spotify, and social links in one pass
+    official_url:  Optional[str] = None
+    spotify_id:    Optional[str] = None
+    instagram_url: Optional[str] = None
+    twitter_url:   Optional[str] = None
+    youtube_url:   Optional[str] = None
+
     for rel in data.get("relations", []):
-        if rel.get("type") == "official homepage":
-            url = rel.get("url", {}).get("resource")
-            if url:
-                official_url = url
-                break
+        resource = (rel.get("url", {}).get("resource") or "").strip()
+        if not resource:
+            continue
+        if rel.get("type") == "official homepage" and official_url is None:
+            official_url = resource
+        elif "open.spotify.com/artist/" in resource and spotify_id is None:
+            # Store just the artist ID (not the full URL) to match spotify_artist_id column
+            spotify_id = resource.split("open.spotify.com/artist/")[-1].split("?")[0].strip("/")
+        elif "instagram.com/" in resource and instagram_url is None:
+            instagram_url = resource
+        elif ("twitter.com/" in resource or "x.com/" in resource) and twitter_url is None:
+            twitter_url = resource
+        elif "youtube.com/" in resource and youtube_url is None:
+            youtube_url = resource
 
     # Artist type
     raw_type    = (data.get("type") or "").strip()
@@ -206,12 +234,32 @@ def mb_get_artist_details(mbid: str) -> dict:
     begin_year = int(begin_raw[:4]) if len(begin_raw) >= 4 and begin_raw[:4].isdigit() else None
     end_year   = int(end_raw[:4])   if len(end_raw)   >= 4 and end_raw[:4].isdigit()   else None
 
+    # Country — area.name is in the base artist object, no extra inc= needed
+    country: Optional[str] = (data.get("area") or {}).get("name") or None
+
+    # Genre tags — filter to tags with community vote count >= 3 to reduce noise
+    tag_list = [
+        tag["name"]
+        for tag in (data.get("tags") or [])
+        if tag.get("count", 0) >= 3
+    ]
+    genres: Optional[list] = tag_list if tag_list else None
+
     return {
-        "official_url": official_url,
-        "artist_type":  artist_type,
-        "begin_year":   begin_year,
-        "end_year":     end_year,
+        "official_url":  official_url,
+        "spotify_id":    spotify_id,
+        "instagram_url": instagram_url,
+        "twitter_url":   twitter_url,
+        "youtube_url":   youtube_url,
+        "artist_type":   artist_type,
+        "begin_year":    begin_year,
+        "end_year":      end_year,
+        "country":       country,
+        "genres":        genres,
     }
+
+
+# ── Core run
 
 
 # ── Core run ──────────────────────────────────────────────────────────────────
@@ -235,15 +283,18 @@ def run(
         )
         q = (
             db.from_("dim_artist")
-            .select("artist_id, artist_name, musicbrainz_artist_id")
+            .select("artist_id, artist_name, musicbrainz_artist_id, "
+                    "spotify_artist_id, artist_type, begin_year, end_year, "
+                    "country, instagram_url, twitter_url, youtube_url, genres")
             .not_.is_("musicbrainz_artist_id", "null")
-            .is_("artist_type", "null")
+            .or_("artist_type.is.null,spotify_artist_id.is.null,"
+                 "country.is.null,genres.is.null")
         )
         if limit:
             q = q.limit(limit)
         artists = (q.execute()).data or []
         total = len(artists)
-        log.info("  %d artists with MBID but no artist_type", total)
+        log.info("  %d artists with MBID missing one or more new fields", total)
         if dry_run:
             log.info("  No DB writes — pass --live to commit.")
 
@@ -257,25 +308,37 @@ def run(
             try:
                 details = mb_get_artist_details(mbid)
                 update: dict = {}
-                if details["artist_type"]:
-                    update["artist_type"] = details["artist_type"]
-                if details["begin_year"]:
-                    update["begin_year"]  = details["begin_year"]
-                if details["end_year"]:
-                    update["end_year"]    = details["end_year"]
+                # Only write fields that are currently NULL -- never overwrite existing data
+                if details["artist_type"]   and artist.get("artist_type")       is None:
+                    update["artist_type"]        = details["artist_type"]
+                if details["begin_year"]    and artist.get("begin_year")        is None:
+                    update["begin_year"]         = details["begin_year"]
+                if details["end_year"]      and artist.get("end_year")          is None:
+                    update["end_year"]           = details["end_year"]
+                if details["spotify_id"]    and artist.get("spotify_artist_id") is None:
+                    update["spotify_artist_id"]  = details["spotify_id"]
+                if details["instagram_url"] and artist.get("instagram_url")     is None:
+                    update["instagram_url"]      = details["instagram_url"]
+                if details["twitter_url"]   and artist.get("twitter_url")       is None:
+                    update["twitter_url"]        = details["twitter_url"]
+                if details["youtube_url"]   and artist.get("youtube_url")       is None:
+                    update["youtube_url"]        = details["youtube_url"]
+                if details["country"]       and artist.get("country")           is None:
+                    update["country"]            = details["country"]
+                if details["genres"]        and artist.get("genres")            is None:
+                    update["genres"]             = details["genres"]
 
                 if not update:
-                    log.debug("[%d/%d] No metadata in MB: %s", i, total, artist_name)
+                    log.debug("[%d/%d] No new data in MB: %s", i, total, artist_name)
                     stats["no_data"] += 1
                     continue
 
                 action = "[DRY-RUN]" if dry_run else "[WRITE]  "
                 log.info(
-                    "%s [%d/%d] %-40s  type=%-12s  %s–%s",
-                    action, i, total, artist_name[:40],
-                    details["artist_type"] or "?",
-                    details["begin_year"] or "?",
-                    details["end_year"]   or "ongoing",
+                    "%s [%d/%d] %-38s  spotify=%-24s  country=%s",
+                    action, i, total, artist_name[:38],
+                    details["spotify_id"] or "none",
+                    details["country"]    or "?",
                 )
 
                 if not dry_run:
@@ -351,6 +414,9 @@ def run(
                     "artist_type":    "",
                     "begin_year":     "",
                     "end_year":       "",
+                    "spotify_id":     "",
+                    "country":        "",
+                    "genres_count":   "",
                 })
                 continue
 
@@ -369,12 +435,24 @@ def run(
             update: dict = {"musicbrainz_artist_id": mbid}
             if official_url:
                 update["official_website_url"] = official_url
+            if details["spotify_id"]:
+                update["spotify_artist_id"] = details["spotify_id"]
+            if details["instagram_url"]:
+                update["instagram_url"]     = details["instagram_url"]
+            if details["twitter_url"]:
+                update["twitter_url"]       = details["twitter_url"]
+            if details["youtube_url"]:
+                update["youtube_url"]       = details["youtube_url"]
             if artist_type:
-                update["artist_type"] = artist_type
+                update["artist_type"]       = artist_type
             if begin_year:
-                update["begin_year"] = begin_year
+                update["begin_year"]        = begin_year
             if end_year:
-                update["end_year"]   = end_year
+                update["end_year"]          = end_year
+            if details["country"]:
+                update["country"]           = details["country"]
+            if details["genres"]:
+                update["genres"]            = details["genres"]
 
             # No official URL — still write the other fields, but flag for review
             if official_url is None:
@@ -390,6 +468,9 @@ def run(
                     "artist_type":    artist_type or "",
                     "begin_year":     begin_year  or "",
                     "end_year":       end_year    or "",
+                    "spotify_id":     details["spotify_id"]    or "",
+                    "country":        details["country"]       or "",
+                    "genres_count":   len(details["genres"]) if details["genres"] else "",
                 })
 
             # Ambiguous match — flag for review, still write
@@ -405,6 +486,9 @@ def run(
                     "artist_type":    artist_type  or "",
                     "begin_year":     begin_year   or "",
                     "end_year":       end_year     or "",
+                    "spotify_id":     details["spotify_id"]    or "",
+                    "country":        details["country"]       or "",
+                    "genres_count":   len(details["genres"]) if details["genres"] else "",
                 })
 
             log.info(
@@ -438,6 +522,7 @@ def run(
                     "artist_id", "artist_name", "reason",
                     "mbid", "mb_score", "disambiguation",
                     "found_url", "artist_type", "begin_year", "end_year",
+                    "spotify_id", "country", "genres_count",
                 ],
             )
             writer.writeheader()
@@ -480,8 +565,9 @@ def main() -> None:
     parser.add_argument(
         "--meta-only", action="store_true", default=False,
         help=(
-            "Backfill artist_type/begin_year/end_year for artists that already have "
-            "musicbrainz_artist_id but are missing the new metadata columns"
+            "Backfill all new fields (spotify_artist_id, country, genres, social links, "
+            "artist_type, begin/end year) for artists that already have musicbrainz_artist_id "
+            "but are missing one or more new columns. Safe to re-run: never overwrites existing data."
         ),
     )
     parser.add_argument(
