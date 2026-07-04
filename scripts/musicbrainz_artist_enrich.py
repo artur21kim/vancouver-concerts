@@ -334,11 +334,15 @@ def run(
                     continue
 
                 action = "[DRY-RUN]" if dry_run else "[WRITE]  "
+                ig = "✓" if details["instagram_url"] else "✗"
+                tw = "✓" if details["twitter_url"]   else "✗"
+                yt = "✓" if details["youtube_url"]   else "✗"
                 log.info(
-                    "%s [%d/%d] %-38s  spotify=%-24s  country=%s",
+                    "%s [%d/%d] %-38s  spotify=%-24s  IG%s TW%s YT%s  country=%s",
                     action, i, total, artist_name[:38],
                     details["spotify_id"] or "none",
-                    details["country"]    or "?",
+                    ig, tw, yt,
+                    details["country"] or "?",
                 )
 
                 if not dry_run:
