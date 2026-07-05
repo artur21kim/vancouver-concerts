@@ -243,7 +243,7 @@ def mb_get_artist_details(mbid: str) -> dict:
         for tag in (data.get("tags") or [])
         if tag.get("count", 0) >= 3
     ]
-    genres: Optional[list] = tag_list if tag_list else None
+    genres: Optional[list] = tag_list  # [] when no tags found — exits genres.is.null filter after one pass
 
     return {
         "official_url":  official_url,
@@ -352,7 +352,7 @@ def run(
                     update["youtube_url"]        = details["youtube_url"]
                 if details["country"]       and artist.get("country")           is None:
                     update["country"]            = details["country"]
-                if details["genres"]        and artist.get("genres")            is None:
+                if details["genres"] is not None and artist.get("genres")       is None:
                     update["genres"]             = details["genres"]
 
                 if not update:
@@ -482,7 +482,7 @@ def run(
                 update["end_year"]          = end_year
             if details["country"]:
                 update["country"]           = details["country"]
-            if details["genres"]:
+            if details["genres"] is not None:
                 update["genres"]            = details["genres"]
 
             # No official URL — still write the other fields, but flag for review
