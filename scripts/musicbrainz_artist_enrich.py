@@ -281,18 +281,45 @@ def run(
             "Mode: %s | Meta-only: backfilling artist_type/begin_year/end_year",
             "DRY-RUN" if dry_run else "LIVE",
         )
-        q = (
-            db.from_("dim_artist")
-            .select("artist_id, artist_name, musicbrainz_artist_id, "
-                    "spotify_artist_id, artist_type, begin_year, end_year, "
-                    "country, instagram_url, twitter_url, youtube_url, genres")
-            .not_.is_("musicbrainz_artist_id", "null")
-            .or_("artist_type.is.null,spotify_artist_id.is.null,"
-                 "country.is.null,genres.is.null")
-        )
+        META_PAGE_SIZE = 1000  # Stay well under PostgREST 50K row cap
+        artists: list = []
         if limit:
-            q = q.limit(limit)
-        artists = (q.execute()).data or []
+            # Single fetch when a limit is requested (dry-run / smoke test)
+            batch = (
+                db.from_("dim_artist")
+                .select("artist_id, artist_name, musicbrainz_artist_id, "
+                        "spotify_artist_id, artist_type, begin_year, end_year, "
+                        "country, instagram_url, twitter_url, youtube_url, genres")
+                .not_.is_("musicbrainz_artist_id", "null")
+                .or_("artist_type.is.null,spotify_artist_id.is.null,"
+                     "country.is.null,genres.is.null")
+                .limit(limit)
+                .execute()
+            ).data or []
+            artists = batch
+        else:
+            # Paginated fetch to bypass PostgREST 50K row cap
+            page = 0
+            while True:
+                lo = page * META_PAGE_SIZE
+                hi = lo + META_PAGE_SIZE - 1
+                batch = (
+                    db.from_("dim_artist")
+                    .select("artist_id, artist_name, musicbrainz_artist_id, "
+                            "spotify_artist_id, artist_type, begin_year, end_year, "
+                            "country, instagram_url, twitter_url, youtube_url, genres")
+                    .not_.is_("musicbrainz_artist_id", "null")
+                    .or_("artist_type.is.null,spotify_artist_id.is.null,"
+                         "country.is.null,genres.is.null")
+                    .order("artist_id")
+                    .range(lo, hi)
+                    .execute()
+                ).data or []
+                if not batch:
+                    break
+                artists.extend(batch)
+                page += 1
+                log.debug("  Fetched page %d (%d total so far)", page, len(artists))
         total = len(artists)
         log.info("  %d artists with MBID missing one or more new fields", total)
         if dry_run:
