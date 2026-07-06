@@ -22,6 +22,7 @@ import re
 import time
 import requests
 from datetime import datetime, timezone
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -196,7 +197,7 @@ def get_mapped_venues() -> list:
 def get_upcoming_shows(venue_id: int) -> list:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     rows = sb_get("fact_shows", {
-        "select": "show_id,date,artist_id,dim_artist(artist_name)",
+        "select": "show_id,date,artist_id,dim_artist(artist_name,tm_attraction_id)",
         "venue_id": f"eq.{venue_id}",
         "date": f"gte.{today}",
         "ticketmaster_url": "is.null",
@@ -220,7 +221,12 @@ def write_tm_url(show_id: int, url: str) -> None:
 # Fetch upcoming events from TM for a single venue
 # ---------------------------------------------------------------------------
 
-def fetch_tm_events(tm_venue_id: str) -> list:
+def fetch_tm_events(tm_venue_id: str, attraction_id: Optional[str] = None) -> list:
+    """
+    Fetch upcoming music events at a TM venue.
+    If attraction_id is supplied, the query is narrowed to that specific artist
+    (venueId + attractionId) — higher precision than venue-only search.
+    """
     events = []
     page = 0
     start_dt = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -235,6 +241,8 @@ def fetch_tm_events(tm_venue_id: str) -> list:
             "page": page,
             "sort": "date,asc",
         }
+        if attraction_id:
+            params["attractionId"] = attraction_id
 
         try:
             resp = requests.get(TM_EVENTS_URL, params=params, timeout=10)
@@ -372,29 +380,83 @@ def main():
 
         print(f"   {len(db_shows)} upcoming shows to enrich")
 
-        tm_events = fetch_tm_events(tm_venue_id)
-        total_tm_calls += 1
-        print(f"   {len(tm_events)} TM events found")
+        # Split shows: targeted (artist has tm_attraction_id) vs fuzzy fallback
+        targeted_shows: list = []   # list of (show, attraction_id)
+        fuzzy_shows:    list = []
 
-        if not tm_events:
-            print(f"   No TM events — skipping\n")
-            continue
+        for show in db_shows:
+            dim_artist = show.get("dim_artist") or {}
+            if isinstance(dim_artist, list):
+                dim_artist = dim_artist[0] if dim_artist else {}
+            attr_id = dim_artist.get("tm_attraction_id")
+            if attr_id:
+                targeted_shows.append((show, attr_id))
+            else:
+                fuzzy_shows.append(show)
 
-        stats = match_and_enrich(tm_events, db_shows)
-        total_matched += stats["matched"]
-        total_unmatched += stats["unmatched"]
-        total_skipped += stats["skipped"]
+        venue_matched   = 0
+        venue_unmatched = 0
+        venue_skipped   = 0
+
+        # ── Targeted pass: attractionId + venueId → precise date match ────────
+        if targeted_shows:
+            print(f"   Targeted pass: {len(targeted_shows)} show(s) with attraction ID")
+            for show, attr_id in targeted_shows:
+                dim_artist = show.get("dim_artist") or {}
+                if isinstance(dim_artist, list):
+                    dim_artist = dim_artist[0] if dim_artist else {}
+                artist_name = dim_artist.get("artist_name", "")
+                show_date   = (show.get("date") or "")[:10]
+
+                events = fetch_tm_events(tm_venue_id, attraction_id=attr_id)
+                total_tm_calls += 1
+                time.sleep(TM_RATE_LIMIT_DELAY)
+
+                matched_url = None
+                for event in events:
+                    parsed = parse_tm_event(event)
+                    if parsed["date"] == show_date and parsed["url"]:
+                        matched_url = parsed["url"]
+                        break
+
+                if matched_url:
+                    write_tm_url(show["show_id"], matched_url)
+                    print(f"      ✅ Targeted: {artist_name} on {show_date}")
+                    venue_matched += 1
+                else:
+                    # No event found for this date — fall back to fuzzy pass
+                    fuzzy_shows.append(show)
+
+        # ── Fuzzy pass: venueId only + name matching (existing logic) ─────────
+        if fuzzy_shows:
+            print(f"   Fuzzy pass: {len(fuzzy_shows)} show(s)")
+            tm_events = fetch_tm_events(tm_venue_id)
+            total_tm_calls += 1
+            print(f"   {len(tm_events)} TM events found")
+
+            if tm_events:
+                fuzzy_stats = match_and_enrich(tm_events, fuzzy_shows)
+                venue_matched   += fuzzy_stats["matched"]
+                venue_unmatched += fuzzy_stats["unmatched"]
+                venue_skipped   += fuzzy_stats["skipped"]
+            else:
+                print(f"   No TM events for fuzzy pass — skipping")
+                venue_unmatched += len([s for s in fuzzy_shows if s])
+
+        total_matched   += venue_matched
+        total_unmatched += venue_unmatched
+        total_skipped   += venue_skipped
 
         venue_elapsed = time.time() - venue_start
         match_rate = (
-            round(stats["matched"] / (stats["matched"] + stats["unmatched"]) * 100)
-            if (stats["matched"] + stats["unmatched"]) > 0 else 0
+            round(venue_matched / (venue_matched + venue_unmatched) * 100)
+            if (venue_matched + venue_unmatched) > 0 else 0
         )
 
         print(
-            f"   → Matched: {stats['matched']} | "
-            f"Unmatched: {stats['unmatched']} | "
-            f"Skipped: {stats['skipped']} | "
+            f"   → Matched: {venue_matched} | "
+            f"Unmatched: {venue_unmatched} | "
+            f"Skipped: {venue_skipped} | "
             f"Match rate: {match_rate}% | "
             f"Time: {venue_elapsed:.1f}s\n"
         )
