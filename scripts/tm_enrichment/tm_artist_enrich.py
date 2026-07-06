@@ -69,9 +69,12 @@ SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 TM_API_KEY   = os.environ["TM_API_KEY"]
 
-TM_ATTRACTIONS_URL = "https://app.ticketmaster.com/discovery/v2/attractions.json"
-REQUEST_DELAY      = 0.25    # 4 req/sec — safely under the 5/sec TM limit
-PAGE_SIZE          = 20      # TM attractions search results per page
+TM_ATTRACTIONS_URL  = "https://app.ticketmaster.com/discovery/v2/attractions.json"
+REQUEST_DELAY       = 0.5    # 2 req/sec — conservative for sustained runs
+PAGE_SIZE           = 20     # TM attractions search results per page
+RATE_LIMIT_BACKOFF  = 60     # Base wait on 429 (seconds); multiplied per attempt
+CIRCUIT_BREAKER_N   = 5      # Consecutive rate-limited artists before long pause
+CIRCUIT_BREAKER_WAIT = 300   # How long to pause when circuit breaker fires (seconds)
 DEFAULT_THRESHOLD  = 0.85
 
 EXPORTS_DIR = Path("exports")
@@ -170,11 +173,14 @@ def _tm_throttle() -> None:
     _last_tm_call = time.time()
 
 
-def tm_search_attractions(artist_name: str, retries: int = 3) -> list[dict]:
+def tm_search_attractions(artist_name: str, retries: int = 3) -> Optional[list[dict]]:
     """
     Search TM Discovery API /v2/attractions for a given artist name.
     Filtered to Music classification to reduce cross-domain false positives.
-    Returns a list of TM attraction dicts (may be empty).
+
+    Returns:
+        list[dict]  — TM results (empty list if artist not found in TM)
+        None        — all retries exhausted on 429; caller should activate circuit breaker
     """
     params = {
         "apikey":             TM_API_KEY,
@@ -189,8 +195,12 @@ def tm_search_attractions(artist_name: str, retries: int = 3) -> list[dict]:
             resp = requests.get(TM_ATTRACTIONS_URL, params=params, timeout=10)
 
             if resp.status_code == 429:
-                wait = int(resp.headers.get("Retry-After", 5))
-                log.warning("429 from TM — waiting %ds", wait)
+                # Linear backoff: 60s, 120s, 180s — TM's Retry-After is unreliable at low values
+                wait = RATE_LIMIT_BACKOFF * (attempt + 1)
+                log.warning(
+                    "429 from TM (attempt %d/%d) — waiting %ds",
+                    attempt + 1, retries, wait,
+                )
                 time.sleep(wait)
                 continue
 
@@ -206,10 +216,14 @@ def tm_search_attractions(artist_name: str, retries: int = 3) -> list[dict]:
             if attempt == retries - 1:
                 log.error("TM request failed after %d attempts: %s", retries, exc)
                 return []
-            log.warning("TM request error (attempt %d/%d): %s", attempt + 1, retries, exc)
+            log.warning(
+                "TM request error (attempt %d/%d): %s", attempt + 1, retries, exc,
+            )
             time.sleep(1)
 
-    return []
+    # All retries exhausted on 429 — signal caller to activate circuit breaker
+    log.warning("Rate limit not resolved after %d attempts — signalling circuit breaker", retries)
+    return None
 
 
 def parse_tm_attraction(tm_attr: dict) -> dict:
@@ -393,9 +407,11 @@ def run(
         "spotify_conflict": 0,   # TM Spotify differs from existing — logged only
         "review":           0,   # below threshold — logged for manual check
         "no_result":        0,   # TM returned nothing for this artist
+        "rate_limited":     0,   # all retries exhausted on 429 — will retry on next run
         "skipped":          0,   # blank artist name
         "error":            0,
     }
+    consecutive_rate_limited = 0
 
     for i, artist in enumerate(artists, 1):
         artist_id        = int(artist["artist_id"])
@@ -411,6 +427,22 @@ def run(
 
         try:
             results = tm_search_attractions(artist_name)
+
+            # None = rate-limited (all retries exhausted) — distinct from no results
+            if results is None:
+                stats["rate_limited"] += 1
+                consecutive_rate_limited += 1
+                if consecutive_rate_limited >= CIRCUIT_BREAKER_N:
+                    log.warning(
+                        "%d consecutive rate-limit failures — pausing %ds before continuing. "
+                        "Progress is safe; re-run will skip already-written artists.",
+                        CIRCUIT_BREAKER_N, CIRCUIT_BREAKER_WAIT,
+                    )
+                    time.sleep(CIRCUIT_BREAKER_WAIT)
+                    consecutive_rate_limited = 0
+                continue
+
+            consecutive_rate_limited = 0  # reset on any successful API response
 
             if not results:
                 log.debug("No TM results: %s", artist_name)
@@ -552,11 +584,17 @@ def run(
     log.info(
         "Done — written: %d | spotify_backfill: %d | mbid_backfill: %d | "
         "spotify_conflicts: %d | review: %d | no_result: %d | "
-        "skipped: %d | error: %d | total: %d",
-        stats["written"],    stats["spotify_backfill"], stats["mbid_backfill"],
-        stats["spotify_conflict"], stats["review"],     stats["no_result"],
-        stats["skipped"],    stats["error"],            total,
+        "rate_limited: %d | skipped: %d | error: %d | total: %d",
+        stats["written"],       stats["spotify_backfill"], stats["mbid_backfill"],
+        stats["spotify_conflict"], stats["review"],        stats["no_result"],
+        stats["rate_limited"],  stats["skipped"],          stats["error"], total,
     )
+    if stats["rate_limited"]:
+        log.info(
+            "%d artist(s) skipped due to sustained rate limiting — "
+            "they have no tm_attraction_id and will be retried on next run.",
+            stats["rate_limited"],
+        )
     if dry_run and stats["written"] > 0:
         log.info(
             "Re-run with --live to commit %d tm_attraction_id writes.",
