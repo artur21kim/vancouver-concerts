@@ -256,22 +256,33 @@ _ARTIST_BATCH_SIZE = 200   # safe URL length for PostgREST .in() filters
 def load_artists_for_city(city: str, force: bool) -> list[dict]:
     """
     Load dim_artist rows for artists who have at least one show in `city`.
-    Joins: dim_city → fact_shows → dim_artist (batched to avoid URL length limits).
+    Path: dim_venue (city filter) → fact_shows (venue_id, batched) → dim_artist.
+    fact_shows has no city_id column — city is stored on dim_venue.
     """
-    log.info("Looking up city_id for '%s'…", city)
-    city_rows = sb_get_all("dim_city", {"select": "city_id,city", "city": f"eq.{city}"})
-    if not city_rows:
-        log.error("City '%s' not found in dim_city.", city)
-        return []
-    city_id = city_rows[0]["city_id"]
-    log.info("  '%s' → city_id=%d", city, city_id)
-
-    log.info("Fetching distinct artist_ids for city_id=%d…", city_id)
-    show_rows = sb_get_all("fact_shows", {
-        "select":  "artist_id",
-        "city_id": f"eq.{city_id}",
+    # Step 1: get venue_ids for this city from dim_venue
+    log.info("Fetching venue_ids for city '%s' from dim_venue…", city)
+    venue_rows = sb_get_all("dim_venue", {
+        "select": "venue_id",
+        "city":   f"eq.{city}",
     })
-    artist_ids = list({r["artist_id"] for r in show_rows if r.get("artist_id")})
+    venue_ids = [r["venue_id"] for r in venue_rows if r.get("venue_id")]
+    if not venue_ids:
+        log.error("No venues found for city '%s' in dim_venue.", city)
+        return []
+    log.info("  Found %d venues in %s", len(venue_ids), city)
+
+    # Step 2: get distinct artist_ids from fact_shows for those venue_ids (batched)
+    _VENUE_BATCH = 100
+    artist_ids_set: set = set()
+    for i in range(0, len(venue_ids), _VENUE_BATCH):
+        batch = venue_ids[i : i + _VENUE_BATCH]
+        rows = sb_get_all("fact_shows", {
+            "select":   "artist_id",
+            "venue_id": f"in.({','.join(str(v) for v in batch)})",
+        })
+        artist_ids_set.update(r["artist_id"] for r in rows if r.get("artist_id"))
+
+    artist_ids = list(artist_ids_set)
     log.info("Found %d unique artists with shows in %s", len(artist_ids), city)
 
     if not artist_ids:
