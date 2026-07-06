@@ -361,12 +361,13 @@ def _review_row(
 # ── Core run ──────────────────────────────────────────────────────────────────
 
 def run(
-    dry_run:   bool,
-    city:      Optional[str],
-    threshold: float,
-    force:     bool,
-    verbose:   bool,
-    limit:     Optional[int],
+    dry_run:      bool,
+    city:         Optional[str],
+    threshold:    float,
+    force:        bool,
+    verbose:      bool,
+    limit:        Optional[int],
+    max_requests: int,
 ) -> None:
     if verbose:
         log.setLevel(logging.DEBUG)
@@ -412,6 +413,7 @@ def run(
         "error":            0,
     }
     consecutive_rate_limited = 0
+    tm_calls_made = 0
 
     for i, artist in enumerate(artists, 1):
         artist_id        = int(artist["artist_id"])
@@ -425,8 +427,19 @@ def run(
 
         log.debug("[%d/%d] %s", i, total, artist_name)
 
+        # Stop gracefully before hitting TM daily quota
+        if tm_calls_made >= max_requests:
+            log.info(
+                "Daily TM request cap reached (%d/%d) — stopping. "
+                "%d artist(s) remaining will be picked up on next run.",
+                tm_calls_made, max_requests, total - i + 1,
+            )
+            break
+
         try:
             results = tm_search_attractions(artist_name)
+            if results is not None:
+                tm_calls_made += 1  # count every successful HTTP response
 
             # None = rate-limited (all retries exhausted) — distinct from no results
             if results is None:
@@ -584,10 +597,10 @@ def run(
     log.info(
         "Done — written: %d | spotify_backfill: %d | mbid_backfill: %d | "
         "spotify_conflicts: %d | review: %d | no_result: %d | "
-        "rate_limited: %d | skipped: %d | error: %d | total: %d",
+        "rate_limited: %d | skipped: %d | error: %d | tm_calls: %d | total: %d",
         stats["written"],       stats["spotify_backfill"], stats["mbid_backfill"],
         stats["spotify_conflict"], stats["review"],        stats["no_result"],
-        stats["rate_limited"],  stats["skipped"],          stats["error"], total,
+        stats["rate_limited"],  stats["skipped"],          stats["error"], tm_calls_made, total,
     )
     if stats["rate_limited"]:
         log.info(
@@ -643,6 +656,14 @@ def main() -> None:
         help="Process at most N artists (for test batches)",
     )
     parser.add_argument(
+        "--max-requests",
+        type=int, default=DEFAULT_MAX_REQUESTS, metavar="N",
+        help=(
+            f"Stop after N TM API requests to avoid hitting the daily quota "
+            f"(default: {DEFAULT_MAX_REQUESTS}, TM limit is 5,000)"
+        ),
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true", default=False,
         help="Show DEBUG-level logs (per-artist detail)",
@@ -656,6 +677,7 @@ def main() -> None:
         force=args.force,
         verbose=args.verbose,
         limit=args.limit,
+        max_requests=args.max_requests,
     )
 
 
