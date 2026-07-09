@@ -15,6 +15,7 @@ All data pipeline and enrichment scripts live in `vancouver-concerts/scripts/`.
 | `comedian_enrich.py` | Enrich `dim_artist` with `comedy_type='standup'` and birth/death years via Dead Frog comedian database fuzzy-match | Manual | One-off | `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `musicbrainz_venue_enrich.py` | Enrich `dim_venue` with MBIDs, open/close dates, lat/long, and URLs | Manual | Post-ingestion, per city catch-up | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `wikidata_capacity_enrich.py` | Populate `dim_venue.capacity` via Wikidata P1083 (max capacity), using `musicbrainz_place_id` as lookup key | Manual | Post-MB-enrichment, per city catch-up | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `tm_enrichment/tm_artist_enrich.py` | Populate `dim_artist.tm_attraction_id` via TM `/v2/attractions`; backfills `spotify_artist_id` and `musicbrainz_artist_id` from TM `externalLinks` when not already set. Daily cap: 4,900 requests (TM limit 5,000). | Manual | Post-ingestion, per city then full overnight run | `TM_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
 | `tm_enrichment/tm_enrichment.py` | Enrich `fact_shows` with Ticketmaster URLs; enrich `dim_venue` with lat/long for TM-mapped venues | Manual | Per city, after import | `TM_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
 | `nominatim_enrich.py` | Geocode `dim_venue` lat/long via OpenStreetMap Nominatim (fallback after TM + MB) | Manual | Post-ingestion | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
 | `spotify_matching/spotify_matcher_fixed.py` | Match artists against Spotify library for initial data load | Manual | One-off / as needed | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
@@ -259,7 +260,7 @@ Each script subfolder has its own `.env` file (gitignored). Copy `.env.example` 
 | `SUPABASE_URL` | All Supabase-connected scripts |
 | `SUPABASE_SERVICE_KEY` | `refresh_shows.py`, `nominatim_enrich.py`, `tm_enrichment.py` |
 | `SUPABASE_SERVICE_ROLE_KEY` | `musicbrainz_artist_enrich.py`, `comedian_enrich.py`, `musicbrainz_venue_enrich.py`, `wikidata_capacity_enrich.py` |
-| `TM_API_KEY` | `tm_enrichment.py` |
+| `TM_API_KEY` | `tm_enrichment.py`, `tm_artist_enrich.py` |
 | `SPOTIFY_CLIENT_ID` | `spotify_matcher_fixed.py` |
 | `SPOTIFY_CLIENT_SECRET` | `spotify_matcher_fixed.py` |
 
@@ -270,10 +271,14 @@ Each script subfolder has its own `.env` file (gitignored). Copy `.env.example` 
 1. `fetch_setlist_api.py` — pull historical data (multi-day)
 2. `refresh_shows.py --dry-run` — preview alias candidates
 3. `refresh_shows.py` — interactive alias review + live insert  
-   ↳ `auto_update_venue_status()` runs automatically after insert
+   ↳ `auto_update_venue_status()` and `refresh_home_materialized_views()` run automatically after insert
 4. `musicbrainz_artist_enrich.py --new-only --live` — enrich new artists
 5. `tm_enrichment/tm_venue_search.py --live --city <city>` — discover and write `tm_venue_id` + lat/long for TM-mapped venues
-6. `tm_enrichment/tm_enrichment.py` — upcoming show TM URLs
-7. `musicbrainz_venue_enrich.py --live --city <city>` — MBID, dates, lat/long for MB-known venues
-8. `nominatim_enrich.py --live --city <city>` — fallback geocoding for remaining venues
-9. `wikidata_capacity_enrich.py --live --city <city>` — capacity from Wikidata for MB-matched venues
+6. `tm_enrichment/tm_artist_enrich.py --city <city> --live` — populate `tm_attraction_id` for artists; backfills Spotify/MB IDs from TM  
+   ↳ Daily cap: 4,900 req/day. Re-run each morning until complete. Resumes automatically via `tm_attraction_id IS NULL` filter.
+7. `tm_enrichment/tm_enrichment.py` — upcoming show TM URLs
+8. `musicbrainz_venue_enrich.py --live --city <city>` — MBID, dates, lat/long for MB-known venues
+9. `nominatim_enrich.py --live --city <city>` — fallback geocoding for remaining venues  
+   ↳ **After this step:** run `SELECT refresh_home_materialized_views();` in Supabase SQL editor.  
+   Nominatim updates `dim_city` centroid coordinates; the MV must be refreshed for city bubbles to appear on the Home map.
+10. `wikidata_capacity_enrich.py --live --city <city>` — capacity from Wikidata for MB-matched venues
