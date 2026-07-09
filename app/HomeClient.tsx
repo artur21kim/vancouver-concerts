@@ -221,9 +221,10 @@ export default function HomeClient({
     return () => controller.abort()
   }, [selectedState])
 
-  // ── City stats fallback: re-fetch client-side if ISR cache served stale empty data ──
+  // ── City stats fallback: re-fetch if ISR cache served stale data (empty or missing coords) ──
   useEffect(() => {
-    if (initialCityStats.length === 0) {
+    const hasCoords = initialCityStats.some(c => c.latitude != null)
+    if (initialCityStats.length === 0 || !hasCoords) {
       fetch('/api/home/city-stats')
         .then(r => {
           if (!r.ok) throw new Error(`city-stats ${r.status}`)

@@ -75,7 +75,8 @@ PAGE_SIZE           = 20     # TM attractions search results per page
 RATE_LIMIT_BACKOFF  = 60     # Base wait on 429 (seconds); multiplied per attempt
 CIRCUIT_BREAKER_N   = 5      # Consecutive rate-limited artists before long pause
 CIRCUIT_BREAKER_WAIT = 300   # How long to pause when circuit breaker fires (seconds)
-DEFAULT_THRESHOLD  = 0.85
+DEFAULT_THRESHOLD    = 0.85
+DEFAULT_MAX_REQUESTS = 4900  # TM daily quota is 5,000; stop with 100 to spare
 
 EXPORTS_DIR = Path("exports")
 
