@@ -890,6 +890,7 @@ def _summary(
     genuinely_new_artists, genuinely_new_venues,
     fuzzy_artist_suggestions, fuzzy_venue_suggestions,
     inserted, fuzzy_blocked, dry_run,
+    mbid_resolved_count: int = 0,
 ) -> None:
     nb            = _n_blocked(to_insert, fuzzy_artist_suggestions, fuzzy_venue_suggestions)
     n_artist_b    = sum(1 for s in to_insert if s["artist_name"] in fuzzy_artist_suggestions)
@@ -1357,6 +1358,7 @@ def main() -> None:
             genuinely_new_artists, genuinely_new_venues,
             fuzzy_artist_suggestions, fuzzy_venue_suggestions,
             inserted=0, fuzzy_blocked=[], dry_run=True,
+            mbid_resolved_count=mbid_resolved_count,
         )
         print(
             "\n  📝  Venue-change detection runs after a live insert (not in --dry-run mode)."
@@ -1404,6 +1406,7 @@ def main() -> None:
             genuinely_new_artists, genuinely_new_venues,
             fuzzy_artist_suggestions, fuzzy_venue_suggestions,
             inserted=0, fuzzy_blocked=[], dry_run=False,
+            mbid_resolved_count=mbid_resolved_count,
         )
         return
 
@@ -1529,6 +1532,7 @@ def main() -> None:
         genuinely_new_artists, genuinely_new_venues,
         fuzzy_artist_suggestions, fuzzy_venue_suggestions,
         inserted=inserted, fuzzy_blocked=fuzzy_blocked, dry_run=False,
+        mbid_resolved_count=mbid_resolved_count,
     )
 
     # ── 8. Post-insert housekeeping (live runs only) ─────────────────────────
