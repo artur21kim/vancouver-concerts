@@ -995,6 +995,9 @@ def detect_venue_changes(
                 continue
             if old_r["venue_id"] == new_r["venue_id"]:
                 continue
+            # Different URLs = different shows on the same date, not a venue change
+            if old_r.get("setlist_url") != new_r.get("setlist_url"):
+                continue
             pairs.append({
                 "old_show_id":    old_r["show_id"],
                 "new_show_id":    new_r["show_id"],
