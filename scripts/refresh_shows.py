@@ -890,7 +890,6 @@ def _summary(
     genuinely_new_artists, genuinely_new_venues,
     fuzzy_artist_suggestions, fuzzy_venue_suggestions,
     inserted, fuzzy_blocked, dry_run,
-    mbid_resolved_count: int = 0,
 ) -> None:
     nb            = _n_blocked(to_insert, fuzzy_artist_suggestions, fuzzy_venue_suggestions)
     n_artist_b    = sum(1 for s in to_insert if s["artist_name"] in fuzzy_artist_suggestions)
@@ -1358,7 +1357,6 @@ def main() -> None:
             genuinely_new_artists, genuinely_new_venues,
             fuzzy_artist_suggestions, fuzzy_venue_suggestions,
             inserted=0, fuzzy_blocked=[], dry_run=True,
-            mbid_resolved_count=mbid_resolved_count,
         )
         print(
             "\n  📝  Venue-change detection runs after a live insert (not in --dry-run mode)."
@@ -1406,7 +1404,6 @@ def main() -> None:
             genuinely_new_artists, genuinely_new_venues,
             fuzzy_artist_suggestions, fuzzy_venue_suggestions,
             inserted=0, fuzzy_blocked=[], dry_run=False,
-            mbid_resolved_count=mbid_resolved_count,
         )
         return
 
@@ -1497,6 +1494,19 @@ def main() -> None:
         for s in unresolved[:5]:
             print(f"     {s['date']}  {s['artist_name']}  @  {s['venue_name']}")
 
+    # Deduplicate within the CSV — the same setlist_url can appear twice if the
+    # source file was built from multiple partial fetches (--resume runs).
+    seen_urls: set[str] = set()
+    deduped: list[dict] = []
+    for r in show_records:
+        if r["setlist_url"] not in seen_urls:
+            seen_urls.add(r["setlist_url"])
+            deduped.append(r)
+    intra_csv_dupes = len(show_records) - len(deduped)
+    if intra_csv_dupes:
+        print(f"  ⚠️  {intra_csv_dupes} intra-CSV duplicate URL(s) removed before insert")
+    show_records = deduped
+
     inserted = 0
     if show_records:
         next_show_id = get_max_id("fact_shows", "show_id") + 1
@@ -1532,7 +1542,6 @@ def main() -> None:
         genuinely_new_artists, genuinely_new_venues,
         fuzzy_artist_suggestions, fuzzy_venue_suggestions,
         inserted=inserted, fuzzy_blocked=fuzzy_blocked, dry_run=False,
-        mbid_resolved_count=mbid_resolved_count,
     )
 
     # ── 8. Post-insert housekeeping (live runs only) ─────────────────────────
