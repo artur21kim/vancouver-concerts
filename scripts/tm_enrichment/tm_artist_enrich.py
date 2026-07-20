@@ -478,6 +478,8 @@ def run(
 
             if best is None:
                 stats["no_result"] += 1
+                if not dry_run:
+                    sb_patch_artist(artist_id, {"tm_attempted": True})
                 continue
 
             label = artist_name[:50]
@@ -655,7 +657,7 @@ def main() -> None:
     parser.add_argument(
         "--force",
         action="store_true", default=False,
-        help="Re-process artists that already have tm_attraction_id set",
+        help="Re-process all artists, ignoring tm_attempted state",
     )
     parser.add_argument(
         "--limit",
