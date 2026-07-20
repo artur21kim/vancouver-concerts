@@ -27,6 +27,7 @@ Schema migration (run once in Supabase SQL editor before first use):
     ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS tm_attraction_id text;
     CREATE INDEX IF NOT EXISTS idx_dim_artist_tm_attraction_id
       ON dim_artist(tm_attraction_id);
+    ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS tm_attempted BOOLEAN NOT NULL DEFAULT FALSE;
 
 Usage:
     # Dry run — preflight, no writes:
@@ -312,17 +313,17 @@ def load_artists_for_city(city: str, force: bool) -> list[dict]:
             "artist_id": id_filter,
         }
         if not force:
-            params["tm_attraction_id"] = "is.null"
+            params["tm_attempted"] = "eq.false"
         all_artists.extend(sb_get_all("dim_artist", params))
 
     return all_artists
 
 
 def load_all_artists(force: bool) -> list[dict]:
-    """Load all dim_artist rows lacking tm_attraction_id (or all if --force)."""
+    """Load all dim_artist rows not yet attempted (or all if --force)."""
     params: dict = {"select": _ARTIST_SELECT}
     if not force:
-        params["tm_attraction_id"] = "is.null"
+        params["tm_attempted"] = "eq.false"
     return sb_get_all("dim_artist", params)
 
 
@@ -461,6 +462,8 @@ def run(
             if not results:
                 log.debug("No TM results: %s", artist_name)
                 stats["no_result"] += 1
+                if not dry_run:
+                    sb_patch_artist(artist_id, {"tm_attempted": True})
                 continue
 
             # Score all results and pick the best name match
@@ -514,6 +517,7 @@ def run(
                 )
 
                 if not dry_run:
+                    update["tm_attempted"] = True
                     sb_patch_artist(artist_id, update)
 
                 stats["written"] += 1
@@ -536,6 +540,8 @@ def run(
                     artist_id, artist_name, "low_confidence",
                     best, best_score, existing_spotify, existing_mbid,
                 ))
+                if not dry_run:
+                    sb_patch_artist(artist_id, {"tm_attempted": True})
 
         except Exception as exc:
             log.error("Error for %s (id=%d): %s", artist_name, artist_id, exc)
