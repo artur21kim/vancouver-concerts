@@ -24,10 +24,13 @@ const PROVINCE_COORDS: Record<string, [number, number]> = {
   NU: [70.0,  -86.0],
   WA: [47.3, -120.5],  OR: [44.0, -120.5],  CA: [37.5, -119.5],  NV: [39.5, -116.5],
   AZ: [34.3, -111.7],  CO: [39.0, -105.5],  TX: [31.5,  -99.5],  OK: [35.5,  -97.5],
-  MN: [46.5,  -94.0],
-  MO: [38.5,  -92.5],  IL: [40.0,  -89.0],  TN: [35.8,  -86.0],  GA: [32.7,  -83.5],
-  FL: [28.5,  -82.0],  OH: [40.5,  -82.5],  MI: [44.5,  -85.5],  PA: [41.0,  -77.5],
-  NC: [35.5,  -79.5],  MA: [42.3,  -71.8],  NY: [42.9,  -75.5],
+  UT: [39.5, -111.5],  ID: [44.5, -114.0],  NM: [34.5, -106.5],
+  MN: [46.5,  -94.0],  IA: [42.0,  -93.5],  NE: [41.5,  -99.5],  WI: [44.5,  -90.0],
+  MO: [38.5,  -92.5],  IL: [40.0,  -89.0],  IN: [40.0,  -86.5],  TN: [35.8,  -86.0],
+  KY: [37.5,  -85.5],  GA: [32.7,  -83.5],  AL: [32.5,  -86.5],  FL: [28.5,  -82.0],
+  LA: [31.0,  -91.5],  OH: [40.5,  -82.5],  MI: [44.5,  -85.5],  PA: [41.0,  -77.5],
+  NC: [35.5,  -79.5],  SC: [34.0,  -81.0],  MA: [42.3,  -71.8],  NY: [42.9,  -75.5],
+  MD: [39.2,  -76.8],  DC: [38.9,  -77.1],
 }
 
 // City coordinates now sourced from dim_city via get_overview_city_stats (GP-153)
@@ -39,10 +42,13 @@ const STATE_NAMES: Record<string, string> = {
   PE: 'Prince Edward Island',
   WA: 'Washington',  OR: 'Oregon',    CA: 'California',    NV: 'Nevada',
   AZ: 'Arizona',     CO: 'Colorado',  TX: 'Texas',         OK: 'Oklahoma',
-  MN: 'Minnesota',
-  MO: 'Missouri',    IL: 'Illinois',  TN: 'Tennessee',     GA: 'Georgia',
-  FL: 'Florida',     OH: 'Ohio',      MI: 'Michigan',      PA: 'Pennsylvania',
-  NC: 'North Carolina', MA: 'Massachusetts', NY: 'New York',
+  UT: 'Utah',        ID: 'Idaho',     NM: 'New Mexico',
+  MN: 'Minnesota',   IA: 'Iowa',      NE: 'Nebraska',      WI: 'Wisconsin',
+  MO: 'Missouri',    IL: 'Illinois',  IN: 'Indiana',       TN: 'Tennessee',
+  KY: 'Kentucky',    GA: 'Georgia',   AL: 'Alabama',       FL: 'Florida',
+  LA: 'Louisiana',   OH: 'Ohio',      MI: 'Michigan',      PA: 'Pennsylvania',
+  NC: 'North Carolina', SC: 'South Carolina', MA: 'Massachusetts', NY: 'New York',
+  MD: 'Maryland',    DC: 'Washington D.C.',
 }
 
 const NA_CENTER: [number, number] = [50, -93]
