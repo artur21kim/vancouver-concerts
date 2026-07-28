@@ -75,7 +75,7 @@ DEFAULT_CITY = os.getenv("REFRESH_CITY", "Vancouver")
 
 BATCH_SIZE             = 500
 VENUE_FUZZY_THRESHOLD  = 0.82
-ARTIST_FUZZY_THRESHOLD = 0.90   # raised from 0.85 — 85-90% range produced too many
+ARTIST_FUZZY_THRESHOLD = 0.92   # raised from 0.90 — 90-91% range produced too many false positives
                                  # false positives (distinct artists) to review reliably
 
 MONTH_MAP = {
