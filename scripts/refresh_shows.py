@@ -75,7 +75,7 @@ DEFAULT_CITY = os.getenv("REFRESH_CITY", "Vancouver")
 
 BATCH_SIZE             = 500
 VENUE_FUZZY_THRESHOLD  = 0.82
-ARTIST_FUZZY_THRESHOLD = 0.92   # raised from 0.90 — 90-91% range produced too many false positives
+ARTIST_FUZZY_THRESHOLD = 0.96   # raised from 0.92 — 92-95% range still produced too many false positives
                                  # false positives (distinct artists) to review reliably
 
 MONTH_MAP = {
@@ -844,14 +844,7 @@ def _print_alias_report(
     country: Optional[str] = None,
     venue_location_map: Optional[dict[str, tuple]] = None,
 ) -> None:
-    """Non-interactive alias report (dry-run or --no-interactive).
-
-    Output is split into two sections:
-      1. Exact-normalised matches (score == 1.0) — article drops, punctuation,
-         casing differences. These most often need DB verification before accepting.
-      2. Fuzzy matches (score < 1.0) — similarity-based candidates.
-    Each section prints its own SQL INSERT block.
-    """
+    """Non-interactive alias report (dry-run or --no-interactive)."""
     if not suggestions:
         return
 
@@ -860,38 +853,29 @@ def _print_alias_report(
         if s[show_match_key] in suggestions:
             blocked_by_name[s[show_match_key]] = blocked_by_name.get(s[show_match_key], 0) + 1
 
-    exact   = {k: v for k, v in suggestions.items() if v[2] == 1.0}
-    fuzzy   = {k: v for k, v in suggestions.items() if v[2] <  1.0}
+    print(f"\n{header} ({len(suggestions)}):")
+    for input_name, (canonical, rid, score) in suggestions.items():
+        n         = blocked_by_name.get(input_name, 0)
+        score_s   = "exact (normalised)" if score == 1.0 else f"{score:.0%} similarity"
+        loc       = venue_location_map.get(canonical.lower(), ("", "", "")) if venue_location_map else ("", "", "")
+        loc_label = f" [{loc[0]}, {loc[1]}]" if (loc[0] or loc[1]) else ""
+        print(f"  '{input_name}'  →  '{canonical}'{loc_label}  [{score_s}, {n} show(s)]")
 
-    def _print_section(section: dict, section_label: str) -> None:
-        if not section:
-            return
-        print(f"\n{header} — {section_label} ({len(section)}):")
-        for input_name, (canonical, rid, score) in section.items():
-            n         = blocked_by_name.get(input_name, 0)
-            score_s   = "exact (normalised)" if score == 1.0 else f"{score:.0%} similarity"
-            loc       = venue_location_map.get(canonical.lower(), ("", "", "")) if venue_location_map else ("", "", "")
-            loc_label = f" [{loc[0]}, {loc[1]}]" if (loc[0] or loc[1]) else ""
-            print(f"  '{input_name}'  →  '{canonical}'{loc_label}  [{score_s}, {n} show(s)]")
-
-        print(f"\n  SQL — verify each line, then run in Supabase SQL editor:")
-        if city:
-            print(f"  INSERT INTO {table} (setlist_name, city, state, country, {id_col}) VALUES")
-            lines = [
-                f"    ('{n.replace(chr(39), chr(39)*2)}', '{city}', '{state or ''}', '{country or ''}', {rid})"
-                for n, (_, rid, _) in section.items() if blocked_by_name.get(n, 0) > 0
-            ]
-        else:
-            print(f"  INSERT INTO {table} (setlist_name, {id_col}) VALUES")
-            lines = [
-                f"    ('{n.replace(chr(39), chr(39)*2)}', {rid})"
-                for n, (_, rid, _) in section.items() if blocked_by_name.get(n, 0) > 0
-            ]
-        print(",\n".join(lines) + "\n  ON CONFLICT DO NOTHING;")
-        print(f"  Then re-run the script to insert the held shows.")
-
-    _print_section(exact, "EXACT NORMALISED — verify each in DB before accepting")
-    _print_section(fuzzy, "FUZZY MATCHES")
+    print(f"\n  SQL — verify each line, then run in Supabase SQL editor:")
+    if city:
+        print(f"  INSERT INTO {table} (setlist_name, city, state, country, {id_col}) VALUES")
+        lines = [
+            f"    ('{n.replace(chr(39), chr(39)*2)}', '{city}', '{state or ''}', '{country or ''}', {rid})"
+            for n, (_, rid, _) in suggestions.items() if blocked_by_name.get(n, 0) > 0
+        ]
+    else:
+        print(f"  INSERT INTO {table} (setlist_name, {id_col}) VALUES")
+        lines = [
+            f"    ('{n.replace(chr(39), chr(39)*2)}', {rid})"
+            for n, (_, rid, _) in suggestions.items() if blocked_by_name.get(n, 0) > 0
+        ]
+    print(",\n".join(lines) + "\n  ON CONFLICT DO NOTHING;")
+    print(f"  Then re-run the script to insert the held shows.")
 
 
 def _n_blocked(to_insert, fuzzy_artist, fuzzy_venue) -> int:
