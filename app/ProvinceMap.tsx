@@ -18,9 +18,9 @@ export type ProvinceData = {
 // Where the province/state abbreviation appears on a typical North America atlas —
 // not city-area positions, not geographic centroids, but readable label zones.
 const PROVINCE_COORDS: Record<string, [number, number]> = {
-  BC: [54.5, -126.5],  AB: [54.5, -114.5],  SK: [54.5, -106.0],  MB: [54.0,  -97.5],
-  ON: [49.5,  -84.0],  QC: [52.0,  -72.0],  NS: [45.0,  -63.0],  NB: [46.5,  -66.5],
-  NL: [53.0,  -59.0],  PE: [46.5,  -63.3],  NT: [64.0, -118.0],  YT: [63.0, -135.0],
+  BC: [51.5, -126.0],  AB: [51.5, -114.0],  SK: [52.0, -106.0],  MB: [51.5,  -97.0],
+  ON: [49.5,  -84.0],  QC: [48.5,  -72.0],  NS: [45.0,  -63.0],  NB: [46.5,  -66.5],
+  NL: [49.0,  -59.0],  PE: [46.5,  -63.3],  NT: [64.0, -118.0],  YT: [63.0, -135.0],
   NU: [70.0,  -86.0],
   WA: [47.3, -120.5],  OR: [44.0, -120.5],  CA: [37.5, -119.5],  NV: [39.5, -116.5],
   AZ: [34.3, -111.7],  CO: [39.0, -105.5],  TX: [31.5,  -99.5],  OK: [35.5,  -97.5],
@@ -51,8 +51,8 @@ const STATE_NAMES: Record<string, string> = {
   MD: 'Maryland',    DC: 'Washington D.C.',
 }
 
-const NA_CENTER: [number, number] = [50, -93]
-const NA_ZOOM   = 3
+const NA_CENTER: [number, number] = [44, -96]
+const NA_ZOOM   = 4
 const TEAL      = '#00BFA8'
 const TEAL_DARK = 'rgba(0,159,140,0.95)'
 
@@ -269,7 +269,7 @@ export default function ProvinceMap({
         center={NA_CENTER}
         zoom={NA_ZOOM}
         style={{ height: '100%', width: '100%' }}
-        scrollWheelZoom={false}
+        scrollWheelZoom={true}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
