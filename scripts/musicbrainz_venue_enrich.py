@@ -273,7 +273,8 @@ def run(
         log.info("No DB writes will occur — pass --live to commit.")
 
     # ── Review CSV ────────────────────────────────────────────────────────────
-    csv_path   = Path("exports") / "pipeline_reviews" / f"musicbrainz_venue_review_{date.today().isoformat()}.csv"
+    city_slug  = f"_{city_filter.lower().replace(' ', '_')}" if city_filter else ""
+    csv_path   = Path("exports") / "pipeline_reviews" / f"musicbrainz_venue_review{city_slug}_{date.today().isoformat()}.csv"
     review_rows: list[dict] = []
 
     stats = {

@@ -267,7 +267,8 @@ def run(
             time.sleep(REQUEST_DELAY)
 
     # ── Process results ───────────────────────────────────────────────────────
-    csv_path    = Path("exports") / "pipeline_reviews" / f"wikidata_capacity_review_{date.today().isoformat()}.csv"
+    city_slug   = f"_{city_filter.lower().replace(' ', '_')}" if city_filter else ""
+    csv_path    = Path("exports") / "pipeline_reviews" / f"wikidata_capacity_review{city_slug}_{date.today().isoformat()}.csv"
     review_rows: list[dict] = []
 
     stats = {

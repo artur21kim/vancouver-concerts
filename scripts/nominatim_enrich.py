@@ -404,7 +404,8 @@ def run(
 
     # ── Output paths ──────────────────────────────────────────────────────────
     today = date.today().isoformat()
-    review_csv_path = EXPORTS_DIR / "pipeline_reviews" / f"nominatim_review_{today}.csv"
+    city_slug = f"_{city.lower().replace(' ', '_')}" if city else ""
+    review_csv_path = EXPORTS_DIR / "pipeline_reviews" / f"nominatim_review{city_slug}_{today}.csv"
     review_csv_path.parent.mkdir(parents=True, exist_ok=True)
     review_rows: list[dict] = []
 
