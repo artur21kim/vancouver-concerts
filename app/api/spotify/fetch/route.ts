@@ -50,22 +50,53 @@ export async function POST(request: Request) {
       });
 
       if (!refreshResponse.ok) {
-        console.error('❌ Failed to refresh token:', await refreshResponse.text());
+        const errorBody = await refreshResponse.json().catch(() => ({}));
+
+        if (errorBody.error === 'invalid_grant') {
+          // Refresh token expired (Spotify 6-month expiry) — clear token and prompt reconnect
+          console.error(`❌ Refresh token expired for user ${user.id} — clearing token`);
+
+          await supabase
+            .from('user_spotify_tokens')
+            .update({
+              status: 'error',
+              error_message: 'spotify_reconnect_required',
+              updated_at: new Date().toISOString()
+            })
+            .eq('user_id', user.id);
+
+          await supabase
+            .from('user_profiles')
+            .update({ spotify_connected: false, updated_at: new Date().toISOString() })
+            .eq('user_id', user.id);
+
+          return NextResponse.json({
+            error: 'spotify_reconnect_required',
+            message: 'Your Spotify session has expired. Please reconnect your account.'
+          }, { status: 401 });
+        }
+
+        console.error('❌ Failed to refresh token:', errorBody);
         return NextResponse.json({ error: 'Failed to refresh Spotify token' }, { status: 401 });
       }
 
       const refreshData = await refreshResponse.json();
       accessToken = refreshData.access_token;
       
-      // Update token in database
+      // Update token in database.
+      // Spotify may rotate the refresh token — persist it if provided.
       const newExpiresAt = new Date(Date.now() + refreshData.expires_in * 1000);
+      const tokenUpdate: Record<string, string> = {
+        access_token: accessToken,
+        expires_at: newExpiresAt.toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      if (refreshData.refresh_token) {
+        tokenUpdate.refresh_token = refreshData.refresh_token;
+      }
       await supabase
         .from('user_spotify_tokens')
-        .update({ 
-          access_token: accessToken,
-          expires_at: newExpiresAt.toISOString(),
-          updated_at: new Date().toISOString()
-        })
+        .update(tokenUpdate)
         .eq('user_id', user.id);
       
       console.log(`✅ Token refreshed for user ${user.id}`);
