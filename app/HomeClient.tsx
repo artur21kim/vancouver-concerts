@@ -65,16 +65,25 @@ const CAPACITY_BADGE: Record<string, { bg: string; color: string; label: string 
 
 // ── Province/state full names ─────────────────────────────────
 const STATE_NAMES: Record<string, string> = {
-  BC: 'British Columbia', ON: 'Ontario',    QC: 'Quebec',            AB: 'Alberta',
-  MB: 'Manitoba',         SK: 'Saskatchewan', NS: 'Nova Scotia',     NB: 'New Brunswick',
+  // Canadian provinces & territories
+  BC: 'British Columbia', ON: 'Ontario',       QC: 'Quebec',          AB: 'Alberta',
+  MB: 'Manitoba',         SK: 'Saskatchewan',  NS: 'Nova Scotia',     NB: 'New Brunswick',
   NL: 'Newfoundland & Labrador', PE: 'Prince Edward Island',
-  NT: 'Northwest Territories',   YT: 'Yukon',                        NU: 'Nunavut',
-  WA: 'Washington',       OR: 'Oregon',     CA: 'California',        NY: 'New York',
-  IL: 'Illinois',         TX: 'Texas',      FL: 'Florida',           MI: 'Michigan',
-  CO: 'Colorado',         OH: 'Ohio',       PA: 'Pennsylvania',      GA: 'Georgia',
-  TN: 'Tennessee',        MA: 'Massachusetts', NV: 'Nevada',         AZ: 'Arizona',
-  MN: 'Minnesota',        NC: 'North Carolina', MO: 'Missouri',      WI: 'Wisconsin',
-  OK: 'Oklahoma',
+  NT: 'Northwest Territories',   YT: 'Yukon',                         NU: 'Nunavut',
+  // US states — full set to prevent abbreviated labels as city coverage expands
+  WA: 'Washington',    OR: 'Oregon',      CA: 'California',    NY: 'New York',
+  IL: 'Illinois',      TX: 'Texas',       FL: 'Florida',       MI: 'Michigan',
+  CO: 'Colorado',      OH: 'Ohio',        PA: 'Pennsylvania',  GA: 'Georgia',
+  TN: 'Tennessee',     MA: 'Massachusetts', NV: 'Nevada',      AZ: 'Arizona',
+  MN: 'Minnesota',     NC: 'North Carolina', MO: 'Missouri',   WI: 'Wisconsin',
+  OK: 'Oklahoma',      KY: 'Kentucky',    IN: 'Indiana',       AL: 'Alabama',
+  LA: 'Louisiana',     SC: 'South Carolina', MD: 'Maryland',   DC: 'Washington D.C.',
+  IA: 'Iowa',          NE: 'Nebraska',    ID: 'Idaho',         UT: 'Utah',
+  NM: 'New Mexico',    VA: 'Virginia',    WV: 'West Virginia', KS: 'Kansas',
+  AR: 'Arkansas',      MS: 'Mississippi', ND: 'North Dakota',  SD: 'South Dakota',
+  MT: 'Montana',       WY: 'Wyoming',     NJ: 'New Jersey',    CT: 'Connecticut',
+  RI: 'Rhode Island',  NH: 'New Hampshire', VT: 'Vermont',     ME: 'Maine',
+  DE: 'Delaware',      HI: 'Hawaii',      AK: 'Alaska',
 }
 const DECADES: Decade[] = ['all', '1900s', '1910s', '1920s', '1930s', '1940s', '1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s']
 const MONTH_NAMES       = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
