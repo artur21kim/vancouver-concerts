@@ -1280,7 +1280,9 @@ def main() -> None:
             if s:
                 fuzzy_artist_suggestions[show["artist_name"]] = s
             else:
-                genuinely_new_artists[show["artist_name"]] = None
+                # Store MBID alongside name so it can be written at insert time,
+                # bypassing a separate musicbrainz_artist_enrich.py run for known artists.
+                genuinely_new_artists[show["artist_name"]] = artist_mbid or None
 
         # ── Venue resolution — composite (name, city, state, country) key (GP-136) ─
         vtkey      = (
@@ -1420,8 +1422,13 @@ def main() -> None:
         print(f"  Creating {len(genuinely_new_artists)} artist(s)…", end=" ", flush=True)
         next_id = get_max_id("dim_artist", "artist_id") + 1
         records = [
-            {"artist_id": next_id + i, "artist_name": n, "review_status": "unverified"}
-            for i, n in enumerate(genuinely_new_artists)
+            {
+                "artist_id":              next_id + i,
+                "artist_name":            n,
+                "review_status":          "unverified",
+                **({"musicbrainz_artist_id": mbid} if mbid else {}),
+            }
+            for i, (n, mbid) in enumerate(genuinely_new_artists.items())
         ]
         count = create_and_resolve("dim_artist", records, "artist_name", "artist_id", existing_artists)
         print(f"✅  {count} created")
