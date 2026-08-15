@@ -307,7 +307,7 @@ export default function HomeClient({
   // ── Province map CTA ─────────────────────────────────────
   const handleProvinceCta = useCallback(() => {
     if (user) {
-      router.push('/my-grooveprint')
+      router.push('/discover')
     } else {
       setShowSignUpBanner(true)
     }
@@ -1089,7 +1089,7 @@ export default function HomeClient({
       {/* ── Sign-up banner (triggered from province map CTA) ── */}
       {showSignUpBanner && (
         <div
-          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/50 z-[1000] flex items-center justify-center p-4"
           onClick={() => setShowSignUpBanner(false)}
         >
           <div
