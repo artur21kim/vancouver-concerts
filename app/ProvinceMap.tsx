@@ -170,7 +170,7 @@ function CityPopup({
           border: 'none', cursor: 'pointer',
         }}
       >
-        {isAuthenticated ? 'View your Grooveprint →' : 'Track concerts here →'}
+        Track concerts here →
       </button>
       {!isAuthenticated && (
         <p style={{ fontSize: 10, color: '#94a3b8', textAlign: 'center', margin: '4px 0 0' }}>
