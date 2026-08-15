@@ -17,6 +17,7 @@ import { Bar } from 'react-chartjs-2'
 import { useTheme } from 'next-themes'
 import type { ChartRow, TopArtist, TopVenue, CityStats, HomeStats, DrillStats } from './page'
 import CountryFlag from './components/CountryFlag'
+import AuthModal from './components/AuthModal'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -160,7 +161,7 @@ export default function HomeClient({
 
   // ── View state ────────────────────────────────────────────
   const [viewMode,         setViewMode]         = useState<'map' | 'chart'>('map')
-  const [showSignUpBanner, setShowSignUpBanner] = useState(false)
+  const [showAuthModal, setShowAuthModal] = useState(false)
   const [cityStatsData,    setCityStatsData]    = useState<CityStats[]>(
     () => initialCityStats.map(c => ({ ...c, country: normalizeCountry(c.country) }))
   )
@@ -309,7 +310,7 @@ export default function HomeClient({
     if (user) {
       router.push('/discover')
     } else {
-      setShowSignUpBanner(true)
+      setShowAuthModal(true)
     }
   }, [user, router])
 
@@ -1086,41 +1087,12 @@ export default function HomeClient({
 
       </div>
 
-      {/* ── Sign-up banner (triggered from province map CTA) ── */}
-      {showSignUpBanner && (
-        <div
-          className="fixed inset-0 bg-black/50 z-[1000] flex items-center justify-center p-4"
-          onClick={() => setShowSignUpBanner(false)}
-        >
-          <div
-            className="bg-card rounded-xl shadow-2xl p-6 max-w-sm w-full"
-            onClick={e => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-bold text-foreground mb-2">
-              See your concert history
-            </h3>
-            <p className="text-sm text-muted-foreground mb-5">
-              Sign up to track concerts you&apos;ve attended, discover your Spotify matches,
-              and explore which venues you&apos;ve visited across every city.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => router.push('/my-grooveprint')}
-                className="flex-1 rounded-lg py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity"
-                style={{ background: '#00BFA8' }}
-              >
-                Sign up free →
-              </button>
-              <button
-                onClick={() => setShowSignUpBanner(false)}
-                className="px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── Auth modal (triggered from province map CTA) ── */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        returnPath="/discover"
+      />
 
     </main>
   )
