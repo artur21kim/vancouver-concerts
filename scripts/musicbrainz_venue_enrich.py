@@ -111,14 +111,15 @@ def _throttle() -> None:
 
 def mb_get(path: str, params: dict, retries: int = 3) -> dict:
     """
-    GET a MusicBrainz endpoint with rate limiting and retry on 503.
+    GET a MusicBrainz endpoint with rate limiting and retry on 503 or timeout.
     MusicBrainz returns 503 (not 429) when the rate limit is hit.
+    Timeouts use the same exponential backoff as 503s (15s, 30s, 45s).
     """
     url = f"{MB_BASE}/{path}"
     for attempt in range(retries):
         _throttle()
         try:
-            resp = requests.get(url, params=params, headers=MB_HEADERS, timeout=15)
+            resp = requests.get(url, params=params, headers=MB_HEADERS, timeout=30)
             if resp.status_code == 503:
                 wait = 15 * (attempt + 1)
                 log.warning(
@@ -129,11 +130,20 @@ def mb_get(path: str, params: dict, retries: int = 3) -> dict:
                 continue
             resp.raise_for_status()
             return resp.json()
+        except requests.Timeout as exc:
+            wait = 15 * (attempt + 1)
+            if attempt == retries - 1:
+                raise
+            log.warning(
+                "Timeout from MusicBrainz — waiting %ds before retry %d/%d: %s",
+                wait, attempt + 1, retries, exc,
+            )
+            time.sleep(wait)
         except requests.RequestException as exc:
             if attempt == retries - 1:
                 raise
             log.warning("Request error (attempt %d/%d): %s", attempt + 1, retries, exc)
-            time.sleep(3)
+            time.sleep(10)
     return {}
 
 
@@ -153,7 +163,7 @@ def mb_search_place(venue_name: str, city: str) -> Optional[dict]:
             "place/",
             {"query": f'place:"{venue_name}" AND area:"{city}"', "fmt": "json", "limit": 5},
         )
-    except requests.HTTPError:
+    except requests.RequestException:
         return None
 
     places = data.get("places", [])
@@ -175,8 +185,15 @@ def mb_get_place_details(mbid: str) -> dict:
         begin_date   str | None   (raw MB partial date, e.g. "1977", "1977-03", "1977-03-15")
         end_date     str | None
         official_url str | None
+
+    On network error, returns an empty-detail dict so the MBID write still succeeds
+    (caller records as partial_data rather than crashing the venue).
     """
-    data = mb_get(f"place/{mbid}", {"inc": "url-rels", "fmt": "json"})
+    try:
+        data = mb_get(f"place/{mbid}", {"inc": "url-rels", "fmt": "json"})
+    except requests.RequestException as exc:
+        log.warning("Could not fetch place details for %s: %s — MBID will still be written", mbid, exc)
+        return {"lat": None, "lon": None, "begin_date": None, "end_date": None, "official_url": None}
 
     # Coordinates
     coords = data.get("coordinates") or {}
