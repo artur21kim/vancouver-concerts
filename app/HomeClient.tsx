@@ -11,36 +11,7 @@ import AuthModal from './components/AuthModal'
 
 const ProvinceMap = dynamic(() => import('./ProvinceMap'), { ssr: false })
 
-// ── Types ─────────────────────────────────────────────────────
-type CapacityBucket = 'small' | 'medium' | 'large' | 'xlarge' | 'unknown'
-type CapacityFilter = 'all' | CapacityBucket
-// ── Capacity metadata (unchanged from original) ───────────────
-const CAPACITY_META: Record<CapacityBucket, {
-  label: string
-  legendLabel: string
-  tooltipLabel: string
-  tooltip: string
-  unselectedClass: string
-  bg: string
-  border: string
-  hoverBg: string
-}> = {
-  small:   { label: 'S',  legendLabel: 'Small (<500)',      tooltipLabel: 'Small',   tooltip: 'Small (< 500)',     unselectedClass: 'text-purple-400 dark:text-purple-300',  bg: 'rgba(139, 92, 192, 0.7)',   border: 'rgba(139, 92, 192, 1)',  hoverBg: 'rgba(139, 92, 192, 0.9)' },
-  medium:  { label: 'M',  legendLabel: 'Medium (500–1.5K)', tooltipLabel: 'Medium',  tooltip: 'Medium (500–1.5K)', unselectedClass: 'text-[#3A8FBD]',                        bg: 'rgba(58, 143, 189, 0.75)',  border: 'rgba(58, 143, 189, 1)',  hoverBg: 'rgba(58, 143, 189, 0.95)' },
-  large:   { label: 'L',  legendLabel: 'Large (1.5K–10K)',  tooltipLabel: 'Large',   tooltip: 'Large (1.5K–10K)',  unselectedClass: 'text-orange-600 dark:text-orange-400',  bg: 'rgba(234, 88, 12, 0.75)',   border: 'rgba(234, 88, 12, 1)',   hoverBg: 'rgba(234, 88, 12, 0.95)' },
-  xlarge:  { label: 'XL', legendLabel: 'X-Large (10K+)',    tooltipLabel: 'X-Large', tooltip: 'X-Large (10K+)',    unselectedClass: 'text-rose-600 dark:text-rose-400',      bg: 'rgba(225, 29, 72, 0.75)',   border: 'rgba(225, 29, 72, 1)',   hoverBg: 'rgba(225, 29, 72, 0.95)' },
-  unknown: { label: '?',  legendLabel: 'Unknown',           tooltipLabel: 'Unknown', tooltip: 'Unknown capacity',  unselectedClass: 'text-gray-400 dark:text-gray-500',      bg: 'rgba(156, 163, 175, 0.65)', border: 'rgba(156, 163, 175, 1)', hoverBg: 'rgba(156, 163, 175, 0.8)' },
-}
 
-const LEGEND_TO_TOOLTIP: Record<string, string> = Object.fromEntries(
-  Object.values(CAPACITY_META).map(m => [m.legendLabel, m.tooltipLabel])
-)
-
-const CAPACITY_BUCKETS: CapacityBucket[]             = ['small', 'medium', 'large', 'xlarge', 'unknown']
-const CAPACITY_BUTTON_ORDER: CapacityFilter[]         = ['all', 'small', 'medium', 'large', 'xlarge', 'unknown']
-const CAPACITY_DISPLAY_NAMES: Record<CapacityBucket, string> = {
-  small: 'Small', medium: 'Medium', large: 'Large', xlarge: 'X-Large', unknown: 'Unknown'
-}
 
 // Inline badge styles for venue rows — matches VenueMap.tsx Discover page style
 const CAPACITY_BADGE: Record<string, { bg: string; color: string; label: string }> = {
@@ -72,23 +43,6 @@ const STATE_NAMES: Record<string, string> = {
   RI: 'Rhode Island',  NH: 'New Hampshire', VT: 'Vermont',     ME: 'Maine',
   DE: 'Delaware',      HI: 'Hawaii',      AK: 'Alaska',
 }
-// ── Helper: filter top lists by capacity ─────────────────────
-function filterVenues(venues: TopVenue[], cap: CapacityFilter): TopVenue[] {
-  if (cap === 'all') return venues
-  const catMap: Record<CapacityBucket, string> = {
-    small:   'Small (<500)',
-    medium:  'Medium (500-1.5K)',
-    large:   'Large (1.5K-10K)',
-    xlarge:  'X-Large (10K+)',
-    unknown: '',
-  }
-  return venues.filter(v =>
-    cap === 'unknown'
-      ? v.capacity_category === null
-      : v.capacity_category === catMap[cap as CapacityBucket]
-  )
-}
-
 
 // ── Country code normalizer (RPC returns full names; flags map on ISO codes) ─
 function normalizeCountry(c: string | null): string | null {
@@ -120,7 +74,7 @@ export default function HomeClient({
   const [cityStatsData,    setCityStatsData]    = useState<CityStats[]>(
     () => initialCityStats.map(c => ({ ...c, country: normalizeCountry(c.country) }))
   )
-  const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all')
+
   const [showAllArtists, setShowAllArtists] = useState(false)
   const [showAllVenues,  setShowAllVenues]  = useState(false)
   const [showAllCities,  setShowAllCities]  = useState(false)
@@ -218,8 +172,6 @@ export default function HomeClient({
     }
   }, [initialArtists.length, initialVenues.length])
 
-  const hasActiveFilter = capacityFilter !== 'all'
-
   // ── Province map CTA ─────────────────────────────────────
   const handleProvinceCta = useCallback(() => {
     if (user) {
@@ -229,10 +181,7 @@ export default function HomeClient({
     }
   }, [user, router])
 
-  // ── Clear all ─────────────────────────────────────────────
-  const handleClearAll = useCallback(() => {
-    setCapacityFilter('all')
-  }, [])
+
 
   // ── GP-132: province/state expand toggle ─────────────────
   const toggleProvince = useCallback((state: string) => {
@@ -247,10 +196,7 @@ export default function HomeClient({
 
 
   // ── Filtered venues (capacity applied client-side) ────────
-  const filteredVenues = useMemo(
-    () => filterVenues(venues, capacityFilter),
-    [venues, capacityFilter]
-  )
+  const filteredVenues = venues
 
   // ── GP-159: State-filtered derived data (client-side from map drill-down) ──
   const displayedArtists = useMemo(() => {
@@ -260,9 +206,8 @@ export default function HomeClient({
 
   const stateFilteredVenues = useMemo(() => {
     if (!selectedState) return filteredVenues
-    if (stateVenues === null) return []
-    return filterVenues(stateVenues, capacityFilter)
-  }, [filteredVenues, selectedState, stateVenues, capacityFilter])
+    return stateVenues ?? []
+  }, [filteredVenues, selectedState, stateVenues])
 
   const displayedCities = useMemo(() => {
     if (!selectedState) return cityStatsData
@@ -295,12 +240,9 @@ export default function HomeClient({
   }), [initialStats])
 
   // ── Filter context label ──────────────────────────────────
-  const filterContext = useMemo(() => {
-    const parts: string[] = []
-    if (selectedState)         parts.push(STATE_NAMES[selectedState] ?? selectedState)
-    if (capacityFilter !== 'all') parts.push(`${CAPACITY_DISPLAY_NAMES[capacityFilter as CapacityBucket]} Venues`)
-    return parts.length > 0 ? parts.join(' · ') : null
-  }, [capacityFilter, selectedState])
+  const filterContext = useMemo(() =>
+    selectedState ? (STATE_NAMES[selectedState] ?? selectedState) : null
+  , [selectedState])
 
   // ── Render ────────────────────────────────────────────────
   return (
@@ -323,43 +265,6 @@ export default function HomeClient({
             selectedState={selectedState}
             onStateChange={setSelectedState}
           />
-        </div>
-
-        {/* Filters */}
-        <div className="bg-card rounded-lg shadow-lg p-3 md:p-4 mb-3 md:mb-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
-              {CAPACITY_BUTTON_ORDER.map((k, i) => {
-                const isAll    = k === 'all'
-                const isActive = capacityFilter === k
-                const unselectedClass = isAll ? 'text-muted-foreground' : CAPACITY_META[k as CapacityBucket].unselectedClass
-                const label           = isAll ? 'All Venues' : CAPACITY_META[k as CapacityBucket].label
-                const tooltip         = isAll ? 'All venues' : CAPACITY_META[k as CapacityBucket].tooltip
-                return (
-                  <button
-                    key={k}
-                    onClick={() => setCapacityFilter(k)}
-                    title={tooltip}
-                    className={`px-2 py-1.5 transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
-                      isActive
-                        ? 'bg-primary text-primary-foreground'
-                        : `bg-card ${unselectedClass} hover:bg-muted`
-                    }`}
-                  >
-                    {label}
-                  </button>
-                )
-              })}
-            </div>
-            {hasActiveFilter && (
-              <button
-                onClick={handleClearAll}
-                className="text-xs border border-destructive text-destructive rounded px-2 py-1.5 hover:bg-destructive/10 transition-colors whitespace-nowrap"
-              >
-                Clear All
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Top tables */}
