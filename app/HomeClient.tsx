@@ -4,30 +4,16 @@ import dynamic from 'next/dynamic'
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/app/providers/AuthProvider'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-} from 'chart.js'
-import { Bar } from 'react-chartjs-2'
-import { useTheme } from 'next-themes'
-import type { ChartRow, TopArtist, TopVenue, CityStats, HomeStats, DrillStats } from './page'
+import type { TopArtist, TopVenue, CityStats, HomeStats } from './page'
 import CountryFlag from './components/CountryFlag'
 import AuthModal from './components/AuthModal'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 const ProvinceMap = dynamic(() => import('./ProvinceMap'), { ssr: false })
 
 // ── Types ─────────────────────────────────────────────────────
 type CapacityBucket = 'small' | 'medium' | 'large' | 'xlarge' | 'unknown'
 type CapacityFilter = 'all' | CapacityBucket
-type Decade = 'all' | '1900s' | '1910s' | '1920s' | '1930s' | '1940s' | '1950s' | '1960s' | '1970s' | '1980s' | '1990s' | '2000s' | '2010s' | '2020s'
-
 // ── Capacity metadata (unchanged from original) ───────────────
 const CAPACITY_META: Record<CapacityBucket, {
   label: string
@@ -86,33 +72,6 @@ const STATE_NAMES: Record<string, string> = {
   RI: 'Rhode Island',  NH: 'New Hampshire', VT: 'Vermont',     ME: 'Maine',
   DE: 'Delaware',      HI: 'Hawaii',      AK: 'Alaska',
 }
-const DECADES: Decade[] = ['all', '1900s', '1910s', '1920s', '1930s', '1940s', '1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s']
-const MONTH_NAMES       = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const MONTH_NAMES_FULL  = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-const PRE1960_LABEL     = 'Pre-1960s'
-
-// ── Helper: decade string → RPC p_decade param ────────────────
-function decadeToParam(d: Decade): string | null {
-  if (d === 'all') return null
-  // Always pass the actual decade string (e.g. '1920s') so the RPC
-  // filters to that specific decade. 'pre1960s' is only used by the
-  // all-time chart aggregation bucket label, never for drill-down.
-  return d
-}
-
-// ── Helper: capacity filter applied to ChartRow[] ────────────
-function filterChartRows(rows: ChartRow[], cap: CapacityFilter): ChartRow[] {
-  if (cap === 'all') return rows
-  return rows.map(r => ({
-    ...r,
-    small:   cap === 'small'   ? r.small   : 0,
-    medium:  cap === 'medium'  ? r.medium  : 0,
-    large:   cap === 'large'   ? r.large   : 0,
-    xlarge:  cap === 'xlarge'  ? r.xlarge  : 0,
-    unknown: cap === 'unknown' ? r.unknown : 0,
-  }))
-}
-
 // ── Helper: filter top lists by capacity ─────────────────────
 function filterVenues(venues: TopVenue[], cap: CapacityFilter): TopVenue[] {
   if (cap === 'all') return venues
@@ -143,31 +102,24 @@ function normalizeCountry(c: string | null): string | null {
 // ── Main component ────────────────────────────────────────────
 export default function HomeClient({
   initialStats,
-  initialChart,
   initialArtists,
   initialVenues,
   initialCityStats,
 }: {
   initialStats:     HomeStats
-  initialChart:     ChartRow[]
   initialArtists:   TopArtist[]
   initialVenues:    TopVenue[]
   initialCityStats: CityStats[]
 }) {
   const router = useRouter()
-  const { resolvedTheme } = useTheme()
   const { user } = useAuth()
   const [mounted, setMounted] = useState(false)
 
   // ── View state ────────────────────────────────────────────
-  const [viewMode,         setViewMode]         = useState<'map' | 'chart'>('map')
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [cityStatsData,    setCityStatsData]    = useState<CityStats[]>(
     () => initialCityStats.map(c => ({ ...c, country: normalizeCountry(c.country) }))
   )
-  const [selectedDecade, setSelectedDecade] = useState<Decade>('all')
-  const [selectedYear,   setSelectedYear]   = useState<number | null>(null)
-  const [selectedMonth,  setSelectedMonth]  = useState<number | null>(null)
   const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>('all')
   const [showAllArtists, setShowAllArtists] = useState(false)
   const [showAllVenues,  setShowAllVenues]  = useState(false)
@@ -181,11 +133,10 @@ export default function HomeClient({
   const [stateLoading,      setStateLoading]      = useState(false)
   const stateDrillCache = useRef<Record<string, { artists: TopArtist[]; venues: TopVenue[] }>>({})
   // ── Drill-down data state ─────────────────────────────────
-  const [chartRows,   setChartRows]   = useState<ChartRow[]>(initialChart)
+
   const [artists,     setArtists]     = useState<TopArtist[]>(initialArtists)
   const [venues,      setVenues]      = useState<TopVenue[]>(initialVenues)
-  const [drillStats,  setDrillStats]  = useState<DrillStats | null>(null)
-  const [loading,     setLoading]     = useState(false)
+
 
 
   useEffect(() => { setMounted(true) }, [])
@@ -212,6 +163,8 @@ export default function HomeClient({
     }
 
     const controller = new AbortController()
+    setStateArtists(null)
+    setStateVenues(null)
     setStateLoading(true)
     fetch(`/api/home/state-drill?state=${encodeURIComponent(selectedState)}`, {
       signal: controller.signal,
@@ -252,58 +205,20 @@ export default function HomeClient({
   }, [initialCityStats.length])
 
   // ── Fetch drill-down data ─────────────────────────────────
-  const fetchDrillData = useCallback(async (
-    decade: Decade,
-    year:   number | null,
-    month:  number | null,
-  ) => {
-    const isAllTime = decade === 'all' && year === null && month === null
-
-    if (isAllTime && initialChart.length > 0 && initialArtists.length > 0 && initialVenues.length > 0) {
-      // Restore initial server-fetched data (ISR cache was fully fresh)
-      setChartRows(initialChart)
-      setArtists(initialArtists)
-      setVenues(initialVenues)
-      setDrillStats(null)
-      return
-    }
-    // Fall through to API if any initial data is missing (partial ISR failure)
-
-    setLoading(true)
-    const params = new URLSearchParams()
-    if (decade !== 'all') params.set('decade', decadeToParam(decade) ?? '')
-    if (year  !== null)   params.set('year',   String(year))
-    if (month !== null)   params.set('month',  String(month))
-
-    try {
-      const res  = await fetch(`/api/home/drill?${params.toString()}`)
-      const data = await res.json()
-      setChartRows(data.chart   ?? [])
-      setArtists(data.artists   ?? [])
-      setVenues(data.venues     ?? [])
-      setDrillStats(data.stats  ?? null)
-    } catch (e) {
-      console.error('Drill-down fetch error:', e)
-    } finally {
-      setLoading(false)
-    }
-  }, [initialChart, initialArtists, initialVenues])
-
-  // ── Chart + stats fallback: trigger all-time fetch if ISR cache was stale ──
-  // Covers all partial failure modes: chart, stats, artists, or venues missing
+  // ── ISR fallback: refetch artists/venues if server cache was stale ──
   useEffect(() => {
-    if (
-      initialChart.length === 0   ||
-      initialStats.total_shows === 0 ||
-      initialArtists.length === 0 ||
-      initialVenues.length === 0
-    ) {
-      fetchDrillData('all', null, null)
+    if (initialArtists.length === 0 || initialVenues.length === 0) {
+      fetch('/api/home/drill')
+        .then(r => r.json())
+        .then(data => {
+          if (data.artists?.length) setArtists(data.artists)
+          if (data.venues?.length)  setVenues(data.venues)
+        })
+        .catch(e => console.error('ISR fallback error:', e))
     }
-  }, [initialChart.length, initialStats.total_shows, initialArtists.length, initialVenues.length, fetchDrillData])
+  }, [initialArtists.length, initialVenues.length])
 
-  const isDrilled       = selectedDecade !== 'all' || selectedYear !== null || selectedMonth !== null
-  const hasActiveFilter = isDrilled || capacityFilter !== 'all'
+  const hasActiveFilter = capacityFilter !== 'all'
 
   // ── Province map CTA ─────────────────────────────────────
   const handleProvinceCta = useCallback(() => {
@@ -316,12 +231,8 @@ export default function HomeClient({
 
   // ── Clear all ─────────────────────────────────────────────
   const handleClearAll = useCallback(() => {
-    setSelectedDecade('all')
-    setSelectedYear(null)
-    setSelectedMonth(null)
     setCapacityFilter('all')
-    fetchDrillData('all', null, null)
-  }, [fetchDrillData])
+  }, [])
 
   // ── GP-132: province/state expand toggle ─────────────────
   const toggleProvince = useCallback((state: string) => {
@@ -333,50 +244,7 @@ export default function HomeClient({
     })
   }, [])
 
-  // ── Decade click ─────────────────────────────────────────
-  const handleDecadeClick = useCallback((decade: Decade) => {
-    setSelectedDecade(decade)
-    setSelectedYear(null)
-    setSelectedMonth(null)
-    fetchDrillData(decade, null, null)
-  }, [fetchDrillData])
 
-  // ── Year click (from chart bar click) ────────────────────
-  const handleYearClick = useCallback((year: number, decade: Decade) => {
-    setSelectedDecade(decade)
-    setSelectedYear(year)
-    setSelectedMonth(null)
-    fetchDrillData(decade, year, null)
-  }, [fetchDrillData])
-
-  // ── Month click (from chart bar click in year view) ──────
-  const handleMonthClick = useCallback((monthIndex: number) => {
-    // monthIndex is 0-based (Jan=0); API expects 1-based
-    setSelectedMonth(monthIndex)
-    fetchDrillData(selectedDecade, selectedYear, monthIndex + 1)
-  }, [fetchDrillData, selectedDecade, selectedYear])
-
-  // ── Chart nav prev/next ───────────────────────────────────
-  const handleNavDecade = useCallback((newDecade: Decade) => {
-    setSelectedDecade(newDecade)
-    setSelectedYear(null)
-    setSelectedMonth(null)
-    fetchDrillData(newDecade, null, null)
-  }, [fetchDrillData])
-
-  const handleNavYear = useCallback((newYear: number) => {
-    const newDecade = `${Math.floor(newYear / 10) * 10}s` as Decade
-    setSelectedDecade(newDecade)
-    setSelectedYear(newYear)
-    setSelectedMonth(null)
-    fetchDrillData(newDecade, newYear, null)
-  }, [fetchDrillData])
-
-  // ── Filtered chart rows (capacity applied client-side) ────
-  const filteredChartRows = useMemo(
-    () => filterChartRows(chartRows, capacityFilter),
-    [chartRows, capacityFilter]
-  )
 
   // ── Filtered venues (capacity applied client-side) ────────
   const filteredVenues = useMemo(
@@ -419,167 +287,20 @@ export default function HomeClient({
   }, [cityStatsData])
 
   // ── Stats ─────────────────────────────────────────────────
-  const stats = useMemo(() => {
-    const isDrilled = selectedDecade !== 'all' || selectedYear !== null || selectedMonth !== null
-
-    // All-time view: use server-fetched baseline stats
-    // Drilled view: use exact counts from get_home_drill_stats RPC
-    const totalShows    = isDrilled && drillStats ? drillStats.total_shows    : (initialStats.total_shows    > 0 ? initialStats.total_shows    : drillStats?.total_shows    ?? 0)
-    const uniqueArtists = isDrilled && drillStats ? drillStats.unique_artists : (initialStats.unique_artists > 0 ? initialStats.unique_artists : drillStats?.unique_artists ?? 0)
-    const uniqueVenues  = isDrilled && drillStats ? drillStats.unique_venues  : (initialStats.unique_venues  > 0 ? initialStats.unique_venues  : drillStats?.unique_venues  ?? 0)
-
-    let fourthCard: { label: string; value: string } | null = null
-    if (selectedYear && !selectedMonth) {
-      fourthCard = { label: 'Shows per Month', value: Math.round(totalShows / 12).toLocaleString() }
-    } else if (selectedDecade !== 'all' && !selectedYear) {
-      fourthCard = { label: 'Shows per Year', value: Math.round(totalShows / 10).toLocaleString() }
-    } else if (selectedDecade === 'all' && !selectedYear) {
-      fourthCard = { label: 'Date Range', value: '1900–2026' }
-    }
-
-    return { totalShows, uniqueArtists, uniqueVenues, fourthCard }
-  }, [initialStats, drillStats, selectedYear, selectedMonth, selectedDecade])
-
-  // ── Chart data ────────────────────────────────────────────
-  const chartData = useMemo(() => {
-    if (selectedMonth !== null) return { labels: [], datasets: [] }
-
-    const labels = filteredChartRows.map(r => r.bucket)
-
-    const columnTotals: Record<string, number> = {}
-    filteredChartRows.forEach(r => {
-      columnTotals[r.bucket] = r.small + r.medium + r.large + r.xlarge + r.unknown
-    })
-
-    return {
-      labels,
-      datasets: CAPACITY_BUCKETS.map(k => ({
-        label:                  CAPACITY_META[k].legendLabel,
-        data:                   filteredChartRows.map(r => r[k]),
-        backgroundColor:        CAPACITY_META[k].bg,
-        hoverBackgroundColor:   CAPACITY_META[k].hoverBg,
-        borderColor:            CAPACITY_META[k].border,
-        borderWidth:            0,
-        hoverBorderWidth:       1,
-        stack:                  'stack',
-        columnTotals,
-      }))
-    }
-  }, [filteredChartRows, selectedMonth])
-
-  // ── Chart nav metadata ────────────────────────────────────
-  const chartNav = useMemo(() => {
-    if (selectedMonth !== null && selectedYear) {
-      return { title: `Shows in ${MONTH_NAMES[selectedMonth]} ${selectedYear}`, prev: null, next: null }
-    }
-    if (selectedYear) {
-      const prev = selectedYear - 1
-      const next = selectedYear + 1
-      return {
-        title: `Shows in ${selectedYear}`,
-        prev: prev >= 1900 ? { label: `← ${prev}`, onClick: () => handleNavYear(prev) } : null,
-        next: next <= 2026 ? { label: `${next} →`, onClick: () => handleNavYear(next) } : null,
-      }
-    }
-    if (selectedDecade !== 'all') {
-      const s = parseInt(selectedDecade.substring(0, 4))
-      return {
-        title: `Shows in the ${selectedDecade}`,
-        prev: s - 10 >= 1900 ? { label: `← ${s - 10}s`, onClick: () => handleNavDecade(`${s - 10}s` as Decade) } : null,
-        next: s + 10 <= 2020 ? { label: `${s + 10}s →`, onClick: () => handleNavDecade(`${s + 10}s` as Decade) } : null,
-      }
-    }
-    return { title: 'Shows by Decade', prev: null, next: null }
-  }, [selectedDecade, selectedYear, selectedMonth, handleNavYear, handleNavDecade])
+  const stats = useMemo(() => ({
+    totalShows:    initialStats.total_shows,
+    uniqueArtists: initialStats.unique_artists,
+    uniqueVenues:  initialStats.unique_venues,
+    fourthCard:    { label: 'Date Range', value: '1900–2026' },
+  }), [initialStats])
 
   // ── Filter context label ──────────────────────────────────
   const filterContext = useMemo(() => {
     const parts: string[] = []
-    if (selectedState)                             parts.push(STATE_NAMES[selectedState] ?? selectedState)
-    if (selectedMonth !== null && selectedYear)    parts.push(`${MONTH_NAMES[selectedMonth]} ${selectedYear}`)
-    else if (selectedYear)                         parts.push(selectedYear.toString())
-    else if (selectedDecade !== 'all')             parts.push(selectedDecade)
-    if (capacityFilter !== 'all')                  parts.push(`${CAPACITY_DISPLAY_NAMES[capacityFilter as CapacityBucket]} Venues`)
+    if (selectedState)         parts.push(STATE_NAMES[selectedState] ?? selectedState)
+    if (capacityFilter !== 'all') parts.push(`${CAPACITY_DISPLAY_NAMES[capacityFilter as CapacityBucket]} Venues`)
     return parts.length > 0 ? parts.join(' · ') : null
-  }, [selectedDecade, selectedYear, selectedMonth, capacityFilter, selectedState])
-
-  // ── Chart options ─────────────────────────────────────────
-  const chartOptions = useMemo(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: true,
-        position: 'bottom' as const,
-        labels: {
-          boxWidth: 14,
-          padding:  12,
-          font: { size: 12 },
-          color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.75)',
-        },
-        onClick: () => {}
-      },
-      title: { display: false },
-      tooltip: {
-        mode: 'index' as const,
-        intersect: false,
-        callbacks: {
-          title: (items: any[]) => {
-            if (!items.length) return ''
-            const label = items[0].label
-            if (label === PRE1960_LABEL) return `${PRE1960_LABEL} (1900–1959)`
-            if (selectedYear) {
-              const monthIndex = MONTH_NAMES.indexOf(label)
-              if (monthIndex !== -1) return `${MONTH_NAMES_FULL[monthIndex]} ${selectedYear}`
-            }
-            return label
-          },
-          label: (item: any) => {
-            const dataset      = item.chart.data.datasets[item.datasetIndex]
-            const columnTotals = dataset.columnTotals as Record<string, number>
-            const label        = item.chart.data.labels[item.dataIndex] as string
-            const total        = columnTotals[label] || 0
-            const value        = item.parsed.y
-            if (value === 0) return undefined
-            const pct       = total > 0 ? Math.round((value / total) * 100) : 0
-            const shortLabel = LEGEND_TO_TOOLTIP[item.dataset.label] ?? item.dataset.label
-            return `${shortLabel}: ${pct}%`
-          },
-          footer: (items: any[]) => {
-            if (!items.length) return ''
-            const total = items.reduce((sum: number, item: any) => sum + (item.parsed.y || 0), 0)
-            return `Total: ${total.toLocaleString()} shows`
-          }
-        }
-      }
-    },
-    scales: {
-      x: { stacked: true, grid: { display: false }, border: { display: false } },
-      y: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { display: false }, border: { display: false } }
-    },
-    onClick: (_event: any, elements: any) => {
-      if (!elements.length) return
-      const index = elements[0].index
-      const label = chartData.labels?.[index] as string
-
-      if (selectedYear) {
-        // Year view → clicking a month navigates to browse
-        router.push(`/browse?year=${selectedYear}&month=${index + 1}`)
-      } else if (selectedDecade === 'all') {
-        // All-time view → drill into decade
-        if (label === PRE1960_LABEL) {
-          handleDecadeClick('1950s')
-        } else {
-          handleDecadeClick(label as Decade)
-        }
-      } else {
-        // Decade view → drill into year
-        const year        = filteredChartRows[index]?.sort_key
-        const clickDecade = selectedDecade
-        if (year) handleYearClick(year, clickDecade)
-      }
-    }
-  }), [selectedDecade, selectedYear, chartData, router, resolvedTheme, filteredChartRows, handleDecadeClick, handleYearClick])
+  }, [capacityFilter, selectedState])
 
   // ── Render ────────────────────────────────────────────────
   return (
@@ -588,134 +309,24 @@ export default function HomeClient({
 
         {/* Stats Cards */}
         <div className="grid grid-cols-4 gap-2 md:gap-3 mb-3 md:mb-4">
-          {loading && stats.totalShows === 0 ? (
-            <>
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="bg-card rounded-lg shadow p-2 md:p-4">
-                  <div className="h-3 md:h-4 rounded animate-pulse bg-muted mb-1.5 w-16" />
-                  <div className="h-5 md:h-7 rounded animate-pulse bg-muted w-24" />
-                </div>
-              ))}
-            </>
-          ) : (
-            <>
-              <StatCard label="Shows"   value={stats.totalShows.toLocaleString()} />
-              <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
-              <StatCard label="Venues"  value={stats.uniqueVenues.toLocaleString()} />
-              {stats.fourthCard ? (
-                <StatCard
-                  label={stats.fourthCard.label}
-                  value={stats.fourthCard.value}
-                  compact={stats.fourthCard.label === 'Date Range'}
-                />
-              ) : (
-                <div />
-              )}
-            </>
-          )}
+          <StatCard label="Shows"      value={stats.totalShows.toLocaleString()} />
+          <StatCard label="Artists"    value={stats.uniqueArtists.toLocaleString()} />
+          <StatCard label="Venues"     value={stats.uniqueVenues.toLocaleString()} />
+          <StatCard label="Date Range" value={stats.fourthCard.value} compact />
         </div>
-
-        {/* ── View toggle ────────────────────────────────────────── */}
-        <div className="flex justify-between items-center mb-2 md:mb-3">
-          {selectedState && viewMode === 'chart' ? (
-            <span className="text-xs text-muted-foreground italic">
-              Chart shows all regions
-            </span>
-          ) : <span />}
-          <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
-            <button
-              onClick={() => setViewMode('map')}
-              className={`px-4 py-2 transition-colors ${
-                viewMode === 'map'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-card text-muted-foreground hover:bg-muted'
-              }`}
-            >
-              Map
-            </button>
-            <button
-              onClick={() => setViewMode('chart')}
-              className={`px-4 py-2 transition-colors border-l border-border ${
-                viewMode === 'chart'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-card text-muted-foreground hover:bg-muted'
-              }`}
-            >
-              Chart
-            </button>
-          </div>
-        </div>
-
         {/* ── Province bubble map ────────────────────────────────── */}
-        {viewMode === 'map' && (
-          <div className="bg-card rounded-lg shadow-lg overflow-hidden mb-3 md:mb-4 h-[420px] md:h-[480px]">
-            <ProvinceMap
-              provinces={provinceStats}
-              isAuthenticated={!!user}
-              onCtaClick={handleProvinceCta}
-              selectedState={selectedState}
-              onStateChange={setSelectedState}
-            />
-          </div>
-        )}
-
-        {viewMode === 'chart' && (<>
-
-        {/* Chart nav */}
-        <div className="flex items-center justify-center gap-4 mb-2 min-h-[32px]">
-          {chartNav.prev ? (
-            <button
-              onClick={chartNav.prev.onClick}
-              className="text-primary hover:opacity-80 font-medium text-xs md:text-sm whitespace-nowrap"
-            >
-              {chartNav.prev.label}
-            </button>
-          ) : (
-            <span className="invisible text-xs md:text-sm font-medium whitespace-nowrap select-none">
-              {chartNav.next?.label ?? '​'}
-            </span>
-          )}
-
-          <h2 className="text-xl md:text-2xl font-bold text-foreground whitespace-nowrap">
-            {chartNav.title}
-          </h2>
-
-          {chartNav.next ? (
-            <button
-              onClick={chartNav.next.onClick}
-              className="text-primary hover:opacity-80 font-medium text-xs md:text-sm whitespace-nowrap"
-            >
-              {chartNav.next.label}
-            </button>
-          ) : (
-            <span className="invisible text-xs md:text-sm font-medium whitespace-nowrap select-none">
-              {chartNav.prev?.label ?? '​'}
-            </span>
-          )}
+        <div className="bg-card rounded-lg shadow-lg overflow-hidden mb-3 md:mb-4 h-[500px] md:h-[580px]">
+          <ProvinceMap
+            provinces={provinceStats}
+            isAuthenticated={!!user}
+            onCtaClick={handleProvinceCta}
+            selectedState={selectedState}
+            onStateChange={setSelectedState}
+          />
         </div>
 
-        {/* Chart card */}
-        <div className="bg-card rounded-lg shadow-lg p-4 md:p-4 mb-3 md:mb-4 relative">
-          {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-card/70 rounded-lg z-10">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-            </div>
-          )}
-          <div style={{ height: '320px', cursor: 'pointer' }} className="md:h-[420px]">
-            {selectedMonth !== null ? (
-              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                Select a month from the chart to view individual shows.
-              </div>
-            ) : (
-              <Bar data={chartData} options={chartOptions} />
-            )}
-          </div>
-        </div>
-
-        {/* Filters card */}
-        <div className="bg-card rounded-lg shadow-lg p-3 md:p-4 mb-3 md:mb-4 space-y-3">
-
-          {/* Row 1: Venue size pill + Year dropdown + Clear All */}
+        {/* Filters */}
+        <div className="bg-card rounded-lg shadow-lg p-3 md:p-4 mb-3 md:mb-4">
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex rounded-lg border border-border overflow-hidden text-xs font-semibold">
               {CAPACITY_BUTTON_ORDER.map((k, i) => {
@@ -740,29 +351,6 @@ export default function HomeClient({
                 )
               })}
             </div>
-
-            <select
-              value={selectedYear || ''}
-              onChange={(e) => {
-                const year = e.target.value ? parseInt(e.target.value) : null
-                if (year) {
-                  const decade = `${Math.floor(year / 10) * 10}s` as Decade
-                  setSelectedDecade(decade)
-                  setSelectedYear(year)
-                  setSelectedMonth(null)
-                  fetchDrillData(decade, year, null)
-                } else {
-                  handleClearAll()
-                }
-              }}
-              className="w-28 px-2 py-1 text-xs border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">All Years</option>
-              {Array.from({ length: 127 }, (_, i) => 1900 + i).map(year => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-
             {hasActiveFilter && (
               <button
                 onClick={handleClearAll}
@@ -772,41 +360,7 @@ export default function HomeClient({
               </button>
             )}
           </div>
-
-          <div className="border-t border-border" />
-
-          {/* Row 2: Decade buttons */}
-          <div className="overflow-x-auto -mx-3 px-3 md:-mx-4 md:px-4">
-            <div className="flex gap-2 min-w-max">
-              {DECADES.map((decade) => {
-                const isActive = selectedDecade === decade && !selectedYear && selectedMonth === null
-                const isParentDecade = selectedYear !== null && decade !== 'all' &&
-                  `${Math.floor(selectedYear / 10) * 10}s` === decade
-                return (
-                  <button
-                    key={decade}
-                    onClick={() => handleDecadeClick(decade)}
-                    className={`px-3 md:px-4 py-2 rounded-md text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
-                      isActive
-                        ? 'bg-primary text-primary-foreground'
-                        : isParentDecade
-                        ? 'bg-primary/20 text-primary border border-primary/40'
-                        : 'bg-muted text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {decade === 'all' ? 'All Time' : decade}
-                    {isParentDecade && (
-                      <span className="ml-1 text-[10px] opacity-75">› {selectedYear}</span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
         </div>
-
-        </>)}
 
         {/* Top tables */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
