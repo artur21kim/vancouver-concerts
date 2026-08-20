@@ -4,16 +4,6 @@ import HomeClient from './HomeClient'
 
 export const revalidate = 3600
 
-export type ChartRow = {
-  bucket:   string
-  sort_key: number
-  small:    number
-  medium:   number
-  large:    number
-  xlarge:   number
-  unknown:  number
-}
-
 export type TopArtist = {
   artist_id:    number
   artist_name:  string
@@ -61,22 +51,19 @@ export default async function Home() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  const [statsRes, chartRes, artistsRes, venuesRes, cityStatsRes] = await Promise.all([
+  const [statsRes, artistsRes, venuesRes, cityStatsRes] = await Promise.all([
     supabase.rpc('get_home_stats'),
-    supabase.rpc('get_home_chart_data', { p_decade: null, p_year: null }),
     supabase.rpc('get_home_top_artists', { p_decade: null, p_year: null, p_month: null }),
     supabase.rpc('get_home_top_venues',  { p_decade: null, p_year: null, p_month: null }),
     supabase.rpc('get_overview_city_stats'),
   ])
 
   if (statsRes.error)     console.error('home stats error:',      statsRes.error)
-  if (chartRes.error)     console.error('home chart error:',      chartRes.error)
   if (artistsRes.error)   console.error('home artists error:',    artistsRes.error)
   if (venuesRes.error)    console.error('home venues error:',     venuesRes.error)
   if (cityStatsRes.error) console.error('home city stats error:', cityStatsRes.error)
 
   const stats:     HomeStats   = statsRes.data     ?? { total_shows: 0, unique_artists: 0, unique_venues: 0, min_date: null, max_date: null }
-  const chart:     ChartRow[]  = chartRes.data     ?? []
   const artists:   TopArtist[] = artistsRes.data   ?? []
   const venues:    TopVenue[]  = venuesRes.data     ?? []
   const cityStats: CityStats[] = cityStatsRes.data ?? []
@@ -86,7 +73,6 @@ export default async function Home() {
       <Navigation />
       <HomeClient
         initialStats={stats}
-        initialChart={chart}
         initialArtists={artists}
         initialVenues={venues}
         initialCityStats={cityStats}
