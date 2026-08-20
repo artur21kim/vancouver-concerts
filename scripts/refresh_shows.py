@@ -74,6 +74,7 @@ SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 DEFAULT_CITY = os.getenv("REFRESH_CITY", "Vancouver")
 
 BATCH_SIZE             = 500
+SHOW_BATCH_SIZE        = 200   # smaller than BATCH_SIZE — fact_shows index updates slow as table grows
 VENUE_FUZZY_THRESHOLD  = 0.82
 ARTIST_FUZZY_THRESHOLD = 0.96   # raised from 0.92 — 92-95% range still produced too many false positives
                                  # false positives (distinct artists) to review reliably
@@ -1526,9 +1527,9 @@ def main() -> None:
         for idx, record in enumerate(show_records):
             record["show_id"] = next_show_id + idx
         print(f"  Inserting {len(show_records):,} shows…", end=" ", flush=True)
-        for i in range(0, len(show_records), BATCH_SIZE):
-            sb_insert("fact_shows", show_records[i: i + BATCH_SIZE])
-            inserted += min(BATCH_SIZE, len(show_records) - i)
+        for i in range(0, len(show_records), SHOW_BATCH_SIZE):
+            sb_insert("fact_shows", show_records[i: i + SHOW_BATCH_SIZE])
+            inserted += min(SHOW_BATCH_SIZE, len(show_records) - i)
         print(f"✅  {inserted:,} inserted")
 
     if fuzzy_blocked:
