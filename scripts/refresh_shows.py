@@ -1423,10 +1423,10 @@ def main() -> None:
         next_id = get_max_id("dim_artist", "artist_id") + 1
         records = [
             {
-                "artist_id":              next_id + i,
-                "artist_name":            n,
-                "review_status":          "unverified",
-                **({"musicbrainz_artist_id": mbid} if mbid else {}),
+                "artist_id":             next_id + i,
+                "artist_name":           n,
+                "review_status":         "unverified",
+                "musicbrainz_artist_id": mbid or None,
             }
             for i, (n, mbid) in enumerate(genuinely_new_artists.items())
         ]
