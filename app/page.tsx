@@ -2,7 +2,7 @@ import Navigation from './components/Navigation'
 import { createClient } from '@supabase/supabase-js'
 import HomeClient from './HomeClient'
 
-export const revalidate = 3600
+export const revalidate = 600
 
 export type TopArtist = {
   artist_id:    number
