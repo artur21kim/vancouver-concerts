@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic'
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/app/providers/AuthProvider'
-import type { TopArtist, TopVenue, CityStats, HomeStats } from './page'
+import type { TopArtist, TopVenue, CityStats, HomeStats, DrillStats } from './page'
 import CountryFlag from './components/CountryFlag'
 import AuthModal from './components/AuthModal'
 
@@ -85,8 +85,9 @@ export default function HomeClient({
   const [stateArtists,      setStateArtists]      = useState<TopArtist[] | null>(null)
   const [stateVenues,       setStateVenues]       = useState<TopVenue[]  | null>(null)
   const [stateLoading,      setStateLoading]      = useState(false)
-  const stateDrillCache = useRef<Record<string, { artists: TopArtist[]; venues: TopVenue[] }>>({})
+  const stateDrillCache = useRef<Record<string, { artists: TopArtist[]; venues: TopVenue[]; stats: DrillStats | null }>>({})
   // ── Drill-down data state ─────────────────────────────────
+  const [drillStats, setDrillStats] = useState<DrillStats | null>(null)
 
   const [artists,     setArtists]     = useState<TopArtist[]>(initialArtists)
   const [venues,      setVenues]      = useState<TopVenue[]>(initialVenues)
@@ -104,6 +105,7 @@ export default function HomeClient({
     if (!selectedState) {
       setStateArtists(null)
       setStateVenues(null)
+      setDrillStats(null)
       setStateLoading(false)
       return
     }
@@ -113,23 +115,27 @@ export default function HomeClient({
     if (cached) {
       setStateArtists(cached.artists)
       setStateVenues(cached.venues)
+      setDrillStats(cached.stats)
       return
     }
 
     const controller = new AbortController()
     setStateArtists(null)
     setStateVenues(null)
+    setDrillStats(null)
     setStateLoading(true)
-    fetch(`/api/home/state-drill?state=${encodeURIComponent(selectedState)}`, {
-      signal: controller.signal,
-    })
-      .then(r => r.json())
-      .then(data => {
-        const artists = data.artists ?? []
-        const venues  = data.venues  ?? []
-        stateDrillCache.current[selectedState] = { artists, venues }
+    Promise.all([
+      fetch(`/api/home/state-drill?state=${encodeURIComponent(selectedState)}`, { signal: controller.signal }).then(r => r.json()),
+      fetch(`/api/home/state-stats?state=${encodeURIComponent(selectedState)}`, { signal: controller.signal }).then(r => r.json()),
+    ])
+      .then(([drillData, statsData]) => {
+        const artists = drillData.artists ?? []
+        const venues  = drillData.venues  ?? []
+        const stats   = statsData.stats   ?? null
+        stateDrillCache.current[selectedState] = { artists, venues, stats }
         setStateArtists(artists)
         setStateVenues(venues)
+        setDrillStats(stats)
       })
       .catch(e => { if (e.name !== 'AbortError') console.error('[HomeClient] state-drill error:', e) })
       .finally(() => setStateLoading(false))
@@ -231,13 +237,35 @@ export default function HomeClient({
       .sort((a, b) => b.total - a.total)
   }, [cityStatsData])
 
-  // ── Stats ─────────────────────────────────────────────────
-  const stats = useMemo(() => ({
-    totalShows:    initialStats.total_shows,
-    uniqueArtists: initialStats.unique_artists,
-    uniqueVenues:  initialStats.unique_venues,
-    fourthCard:    { label: 'Date Range', value: '1900–2026' },
-  }), [initialStats])
+  // ── Global date range derived from ISR-fetched min/max dates ──
+  const globalDateRange = useMemo(() => {
+    const min = initialStats.min_date ? initialStats.min_date.slice(0, 4) : '1900'
+    const max = initialStats.max_date ? initialStats.max_date.slice(0, 4) : '2026'
+    return `${min}–${max}`
+  }, [initialStats.min_date, initialStats.max_date])
+
+  // ── Stats (global or state drill-down) ────────────────────
+  const stats = useMemo(() => {
+    if (drillStats) {
+      const dateRange = (drillStats.min_year != null && drillStats.max_year != null)
+        ? `${drillStats.min_year}–${drillStats.max_year}`
+        : globalDateRange
+      return {
+        totalShows:    drillStats.total_shows,
+        uniqueArtists: drillStats.unique_artists,
+        uniqueVenues:  drillStats.unique_venues,
+        uniqueCities:  drillStats.unique_cities,
+        dateRange,
+      }
+    }
+    return {
+      totalShows:    initialStats.total_shows,
+      uniqueArtists: initialStats.unique_artists,
+      uniqueVenues:  initialStats.unique_venues,
+      uniqueCities:  cityStatsData.length,
+      dateRange:     globalDateRange,
+    }
+  }, [drillStats, initialStats, cityStatsData.length, globalDateRange])
 
   // ── Filter context label ──────────────────────────────────
   const filterContext = useMemo(() =>
@@ -250,11 +278,11 @@ export default function HomeClient({
       <div className="max-w-7xl mx-auto">
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-4 gap-2 md:gap-3 mb-3 md:mb-4">
-          <StatCard label="Shows"      value={stats.totalShows.toLocaleString()} />
-          <StatCard label="Artists"    value={stats.uniqueArtists.toLocaleString()} />
-          <StatCard label="Venues"     value={stats.uniqueVenues.toLocaleString()} />
-          <StatCard label="Date Range" value={stats.fourthCard.value} compact />
+        <div className={`grid grid-cols-4 gap-2 md:gap-3 mb-3 md:mb-4 transition-opacity duration-300${stateLoading ? ' opacity-50' : ''}`}>
+          <StatCard label="Shows"   value={stats.totalShows.toLocaleString()}    subtitle={stats.dateRange} />
+          <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
+          <StatCard label="Venues"  value={stats.uniqueVenues.toLocaleString()}  />
+          <StatCard label="Cities"  value={stats.uniqueCities.toLocaleString()}  />
         </div>
         {/* ── Province bubble map ────────────────────────────────── */}
         <div className="bg-card rounded-lg shadow-lg overflow-hidden mb-3 md:mb-4 h-[500px] md:h-[580px]">
@@ -557,11 +585,14 @@ export default function HomeClient({
   )
 }
 
-function StatCard({ label, value, compact = false }: { label: string; value: string; compact?: boolean }) {
+function StatCard({ label, value, subtitle, compact = false }: { label: string; value: string; subtitle?: string; compact?: boolean }) {
   return (
     <div className="bg-card rounded-lg shadow p-2 md:p-4">
       <p className="text-[10px] md:text-sm text-muted-foreground mb-0.5 md:mb-1 leading-tight">{label}</p>
       <p className={`${compact ? 'text-xs' : 'text-base'} md:text-2xl font-bold text-foreground whitespace-nowrap`}>{value}</p>
+      {subtitle && (
+        <p className="text-[9px] md:text-xs text-muted-foreground mt-0.5 leading-tight">{subtitle}</p>
+      )}
     </div>
   )
 }

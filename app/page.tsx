@@ -43,6 +43,9 @@ export type DrillStats = {
   total_shows:    number
   unique_artists: number
   unique_venues:  number
+  unique_cities:  number
+  min_year:       number | null
+  max_year:       number | null
 }
 
 export default async function Home() {
