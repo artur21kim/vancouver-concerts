@@ -244,7 +244,7 @@ export default function HomeClient({
     return `${min}–${max}`
   }, [initialStats.min_date, initialStats.max_date])
 
-  // ── Stats (global or state drill-down) ────────────────────
+  // ── Stats (global, state RPC, or client-side state fallback) ──
   const stats = useMemo(() => {
     if (drillStats) {
       const dateRange = (drillStats.min_year != null && drillStats.max_year != null)
@@ -258,6 +258,19 @@ export default function HomeClient({
         dateRange,
       }
     }
+    // Client-side fallback: when state selected but RPC is slow/unavailable,
+    // shows + cities are derived from cityStatsData; artists/venues fall back to global
+    if (selectedState) {
+      const stateCities     = cityStatsData.filter(c => c.state === selectedState)
+      const stateTotalShows = stateCities.reduce((sum, c) => sum + Number(c.show_count), 0)
+      return {
+        totalShows:    stateTotalShows,
+        uniqueArtists: initialStats.unique_artists,
+        uniqueVenues:  initialStats.unique_venues,
+        uniqueCities:  stateCities.length,
+        dateRange:     globalDateRange,
+      }
+    }
     return {
       totalShows:    initialStats.total_shows,
       uniqueArtists: initialStats.unique_artists,
@@ -265,7 +278,7 @@ export default function HomeClient({
       uniqueCities:  cityStatsData.length,
       dateRange:     globalDateRange,
     }
-  }, [drillStats, initialStats, cityStatsData.length, globalDateRange])
+  }, [drillStats, initialStats, cityStatsData, selectedState, globalDateRange])
 
   // ── Filter context label ──────────────────────────────────
   const filterContext = useMemo(() =>
@@ -585,14 +598,16 @@ export default function HomeClient({
   )
 }
 
-function StatCard({ label, value, subtitle, compact = false }: { label: string; value: string; subtitle?: string; compact?: boolean }) {
+function StatCard({ label, value, subtitle }: { label: string; value: string; subtitle?: string }) {
   return (
     <div className="bg-card rounded-lg shadow p-2 md:p-4">
       <p className="text-[10px] md:text-sm text-muted-foreground mb-0.5 md:mb-1 leading-tight">{label}</p>
-      <p className={`${compact ? 'text-xs' : 'text-base'} md:text-2xl font-bold text-foreground whitespace-nowrap`}>{value}</p>
-      {subtitle && (
-        <p className="text-[9px] md:text-xs text-muted-foreground mt-0.5 leading-tight">{subtitle}</p>
-      )}
+      <div className="flex items-baseline gap-1.5">
+        <p className="text-base md:text-2xl font-bold text-foreground whitespace-nowrap">{value}</p>
+        {subtitle && (
+          <span className="hidden sm:block text-[9px] md:text-xs text-muted-foreground opacity-60 whitespace-nowrap">{subtitle}</span>
+        )}
+      </div>
     </div>
   )
 }
