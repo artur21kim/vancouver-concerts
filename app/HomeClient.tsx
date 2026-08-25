@@ -292,13 +292,13 @@ export default function HomeClient({
 
         {/* Stats Cards */}
         <div className={`grid grid-cols-4 gap-2 md:gap-3 mb-3 md:mb-4 transition-opacity duration-300${stateLoading ? ' opacity-50' : ''}`}>
-          <StatCard label="Shows"   value={stats.totalShows.toLocaleString()}    subtitle={stats.dateRange} />
+          <StatCard label="Shows"   value={stats.totalShows.toLocaleString()} />
           <StatCard label="Artists" value={stats.uniqueArtists.toLocaleString()} />
           <StatCard label="Venues"  value={stats.uniqueVenues.toLocaleString()}  />
           <StatCard label="Cities"  value={stats.uniqueCities.toLocaleString()}  />
         </div>
         {/* ── Province bubble map ────────────────────────────────── */}
-        <div className="bg-card rounded-lg shadow-lg overflow-hidden mb-3 md:mb-4 h-[500px] md:h-[580px]">
+        <div className="relative bg-card rounded-lg shadow-lg overflow-hidden mb-3 md:mb-4 h-[500px] md:h-[580px]">
           <ProvinceMap
             provinces={provinceStats}
             isAuthenticated={!!user}
@@ -306,6 +306,15 @@ export default function HomeClient({
             selectedState={selectedState}
             onStateChange={setSelectedState}
           />
+          {/* Date range pill — top-centre of map, above Leaflet controls */}
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1001] pointer-events-none">
+            <span
+              className="text-[10px] md:text-xs font-medium px-3 py-1 rounded-full shadow"
+              style={{ backgroundColor: 'rgba(0,0,0,0.45)', color: 'rgba(255,255,255,0.85)' }}
+            >
+              {stats.dateRange}
+            </span>
+          </div>
         </div>
 
         {/* Top tables */}
