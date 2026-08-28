@@ -305,18 +305,8 @@ export default function HomeClient({
             onCtaClick={handleProvinceCta}
             selectedState={selectedState}
             onStateChange={setSelectedState}
+            dateRange={stats.dateRange}
           />
-          {/* Date range pill — top-centre of map, matching ProvinceMap state label style */}
-          <div className="absolute top-[10px] left-1/2 -translate-x-1/2 z-[1001] pointer-events-none">
-            <span style={{
-              background: 'rgba(15,23,42,0.72)', color: '#e2e8f0',
-              borderRadius: 5, padding: '4px 9px',
-              fontSize: 12, fontWeight: 600,
-              backdropFilter: 'blur(4px)',
-            }}>
-              {stats.dateRange}
-            </span>
-          </div>
         </div>
 
         {/* Top tables */}

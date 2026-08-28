@@ -188,12 +188,14 @@ export default function ProvinceMap({
   onCtaClick,
   selectedState,
   onStateChange,
+  dateRange = '1900–2027',
 }: {
   provinces:        ProvinceData[]
   isAuthenticated?: boolean
   onCtaClick?:      () => void
   selectedState:    string | null
   onStateChange:    (s: string | null) => void
+  dateRange?:       string
 }) {
 
   // Province bubble sizing
@@ -232,25 +234,48 @@ export default function ProvinceMap({
   return (
     <div className="relative h-full">
 
-      {/* Back button + province label — overlaid on map when drilled in */}
-      {selectedState && (
-        <div
-          style={{ position: 'absolute', top: 10, right: 10, zIndex: 500,
-            display: 'flex', alignItems: 'center', gap: 6, pointerEvents: 'auto' }}
-        >
+      {/* Centered pill strip — always visible, adapts between global and drilled state */}
+      <div style={{
+        position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)',
+        zIndex: 500, display: 'flex', alignItems: 'center', gap: 6,
+        pointerEvents: 'auto', whiteSpace: 'nowrap',
+      }}>
+        {/* Left pill: 🌐 Global (label-only) or State/Province name */}
+        {selectedState ? (
           <span style={{
             background: 'rgba(15,23,42,0.72)', color: '#e2e8f0',
             borderRadius: 5, padding: '4px 9px', fontSize: 12, fontWeight: 600,
-            backdropFilter: 'blur(4px)',
+            backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', gap: 5,
           }}>
             {stateName}
             {selectedProvince?.country && (
               <CountryFlag
                 code={selectedProvince.country}
-                className="inline-block w-3.5 h-auto rounded-[1px] align-[-1px] ml-1.5"
+                className="inline-block w-3.5 h-auto rounded-[1px] align-[-1px]"
               />
             )}
           </span>
+        ) : (
+          <span style={{
+            background: 'rgba(15,23,42,0.60)', color: '#cbd5e1',
+            borderRadius: 5, padding: '4px 9px', fontSize: 12, fontWeight: 600,
+            backdropFilter: 'blur(4px)', cursor: 'default', userSelect: 'none',
+          }}>
+            🌐 Global
+          </span>
+        )}
+
+        {/* Center pill: date range */}
+        <span style={{
+          background: 'rgba(15,23,42,0.72)', color: '#e2e8f0',
+          borderRadius: 5, padding: '4px 9px', fontSize: 12, fontWeight: 600,
+          backdropFilter: 'blur(4px)', cursor: 'default', userSelect: 'none',
+        }}>
+          {dateRange}
+        </span>
+
+        {/* Right pill: ← All Regions (drilldown only) */}
+        {selectedState && (
           <button
             onClick={() => onStateChange(null)}
             style={{
@@ -262,8 +287,8 @@ export default function ProvinceMap({
           >
             ← All Regions
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       <MapContainer
         center={NA_CENTER}
