@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useEffect } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import { divIcon } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -198,6 +198,43 @@ export default function ProvinceMap({
   dateRange?:       string
 }) {
 
+  // ── My Region geolocation ────────────────────────────────────────────────
+  const [geoState, setGeoState] = useState<'idle' | 'locating' | 'notfound'>('idle')
+
+  const handleMyRegion = () => {
+    if (geoState === 'locating') return
+    setGeoState('locating')
+
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords: { latitude: lat, longitude: lng } }) => {
+        try {
+          const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+          const res   = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=region&access_token=${token}`
+          )
+          const data      = await res.json()
+          const shortCode = data.features?.[0]?.properties?.short_code as string | undefined
+          // shortCode is like 'US-NY' or 'CA-BC' — strip country prefix
+          const stateCode = shortCode?.split('-').slice(1).join('-')
+          if (stateCode && STATE_NAMES[stateCode]) {
+            setGeoState('idle')
+            onStateChange(stateCode)
+          } else {
+            setGeoState('notfound')
+            setTimeout(() => setGeoState('idle'), 2000)
+          }
+        } catch {
+          setGeoState('notfound')
+          setTimeout(() => setGeoState('idle'), 2000)
+        }
+      },
+      () => {
+        // Permission denied or unavailable — silently reset
+        setGeoState('idle')
+      }
+    )
+  }
+
   // Province bubble sizing
   const { minTotal, maxTotal } = useMemo(() => {
     const totals = provinces.filter(p => p.total > 0).map(p => p.total)
@@ -273,6 +310,28 @@ export default function ProvinceMap({
         }}>
           {dateRange}
         </span>
+
+        {/* My Region button — global view only */}
+        {!selectedState && (
+          <button
+            onClick={handleMyRegion}
+            disabled={geoState === 'locating'}
+            style={{
+              background: geoState === 'notfound' ? 'rgba(100,116,139,0.80)' : TEAL,
+              color: '#fff', border: 'none',
+              borderRadius: 5, padding: '4px 10px',
+              fontSize: 12, fontWeight: 700,
+              cursor: geoState === 'locating' ? 'default' : 'pointer',
+              opacity: geoState === 'locating' ? 0.75 : 1,
+              boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
+              transition: 'background 0.15s, opacity 0.15s',
+            }}
+          >
+            {geoState === 'idle'     && '📍 My Region'}
+            {geoState === 'locating' && '⏳ Locating...'}
+            {geoState === 'notfound' && '📍 Not available'}
+          </button>
+        )}
 
         {/* Right pill: ← All Regions (drilldown only) */}
         {selectedState && (
