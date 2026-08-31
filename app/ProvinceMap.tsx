@@ -328,7 +328,7 @@ export default function ProvinceMap({
           {dateRange}
         </span>
 
-        {/* My Region button — global view only; outlined to read as invitation not status */}
+        {/* My Region button — global view only */}
         {!selectedState && (
           <button
             onClick={handleMyRegion}
@@ -338,8 +338,7 @@ export default function ProvinceMap({
               color: '#fff', border: 'none',
               borderRadius: 5, padding: '4px 10px',
               fontSize: 12, fontWeight: 700,
-              cursor: geoState === 'locating' ? 'default' : 'pointer',
-              opacity: geoState === 'locating' ? 0.75 : 1,
+              cursor: geoState === 'locating' ? 'not-allowed' : 'pointer',
               boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
               transition: 'background 0.15s, opacity 0.15s',
             }}
