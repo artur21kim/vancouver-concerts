@@ -334,15 +334,14 @@ export default function ProvinceMap({
             onClick={handleMyRegion}
             disabled={geoState === 'locating'}
             style={{
-              background: 'transparent',
-              color: (geoState === 'notfound' || geoState === 'denied') ? 'rgba(100,116,139,0.85)' : TEAL,
-              border: `1.5px solid ${(geoState === 'notfound' || geoState === 'denied') ? 'rgba(100,116,139,0.55)' : TEAL}`,
-              borderRadius: 5, padding: '3px 9px',
+              background: (geoState === 'notfound' || geoState === 'denied') ? 'rgba(100,116,139,0.80)' : TEAL,
+              color: '#fff', border: 'none',
+              borderRadius: 5, padding: '4px 10px',
               fontSize: 12, fontWeight: 700,
               cursor: geoState === 'locating' ? 'default' : 'pointer',
-              opacity: geoState === 'locating' ? 0.6 : 1,
-              backdropFilter: 'blur(4px)',
-              transition: 'color 0.15s, border-color 0.15s, opacity 0.15s',
+              opacity: geoState === 'locating' ? 0.75 : 1,
+              boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
+              transition: 'background 0.15s, opacity 0.15s',
             }}
           >
             {geoState === 'idle'     && '📍 Find My Region'}
