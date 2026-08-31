@@ -208,14 +208,30 @@ export default function ProvinceMap({
     navigator.geolocation.getCurrentPosition(
       async ({ coords: { latitude: lat, longitude: lng } }) => {
         try {
-          const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-          const res   = await fetch(
-            `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=region&access_token=${token}`
+          const token   = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+          const res     = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=region&language=en&access_token=${token}`
           )
-          const data      = await res.json()
-          const shortCode = data.features?.[0]?.properties?.short_code as string | undefined
-          // shortCode is like 'US-NY' or 'CA-BC' — strip country prefix
-          const stateCode = shortCode?.split('-').slice(1).join('-')
+          const data    = await res.json()
+          const feature = data.features?.[0]
+
+          // Path 1: short_code (e.g. 'US-NY' -> 'NY', 'CA-BC' -> 'BC')
+          let stateCode: string | undefined
+          const shortCode = (feature?.properties?.short_code ?? feature?.short_code) as string | undefined
+          if (shortCode?.includes('-')) {
+            stateCode = shortCode.split('-').slice(1).join('-')
+          }
+
+          // Path 2: match feature text against STATE_NAMES values
+          if (!stateCode || !STATE_NAMES[stateCode]) {
+            const text = feature?.text as string | undefined
+            if (text) {
+              stateCode = Object.entries(STATE_NAMES).find(
+                ([, name]) => name.toLowerCase() === text.toLowerCase()
+              )?.[0]
+            }
+          }
+
           if (stateCode && STATE_NAMES[stateCode]) {
             setGeoState('idle')
             onStateChange(stateCode)
@@ -229,7 +245,7 @@ export default function ProvinceMap({
         }
       },
       () => {
-        // Permission denied or unavailable — silently reset
+        // Permission denied or unavailable -- silently reset
         setGeoState('idle')
       }
     )
@@ -311,20 +327,21 @@ export default function ProvinceMap({
           {dateRange}
         </span>
 
-        {/* My Region button — global view only */}
+        {/* My Region button — global view only; outlined to read as invitation not status */}
         {!selectedState && (
           <button
             onClick={handleMyRegion}
             disabled={geoState === 'locating'}
             style={{
-              background: geoState === 'notfound' ? 'rgba(100,116,139,0.80)' : TEAL,
-              color: '#fff', border: 'none',
-              borderRadius: 5, padding: '4px 10px',
+              background: 'transparent',
+              color: geoState === 'notfound' ? 'rgba(100,116,139,0.85)' : TEAL,
+              border: `1.5px solid ${geoState === 'notfound' ? 'rgba(100,116,139,0.55)' : TEAL}`,
+              borderRadius: 5, padding: '3px 9px',
               fontSize: 12, fontWeight: 700,
               cursor: geoState === 'locating' ? 'default' : 'pointer',
-              opacity: geoState === 'locating' ? 0.75 : 1,
-              boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
-              transition: 'background 0.15s, opacity 0.15s',
+              opacity: geoState === 'locating' ? 0.6 : 1,
+              backdropFilter: 'blur(4px)',
+              transition: 'color 0.15s, border-color 0.15s, opacity 0.15s',
             }}
           >
             {geoState === 'idle'     && '📍 My Region'}
