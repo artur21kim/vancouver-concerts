@@ -1192,6 +1192,9 @@ def main() -> None:
                     help="State/province code (e.g. BC, WA, ON)")
     ap.add_argument("--country",        required=True,
                     help="Full country name (e.g. Canada, 'United States')")
+    ap.add_argument("--from-line",      type=int, default=0,
+                    help="Skip the first N data rows (excluding header). Use to process only rows "
+                         "appended since the last run, e.g. --from-line 228432.")
     args = ap.parse_args()
 
     # Expand ISO country codes to full names used in setlist.fm venue strings
@@ -1209,6 +1212,8 @@ def main() -> None:
     print(f"Started:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Input:    {args.input}")
     print(f"Location: {args.city}, {args.state}, {args.country}")
+    if args.from_line:
+        print(f"From line:{args.from_line:,}  (skipping earlier rows)")
     mode = "DRY RUN" if args.dry_run else ("LIVE + interactive review" if interactive else "LIVE (non-interactive)")
     print(f"Mode:     {mode}")
     print("=" * 64)
@@ -1216,7 +1221,12 @@ def main() -> None:
     # ── 1. Load & parse ──────────────────────────────────────────────────────
     print("\nLoading input file…")
     raw_rows = load_file(args.input)
-    print(f"  {len(raw_rows):,} raw rows read")
+    total_in_file = len(raw_rows)
+    if args.from_line:
+        raw_rows = raw_rows[args.from_line:]
+        print(f"  {total_in_file:,} raw rows in file  |  skipping first {args.from_line:,}  |  {len(raw_rows):,} rows to process")
+    else:
+        print(f"  {total_in_file:,} raw rows read")
 
     print("\nParsing rows…")
     parsed:    list[dict]   = []
