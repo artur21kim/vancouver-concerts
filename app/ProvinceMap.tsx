@@ -332,21 +332,19 @@ export default function ProvinceMap({
         {!selectedState && (
           <button
             onClick={handleMyRegion}
-            disabled={geoState === 'locating'}
             style={{
-              background: (geoState === 'notfound' || geoState === 'denied') ? 'rgba(100,116,139,0.80)' : TEAL,
+              background: geoState === 'notfound' || geoState === 'denied'
+                ? 'rgba(100,116,139,0.80)' : TEAL,
               color: '#fff', border: 'none',
               borderRadius: 5, padding: '4px 10px',
-              fontSize: 12, fontWeight: 700,
-              cursor: geoState === 'locating' ? 'not-allowed' : 'pointer',
+              fontSize: 12, fontWeight: 700, cursor: 'pointer',
               boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
-              transition: 'background 0.15s, opacity 0.15s',
             }}
           >
-            {geoState === 'idle'     && '📍 Find My Region'}
-            {geoState === 'locating' && '⏳ Locating...'}
-            {geoState === 'notfound' && '📍 Not available'}
-            {geoState === 'denied'   && '📍 Location blocked'}
+            {geoState === 'idle'     ? '📍 Find My Region'  :
+             geoState === 'locating' ? '⏳ Locating...'      :
+             geoState === 'denied'   ? '📍 Location blocked' :
+                                       '📍 Not available'}
           </button>
         )}
 
