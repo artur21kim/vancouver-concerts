@@ -199,7 +199,7 @@ export default function ProvinceMap({
 }) {
 
   // ── My Region geolocation ────────────────────────────────────────────────
-  const [geoState, setGeoState] = useState<'idle' | 'locating' | 'notfound'>('idle')
+  const [geoState, setGeoState] = useState<'idle' | 'locating' | 'notfound' | 'denied'>('idle')
 
   const handleMyRegion = () => {
     if (geoState === 'locating') return
@@ -245,8 +245,9 @@ export default function ProvinceMap({
         }
       },
       () => {
-        // Permission denied or unavailable -- silently reset
-        setGeoState('idle')
+        // Permission denied or unavailable — show brief hint, then reset
+        setGeoState('denied')
+        setTimeout(() => setGeoState('idle'), 2500)
       }
     )
   }
@@ -334,8 +335,8 @@ export default function ProvinceMap({
             disabled={geoState === 'locating'}
             style={{
               background: 'transparent',
-              color: geoState === 'notfound' ? 'rgba(100,116,139,0.85)' : TEAL,
-              border: `1.5px solid ${geoState === 'notfound' ? 'rgba(100,116,139,0.55)' : TEAL}`,
+              color: (geoState === 'notfound' || geoState === 'denied') ? 'rgba(100,116,139,0.85)' : TEAL,
+              border: `1.5px solid ${(geoState === 'notfound' || geoState === 'denied') ? 'rgba(100,116,139,0.55)' : TEAL}`,
               borderRadius: 5, padding: '3px 9px',
               fontSize: 12, fontWeight: 700,
               cursor: geoState === 'locating' ? 'default' : 'pointer',
@@ -344,9 +345,10 @@ export default function ProvinceMap({
               transition: 'color 0.15s, border-color 0.15s, opacity 0.15s',
             }}
           >
-            {geoState === 'idle'     && '📍 My Region'}
+            {geoState === 'idle'     && '📍 Find My Region'}
             {geoState === 'locating' && '⏳ Locating...'}
             {geoState === 'notfound' && '📍 Not available'}
+            {geoState === 'denied'   && '📍 Location blocked'}
           </button>
         )}
 
