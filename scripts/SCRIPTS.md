@@ -13,6 +13,7 @@ All data pipeline and enrichment scripts live in `vancouver-concerts/scripts/`.
 | `find_secondary_cities.py` | Discover additional cities in a province/state by show volume | Manual | One-off per region | `SETLIST_API_KEY` |
 | `musicbrainz_artist_enrich.py` | Enrich `dim_artist` with MBIDs, official website URLs, artist type, and life-span years | Manual (auto-trigger planned — GP-97) | Post-ingestion | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `comedian_enrich.py` | Enrich `dim_artist` with `comedy_type='standup'` and birth/death years via Dead Frog comedian database fuzzy-match | Manual | One-off | `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `kexp_enrich.py` | Enrich `dim_artist` with KEXP Full Performance YouTube URLs and session counts via fuzzy name match | Manual | After each Octoparse scrape | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `musicbrainz_venue_enrich.py` | Enrich `dim_venue` with MBIDs, open/close dates, lat/long, and URLs | Manual | Post-ingestion, per city catch-up | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `wikidata_capacity_enrich.py` | Populate `dim_venue.capacity` via Wikidata P1083 (max capacity), using `musicbrainz_place_id` as lookup key | Manual | Post-MB-enrichment, per city catch-up | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `tm_enrichment/tm_artist_enrich.py` | Populate `dim_artist.tm_attraction_id` via TM `/v2/attractions`; backfills `spotify_artist_id` and `musicbrainz_artist_id` from TM `externalLinks` when not already set. Daily cap: 4,900 requests (TM limit 5,000). | Manual | Post-ingestion, per city then full overnight run | `TM_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
@@ -145,6 +146,37 @@ WHERE artist_name IN ('Flight of the Conchords', 'Tim Minchin', 'Stephen Lynch',
 
 ---
 
+### `kexp_enrich.py`
+Fuzzy-matches KEXP Full Performance YouTube playlist entries against `dim_artist.artist_name`. Writes `kexp_url` (most recent session) and `kexp_session_count` to `dim_artist`.
+
+Individual song-level videos (e.g. "HAM - Partýbær (Live on KEXP)") are automatically skipped — they don't match the Full Performance title pattern. Artists with multiple full sessions keep the most recently posted URL (playlist is ordered newest-first).
+
+**Prerequisites — run schema migration once in Supabase SQL editor:**
+```sql
+ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS kexp_url TEXT;
+ALTER TABLE dim_artist ADD COLUMN IF NOT EXISTS kexp_session_count SMALLINT;
+```
+
+**Octoparse scrape:** Export the KEXP Full Performance YouTube playlist at `https://www.youtube.com/playlist?list=PLUh4W61bt_K6tflBpjWgnXLpyuu6EbNTW`. Save the XLSX to `exports/kexp_full_performance.xlsx`.
+
+```bash
+# Preflight dry run (no DB writes):
+python scripts/kexp_enrich.py --input exports/kexp_full_performance.xlsx
+
+# Live run:
+python scripts/kexp_enrich.py --input exports/kexp_full_performance.xlsx --live
+
+# Lower threshold (default 0.92):
+python scripts/kexp_enrich.py --input exports/kexp_full_performance.xlsx --threshold 0.90 --live
+```
+
+**Threshold:** Accept >= 0.92 (auto); 0.85–0.92 → review CSV; < 0.85 → no match.  
+**Output:** `exports/pipeline_reviews/kexp_review_YYYY-MM-DD.csv` — borderline matches for manual SQL verification before accepting.  
+**Re-runs:** Safe to re-run after each Octoparse scrape. Always overwrites with most recent session URL.  
+**Prerequisites:** `pip install rapidfuzz openpyxl supabase python-dotenv --break-system-packages`
+
+---
+
 ### `musicbrainz_venue_enrich.py`
 Looks up MBIDs, open/close dates, coordinates, and official URLs for venues in `dim_venue`.
 
@@ -259,7 +291,7 @@ Each script subfolder has its own `.env` file (gitignored). Copy `.env.example` 
 | `SETLIST_API_KEY` | `fetch_setlist_api.py`, `find_secondary_cities.py` |
 | `SUPABASE_URL` | All Supabase-connected scripts |
 | `SUPABASE_SERVICE_KEY` | `refresh_shows.py`, `nominatim_enrich.py`, `tm_enrichment.py` |
-| `SUPABASE_SERVICE_ROLE_KEY` | `musicbrainz_artist_enrich.py`, `comedian_enrich.py`, `musicbrainz_venue_enrich.py`, `wikidata_capacity_enrich.py` |
+| `SUPABASE_SERVICE_ROLE_KEY` | `musicbrainz_artist_enrich.py`, `comedian_enrich.py`, `musicbrainz_venue_enrich.py`, `wikidata_capacity_enrich.py`, `kexp_enrich.py` |
 | `TM_API_KEY` | `tm_enrichment.py`, `tm_artist_enrich.py` |
 | `SPOTIFY_CLIENT_ID` | `spotify_matcher_fixed.py` |
 | `SPOTIFY_CLIENT_SECRET` | `spotify_matcher_fixed.py` |

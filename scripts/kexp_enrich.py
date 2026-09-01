@@ -70,7 +70,7 @@ _WATCH_URL_RE = re.compile(r"(https://www\.youtube\.com/watch\?v=[^&\s]+)")
 # ---------------------------------------------------------------------------
 # Bootstrap
 # ---------------------------------------------------------------------------
-load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent / ".env") or load_dotenv(Path(__file__).parent / "tm_enrichment" / ".env")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SERVICE_KEY")
