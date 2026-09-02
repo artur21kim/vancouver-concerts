@@ -40,7 +40,9 @@ export default async function MyGrooveprintPage() {
                         monthly_listeners,
                         spotify_artist_id,
                         kexp_url,
-                        kexp_session_count
+                        kexp_session_count,
+                        tiny_desk_url,
+                        tiny_desk_session_count
                     ),
                     dim_venue (
                         venue_id,
@@ -108,12 +110,14 @@ export default async function MyGrooveprintPage() {
             city:          venue.city         ?? null,
             venue_state:   venue.state        ?? null,
             artist: {
-                artist_id:          artist.artist_id,
-                artist_name:        artist.artist_name,
-                monthly_listeners:  artist.monthly_listeners,
-                spotify_artist_id:  artist.spotify_artist_id,
-                kexp_url:           artist.kexp_url           ?? null,
-                kexp_session_count: artist.kexp_session_count ?? null,
+                artist_id:                artist.artist_id,
+                artist_name:              artist.artist_name,
+                monthly_listeners:        artist.monthly_listeners,
+                spotify_artist_id:        artist.spotify_artist_id,
+                kexp_url:                 artist.kexp_url                 ?? null,
+                kexp_session_count:       artist.kexp_session_count       ?? null,
+                tiny_desk_url:            artist.tiny_desk_url            ?? null,
+                tiny_desk_session_count:  artist.tiny_desk_session_count  ?? null,
             },
             venue: {
                 venue_id:          venue.venue_id,

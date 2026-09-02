@@ -17,6 +17,8 @@ type Show = {
   spotify_artist_id: string | null;
   kexp_url: string | null;
   kexp_session_count: number | null;
+  tiny_desk_url: string | null;
+  tiny_desk_session_count: number | null;
   venue_id: number;
   venue_name: string;
   capacity: number | null;
@@ -118,6 +120,20 @@ function KexpLink({ url, sessionCount }: { url: string; sessionCount?: number | 
       onClick={e => e.stopPropagation()}
       className="flex-shrink-0 hover:opacity-70 transition-opacity inline-flex items-center">
       <img src="https://www.kexp.org/favicon.ico" alt="KEXP" className="w-3 h-3" />
+    </a>
+  );
+}
+
+// ─── NPR Tiny Desk icon ───────────────────────────────────────────────────────
+function TinyDeskLink({ url, sessionCount }: { url: string; sessionCount?: number | null }) {
+  const tooltip = sessionCount && sessionCount > 1
+    ? `Watch on NPR Tiny Desk · ${sessionCount} sessions`
+    : 'Watch on NPR Tiny Desk';
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" title={tooltip}
+      onClick={e => e.stopPropagation()}
+      className="flex-shrink-0 hover:opacity-70 transition-opacity inline-flex items-center">
+      <img src="https://www.npr.org/favicon.ico" alt="NPR Tiny Desk" className="w-3 h-3" />
     </a>
   );
 }
@@ -304,6 +320,7 @@ function SwipeableRow({
           <span className="text-sm font-medium text-primary">{show.artist_name}</span>
           {show.spotify_artist_id && <SpotifyIcon artistId={show.spotify_artist_id} isMatch={show.is_spotify_match} />}
           {show.kexp_url && <KexpLink url={show.kexp_url} sessionCount={show.kexp_session_count} />}
+          {show.tiny_desk_url && <TinyDeskLink url={show.tiny_desk_url} sessionCount={show.tiny_desk_session_count} />}
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[13px] text-muted-foreground">{show.venue_name}</span>
@@ -337,6 +354,7 @@ function SwipeableRow({
                   <span className="text-[11px] font-medium truncate text-primary">{show.artist_name}</span>
                   {show.spotify_artist_id && <SpotifyIcon artistId={show.spotify_artist_id} isMatch={show.is_spotify_match} />}
                   {show.kexp_url && <KexpLink url={show.kexp_url} sessionCount={show.kexp_session_count} />}
+                  {show.tiny_desk_url && <TinyDeskLink url={show.tiny_desk_url} sessionCount={show.tiny_desk_session_count} />}
                 </div>
                 <div className="flex items-center gap-1 mt-0.5">
                   <span className="text-[10px] text-muted-foreground truncate">{show.venue_name}</span>
@@ -395,6 +413,7 @@ function SplitShowRow({
             <SpotifyIcon artistId={show.spotify_artist_id} isMatch />
           )}
           {show.kexp_url && <KexpLink url={show.kexp_url} sessionCount={show.kexp_session_count} />}
+          {show.tiny_desk_url && <TinyDeskLink url={show.tiny_desk_url} sessionCount={show.tiny_desk_session_count} />}
         </div>
         <div className="flex items-center gap-1 text-muted-foreground">
           <span className="flex-shrink-0 tabular-nums">{fmtDateShort(show.date)}</span>

@@ -30,7 +30,7 @@ from rapidfuzz import fuzz
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(".env.local")
 
 SUPABASE_URL = os.environ["NEXT_PUBLIC_SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]

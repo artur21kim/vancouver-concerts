@@ -65,7 +65,9 @@ export async function GET(request: Request) {
       artist_name,
       spotify_artist_id,
       kexp_url,
-      kexp_session_count
+      kexp_session_count,
+      tiny_desk_url,
+      tiny_desk_session_count
     `;
 
     const venueSelect = `
@@ -171,6 +173,8 @@ export async function GET(request: Request) {
         spotify_artist_id:  artistSpotifyIdMap[artist.artist_id] || artist.spotify_artist_id || null,
         kexp_url:           artist.kexp_url           ?? null,
         kexp_session_count: artist.kexp_session_count ?? null,
+        tiny_desk_url:           artist.tiny_desk_url           ?? null,
+        tiny_desk_session_count: artist.tiny_desk_session_count ?? null,
         venue_id:           venue.venue_id,
         venue_name:        venue.venue_name,
         capacity:          venue.capacity          || null,
