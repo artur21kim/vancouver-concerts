@@ -59,6 +59,15 @@ export async function GET(request: Request) {
 
     // GP-127: city added to dim_venue select for city preference filtering
     // SCRUM-84: latitude + longitude added for map view
+    // GP-205: kexp_url + kexp_session_count added for KEXP icon
+    const artistSelect = `
+      artist_id,
+      artist_name,
+      spotify_artist_id,
+      kexp_url,
+      kexp_session_count
+    `;
+
     const venueSelect = `
       venue_id,
       venue_name,
@@ -79,9 +88,7 @@ export async function GET(request: Request) {
           venue_id,
           ticketmaster_url,
           dim_artist!inner (
-            artist_id,
-            artist_name,
-            spotify_artist_id
+            ${artistSelect}
           ),
           dim_venue!inner (
             ${venueSelect}
@@ -113,9 +120,7 @@ export async function GET(request: Request) {
           venue_id,
           ticketmaster_url,
           dim_artist!inner (
-            artist_id,
-            artist_name,
-            spotify_artist_id
+            ${artistSelect}
           ),
           dim_venue!inner (
             ${venueSelect}
@@ -159,12 +164,14 @@ export async function GET(request: Request) {
       const isSpotifyMatch = matchedArtistIdSet.has(artist.artist_id);
 
       return {
-        show_id:           show.show_id,
-        date:              show.date,
-        artist_id:         artist.artist_id,
-        artist_name:       artist.artist_name,
-        spotify_artist_id: artistSpotifyIdMap[artist.artist_id] || artist.spotify_artist_id || null,
-        venue_id:          venue.venue_id,
+        show_id:            show.show_id,
+        date:               show.date,
+        artist_id:          artist.artist_id,
+        artist_name:        artist.artist_name,
+        spotify_artist_id:  artistSpotifyIdMap[artist.artist_id] || artist.spotify_artist_id || null,
+        kexp_url:           artist.kexp_url           ?? null,
+        kexp_session_count: artist.kexp_session_count ?? null,
+        venue_id:           venue.venue_id,
         venue_name:        venue.venue_name,
         capacity:          venue.capacity          || null,
         capacity_category: venue.capacity_category || null,
