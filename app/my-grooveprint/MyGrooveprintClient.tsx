@@ -28,6 +28,8 @@ type Show = {
     artist_name: string
     monthly_listeners: number | null
     spotify_artist_id: string | null
+    kexp_url: string | null
+    kexp_session_count: number | null
   }
   venue: {
     venue_id: number
@@ -234,6 +236,20 @@ function SetlistLink({ url }: { url: string }) {
       onClick={e => e.stopPropagation()}
       className="flex-shrink-0 hover:opacity-70 transition-opacity">
       <img src="https://www.setlist.fm/favicon.ico" alt="setlist.fm" className="w-3 h-3 dark:invert" />
+    </a>
+  )
+}
+
+// ── KEXP Full Performance icon ────────────────────────────────────────────────
+function KexpLink({ url, sessionCount }: { url: string; sessionCount?: number | null }) {
+  const tooltip = sessionCount && sessionCount > 1
+    ? `Watch on KEXP · ${sessionCount} sessions`
+    : 'Watch on KEXP'
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" title={tooltip}
+      onClick={e => e.stopPropagation()}
+      className="flex-shrink-0 hover:opacity-70 transition-opacity">
+      <img src="https://www.kexp.org/favicon.ico" alt="KEXP" className="w-3 h-3" />
     </a>
   )
 }
@@ -2316,7 +2332,7 @@ export default function MyGrooveprintClient({
       await supabase.from('user_shows').upsert(records, { onConflict: 'user_id,show_id' })
       const { data: newShows } = await supabase
         .from('user_shows')
-        .select(`show_id, added_at, source, fact_shows ( show_id, date, setlist_url, show_type, festival_name, tour_name, dim_artist ( artist_id, artist_name, monthly_listeners, spotify_artist_id ), dim_venue ( venue_id, venue_name, capacity, capacity_category, city, state ) )`)
+        .select(`show_id, added_at, source, fact_shows ( show_id, date, setlist_url, show_type, festival_name, tour_name, dim_artist ( artist_id, artist_name, monthly_listeners, spotify_artist_id, kexp_url, kexp_session_count ), dim_venue ( venue_id, venue_name, capacity, capacity_category, city, state ) )`)
         .eq('user_id', user.id).order('added_at', { ascending: false })
       if (newShows) {
         const mapped = newShows.map((us: any) => {
@@ -2325,7 +2341,7 @@ export default function MyGrooveprintClient({
           const artist = Array.isArray(show.dim_artist) ? show.dim_artist[0] : show.dim_artist
           const venue  = Array.isArray(show.dim_venue)  ? show.dim_venue[0]  : show.dim_venue
           if (!artist || !venue) return null
-          return { show_id: show.show_id, date: show.date, setlist_url: show.setlist_url, show_type: show.show_type, festival_name: show.festival_name, tour_name: show.tour_name ?? null, added_at: us.added_at, notes: null, source: us.source, city: venue.city ?? null, venue_state: venue.state ?? null, artist: { artist_id: artist.artist_id, artist_name: artist.artist_name, monthly_listeners: artist.monthly_listeners, spotify_artist_id: artist.spotify_artist_id }, venue: { venue_id: venue.venue_id, venue_name: venue.venue_name, capacity: venue.capacity ?? null, capacity_category: venue.capacity_category ?? null } }
+          return { show_id: show.show_id, date: show.date, setlist_url: show.setlist_url, show_type: show.show_type, festival_name: show.festival_name, tour_name: show.tour_name ?? null, added_at: us.added_at, notes: null, source: us.source, city: venue.city ?? null, venue_state: venue.state ?? null, artist: { artist_id: artist.artist_id, artist_name: artist.artist_name, monthly_listeners: artist.monthly_listeners, spotify_artist_id: artist.spotify_artist_id, kexp_url: artist.kexp_url ?? null, kexp_session_count: artist.kexp_session_count ?? null }, venue: { venue_id: venue.venue_id, venue_name: venue.venue_name, capacity: venue.capacity ?? null, capacity_category: venue.capacity_category ?? null } }
         }).filter(Boolean)
         setShows(mapped as Show[])
       }
@@ -3722,6 +3738,11 @@ export default function MyGrooveprintClient({
                                   <SpotifyLink artistId={group.headliner.artist.spotify_artist_id} />
                                 </span>
                               )}
+                              {group.headliner.artist.kexp_url && (
+                                <span onClick={e => e.stopPropagation()}>
+                                  <KexpLink url={group.headliner.artist.kexp_url} sessionCount={group.headliner.artist.kexp_session_count} />
+                                </span>
+                              )}
                               {group.headliner.setlist_url && (
                                 <span onClick={e => e.stopPropagation()}><SetlistLink url={group.headliner.setlist_url} /></span>
                               )}
@@ -3789,6 +3810,9 @@ export default function MyGrooveprintClient({
                                     {show.artist.spotify_artist_id && (
                                       <span onClick={e => e.stopPropagation()}><SpotifyLink artistId={show.artist.spotify_artist_id} /></span>
                                     )}
+                                    {show.artist.kexp_url && (
+                                      <span onClick={e => e.stopPropagation()}><KexpLink url={show.artist.kexp_url} sessionCount={show.artist.kexp_session_count} /></span>
+                                    )}
                                     {show.setlist_url && <span onClick={e => e.stopPropagation()}><SetlistLink url={show.setlist_url} /></span>}
                                   </div>
                                 </div>
@@ -3845,6 +3869,7 @@ export default function MyGrooveprintClient({
                                     {show.artist.artist_name}
                                   </button>
                                   {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
+                                  {show.artist.kexp_url && <KexpLink url={show.artist.kexp_url} sessionCount={show.artist.kexp_session_count} />}
                                   {show.setlist_url && <SetlistLink url={show.setlist_url} />}
                                 </div>
                               </div>
@@ -3909,6 +3934,7 @@ export default function MyGrooveprintClient({
                                   <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                                     <button onClick={() => applyFilter(show.artist.artist_name)} className="text-sm font-medium text-primary hover:opacity-80 hover:underline">{show.artist.artist_name}</button>
                                     {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
+                                    {show.artist.kexp_url && <KexpLink url={show.artist.kexp_url} sessionCount={show.artist.kexp_session_count} />}
                                     {show.setlist_url && <SetlistLink url={show.setlist_url} />}
                                   </div>
                                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -3944,6 +3970,7 @@ export default function MyGrooveprintClient({
                                   <div className="flex items-center gap-1 mb-0.5 flex-wrap">
                                     <button onClick={() => applyFilter(show.artist.artist_name)} className="text-[11px] font-medium text-primary hover:opacity-80 truncate">{show.artist.artist_name}</button>
                                     {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
+                                    {show.artist.kexp_url && <KexpLink url={show.artist.kexp_url} sessionCount={show.artist.kexp_session_count} />}
                                   </div>
                                   <div className="flex items-center gap-1 flex-wrap">
                                     <button onClick={() => applyFilter(show.venue.venue_name)} className="text-[10px] text-muted-foreground hover:text-primary truncate">{show.venue.venue_name}</button>
@@ -3997,6 +4024,7 @@ export default function MyGrooveprintClient({
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <button onClick={() => applyFilter(show.artist.artist_name)} className="text-primary hover:opacity-80 hover:underline text-left">{show.artist.artist_name}</button>
                                     {show.artist.spotify_artist_id && <SpotifyLink artistId={show.artist.spotify_artist_id} />}
+                                    {show.artist.kexp_url && <KexpLink url={show.artist.kexp_url} sessionCount={show.artist.kexp_session_count} />}
                                     {show.setlist_url && <SetlistLink url={show.setlist_url} />}
                                   </div>
                                 </td>
