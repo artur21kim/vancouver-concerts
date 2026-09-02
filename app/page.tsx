@@ -5,13 +5,15 @@ import HomeClient from './HomeClient'
 export const revalidate = 600
 
 export type TopArtist = {
-  artist_id:          number
-  artist_name:        string
-  show_count:         number
-  spotify_url:        string | null
-  kexp_url:           string | null
-  kexp_session_count: number | null
-  state_counts:       { state: string; cnt: number }[]
+  artist_id:               number
+  artist_name:             string
+  show_count:              number
+  spotify_url:             string | null
+  kexp_url:                string | null
+  kexp_session_count:      number | null
+  tiny_desk_url:           string | null
+  tiny_desk_session_count: number | null
+  state_counts:            { state: string; cnt: number }[]
 }
 
 export type TopVenue = {
