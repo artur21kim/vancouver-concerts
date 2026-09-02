@@ -235,7 +235,12 @@ function SetlistLink({ url }: { url: string }) {
     <a href={url} target="_blank" rel="noopener noreferrer" title="View setlist"
       onClick={e => e.stopPropagation()}
       className="flex-shrink-0 hover:opacity-70 transition-opacity">
-      <img src="https://www.setlist.fm/favicon.ico" alt="setlist.fm" className="w-3 h-3 dark:invert" />
+      {/* Light mode: real setlist.fm favicon */}
+      <img src="https://www.setlist.fm/favicon.ico" alt="setlist.fm" className="w-3 h-3 dark:hidden" />
+      {/* Dark mode: green music note — invert produces wrong purple */}
+      <svg className="w-3 h-3 hidden dark:block" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" fill="#22c55e" />
+      </svg>
     </a>
   )
 }
