@@ -133,7 +133,11 @@ function TinyDeskLink({ url, sessionCount }: { url: string; sessionCount?: numbe
     <a href={url} target="_blank" rel="noopener noreferrer" title={tooltip}
       onClick={e => e.stopPropagation()}
       className="flex-shrink-0 hover:opacity-70 transition-opacity inline-flex items-center">
-      <img src="https://www.npr.org/favicon.ico" alt="NPR Tiny Desk" className="w-3 h-3" />
+      <svg viewBox="0 0 21 12" className="h-3 w-auto" fill="none">
+        <rect width="6" height="12" fill="#CC0000" rx="1"/>
+        <rect x="7.5" width="6" height="12" fill="#000000" rx="1"/>
+        <rect x="15" width="6" height="12" fill="#0047AB" rx="1"/>
+      </svg>
     </a>
   );
 }
