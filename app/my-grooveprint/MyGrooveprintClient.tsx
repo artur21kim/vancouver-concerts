@@ -261,8 +261,8 @@ function TmVenueLink({ url }: { url: string }) {
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" title="View on Ticketmaster"
       onClick={e => e.stopPropagation()}
-      className="flex-shrink-0 hover:opacity-70 transition-opacity inline-flex items-center">
-      <img src="https://www.ticketmaster.com/favicon.ico" alt="Ticketmaster" width="13" height="13" />
+      className="flex-shrink-0 hover:opacity-70 transition-opacity">
+      <img src="https://www.ticketmaster.com/favicon.ico" alt="Ticketmaster" className="w-3 h-3" />
     </a>
   )
 }
