@@ -36,6 +36,7 @@ type Show = {
     venue_name: string
     capacity: number | null
     capacity_category: string | null
+    tm_url: string | null
   }
   match_score?: number | null
 }
@@ -252,6 +253,16 @@ function KexpLink({ url, sessionCount }: { url: string; sessionCount?: number | 
       onClick={e => e.stopPropagation()}
       className="flex-shrink-0 hover:opacity-70 transition-opacity">
       <img src="https://www.kexp.org/favicon.ico" alt="KEXP" className="w-3 h-3" />
+    </a>
+  )
+}
+
+function TmVenueLink({ url }: { url: string }) {
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" title="View on Ticketmaster"
+      onClick={e => e.stopPropagation()}
+      className="flex-shrink-0 hover:opacity-70 transition-opacity">
+      <img src="https://www.ticketmaster.com/favicon.ico" alt="Ticketmaster" width="13" height="13" />
     </a>
   )
 }
@@ -2334,7 +2345,7 @@ export default function MyGrooveprintClient({
       await supabase.from('user_shows').upsert(records, { onConflict: 'user_id,show_id' })
       const { data: newShows } = await supabase
         .from('user_shows')
-        .select(`show_id, added_at, source, fact_shows ( show_id, date, setlist_url, show_type, festival_name, tour_name, dim_artist ( artist_id, artist_name, monthly_listeners, spotify_artist_id, kexp_url, kexp_session_count ), dim_venue ( venue_id, venue_name, capacity, capacity_category, city, state ) )`)
+        .select(`show_id, added_at, source, fact_shows ( show_id, date, setlist_url, show_type, festival_name, tour_name, dim_artist ( artist_id, artist_name, monthly_listeners, spotify_artist_id, kexp_url, kexp_session_count ), dim_venue ( venue_id, venue_name, capacity, capacity_category, city, state, tm_url ) )`)
         .eq('user_id', user.id).order('added_at', { ascending: false })
       if (newShows) {
         const mapped = newShows.map((us: any) => {
@@ -2343,7 +2354,7 @@ export default function MyGrooveprintClient({
           const artist = Array.isArray(show.dim_artist) ? show.dim_artist[0] : show.dim_artist
           const venue  = Array.isArray(show.dim_venue)  ? show.dim_venue[0]  : show.dim_venue
           if (!artist || !venue) return null
-          return { show_id: show.show_id, date: show.date, setlist_url: show.setlist_url, show_type: show.show_type, festival_name: show.festival_name, tour_name: show.tour_name ?? null, added_at: us.added_at, notes: null, source: us.source, city: venue.city ?? null, venue_state: venue.state ?? null, artist: { artist_id: artist.artist_id, artist_name: artist.artist_name, monthly_listeners: artist.monthly_listeners, spotify_artist_id: artist.spotify_artist_id, kexp_url: artist.kexp_url ?? null, kexp_session_count: artist.kexp_session_count ?? null }, venue: { venue_id: venue.venue_id, venue_name: venue.venue_name, capacity: venue.capacity ?? null, capacity_category: venue.capacity_category ?? null } }
+          return { show_id: show.show_id, date: show.date, setlist_url: show.setlist_url, show_type: show.show_type, festival_name: show.festival_name, tour_name: show.tour_name ?? null, added_at: us.added_at, notes: null, source: us.source, city: venue.city ?? null, venue_state: venue.state ?? null, artist: { artist_id: artist.artist_id, artist_name: artist.artist_name, monthly_listeners: artist.monthly_listeners, spotify_artist_id: artist.spotify_artist_id, kexp_url: artist.kexp_url ?? null, kexp_session_count: artist.kexp_session_count ?? null }, venue: { venue_id: venue.venue_id, venue_name: venue.venue_name, capacity: venue.capacity ?? null, capacity_category: venue.capacity_category ?? null, tm_url: venue.tm_url ?? null } }
         }).filter(Boolean)
         setShows(mapped as Show[])
       }
@@ -3768,6 +3779,7 @@ export default function MyGrooveprintClient({
                             <div className="flex items-center gap-1.5 mt-0.5">
                               <button onClick={e => { e.stopPropagation(); applyFilter(group.venue_name) }} className="text-[13px] text-muted-foreground hover:text-primary hover:underline transition-colors">{group.venue_name}</button>
                               <CapacityBadge category={group.capacity_category} />
+                              {group.headliner.venue.tm_url && <span onClick={e => e.stopPropagation()}><TmVenueLink url={group.headliner.venue.tm_url} /></span>}
                             </div>
                           </div>
                           {/* City column — desktop only */}
@@ -3942,6 +3954,7 @@ export default function MyGrooveprintClient({
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <button onClick={() => applyFilter(show.venue.venue_name)} className="text-[13px] text-muted-foreground hover:text-primary hover:underline">{show.venue.venue_name}</button>
                                     <CapacityBadge category={show.venue.capacity_category} />
+                                    {show.venue.tm_url && <TmVenueLink url={show.venue.tm_url} />}
                                   </div>
                                 </div>
                                 <div className="px-3 py-3.5">
@@ -3977,6 +3990,7 @@ export default function MyGrooveprintClient({
                                   <div className="flex items-center gap-1 flex-wrap">
                                     <button onClick={() => applyFilter(show.venue.venue_name)} className="text-[10px] text-muted-foreground hover:text-primary truncate">{show.venue.venue_name}</button>
                                     <CapacityBadge category={show.venue.capacity_category} />
+                                    {show.venue.tm_url && <TmVenueLink url={show.venue.tm_url} />}
                                   </div>
                                   {show.city && show.venue_state && (
                                     <p className="text-[9px] text-muted-foreground/60 leading-tight mt-0.5">{show.city}, {show.venue_state}</p>
@@ -4034,6 +4048,7 @@ export default function MyGrooveprintClient({
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <button onClick={() => applyFilter(show.venue.venue_name)} className="text-muted-foreground hover:text-primary hover:underline text-left">{show.venue.venue_name}</button>
                                     <CapacityBadge category={show.venue.capacity_category} />
+                                    {show.venue.tm_url && <TmVenueLink url={show.venue.tm_url} />}
                                   </div>
                                 </td>
                                 <td className="px-3 py-3 text-sm text-muted-foreground whitespace-nowrap">

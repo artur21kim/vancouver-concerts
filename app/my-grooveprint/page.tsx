@@ -48,7 +48,8 @@ export default async function MyGrooveprintPage() {
                         capacity,
                         capacity_category,
                         city,
-                        state
+                        state,
+                        tm_url
                     )
                 )
             `)
@@ -119,6 +120,7 @@ export default async function MyGrooveprintPage() {
                 venue_name:        venue.venue_name,
                 capacity:          venue.capacity          ?? null,
                 capacity_category: venue.capacity_category ?? null,
+                tm_url:            venue.tm_url            ?? null,
             },
         }
     }).filter(Boolean)
