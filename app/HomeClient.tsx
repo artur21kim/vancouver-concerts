@@ -357,6 +357,18 @@ export default function HomeClient({
                               </svg>
                             </a>
                           )}
+                          {artist.kexp_url && (
+                            <a
+                              href={artist.kexp_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={artist.kexp_session_count && artist.kexp_session_count > 1 ? `Watch on KEXP · ${artist.kexp_session_count} sessions` : 'Watch on KEXP'}
+                              onClick={e => e.stopPropagation()}
+                              className="flex-shrink-0 hover:opacity-75 transition-opacity"
+                            >
+                              <img src="https://www.kexp.org/favicon.ico" alt="KEXP" width="13" height="13" />
+                            </a>
+                          )}
                           {/* State pills — only when artist spans multiple states */}
                           {artist.state_counts && artist.state_counts.length > 1 && (
                             <div className="hidden sm:flex gap-1 flex-shrink-0">
@@ -444,6 +456,18 @@ export default function HomeClient({
                           >
                             {CAPACITY_BADGE[venue.capacity_category].label}
                           </span>
+                        )}
+                        {venue.tm_url && (
+                          <a
+                            href={venue.tm_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="View on Ticketmaster"
+                            onClick={e => e.stopPropagation()}
+                            className="hidden sm:flex-shrink-0 sm:inline-flex hover:opacity-75 transition-opacity"
+                          >
+                            <img src="https://www.ticketmaster.com/favicon.ico" alt="Ticketmaster" width="13" height="13" />
+                          </a>
                         )}
                       </div>
                       <span className="text-xs md:text-base text-muted-foreground font-medium whitespace-nowrap ml-2">
