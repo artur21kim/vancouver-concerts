@@ -969,18 +969,14 @@ def detect_venue_changes(
 
     unique_artist_ids = list({r["artist_id"] for r in show_records})
 
-    all_existing: list[dict] = []
-    ID_BATCH = 50
-    for i in range(0, len(unique_artist_ids), ID_BATCH):
-        ids_str = ",".join(str(x) for x in unique_artist_ids[i: i + ID_BATCH])
-        rows = sb_get_all(
-            "fact_shows",
-            {
-                "select":    "show_id,artist_id,date,venue_id,setlist_url",
-                "artist_id": f"in.({ids_str})",
-            },
-        )
-        all_existing.extend(rows)
+    # GP-188: use RPC to pass artist_ids in POST body, bypassing PostgREST URL length limit
+    resp = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/get_shows_by_artists",
+        headers=_headers("return=representation"),
+        json={"p_artist_ids": unique_artist_ids},
+    )
+    resp.raise_for_status()
+    all_existing: list[dict] = resp.json()
 
     by_key: dict[tuple, list] = defaultdict(list)
     for row in all_existing:

@@ -26,19 +26,12 @@ type Show = {
   venue_status: string | null
   other_names: string | null
   ticketmaster_url: string | null
-}
-
-type Venue = {
-  venue_id: number
-  venue_name: string
-  capacity: number | null
-  capacity_category: string | null
-  status: string | null
-  other_names: string | null
   city: string | null
   state: string | null
   country: string | null
 }
+
+type LocationOption = { state: string; country: string }
 
 type Stats = {
   total_shows: number
@@ -122,16 +115,17 @@ function BrowseContent({
   initialTotal,
   initialStats,
   initialTotalPages,
-  venues,
+  locations,
   initialParams,
   initialArtistName,
+  initialVenueName,
   initialFestivals,
 }: {
   initialShows: Show[]
   initialTotal: number
   initialStats: Stats
   initialTotalPages: number
-  venues: Venue[]
+  locations: LocationOption[]
   initialParams: {
     decade: string; year?: string; month?: string
     artistId?: string; venueId?: string; showType?: string
@@ -139,6 +133,7 @@ function BrowseContent({
     page: number; sort: string; dir: string
   }
   initialArtistName: string | null
+  initialVenueName: string | null
   initialFestivals: SelectOption[]
 }) {
   const router   = useRouter()
@@ -203,10 +198,7 @@ function BrowseContent({
   // ── Unified search state ──────────────────────────────────────────────────
   const getInitialSearchQuery = () => {
     if (initialParams.artistId && initialArtistName) return initialArtistName
-    if (initialParams.venueId) {
-      const v = venues.find(v => String(v.venue_id) === initialParams.venueId)
-      return v?.venue_name ?? ''
-    }
+    if (initialParams.venueId) return initialVenueName ?? ''
     if (initialParams.festival) return initialParams.festival
     return ''
   }
@@ -214,18 +206,29 @@ function BrowseContent({
   const [browseSearchOpen,    setBrowseSearchOpen]    = useState(false)
   const [browseSearchLoading, setBrowseSearchLoading] = useState(false)
   const [browseArtistResults, setBrowseArtistResults] = useState<SelectOption[]>([])
+  const [browseVenueResults,  setBrowseVenueResults]  = useState<Array<{ value: number; label: string; city: string | null; state: string | null; country: string | null }>>([])
+  const [selectedVenueName,   setSelectedVenueName]   = useState<string | null>(initialVenueName ?? null)
   const browseSearchRef = useRef<HTMLDivElement>(null)
 
-  // Debounced artist search
+  // Debounced search — artists + venues in parallel (GP-208: venue search now server-side)
   useEffect(() => {
-    if (!browseSearchQuery.trim()) { setBrowseArtistResults([]); setBrowseSearchLoading(false); return }
+    if (!browseSearchQuery.trim()) {
+      setBrowseArtistResults([]); setBrowseVenueResults([]); setBrowseSearchLoading(false); return
+    }
     setBrowseSearchLoading(true)
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/browse/artists/search?q=${encodeURIComponent(browseSearchQuery)}`)
-        const data = await res.json()
-        setBrowseArtistResults(data.artists || [])
-      } catch { setBrowseArtistResults([]) }
+        const q = encodeURIComponent(browseSearchQuery)
+        const [artistData, venueData] = await Promise.all([
+          fetch(`/api/browse/artists/search?q=${q}`).then(r => r.json()),
+          fetch(`/api/browse/venues/search?q=${q}`).then(r => r.json()),
+        ])
+        setBrowseArtistResults(artistData.artists || [])
+        setBrowseVenueResults(venueData.venues || [])
+      } catch {
+        setBrowseArtistResults([])
+        setBrowseVenueResults([])
+      }
       finally { setBrowseSearchLoading(false) }
     }, 300)
     return () => clearTimeout(timer)
@@ -236,50 +239,28 @@ function BrowseContent({
     const handleClickOutside = (e: MouseEvent) => {
       if (browseSearchRef.current && !browseSearchRef.current.contains(e.target as Node)) {
         setBrowseSearchOpen(false)
-        const activeLabel = artistOption?.label ||
-          (venueId ? venues.find(v => String(v.venue_id) === venueId)?.venue_name : null) ||
-          festival?.label || ''
+        const activeLabel = artistOption?.label || selectedVenueName || festival?.label || ''
         setBrowseSearchQuery(activeLabel)
       }
     }
     if (browseSearchOpen) document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [browseSearchOpen, artistOption, venueId, festival, venues])
+  }, [browseSearchOpen, artistOption, venueId, selectedVenueName, festival])
 
-  // Venue + festival results filtered client-side from loaded data
-  const filteredVenueResults = useMemo(() => {
-    if (!browseSearchQuery.trim()) return []
-    const q = browseSearchQuery.toLowerCase()
-    return venues.filter(v => v.venue_name.toLowerCase().includes(q)).slice(0, 5)
-  }, [browseSearchQuery, venues])
-
+  // Festival results filtered client-side from server-loaded list (small, ~hundreds of items)
   const filteredFestivalResults = useMemo(() => {
     if (!browseSearchQuery.trim()) return []
     const q = browseSearchQuery.toLowerCase()
     return festivalOptions.filter(f => f.label.toLowerCase().includes(q)).slice(0, 5)
   }, [browseSearchQuery, festivalOptions])
 
-  // ── Location data derived from venues ────────────────────────────────────
-  const availableLocations = useMemo(() => {
-    const seen = new Set<string>()
-    const result: { state: string; country: string }[] = []
-    for (const v of venues) {
-      if (!v.state || !v.country) continue
-      const key = `${v.state}:${v.country}`
-      if (!seen.has(key)) { seen.add(key); result.push({ state: v.state, country: v.country }) }
-    }
-    return result.sort((a, b) => {
+  // ── Location data: sorted from locations prop (replaces venues-derived memo, GP-208) ──
+  const sortedLocations = useMemo(() =>
+    [...locations].sort((a, b) => {
       if (a.country !== b.country) return a.country === 'CA' ? -1 : b.country === 'CA' ? 1 : a.country.localeCompare(b.country)
       return (PROVINCE_NAMES[a.state] ?? a.state).localeCompare(PROVINCE_NAMES[b.state] ?? b.state)
     })
-  }, [venues])
-
-  const venueCityMap = useMemo(() => {
-    const map = new Map<number, { city: string | null; state: string | null; country: string | null }>()
-    for (const v of venues) map.set(v.venue_id, { city: v.city ?? null, state: v.state ?? null, country: v.country ?? null })
-    return map
-  }, [venues])
-
+  , [locations])
 
   // ── Core: push URL + fetch new data ──────────────────────────────────────
   const fetchData = useCallback(async (params: {
@@ -393,7 +374,7 @@ function BrowseContent({
       applyFilter({ artistId: newId, venueId: undefined, festival: undefined })
     } else if (type === 'venue') {
       const newId = String(id)
-      setVenueId(newId)
+      setVenueId(newId); setSelectedVenueName(label)
       setArtistId(undefined); setArtistOption(null); setFestival(null)
       applyFilter({ venueId: newId, artistId: undefined, festival: undefined })
     } else {
@@ -405,8 +386,8 @@ function BrowseContent({
   }
 
   const handleBrowseSearchClear = () => {
-    setBrowseSearchQuery(''); setBrowseArtistResults([]); setBrowseSearchOpen(false)
-    setArtistId(undefined); setArtistOption(null); setVenueId(undefined); setFestival(null)
+    setBrowseSearchQuery(''); setBrowseArtistResults([]); setBrowseVenueResults([]); setBrowseSearchOpen(false)
+    setArtistId(undefined); setArtistOption(null); setVenueId(undefined); setSelectedVenueName(null); setFestival(null)
     applyFilter({ artistId: undefined, venueId: undefined, festival: undefined })
   }
 
@@ -439,7 +420,8 @@ function BrowseContent({
     setCapacity('all')
     setStatus('all')
     setProvince('')
-    setBrowseSearchQuery(''); setBrowseArtistResults([]); setBrowseSearchOpen(false)
+    setBrowseSearchQuery(''); setBrowseArtistResults([]); setBrowseVenueResults([]); setBrowseSearchOpen(false)
+    setSelectedVenueName(null)
     setSortField('date'); setSortDir('desc')
     fetchData({ decade: '2020s', page: 1, sort: 'date', dir: 'desc' })
   }
@@ -506,7 +488,7 @@ function BrowseContent({
 
   const pageTitle = (() => {
     const artistName = artistOption && artistId ? artistOption.label : null
-    const venueName  = venueId ? (venues.find(v => v.venue_id === parseInt(venueId))?.venue_name ?? null) : null
+    const venueName  = venueId ? selectedVenueName : null
 
     // Entity filters: artist and/or venue take top priority
     if (artistName && venueName) return `Browse: ${artistName} @ ${venueName}`
@@ -697,24 +679,21 @@ function BrowseContent({
                       </>
                     )}
 
-                    {filteredVenueResults.length > 0 && (
+                    {browseVenueResults.length > 0 && (
                       <>
                         <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-teal-400 uppercase tracking-wider">Venues</div>
-                        {filteredVenueResults.map(v => {
-                          const loc = venueCityMap.get(v.venue_id)
-                          return (
-                            <button
-                              key={v.venue_id}
-                              onMouseDown={e => { e.preventDefault(); handleBrowseSearchSelect('venue', v.venue_id, v.venue_name) }}
-                              className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center justify-between gap-2"
-                            >
-                              <span className="truncate">{v.venue_name}</span>
-                              {loc?.city && loc?.state && (
-                                <span className="text-xs text-muted-foreground flex-shrink-0">{loc.city}, {loc.state}</span>
-                              )}
-                            </button>
-                          )
-                        })}
+                        {browseVenueResults.map(v => (
+                          <button
+                            key={v.value}
+                            onMouseDown={e => { e.preventDefault(); handleBrowseSearchSelect('venue', v.value, v.label) }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center justify-between gap-2"
+                          >
+                            <span className="truncate">{v.label}</span>
+                            {v.city && v.state && (
+                              <span className="text-xs text-muted-foreground flex-shrink-0">{v.city}, {v.state}</span>
+                            )}
+                          </button>
+                        ))}
                       </>
                     )}
 
@@ -733,7 +712,7 @@ function BrowseContent({
                       </>
                     )}
 
-                    {!browseSearchLoading && browseArtistResults.length === 0 && filteredVenueResults.length === 0 && filteredFestivalResults.length === 0 && (
+                    {!browseSearchLoading && browseArtistResults.length === 0 && browseVenueResults.length === 0 && filteredFestivalResults.length === 0 && (
                       <div className="px-3 py-3 text-sm text-muted-foreground">No results for "{browseSearchQuery}"</div>
                     )}
                   </div>
@@ -749,7 +728,7 @@ function BrowseContent({
                 >
                   <option value="">All Locations</option>
                   {Array.from(
-                    availableLocations.reduce((acc, loc) => {
+                    sortedLocations.reduce((acc, loc) => {
                       if (!acc.has(loc.country)) acc.set(loc.country, [])
                       acc.get(loc.country)!.push(loc.state)
                       return acc
@@ -1019,22 +998,21 @@ function BrowseContent({
 
                         {/* City */}
                         <div className="flex items-center gap-1 px-3 py-3 overflow-hidden">
-                          {(() => {
-                            const loc = venueCityMap.get(show.venue_id)
-                            if (!loc?.city || !loc?.state) return <span className="text-sm text-muted-foreground">–</span>
-                            return <>
-                              <button
-                                onClick={() => handleProvinceChange(loc.state!)}
-                                className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors text-left truncate min-w-0"
-                                title={`Filter: ${PROVINCE_NAMES[loc.state!] ?? loc.state}`}
-                              >
-                                {loc.city}, {loc.state}
-                              </button>
-                              {loc.country && FLAG_EMOJI[loc.country] && (
-                                <span className="flex-shrink-0 text-sm leading-none">{FLAG_EMOJI[loc.country]}</span>
-                              )}
-                            </>
-                          })()}
+                          {show.city && show.state
+                            ? <>
+                                <button
+                                  onClick={() => handleProvinceChange(show.state!)}
+                                  className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors text-left truncate min-w-0"
+                                  title={`Filter: ${PROVINCE_NAMES[show.state!] ?? show.state}`}
+                                >
+                                  {show.city}, {show.state}
+                                </button>
+                                {show.country && FLAG_EMOJI[show.country] && (
+                                  <span className="flex-shrink-0 text-sm leading-none">{FLAG_EMOJI[show.country]}</span>
+                                )}
+                              </>
+                            : <span className="text-sm text-muted-foreground">–</span>
+                          }
                         </div>
 
                         {/* Tour / Festival */}
@@ -1122,12 +1100,9 @@ function BrowseContent({
                               >F</button>
                             )}
                           </div>
-                          {(() => {
-                            const loc = venueCityMap.get(show.venue_id)
-                            return loc?.city && loc?.state
-                              ? <span className="text-[9px] text-muted-foreground/60 leading-tight">{loc.city}, {loc.state}{loc.country && FLAG_EMOJI[loc.country] ? ` ${FLAG_EMOJI[loc.country]}` : ''}</span>
-                              : null
-                          })()}
+                          {show.city && show.state && (
+                            <span className="text-[9px] text-muted-foreground/60 leading-tight">{show.city}, {show.state}{show.country && FLAG_EMOJI[show.country] ? ` ${FLAG_EMOJI[show.country]}` : ''}</span>
+                          )}
                           {(show.tour_name || show.festival_name) && (
                             <span className="text-[9px] text-muted-foreground/50 leading-tight truncate" title={show.tour_name ?? show.festival_name ?? undefined}>
                               {show.tour_name ?? show.festival_name}

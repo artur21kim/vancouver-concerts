@@ -27,7 +27,7 @@ export default async function BrowsePage({ searchParams }: PageProps) {
   const festival = getString(params.festival)
   const capacity = getString(params.capacity)
   const status   = getString(params.status)
-  const state    = getString(params.state)      // province/state filter (e.g. 'BC', 'WA')
+  const state    = getString(params.state)
   const page     = getString(params.page)     || '1'
   const sort     = getString(params.sort)     || 'date'
   const dir      = getString(params.dir)      || 'desc'
@@ -64,12 +64,16 @@ export default async function BrowsePage({ searchParams }: PageProps) {
     p_festival:          festival || null,
     p_capacity:          (capacity && capacity !== 'all') ? capacity : null,
     p_status:            (status   && status   !== 'all') ? status   : null,
-    p_state:             state    || null,                // GP-151: province/state filter
+    p_state:             state    || null,
     p_preferred_cities:  preferredCities,
   }
 
-  // Parallel: shows, stats, venues, and artist name lookup (if needed)
-  const [showsRes, statsRes, venuesRes, artistRes, festivalsRes] = await Promise.all([
+  // GP-208: Parallel fetches — venues blob removed entirely.
+  // - total_count window function removed from get_shows_paged; use get_shows_stats for pagination total.
+  // - city/state/country now embedded in get_shows_paged rows via RPC join.
+  // - get_browse_locations() replaces 34k-row dim_venue fetch for Location dropdown.
+  // - get_browse_festivals() replaces full fact_shows scan for festival names.
+  const [showsRes, statsRes, artistRes, festivalsRes, locationsRes, venueNameRes] = await Promise.all([
     supabase.rpc('get_shows_paged', {
       ...rpcBase,
       p_sort:     sort,
@@ -78,12 +82,6 @@ export default async function BrowsePage({ searchParams }: PageProps) {
       p_per_page: SHOWS_PER_PAGE,
     }),
     supabase.rpc('get_shows_stats', rpcBase),
-    // GP-151: include city, state, country for Location filter and City column
-    supabase
-      .from('dim_venue')
-      .select('venue_id, venue_name, capacity, capacity_category, status, other_names, city, state, country')
-      .order('venue_name')
-      .then(r => r.data || []),
     artistId
       ? supabase
           .from('dim_artist')
@@ -92,21 +90,27 @@ export default async function BrowsePage({ searchParams }: PageProps) {
           .single()
           .then(r => r.data)
       : Promise.resolve(null),
-    supabase
-      .from('fact_shows')
-      .select('festival_name')
-      .not('festival_name', 'is', null)
-      .neq('festival_name', '')
-      .order('festival_name')
-      .then(r => {
-        const unique = Array.from(new Set((r.data || []).map((x: any) => x.festival_name as string))).sort()
-        return unique.map(f => ({ value: f, label: f }))
-      }),
+    // GP-208: lightweight DISTINCT query via RPC — replaces full fact_shows scan
+    supabase.rpc('get_browse_festivals').then(r =>
+      (r.data || []).map((x: any) => ({ value: x.festival_name as string, label: x.festival_name as string }))
+    ),
+    // GP-208: distinct (state, country) pairs — replaces 34k-row dim_venue fetch
+    supabase.rpc('get_browse_locations').then(r => r.data || []),
+    // Venue name lookup for initial URL filter (single row, only when venueId is set)
+    venueId
+      ? supabase
+          .from('dim_venue')
+          .select('venue_id, venue_name')
+          .eq('venue_id', parseInt(venueId))
+          .single()
+          .then(r => r.data)
+      : Promise.resolve(null),
   ])
 
-  const rows       = showsRes.data || []
-  const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0
-  const statsRow   = statsRes.data?.[0]
+  const rows     = showsRes.data || []
+  const statsRow = statsRes.data?.[0]
+  // GP-208: total now from get_shows_stats (COUNT(*) OVER() window function removed from shows RPC)
+  const totalCount = statsRow ? Number(statsRow.total_shows) : 0
 
   const shows = rows.map((row: any) => ({
     show_id:           row.show_id,
@@ -126,6 +130,10 @@ export default async function BrowsePage({ searchParams }: PageProps) {
     venue_status:      row.venue_status        ?? null,
     other_names:       row.other_names         ?? null,
     ticketmaster_url:  row.ticketmaster_url     ?? null,
+    // GP-208: city/state/country now come directly from the RPC join
+    city:              row.city               ?? null,
+    state:             row.state              ?? null,
+    country:           row.country            ?? null,
   }))
 
   const stats = {
@@ -142,13 +150,14 @@ export default async function BrowsePage({ searchParams }: PageProps) {
       initialTotal={totalCount}
       initialStats={stats}
       initialTotalPages={Math.ceil(totalCount / SHOWS_PER_PAGE)}
-      venues={venuesRes as any}
+      locations={locationsRes as any}
       initialParams={{
         decade, year, month, artistId, venueId,
         showType, festival, capacity, status, state,
         page: parseInt(page), sort, dir,
       }}
       initialArtistName={artistRes?.artist_name ?? null}
+      initialVenueName={(venueNameRes as any)?.venue_name ?? null}
       initialFestivals={festivalsRes as any}
     />
   )

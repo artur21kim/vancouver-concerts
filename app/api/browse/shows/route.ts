@@ -15,12 +15,11 @@ export async function GET(request: Request) {
   const festival = searchParams.get('festival')
   const capacity = searchParams.get('capacity')
   const status   = searchParams.get('status')
-  const state    = searchParams.get('state')    // GP-151: province/state filter (e.g. 'BC', 'WA')
+  const state    = searchParams.get('state')    // GP-151: province/state filter
   const page     = Math.max(1, parseInt(searchParams.get('page') || '1'))
   const sort     = searchParams.get('sort') || 'date'
   const dir      = searchParams.get('dir')  || 'desc'
   // GP-127: comma-separated city list passed from Browse page when user has a preference
-  // e.g. ?cities=Vancouver,Seattle  — null means all cities
   const citiesParam = searchParams.get('cities')
   const preferredCities = citiesParam ? citiesParam.split(',').filter(Boolean) : null
 
@@ -29,7 +28,6 @@ export async function GET(request: Request) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Shared RPC params
   const rpcBase = {
     p_decade:            decade,
     p_year:              year     ? parseInt(year)     : null,
@@ -40,12 +38,13 @@ export async function GET(request: Request) {
     p_festival:          festival || null,
     p_capacity:          (capacity && capacity !== 'all') ? capacity : null,
     p_status:            (status   && status   !== 'all') ? status   : null,
-    p_state:             state    || null,               // GP-151: province/state filter
-    // GP-127: city preference filter — null = show all cities (default)
+    p_state:             state    || null,
     p_preferred_cities:  preferredCities,
   }
 
-  // Run shows + stats in parallel
+  // Run shows + stats in parallel.
+  // total_count was removed from get_shows_paged (was a full-scan window function).
+  // Pagination total now comes from get_shows_stats which runs concurrently anyway.
   const [showsRes, statsRes] = await Promise.all([
     supabase.rpc('get_shows_paged', {
       ...rpcBase,
@@ -66,9 +65,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: statsRes.error.message }, { status: 500 })
   }
 
-  const rows       = showsRes.data || []
-  const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0
-  const statsRow   = statsRes.data?.[0]
+  const rows     = showsRes.data || []
+  const statsRow = statsRes.data?.[0]
+  // GP-208: total now from get_shows_stats (not the removed COUNT(*) OVER() window function)
+  const totalCount = statsRow ? Number(statsRow.total_shows) : 0
 
   const shows = rows.map((row: any) => ({
     show_id:           row.show_id,
@@ -88,6 +88,10 @@ export async function GET(request: Request) {
     venue_status:      row.venue_status        ?? null,
     other_names:       row.other_names         ?? null,
     ticketmaster_url:  row.ticketmaster_url     ?? null,
+    // GP-208: city/state/country now come directly from get_shows_paged RPC join
+    city:              row.city               ?? null,
+    state:             row.state              ?? null,
+    country:           row.country            ?? null,
   }))
 
   return NextResponse.json({
