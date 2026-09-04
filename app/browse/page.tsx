@@ -3,6 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import BrowseClient from './BrowseClient'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30 // GP-208: 2020s has ~450k shows; stats query needs >10s default
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>

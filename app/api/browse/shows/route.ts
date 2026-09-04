@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+export const maxDuration = 30 // GP-208: 2020s has ~450k shows; stats query needs >10s default
+
 const SHOWS_PER_PAGE = 50
 
 export async function GET(request: Request) {
