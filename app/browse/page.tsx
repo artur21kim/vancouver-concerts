@@ -3,7 +3,6 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import BrowseClient from './BrowseClient'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 30 // GP-208: 2020s has ~450k shows; stats query needs >10s default
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>
@@ -49,7 +48,9 @@ export default async function BrowsePage({ searchParams }: PageProps) {
         .select('preferred_cities')
         .eq('user_id', user.id)
         .single()
-      preferredCities = (prefData as any)?.preferred_cities ?? null
+      // Normalize empty array to null — [] causes dv.city = ANY('{}') = false for all rows
+      const rawPref = (prefData as any)?.preferred_cities
+      preferredCities = (Array.isArray(rawPref) && rawPref.length > 0) ? rawPref : null
     }
   } catch {
     // Non-fatal — fall back to showing all cities
